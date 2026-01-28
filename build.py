@@ -75,10 +75,13 @@ if USE_SCCACHE:
     os.environ["CARGO_INCREMENTAL"] = "0"
 
 if IS_LINUX:
-    # Use clang as the default compiler
-    os.environ["CC"] = "sccache clang" if USE_SCCACHE else "clang"
-    os.environ["CXX"] = "sccache clang++" if USE_SCCACHE else "clang++"
-    os.environ["LDSHARED"] = "clang -shared"
+    # Use clang as the default compiler, but allow overrides
+    if "CC" not in os.environ:
+        os.environ["CC"] = "sccache clang" if USE_SCCACHE else "clang"
+    if "CXX" not in os.environ:
+        os.environ["CXX"] = "sccache clang++" if USE_SCCACHE else "clang++"
+    if "LDSHARED" not in os.environ:
+        os.environ["LDSHARED"] = "clang -shared"
 
 if IS_MACOS and IS_ARM64:
     os.environ["CFLAGS"] = f"{os.environ.get('CFLAGS', '')} -arch arm64"
@@ -381,24 +384,24 @@ def _get_nautilus_version() -> str:
 
 def _get_clang_version() -> str:
     try:
+        compiler = os.environ.get("CC", "clang").split()[0]
         result = subprocess.run(
-            ["clang", "--version"],
+            [compiler, "--version"],
             check=True,
             capture_output=True,
         )
         output = (
             result.stdout.decode()
             .splitlines()[0]
-            .removeprefix("Apple ")
-            .removeprefix("Ubuntu ")
-            .removeprefix("clang version ")
+            .replace("Apple ", "")
+            .replace("Ubuntu ", "")
+            .replace("clang version ", "")
+            .replace("gcc (Ubuntu ", "")
+            .replace(")", "")
         )
         return output
-    except (subprocess.CalledProcessError, FileNotFoundError) as e:
-        err_msg = str(e) if isinstance(e, FileNotFoundError) else e.stderr.decode()
-        raise RuntimeError(
-            f"You are installing from source which requires the Clang compiler to be installed.\nError running clang: {err_msg}",
-        ) from e
+    except Exception:
+        return "missing"
 
 
 def _get_rustc_version() -> str:
@@ -577,8 +580,8 @@ if __name__ == "__main__":
     print(f"Nautilus Builder {_get_nautilus_version()}")
     print("=====================================================================\033[0m")
     print(f"System: {platform.system()} {platform.machine()}")
-    print(f"Clang:  {_get_clang_version()}")
-    print(f"Rust:   {_get_rustc_version()}")
+    print(f"Compiler:  {_get_clang_version()}")
+    print(f"Rust:      {_get_rustc_version()}")
     print(f"Python: {platform.python_version()} ({sys.executable})")
     print(f"Cython: {cython_compiler_version}")
     print(f"NumPy:  {np.__version__}")

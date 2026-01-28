@@ -1,16 +1,15 @@
 // -------------------------------------------------------------------------------------------------
-//  Copyright (C) 2015-2026 Nautech Systems Pty Ltd. All rights reserved.
+//  版权所有 (C) 2015-2026 Nautech Systems Pty Ltd。保留所有权利。
 //  https://nautechsystems.io
 //
-//  Licensed under the GNU Lesser General Public License Version 3.0 (the "License");
-//  You may not use this file except in compliance with the License.
-//  You may obtain a copy of the License at https://www.gnu.org/licenses/lgpl-3.0.en.html
+//  基于 GNU Lesser General Public License 3.0 版本（“许可证”）获得许可；
+//  除非符合许可证，否则您不得使用此文件。
+//  您可以在 https://www.gnu.org/licenses/lgpl-3.0.en.html 获取许可证副本。
 //
-//  Unless required by applicable law or agreed to in writing, software
-//  distributed under the License is distributed on an "AS IS" BASIS,
-//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-//  See the License for the specific language governing permissions and
-//  limitations under the License.
+//  除非适用法律要求或书面同意，
+//  否则根据许可证分发的软件是基于“按原样”基础分发的，
+//  不附带任何明示或暗示的保证或条件。
+//  请参阅许可证以了解管理许可证下的权限和限制的具体语言。
 // -------------------------------------------------------------------------------------------------
 
 use nautilus_core::serialization::{default_false, default_true};
@@ -20,46 +19,46 @@ use nautilus_model::{
 };
 use serde::{Deserialize, Serialize};
 
-/// The base model for all trading strategy configurations.
+/// 所有交易策略配置的基础模型。
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[cfg_attr(
     feature = "python",
     pyo3::pyclass(module = "nautilus_trader.core.nautilus_pyo3.trading")
 )]
 pub struct StrategyConfig {
-    /// The unique ID for the strategy. Will become the strategy ID if not None.
+    /// 策略的唯一 ID。如果不为 None，将成为策略 ID。
     pub strategy_id: Option<StrategyId>,
-    /// The unique order ID tag for the strategy. Must be unique
-    /// amongst all running strategies for a particular trader ID.
+    /// 策略的唯一订单 ID 标签。必须在特定交易员 ID 下的所有
+    /// 运行策略中是唯一的。
     pub order_id_tag: Option<String>,
-    /// If UUID4's should be used for client order ID values.
+    /// 是否应使用 UUID4 作为客户端订单 ID 值。
     #[serde(default = "default_false")]
     pub use_uuid_client_order_ids: bool,
-    /// If hyphens should be used in generated client order ID values.
+    /// 生成的客户端订单 ID 值中是否应使用连字符。
     #[serde(default = "default_true")]
     pub use_hyphens_in_client_order_ids: bool,
-    /// The order management system type for the strategy. This will determine
-    /// how the `ExecutionEngine` handles position IDs.
+    /// 策略的订单管理系统类型。这将决定
+    /// `ExecutionEngine` 如何处理持仓 ID。
     pub oms_type: Option<OmsType>,
-    /// The external order claim instrument IDs.
-    /// External orders for matching instrument IDs will be associated with (claimed by) the strategy.
+    /// 外部订单认领的交易工具 ID。
+    /// 匹配交易工具 ID 的外部订单将与该策略关联（由该策略认领）。
     pub external_order_claims: Option<Vec<InstrumentId>>,
-    /// If OTO, OCO, and OUO **open** contingent orders should be managed automatically by the strategy.
-    /// Any emulated orders which are active local will be managed by the `OrderEmulator` instead.
+    /// 是否应由策略自动管理 OTO、OCO 和 OUO **挂起的**条件订单。
+    /// 任何在本地处于活动状态的模拟订单将改由 `OrderEmulator` 管理。
     #[serde(default = "default_false")]
     pub manage_contingent_orders: bool,
-    /// If all order GTD time in force expirations should be managed by the strategy.
-    /// If True, then will ensure open orders have their GTD timers re-activated on start.
+    /// 是否应由策略管理所有订单的 GTD（Good Till Date）有效时间过期。
+    /// 如果为 True，将确保未结订单在启动时重新激活其 GTD 定时器。
     #[serde(default = "default_false")]
     pub manage_gtd_expiry: bool,
-    /// If events should be logged by the strategy.
-    /// If False, then only warning events and above are logged.
+    /// 策略是否应记录事件日志。
+    /// 如果为 False，则仅记录警告及以上级别的事件。
     #[serde(default = "default_true")]
     pub log_events: bool,
-    /// If commands should be logged by the strategy.
+    /// 策略是否应记录命令日志。
     #[serde(default = "default_true")]
     pub log_commands: bool,
-    /// If order rejected events where `due_post_only` is True should be logged as warnings.
+    /// 是否应将 `due_post_only` 为 True 的订单拒绝事件记录为警告。
     #[serde(default = "default_true")]
     pub log_rejected_due_post_only_as_warning: bool,
 }

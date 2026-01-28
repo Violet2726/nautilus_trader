@@ -31,42 +31,39 @@ from nautilus_trader.model.identifiers import ExecAlgorithmId
 
 class ExecEngineConfig(NautilusConfig, frozen=True):
     """
-    Configuration for ``ExecutionEngine`` instances.
+    ``ExecutionEngine``（执行引擎）实例的配置。
 
-    Parameters
+    参数
     ----------
-    load_cache : bool, default True
-        If the cache should be loaded on initialization.
-    manage_own_order_books : bool, default False
-        If the execution engine should maintain own/user order books based on commands and events.
-    snapshot_orders : bool, default False
-        If order state snapshot lists are persisted to a backing database.
-        Snapshots will be taken at every order state update (when events are applied).
-    snapshot_positions : bool, default False
-        If position state snapshot lists are persisted to a backing database.
-        Snapshots will be taken at position opened, changed and closed (when events are applied).
-        To include the unrealized PnL in the snapshot then quotes for the positions instrument must
-        be available in the cache.
-    snapshot_positions_interval_secs : PositiveFloat, optional
-        The interval (seconds) at which *additional* position state snapshots are persisted to a
-        backing database.
-        If ``None`` then no additional snapshots will be taken.
-        To include unrealized PnL in these snapshots, quotes for the position's instrument must be
-        available in the cache.
-    convert_quote_qty_to_base : bool, default True
-        If quote-denominated order quantities should be converted to base units before submission.
-        Deprecated: future releases will remove this automatic conversion. Set ``False`` to keep
-        behaviour consistent with venues which expect quote-denominated quantities.
-    external_clients : list[ClientId], optional
-        Client IDs representing external execution streams.
-        Commands with these client IDs will be published on the message bus only;
-        the execution engine will not attempt to forward them to a local `ExecutionClient`.
-    allow_overfills : bool, default False
-        If True, allows order fills that exceed the original order quantity.
-        When an overfill is detected, the order's ``overfill_qty`` is set and a warning is logged.
-        When False (default), a ValueError is raised for backward compatibility.
-    debug : bool, default False
-        If debug mode is active (will provide extra debug logging).
+    load_cache : bool, 默认 True
+        初始化时是否加载缓存。
+    manage_own_order_books : bool, 默认 False
+        执行引擎是否根据命令和事件维护自己的/用户的订单簿。
+    snapshot_orders : bool, 默认 False
+        订单状态快照列表是否持久化到后端数据库。
+        快照将在每次订单状态更新时（应用事件时）拍摄。
+    snapshot_positions : bool, 默认 False
+        持仓状态快照列表是否持久化到后端数据库。
+        快照将在持仓开仓、变更和平仓时（应用事件时）拍摄。
+        要在快照中包含未实现盈亏，缓存中必须有该持仓合约的报价数据。
+    snapshot_positions_interval_secs : PositiveFloat, 可选
+        *额外*持仓状态快照持久化到后端数据库的间隔时间（秒）。
+        如果为 ``None``，则不会拍摄额外的快照。
+        要在这些快照中包含未实现盈亏，缓存中必须有该持仓合约的报价数据。
+    convert_quote_qty_to_base : bool, 默认 True
+        以报价货币计价的订单数量在提交前是否应转换为基础货币单位。
+        已弃用：未来版本将移除此自动转换。设置为 ``False`` 以保持与预期
+        报价货币计价数量的交易所行为一致。
+    external_clients : list[ClientId], 可选
+        代表外部执行流的客户端 ID 列表。
+        带有这些客户端 ID 的命令将仅发布到消息总线；
+        执行引擎不会尝试将它们转发到本地的 `ExecutionClient`。
+    allow_overfills : bool, 默认 False
+        如果为 True，允许超过原始订单数量的成交。
+        当检测到超额成交时，订单的 ``overfill_qty`` 将被设置并记录警告。
+        如果为 False（默认），为了向后兼容将抛出 ValueError。
+    debug : bool, 默认 False
+        调试模式是否激活（将提供额外的调试日志）。
 
     """
 
@@ -83,18 +80,18 @@ class ExecEngineConfig(NautilusConfig, frozen=True):
 
 class ExecAlgorithmConfig(NautilusConfig, kw_only=True, frozen=True):
     """
-    The base model for all execution algorithm configurations.
+    所有执行算法配置的基础模型。
 
-    Parameters
+    参数
     ----------
-    exec_algorithm_id : ExecAlgorithmId, optional
-        The unique ID for the execution algorithm.
-        If not ``None`` then will become the execution algorithm ID.
-    log_events : bool, default True
-        If events should be logged by the execution algorithm.
-        If False, then only warning events and above are logged.
-    log_commands : bool, default True
-        If commands should be logged by the execution algorithm.
+    exec_algorithm_id : ExecAlgorithmId, 可选
+        执行算法的唯一 ID。
+        如果不为 ``None``，则将成为执行算法 ID。
+    log_events : bool, 默认 True
+        执行算法是否记录事件日志。
+        如果为 False，则只记录警告及以上级别的事件。
+    log_commands : bool, 默认 True
+        执行算法是否记录命令日志。
 
     """
 
@@ -105,16 +102,16 @@ class ExecAlgorithmConfig(NautilusConfig, kw_only=True, frozen=True):
 
 class ImportableExecAlgorithmConfig(NautilusConfig, frozen=True):
     """
-    Configuration for an execution algorithm instance.
+    执行算法实例的配置。
 
-    Parameters
+    参数
     ----------
     exec_algorithm_path : str
-        The fully qualified name of the execution algorithm class.
+        执行算法类的完全限定名。
     config_path : str
-        The fully qualified name of the config class.
+        配置类的完全限定名。
     config : dict[str, Any]
-        The execution algorithm configuration.
+        执行算法配置。
 
     """
 
@@ -125,27 +122,27 @@ class ImportableExecAlgorithmConfig(NautilusConfig, frozen=True):
 
 class ExecAlgorithmFactory:
     """
-    Provides execution algorithm creation from importable configurations.
+    提供从可导入配置创建执行算法的功能。
     """
 
     @staticmethod
     def create(config: ImportableExecAlgorithmConfig):
         """
-        Create an execution algorithm from the given configuration.
+        从给定配置创建执行算法。
 
-        Parameters
+        参数
         ----------
         config : ImportableExecAlgorithmConfig
-            The configuration for the building step.
+            构建步骤的配置。
 
-        Returns
+        返回
         -------
         ExecAlgorithm
 
-        Raises
+        抛出
         ------
         TypeError
-            If `config` is not of type `ImportableExecAlgorithmConfig`.
+            如果 `config` 的类型不是 `ImportableExecAlgorithmConfig`。
 
         """
         PyCondition.type(config, ImportableExecAlgorithmConfig, "config")
@@ -154,3 +151,4 @@ class ExecAlgorithmFactory:
         json = msgspec.json.encode(config.config, enc_hook=msgspec_encoding_hook)
         config = config_cls.parse(json)
         return exec_algorithm_cls(config=config)
+

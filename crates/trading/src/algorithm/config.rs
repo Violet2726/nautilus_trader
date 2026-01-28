@@ -1,37 +1,36 @@
 // -------------------------------------------------------------------------------------------------
-//  Copyright (C) 2015-2026 Nautech Systems Pty Ltd. All rights reserved.
+//  版权所有 (C) 2015-2026 Nautech Systems Pty Ltd。保留所有权利。
 //  https://nautechsystems.io
 //
-//  Licensed under the GNU Lesser General Public License Version 3.0 (the "License");
-//  You may not use this file except in compliance with the License.
-//  You may obtain a copy of the License at https://www.gnu.org/licenses/lgpl-3.0.en.html
+//  基于 GNU Lesser General Public License 3.0 版本（“许可证”）获得许可；
+//  除非符合许可证，否则您不得使用此文件。
+//  您可以在 https://www.gnu.org/licenses/lgpl-3.0.en.html 获取许可证副本。
 //
-//  Unless required by applicable law or agreed to in writing, software
-//  distributed under the License is distributed on an "AS IS" BASIS,
-//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-//  See the License for the specific language governing permissions and
-//  limitations under the License.
+//  除非适用法律要求或书面同意，
+//  否则根据许可证分发的软件是基于“按原样”基础分发的，
+//  不附带任何明示或暗示的保证或条件。
+//  请参阅许可证以了解管理许可证下的权限和限制的具体语言。
 // -------------------------------------------------------------------------------------------------
 
-//! Configuration for execution algorithms.
+//! 执行算法的配置。
 
 use nautilus_core::serialization::default_true;
 use nautilus_model::identifiers::ExecAlgorithmId;
 use serde::{Deserialize, Serialize};
 
-/// Configuration for an execution algorithm.
+/// 执行算法的配置。
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[cfg_attr(
     feature = "python",
     pyo3::pyclass(module = "nautilus_trader.core.nautilus_pyo3.trading")
 )]
 pub struct ExecutionAlgorithmConfig {
-    /// The unique ID for the execution algorithm.
+    /// 执行算法的唯一 ID。
     pub exec_algorithm_id: Option<ExecAlgorithmId>,
-    /// If events should be logged by the algorithm.
+    /// 算法是否应记录事件日志。
     #[serde(default = "default_true")]
     pub log_events: bool,
-    /// If commands should be logged by the algorithm.
+    /// 算法是否应记录命令日志。
     #[serde(default = "default_true")]
     pub log_commands: bool,
 }

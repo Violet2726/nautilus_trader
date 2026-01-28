@@ -1,39 +1,37 @@
 // -------------------------------------------------------------------------------------------------
-//  Copyright (C) 2015-2026 Nautech Systems Pty Ltd. All rights reserved.
+//  版权所有 (C) 2015-2026 Nautech Systems Pty Ltd。保留所有权利。
 //  https://nautechsystems.io
 //
-//  Licensed under the GNU Lesser General Public License Version 3.0 (the "License");
-//  You may not use this file except in compliance with the License.
-//  You may obtain a copy of the License at https://www.gnu.org/licenses/lgpl-3.0.en.html
+//  基于 GNU Lesser General Public License 3.0 版本（“许可证”）获得许可；
+//  除非符合许可证，否则您不得使用此文件。
+//  您可以在 https://www.gnu.org/licenses/lgpl-3.0.en.html 获取许可证副本。
 //
-//  Unless required by applicable law or agreed to in writing, software
-//  distributed under the License is distributed on an "AS IS" BASIS,
-//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-//  See the License for the specific language governing permissions and
-//  limitations under the License.
+//  除非适用法律要求或书面同意，
+//  否则根据许可证分发的软件是基于“按原样”基础分发的，
+//  不附带任何明示或暗示的保证或条件。
+//  请参阅许可证以了解管理许可证下的权限和限制的具体语言。
 // -------------------------------------------------------------------------------------------------
 
-//! Execution algorithm infrastructure for order slicing and execution optimization.
+//! 执行算法基础设施，用于订单拆分和执行优化。
 //!
-//! This module provides the [`ExecutionAlgorithm`] trait and supporting infrastructure
-//! for implementing algorithms like TWAP (Time-Weighted Average Price) and VWAP
-//! (Volume-Weighted Average Price) that slice large orders into smaller child orders.
+//! 此模块提供了 [`ExecutionAlgorithm`] trait 以及支持 TWAP（时间加权平均价格）和 VWAP
+//! （成交量加权平均价格）等算法的基础设施，这些算法将大订单拆分为更小的子订单。
 //!
-//! # Architecture
+//! # 架构
 //!
-//! Execution algorithms extend [`DataActor`] (not [`Strategy`](super::Strategy)) because:
-//! - They don't own positions (the parent Strategy does).
-//! - Spawned orders carry the parent Strategy's ID, not the algorithm's ID.
-//! - They act as order processors/transformers, not position managers.
+//! 执行算法扩展了 [`DataActor`]（而不是 [`Strategy`](super::Strategy)），因为：
+//! - 它们不持有仓位（父策略持有）。
+//! - 生成的子订单携带的是父策略的 ID，而不是算法的 ID。
+//! - 它们充当订单处理器/转换器，而不是仓位管理器。
 //!
-//! # Order Flow
+//! # 订单流程
 //!
-//! 1. A Strategy submits an order with `exec_algorithm_id` set.
-//! 2. The order is routed to the algorithm's `{id}.execute` endpoint.
-//! 3. The algorithm receives the order via `on_order()`.
-//! 4. The algorithm spawns child orders using `spawn_market()`, `spawn_limit()`, etc.
-//! 5. Spawned orders are submitted through the RiskEngine.
-//! 6. The algorithm receives fill events and manages remaining quantity.
+//! 1. 策略提交一个设置了 `exec_algorithm_id` 的订单。
+//! 2. 订单被路由到算法的 `{id}.execute` 端点。
+//! 3. 算法通过 `on_order()` 接收订单。
+//! 4. 算法使用 `spawn_market()`、`spawn_limit()` 等生成子订单。
+//! 5. 生成的子订单通过 RiskEngine 提交。
+//! 6. 算法接收成交事件并管理剩余数量。
 
 pub mod config;
 pub mod core;
@@ -67,43 +65,42 @@ use nautilus_model::{
 pub use twap::{TwapAlgorithm, TwapAlgorithmConfig};
 use ustr::Ustr;
 
-/// Core trait for implementing execution algorithms in NautilusTrader.
+/// 用于在 NautilusTrader 中实现执行算法的核心 trait。
 ///
-/// Execution algorithms are specialized [`DataActor`]s that receive orders from strategies
-/// and execute them by spawning child orders. They are used for order slicing algorithms
-/// like TWAP and VWAP.
+/// 执行算法是专门的 [`DataActor`]，它们从策略接收订单并通过生成子订单来执行。
+/// 它们用于 TWAP 和 VWAP 等订单拆分算法。
 ///
-/// # Key Capabilities
+/// # 关键能力
 ///
-/// - All [`DataActor`] capabilities (data subscriptions, event handling, timers)
-/// - Order spawning (market, limit, market-to-limit)
-/// - Order lifecycle management (submit, modify, cancel)
-/// - Event filtering for algorithm-owned orders
+/// - 所有 [`DataActor`] 的能力（数据订阅、事件处理、定时器）
+/// - 订单生成（市价、限价、市价转限价）
+/// - 订单生命周期管理（提交、修改、取消）
+/// - 针对算法持有订单的事件过滤
 ///
-/// # Implementation
+/// # 实现
 ///
-/// User algorithms should implement the required methods and hold an
-/// [`ExecutionAlgorithmCore`] member. The struct should `Deref` and `DerefMut`
-/// to `ExecutionAlgorithmCore` (which itself derefs to `DataActorCore`).
+/// 用户算法应实现所需的方法并持有一个 [`ExecutionAlgorithmCore`] 成员。
+/// 结构体应 `Deref` 和 `DerefMut` 到 `ExecutionAlgorithmCore`
+/// （其本身又解引用到 `DataActorCore`）。
 pub trait ExecutionAlgorithm: DataActor {
-    /// Provides mutable access to the internal `ExecutionAlgorithmCore`.
+    /// 提供对内部 `ExecutionAlgorithmCore` 的可变访问。
     fn core_mut(&mut self) -> &mut ExecutionAlgorithmCore;
 
-    /// Returns the execution algorithm ID.
+    /// 返回执行算法 ID。
     fn id(&mut self) -> ExecAlgorithmId {
         self.core_mut().exec_algorithm_id
     }
 
-    /// Executes a trading command.
+    /// 执行交易命令。
     ///
-    /// This is the main entry point for commands routed to the algorithm.
-    /// Dispatches to the appropriate handler based on command type.
+    /// 这是路由到算法的命令的主要入口点。
+    /// 根据命令类型分发到相应的处理器。
     ///
-    /// Commands are only processed when the algorithm is in `Running` state.
+    /// 命令仅在算法处于 `Running` 状态时才会被处理。
     ///
     /// # Errors
     ///
-    /// Returns an error if command handling fails.
+    /// 如果命令处理失败，则返回错误。
     fn execute(&mut self, command: TradingCommand) -> anyhow::Result<()>
     where
         Self: 'static + std::fmt::Debug + Sized,
@@ -130,29 +127,29 @@ pub trait ExecutionAlgorithm: DataActor {
             }
             TradingCommand::CancelOrder(cmd) => self.handle_cancel_order(cmd),
             _ => {
-                log::warn!("Unhandled command type: {command:?}");
+                log::warn!("未处理的命令类型: {command:?}");
                 Ok(())
             }
         }
     }
 
-    /// Called when a primary order is received for execution.
+    /// 当接收到执行的主订单时被调用。
     ///
-    /// Override this method to implement the algorithm's order slicing logic.
+    /// 覆盖此方法以实现算法的订单拆分逻辑。
     ///
     /// # Errors
     ///
-    /// Returns an error if order handling fails.
+    /// 如果订单处理失败，则返回错误。
     fn on_order(&mut self, order: OrderAny) -> anyhow::Result<()>;
 
-    /// Called when an order list is received for execution.
+    /// 当接收到执行的订单列表时被调用。
     ///
-    /// Override this method to handle order lists. The default implementation
-    /// processes each order individually.
+    /// 覆盖此方法以处理订单列表。默认实现
+    /// 会逐个处理每个订单。
     ///
     /// # Errors
     ///
-    /// Returns an error if order list handling fails.
+    /// 如果订单列表处理失败，则返回错误。
     fn on_order_list(&mut self, order_list: OrderList) -> anyhow::Result<()> {
         for order in order_list.orders {
             self.on_order(order)?;
@@ -160,23 +157,20 @@ pub trait ExecutionAlgorithm: DataActor {
         Ok(())
     }
 
-    /// Handles a cancel order command for algorithm-managed orders.
+    /// 处理算法管理订单的取消订单命令。
     ///
-    /// This generates an internal cancel event and publishes it. The order
-    /// is canceled locally without sending a command to the execution engine.
+    /// 这会生成一个内部取消事件并发布它。订单
+    /// 会在本地取消，而不会向执行引擎发送命令。
     ///
     /// # Errors
     ///
-    /// Returns an error if cancellation fails.
+    /// 如果取消失败，则返回错误。
     fn handle_cancel_order(&mut self, command: CancelOrder) -> anyhow::Result<()> {
         let (mut order, is_pending_cancel) = {
             let cache = self.core_mut().cache();
 
             let Some(order) = cache.order(&command.client_order_id) else {
-                log::warn!(
-                    "Cannot cancel order: {} not found in cache",
-                    command.client_order_id
-                );
+                log::warn!("无法取消订单：缓存中未找到 {}", command.client_order_id);
                 return Ok(());
             };
 
@@ -189,14 +183,14 @@ pub trait ExecutionAlgorithm: DataActor {
         }
 
         if order.is_closed() {
-            log::warn!("Order already closed for {command:?}");
+            log::warn!("订单已关闭，针对命令：{command:?}");
             return Ok(());
         }
 
         let event = self.generate_order_canceled(&order);
 
         if let Err(e) = order.apply(OrderEventAny::Canceled(event)) {
-            log::warn!("InvalidStateTrigger: {e}, did not apply cancel event");
+            log::warn!("状态转换失败（InvalidStateTrigger）：{e}，未应用取消事件");
             return Ok(());
         }
 
@@ -212,7 +206,7 @@ pub trait ExecutionAlgorithm: DataActor {
         Ok(())
     }
 
-    /// Generates an OrderCanceled event for an order.
+    /// 为订单生成 OrderCanceled 事件。
     fn generate_order_canceled(&mut self, order: &OrderAny) -> OrderCanceled {
         let ts_now = self.core_mut().clock().timestamp_ns();
 
@@ -230,7 +224,7 @@ pub trait ExecutionAlgorithm: DataActor {
         )
     }
 
-    /// Generates an OrderPendingUpdate event for an order.
+    /// 为订单生成 OrderPendingUpdate 事件。
     fn generate_order_pending_update(&mut self, order: &OrderAny) -> OrderPendingUpdate {
         let ts_now = self.core_mut().clock().timestamp_ns();
 
@@ -241,7 +235,7 @@ pub trait ExecutionAlgorithm: DataActor {
             order.client_order_id(),
             order
                 .account_id()
-                .expect("Order must have account_id for pending update"),
+                .expect("待处理更新的订单必须拥有 account_id"),
             UUID4::new(),
             ts_now,
             ts_now,
@@ -250,7 +244,7 @@ pub trait ExecutionAlgorithm: DataActor {
         )
     }
 
-    /// Generates an OrderPendingCancel event for an order.
+    /// 为订单生成 OrderPendingCancel 事件。
     fn generate_order_pending_cancel(&mut self, order: &OrderAny) -> OrderPendingCancel {
         let ts_now = self.core_mut().clock().timestamp_ns();
 
@@ -261,7 +255,7 @@ pub trait ExecutionAlgorithm: DataActor {
             order.client_order_id(),
             order
                 .account_id()
-                .expect("Order must have account_id for pending cancel"),
+                .expect("待处理取消的订单必须拥有 account_id"),
             UUID4::new(),
             ts_now,
             ts_now,
@@ -270,18 +264,16 @@ pub trait ExecutionAlgorithm: DataActor {
         )
     }
 
-    /// Spawns a market order from a primary order.
+    /// 从主订单生成市价单。
     ///
-    /// Creates a new market order with:
-    /// - A unique client order ID: `{primary_id}-E{sequence}`.
-    /// - The primary order's trader ID, strategy ID, and instrument ID.
-    /// - The algorithm's exec_algorithm_id.
-    /// - exec_spawn_id set to the primary order's client order ID.
+    /// 创建一个新的市价单，具有：
+    /// - 唯一的客户订单 ID：`{primary_id}-E{sequence}`。
+    /// - 主订单的交易员 ID、策略 ID 和仪表 ID。
+    /// - 算法的 exec_algorithm_id。
+    /// - exec_spawn_id 设置为主订单的客户订单 ID。
     ///
-    /// If `reduce_primary` is true, the primary order's quantity will be reduced
-    /// by the spawned quantity. If the spawned order is subsequently denied or
-    /// rejected (before acceptance), the deducted quantity is automatically
-    /// restored to the primary order.
+    /// 如果 `reduce_primary` 为真，主订单的数量将减少生成的数量。
+    /// 如果生成的订单随后被拒或被驳回（在接受之前），扣除的数量会自动恢复到主订单。
     fn spawn_market(
         &mut self,
         primary: &mut OrderAny,
@@ -326,32 +318,31 @@ pub trait ExecutionAlgorithm: DataActor {
         )
     }
 
-    /// Spawns a limit order from a primary order.
+    /// 从主订单生成限价单。
     ///
-    /// Creates a new limit order with:
-    /// - A unique client order ID: `{primary_id}-E{sequence}`
-    /// - The primary order's trader ID, strategy ID, and instrument ID
-    /// - The algorithm's exec_algorithm_id
-    /// - exec_spawn_id set to the primary order's client order ID
+    /// 创建一个新的限价单，具有：
+    /// - 唯一的客户订单 ID：`{primary_id}-E{sequence}`
+    /// - 主订单的交易员 ID、策略 ID 和仪表 ID
+    /// - 算法的 exec_algorithm_id
+    /// - exec_spawn_id 设置为主订单的客户订单 ID
     ///
-    /// If `reduce_primary` is true, the primary order's quantity will be reduced
-    /// by the spawned quantity. If the spawned order is subsequently denied or
-    /// rejected (before acceptance), the deducted quantity is automatically
-    /// restored to the primary order.
+    /// 如果 `reduce_primary` 为真，主订单的数量将减少生成的数量。
+    /// 如果生成的订单随后被拒或被驳回（在接受之前），扣除的数量会
+    /// 自动恢复到主订单。
     #[allow(clippy::too_many_arguments)]
     fn spawn_limit(
         &mut self,
-        primary: &mut OrderAny,
-        quantity: Quantity,
-        price: Price,
-        time_in_force: TimeInForce,
-        expire_time: Option<UnixNanos>,
-        post_only: bool,
-        reduce_only: bool,
-        display_qty: Option<Quantity>,
-        emulation_trigger: Option<TriggerType>,
-        tags: Option<Vec<Ustr>>,
-        reduce_primary: bool,
+        primary: &mut OrderAny,     // 父订单（主订单），将被修改状态或减少数量
+        quantity: Quantity,         // 新生成的限价单数量
+        price: Price,               // 限价单的价格
+        time_in_force: TimeInForce, // 订单时效策略（如 GTC, IOC, FOK）
+        expire_time: Option<UnixNanos>, // (可选) 订单过期时间，通常配合 GTD 使用
+        post_only: bool,            // 是否仅作为挂单（Maker），如果不成则撤单
+        reduce_only: bool,          // 是否仅用于减仓（不会增加头寸）
+        display_qty: Option<Quantity>, // (可选) 冰山订单的显示数量
+        emulation_trigger: Option<TriggerType>, // (可选) 模拟触发条件
+        tags: Option<Vec<Ustr>>,    // (可选) 订单标签，用于追踪或分类
+        reduce_primary: bool,       // 标志位：是否从主订单中扣除对应数量
     ) -> LimitOrder {
         // Generate spawn ID first so we can track the reduction
         let core = self.core_mut();
@@ -394,18 +385,17 @@ pub trait ExecutionAlgorithm: DataActor {
         )
     }
 
-    /// Spawns a market-to-limit order from a primary order.
+    /// 从主订单生成市价转限价单（Market-to-limit order）。
     ///
-    /// Creates a new market-to-limit order with:
-    /// - A unique client order ID: `{primary_id}-E{sequence}`
-    /// - The primary order's trader ID, strategy ID, and instrument ID
-    /// - The algorithm's exec_algorithm_id
-    /// - exec_spawn_id set to the primary order's client order ID
+    /// 创建一个新的市价转限价单，具有：
+    /// - 唯一的客户订单 ID：`{primary_id}-E{sequence}`
+    /// - 主订单的交易员 ID、策略 ID 和仪表 ID
+    /// - 算法的 exec_algorithm_id
+    /// - exec_spawn_id 设置为主订单的客户订单 ID
     ///
-    /// If `reduce_primary` is true, the primary order's quantity will be reduced
-    /// by the spawned quantity. If the spawned order is subsequently denied or
-    /// rejected (before acceptance), the deducted quantity is automatically
-    /// restored to the primary order.
+    /// 如果 `reduce_primary` 为真，主订单的数量将减少生成的数量。
+    /// 如果生成的订单随后被拒或被驳回（在接受之前），扣除的数量会
+    /// 自动恢复到主订单。
     #[allow(clippy::too_many_arguments)]
     fn spawn_market_to_limit(
         &mut self,
@@ -463,19 +453,19 @@ pub trait ExecutionAlgorithm: DataActor {
         order
     }
 
-    /// Reduces the primary order's quantity by the spawn quantity.
+    /// 按生成的子订单数量减少主订单的数量。
     ///
-    /// Generates an `OrderUpdated` event and applies it to the primary order,
-    /// then updates the order in the cache.
+    /// 生成一个 `OrderUpdated` 事件并将其应用于主订单，
+    /// 然后更新缓存中的订单。
     ///
     /// # Panics
     ///
-    /// Panics if `spawn_qty` exceeds the primary order's `leaves_qty`.
+    /// 如果 `spawn_qty` 超过了主订单的 `leaves_qty`（剩余待执行数量），则触发 Panic。
     fn reduce_primary_order(&mut self, primary: &mut OrderAny, spawn_qty: Quantity) {
         let leaves_qty = primary.leaves_qty();
         assert!(
             leaves_qty >= spawn_qty,
-            "Spawn quantity {spawn_qty} exceeds primary leaves_qty {leaves_qty}"
+            "生成的子订单数量 {spawn_qty} 超过了主订单的剩余待执行数量 {leaves_qty}"
         );
 
         let primary_qty = primary.quantity();
@@ -503,20 +493,17 @@ pub trait ExecutionAlgorithm: DataActor {
 
         primary
             .apply(OrderEventAny::Updated(updated))
-            .expect("Failed to apply OrderUpdated");
+            .expect("无法应用 OrderUpdated 事件");
 
         let cache_rc = core.cache_rc();
         let mut cache = cache_rc.borrow_mut();
-        cache
-            .update_order(primary)
-            .expect("Failed to update order in cache");
+        cache.update_order(primary).expect("更新缓存中的订单失败");
     }
 
-    /// Restores the primary order quantity after a spawned order is denied or rejected.
+    /// 在生成的子订单被拒或被驳回后恢复主订单的数量。
     ///
-    /// This is called when a spawned order fails before acceptance. The quantity
-    /// that was deducted from the primary order is restored (up to the spawned
-    /// order's leaves_qty to handle partial fills).
+    /// 当生成的子订单在被接受之前失败时调用。从主订单中
+    /// 扣除的数量会被恢复（最高恢复到子订单的 leaves_qty，以处理部分成交的情况）。
     fn restore_primary_order_quantity(&mut self, order: &OrderAny) {
         let Some(exec_spawn_id) = order.exec_spawn_id() else {
             return;
@@ -537,9 +524,7 @@ pub trait ExecutionAlgorithm: DataActor {
         };
 
         let Some(mut primary) = primary else {
-            log::warn!(
-                "Cannot restore primary order quantity: primary order {exec_spawn_id} not found",
-            );
+            log::warn!("无法恢复主订单数量：未找到主订单 {exec_spawn_id}",);
             return;
         };
 
@@ -575,7 +560,7 @@ pub trait ExecutionAlgorithm: DataActor {
         );
 
         if let Err(e) = primary.apply(OrderEventAny::Updated(updated)) {
-            log::warn!("Failed to apply OrderUpdated for quantity restoration: {e}");
+            log::warn!("数量恢复时应用 OrderUpdated 失败：{e}");
             return;
         }
 
@@ -583,24 +568,24 @@ pub trait ExecutionAlgorithm: DataActor {
             let cache_rc = core.cache_rc();
             let mut cache = cache_rc.borrow_mut();
             if let Err(e) = cache.update_order(&primary) {
-                log::warn!("Failed to update primary order in cache: {e}");
+                log::warn!("在缓存中更新主订单失败：{e}");
                 return;
             }
         }
 
         log::info!(
-            "Restored primary order {} quantity to {} after spawned order {} was denied/rejected",
+            "在生成的子订单 {} 被拒/驳回后，已将主订单 {} 的数量恢复至 {}",
             primary.client_order_id(),
             restored_qty,
             order.client_order_id()
         );
     }
 
-    /// Submits an order to the execution engine via the risk engine.
+    /// 通过风险引擎向执行引擎提交订单。
     ///
     /// # Errors
     ///
-    /// Returns an error if order submission fails.
+    /// 如果订单提交失败，则返回错误。
     fn submit_order(
         &mut self,
         order: OrderAny,
@@ -609,7 +594,7 @@ pub trait ExecutionAlgorithm: DataActor {
     ) -> anyhow::Result<()> {
         let core = self.core_mut();
 
-        let trader_id = core.trader_id().expect("Trader ID not set");
+        let trader_id = core.trader_id().expect("未设置交易员 ID");
         let ts_init = core.clock().timestamp_ns();
 
         // For spawned orders, use the parent's strategy ID
@@ -648,11 +633,11 @@ pub trait ExecutionAlgorithm: DataActor {
         Ok(())
     }
 
-    /// Modifies an order.
+    /// 修改订单。
     ///
     /// # Errors
     ///
-    /// Returns an error if order modification fails.
+    /// 如果订单修改失败，则返回错误。
     fn modify_order(
         &mut self,
         order: &mut OrderAny,
@@ -666,30 +651,26 @@ pub trait ExecutionAlgorithm: DataActor {
         let trigger_changing = trigger_price.is_some() && trigger_price != order.trigger_price();
 
         if !qty_changing && !price_changing && !trigger_changing {
-            log::error!(
-                "Cannot create command ModifyOrder: \
-                quantity, price and trigger were either None \
-                or the same as existing values."
-            );
+            log::error!("无法创建 ModifyOrder 命令：数量、价格和触发价均为 None 或与现有值相同。");
             return Ok(());
         }
 
         if order.is_closed() || order.is_pending_cancel() {
             log::warn!(
-                "Cannot create command ModifyOrder: state is {:?}, {order:?}",
+                "无法创建 ModifyOrder 命令：状态为 {:?}, {order:?}",
                 order.status()
             );
             return Ok(());
         }
 
         let core = self.core_mut();
-        let trader_id = core.trader_id().expect("Trader ID not set");
+        let trader_id = core.trader_id().expect("未设置交易员 ID");
         let strategy_id = order.strategy_id();
 
         if !order.is_active_local() {
             let event = self.generate_order_pending_update(order);
             if let Err(e) = order.apply(OrderEventAny::PendingUpdate(event)) {
-                log::warn!("InvalidStateTrigger: {e}, did not apply pending update event");
+                log::warn!("状态转换失败（InvalidStateTrigger）：{e}，未应用待处理更新事件");
                 return Ok(());
             }
 
@@ -743,17 +724,17 @@ pub trait ExecutionAlgorithm: DataActor {
         Ok(())
     }
 
-    /// Modifies an INITIALIZED or RELEASED order in place without sending a command.
+    /// 在本地修改 INITIALIZED（已初始化）或 RELEASED（已释放）状态的订单，而不发送命令。
     ///
-    /// This is useful for adjusting order parameters before submission. The order
-    /// is updated locally by applying an `OrderUpdated` event and updating the cache.
+    /// 这对于在提交前调整订单参数非常有用。通过应用 `OrderUpdated`
+    /// 事件并更新缓存来本地更新订单。
     ///
-    /// At least one parameter must differ from the current order values.
+    /// 至少有一个参数必须与当前订单值不同。
     ///
     /// # Errors
     ///
-    /// Returns an error if the order status is not INITIALIZED or RELEASED,
-    /// or if no parameters would change.
+    /// 如果订单状态不是 INITIALIZED 或 RELEASED，
+    /// 或者没有任何参数发生变化，则返回错误。
     fn modify_order_in_place(
         &mut self,
         order: &mut OrderAny,
@@ -765,21 +746,21 @@ pub trait ExecutionAlgorithm: DataActor {
         let status = order.status();
         if status != OrderStatus::Initialized && status != OrderStatus::Released {
             anyhow::bail!(
-                "Cannot modify order in place: status is {status:?}, expected INITIALIZED or RELEASED"
+                "无法在本地修改订单：状态为 {status:?}，预期为已初始化（INITIALIZED）或已释放（RELEASED）"
             );
         }
 
         // Validate order type compatibility
         if price.is_some() && order.price().is_none() {
             anyhow::bail!(
-                "Cannot modify order in place: {} orders do not have a LIMIT price",
+                "无法在本地修改订单：{} 类型订单没有限价（LIMIT price）",
                 order.order_type()
             );
         }
 
         if trigger_price.is_some() && order.trigger_price().is_none() {
             anyhow::bail!(
-                "Cannot modify order in place: {} orders do not have a STOP trigger price",
+                "无法在本地修改订单：{} 类型订单没有止损触发价（STOP trigger price）",
                 order.order_type()
             );
         }
@@ -790,7 +771,7 @@ pub trait ExecutionAlgorithm: DataActor {
         let trigger_changing = trigger_price.is_some() && trigger_price != order.trigger_price();
 
         if !qty_changing && !price_changing && !trigger_changing {
-            anyhow::bail!("Cannot modify order in place: no parameters differ from current values");
+            anyhow::bail!("无法在本地修改订单：没有参数与当前值不同");
         }
 
         let core = self.core_mut();
@@ -815,7 +796,7 @@ pub trait ExecutionAlgorithm: DataActor {
 
         order
             .apply(OrderEventAny::Updated(updated))
-            .map_err(|e| anyhow::anyhow!("Failed to apply OrderUpdated: {e}"))?;
+            .map_err(|e| anyhow::anyhow!("应用 OrderUpdated 失败：{e}"))?;
 
         let cache_rc = core.cache_rc();
         let mut cache = cache_rc.borrow_mut();
@@ -824,32 +805,29 @@ pub trait ExecutionAlgorithm: DataActor {
         Ok(())
     }
 
-    /// Cancels an order.
+    /// 取消订单。
     ///
     /// # Errors
     ///
-    /// Returns an error if order cancellation fails.
+    /// 如果取消订单失败，则返回错误。
     fn cancel_order(
         &mut self,
         order: &mut OrderAny,
         client_id: Option<ClientId>,
     ) -> anyhow::Result<()> {
         if order.is_closed() || order.is_pending_cancel() {
-            log::warn!(
-                "Cannot cancel order: state is {:?}, {order:?}",
-                order.status()
-            );
+            log::warn!("无法取消订单：状态为 {:?}, {order:?}", order.status());
             return Ok(());
         }
 
         let core = self.core_mut();
-        let trader_id = core.trader_id().expect("Trader ID not set");
+        let trader_id = core.trader_id().expect("未设置交易员 ID");
         let strategy_id = order.strategy_id();
 
         if !order.is_active_local() {
             let event = self.generate_order_pending_cancel(order);
             if let Err(e) = order.apply(OrderEventAny::PendingCancel(event)) {
-                log::warn!("InvalidStateTrigger: {e}, did not apply pending cancel event");
+                log::warn!("状态转换失败（InvalidStateTrigger）：{e}，未应用待处理取消事件");
                 return Ok(());
             }
 
@@ -900,9 +878,9 @@ pub trait ExecutionAlgorithm: DataActor {
         Ok(())
     }
 
-    /// Subscribes to events from a strategy.
+    /// 订阅来自策略的事件。
     ///
-    /// This is called automatically when the first order is received from a strategy.
+    /// 当从策略接收到第一个订单时会自动调用此方法。
     fn subscribe_to_strategy_events(&mut self, strategy_id: StrategyId)
     where
         Self: 'static + std::fmt::Debug + Sized,
@@ -920,9 +898,7 @@ pub trait ExecutionAlgorithm: DataActor {
             if let Some(mut algo) = try_get_actor_unchecked::<Self>(&order_actor_id) {
                 algo.handle_order_event(event.clone());
             } else {
-                log::error!(
-                    "ExecutionAlgorithm {order_actor_id} not found for order event handling"
-                );
+                log::error!("执行算法 {order_actor_id} 未找到，无法进行订单事件处理");
             }
         });
         msgbus::subscribe_order_events(order_topic.clone().into(), order_handler.clone(), None);
@@ -932,7 +908,7 @@ pub trait ExecutionAlgorithm: DataActor {
             if let Some(mut algo) = try_get_actor_unchecked::<Self>(&actor_id) {
                 algo.handle_position_event(event.clone());
             } else {
-                log::error!("ExecutionAlgorithm {actor_id} not found for position event handling");
+                log::error!("执行算法 {actor_id} 未找到，无法进行持仓事件处理");
             }
         });
         msgbus::subscribe_position_events(
@@ -950,23 +926,23 @@ pub trait ExecutionAlgorithm: DataActor {
         core.store_strategy_event_handlers(strategy_id, handlers);
 
         core.add_subscribed_strategy(strategy_id);
-        log::info!("Subscribed to events for strategy {strategy_id}");
+        log::info!("已订阅策略 {strategy_id} 的事件");
     }
 
-    /// Unsubscribes from all strategy event handlers.
+    /// 取消订阅所有策略事件处理器。
     ///
-    /// This should be called before reset to properly clean up msgbus subscriptions.
+    /// 应在重置前调用此方法，以正确清理消息总线（msgbus）订阅。
     fn unsubscribe_all_strategy_events(&mut self) {
         let handlers = self.core_mut().take_strategy_event_handlers();
         for (strategy_id, h) in handlers {
             msgbus::unsubscribe_order_events(h.order_topic.into(), &h.order_handler);
             msgbus::unsubscribe_position_events(h.position_topic.into(), &h.position_handler);
-            log::info!("Unsubscribed from events for strategy {strategy_id}");
+            log::info!("已取消订阅策略 {strategy_id} 的事件");
         }
         self.core_mut().clear_subscribed_strategies();
     }
 
-    /// Handles an order event, filtering for algorithm-owned orders.
+    /// 处理订单事件，并过滤属于该算法持有的订单。
     fn handle_order_event(&mut self, event: OrderEventAny) {
         if self.core_mut().state() != ComponentState::Running {
             return;
@@ -1038,7 +1014,7 @@ pub trait ExecutionAlgorithm: DataActor {
         self.on_order_event(event);
     }
 
-    /// Handles a position event.
+    /// 处理持仓事件。
     fn handle_position_event(&mut self, event: PositionEvent) {
         if self.core_mut().state() != ComponentState::Running {
             return;
@@ -1062,131 +1038,131 @@ pub trait ExecutionAlgorithm: DataActor {
         self.on_position_event(event);
     }
 
-    /// Called when the algorithm is started.
+    /// 当算法启动时调用。
     ///
-    /// Override this method to implement custom initialization logic.
+    /// 覆盖此方法以实现自定义初始化逻辑。
     ///
     /// # Errors
     ///
-    /// Returns an error if start fails.
+    /// 如果启动失败，则返回错误。
     fn on_start(&mut self) -> anyhow::Result<()> {
         let id = self.id();
-        log::info!("Starting {id}");
+        log::info!("正在启动 {id}");
         Ok(())
     }
 
-    /// Called when the algorithm is stopped.
+    /// 当算法停止时调用。
     ///
     /// # Errors
     ///
-    /// Returns an error if stop fails.
+    /// 如果停止失败，则返回错误。
     fn on_stop(&mut self) -> anyhow::Result<()> {
         Ok(())
     }
 
-    /// Called when the algorithm is reset.
+    /// 当算法重置时调用。
     ///
     /// # Errors
     ///
-    /// Returns an error if reset fails.
+    /// 如果重置失败，则返回错误。
     fn on_reset(&mut self) -> anyhow::Result<()> {
         self.unsubscribe_all_strategy_events();
         self.core_mut().reset();
         Ok(())
     }
 
-    /// Called when a time event is received.
+    /// 当接收到时间事件时调用。
     ///
-    /// Override this method for timer-based algorithms like TWAP.
+    /// 对于像 TWAP 这样基于定时器的算法，请覆盖此方法。
     ///
     /// # Errors
     ///
-    /// Returns an error if time event handling fails.
+    /// 如果时间事件处理失败，则返回错误。
     fn on_time_event(&mut self, _event: &TimeEvent) -> anyhow::Result<()> {
         Ok(())
     }
 
-    /// Called when an order is initialized.
+    /// 当订单已初始化时调用。
     #[allow(unused_variables)]
     fn on_order_initialized(&mut self, event: OrderInitialized) {}
 
-    /// Called when an order is denied.
+    /// 当订单被拒绝（Denied）时调用。
     #[allow(unused_variables)]
     fn on_order_denied(&mut self, event: OrderDenied) {}
 
-    /// Called when an order is emulated.
+    /// 当订单被模拟（Emulated）时调用。
     #[allow(unused_variables)]
     fn on_order_emulated(&mut self, event: OrderEmulated) {}
 
-    /// Called when an order is released from emulation.
+    /// 当订单从模拟状态释放（Released）时调用。
     #[allow(unused_variables)]
     fn on_order_released(&mut self, event: OrderReleased) {}
 
-    /// Called when an order is submitted.
+    /// 当订单已提交时调用。
     #[allow(unused_variables)]
     fn on_order_submitted(&mut self, event: OrderSubmitted) {}
 
-    /// Called when an order is rejected.
+    /// 当订单被驳回（Rejected）时调用。
     #[allow(unused_variables)]
     fn on_order_rejected(&mut self, event: OrderRejected) {}
 
-    /// Called when an order is accepted.
+    /// 当订单被接受时调用。
     #[allow(unused_variables)]
     fn on_order_accepted(&mut self, event: OrderAccepted) {}
 
-    /// Called when an order is canceled.
+    /// 当订单被取消时调用。
     #[allow(unused_variables)]
     fn on_algo_order_canceled(&mut self, event: OrderCanceled) {}
 
-    /// Called when an order expires.
+    /// 当订单过期时调用。
     #[allow(unused_variables)]
     fn on_order_expired(&mut self, event: OrderExpired) {}
 
-    /// Called when an order is triggered.
+    /// 当订单触发时调用。
     #[allow(unused_variables)]
     fn on_order_triggered(&mut self, event: OrderTriggered) {}
 
-    /// Called when an order modification is pending.
+    /// 当订单修改处于待处理状态时调用。
     #[allow(unused_variables)]
     fn on_order_pending_update(&mut self, event: OrderPendingUpdate) {}
 
-    /// Called when an order cancellation is pending.
+    /// 当订单取消处于待处理状态时调用。
     #[allow(unused_variables)]
     fn on_order_pending_cancel(&mut self, event: OrderPendingCancel) {}
 
-    /// Called when an order modification is rejected.
+    /// 当订单修改被驳回时调用。
     #[allow(unused_variables)]
     fn on_order_modify_rejected(&mut self, event: OrderModifyRejected) {}
 
-    /// Called when an order cancellation is rejected.
+    /// 当订单取消被驳回时调用。
     #[allow(unused_variables)]
     fn on_order_cancel_rejected(&mut self, event: OrderCancelRejected) {}
 
-    /// Called when an order is updated.
+    /// 当订单已更新时调用。
     #[allow(unused_variables)]
     fn on_order_updated(&mut self, event: OrderUpdated) {}
 
-    /// Called when an order is filled.
+    /// 当订单已成交（Filled）时调用。
     #[allow(unused_variables)]
     fn on_algo_order_filled(&mut self, event: OrderFilled) {}
 
-    /// Called for any order event (after specific handler).
+    /// 对任何订单事件调用（在特定处理器之后）。
     #[allow(unused_variables)]
     fn on_order_event(&mut self, event: OrderEventAny) {}
 
-    /// Called when a position is opened.
+    /// 当持仓开启时调用。
     #[allow(unused_variables)]
     fn on_position_opened(&mut self, event: PositionOpened) {}
 
-    /// Called when a position is changed.
+    /// 当持仓发生变化时调用。
     #[allow(unused_variables)]
     fn on_position_changed(&mut self, event: PositionChanged) {}
 
-    /// Called when a position is closed.
+    /// 当持仓关闭时调用。
     #[allow(unused_variables)]
     fn on_position_closed(&mut self, event: PositionClosed) {}
 
-    /// Called for any position event (after specific handler).
+    /// 对任何持仓事件调用（在特定处理器之后）。
     #[allow(unused_variables)]
     fn on_position_event(&mut self, event: PositionEvent) {}
 }
@@ -1265,7 +1241,7 @@ mod tests {
     }
 
     fn create_test_algorithm() -> TestAlgorithm {
-        // Use unique ID to avoid thread-local registry/msgbus conflicts in parallel tests
+        // 使用唯一 ID 以避免在并行测试中出现线程局部的注册表/消息总线冲突
         let unique_id = format!("TEST-{}", UUID4::new());
         let config = ExecutionAlgorithmConfig {
             exec_algorithm_id: Some(ExecAlgorithmId::new(&unique_id)),
@@ -1281,7 +1257,7 @@ mod tests {
 
         algo.core.register(trader_id, clock, cache).unwrap();
 
-        // Transition to Running state for tests
+        // 为了测试切换到 Running 状态
         algo.transition_state(ComponentTrigger::Initialize).unwrap();
         algo.transition_state(ComponentTrigger::Start).unwrap();
         algo.transition_state(ComponentTrigger::StartCompleted)
@@ -1605,7 +1581,7 @@ mod tests {
             TimeInForce::Ioc,
             false,
             Some(tags.clone()),
-            false,
+            false, // reduce_primary
         );
 
         assert_eq!(spawned.tags, Some(tags));
@@ -1638,7 +1614,7 @@ mod tests {
             None,
         ));
 
-        // Make accepted so OrderUpdated can be applied
+        // 设置为已接受状态，以便可以应用 OrderUpdated
         let mut primary = TestOrderStubs::make_accepted_order(&order);
 
         {
@@ -1680,7 +1656,7 @@ mod tests {
             None,
         ));
 
-        // Make accepted so OrderUpdated can be applied
+        // 设置为已接受状态，以便可以应用 OrderUpdated
         let mut primary = TestOrderStubs::make_accepted_order(&order);
 
         {
@@ -1816,7 +1792,7 @@ mod tests {
             0.into(),
         ));
 
-        // Try to modify with same quantity - should fail
+        // 尝试使用相同的数量进行修改 - 应该失败
         let result =
             algo.modify_order_in_place(&mut order, Some(Quantity::from("1.0")), None, None);
 
@@ -1825,7 +1801,7 @@ mod tests {
             result
                 .unwrap_err()
                 .to_string()
-                .contains("no parameters differ")
+                .contains("没有参数与当前值不同")
         );
     }
 
@@ -2291,7 +2267,7 @@ mod tests {
         };
         assert_eq!(primary_after_accept.quantity(), Quantity::from("0.5"));
 
-        // Cancel after acceptance - no restoration should occur
+        // 接受后取消 - 不应发生恢复
         let canceled = OrderCanceled::new(
             spawned_order.trader_id(),
             spawned_order.strategy_id(),
@@ -2324,7 +2300,7 @@ mod tests {
     }
 
     #[rstest]
-    #[should_panic(expected = "exceeds primary leaves_qty")]
+    #[should_panic(expected = "超过了主订单的剩余待执行数量")]
     fn test_spawn_quantity_exceeds_leaves_qty_panics() {
         let mut algo = create_test_algorithm();
         register_algorithm(&mut algo);
@@ -2378,7 +2354,7 @@ mod tests {
         assert_eq!(primary.quantity(), Quantity::from("0.2"));
         assert_eq!(primary.leaves_qty(), Quantity::from("0.2"));
 
-        // Should panic - spawning 0.5 when only 0.2 leaves_qty remains
+        // 应该触发 Panic - 当只剩 0.2 的 leaves_qty 时生成 0.5
         let _ = algo.spawn_market(
             &mut primary,
             Quantity::from("0.5"),

@@ -1,19 +1,18 @@
 // -------------------------------------------------------------------------------------------------
-//  Copyright (C) 2015-2026 Nautech Systems Pty Ltd. All rights reserved.
+//  版权所有 (C) 2015-2026 Nautech Systems Pty Ltd。保留所有权利。
 //  https://nautechsystems.io
 //
-//  Licensed under the GNU Lesser General Public License Version 3.0 (the "License");
-//  You may not use this file except in compliance with the License.
-//  You may obtain a copy of the License at https://www.gnu.org/licenses/lgpl-3.0.en.html
+//  基于 GNU Lesser General Public License 3.0 版本（“许可证”）获得许可；
+//  除非符合许可证，否则您不得使用此文件。
+//  您可以在 https://www.gnu.org/licenses/lgpl-3.0.en.html 获取许可证副本。
 //
-//  Unless required by applicable law or agreed to in writing, software
-//  distributed under the License is distributed on an "AS IS" BASIS,
-//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-//  See the License for the specific language governing permissions and
-//  limitations under the License.
+//  除非适用法律要求或书面同意，
+//  否则根据许可证分发的软件是基于“按原样”基础分发的，
+//  不附带任何明示或暗示的保证或条件。
+//  请参阅许可证以了解管理许可证下的权限和限制的具体语言。
 // -------------------------------------------------------------------------------------------------
 
-//! Order types for the trading domain model.
+//! 交易领域模型的订单类型。
 
 pub mod any;
 #[cfg(any(test, feature = "stubs"))]
@@ -75,7 +74,7 @@ use crate::{
     types::{Currency, Money, Price, Quantity},
 };
 
-/// Order types that have stop/trigger prices.
+/// 具有止损/触发价格的订单类型。
 pub const STOP_ORDER_TYPES: &[OrderType] = &[
     OrderType::StopMarket,
     OrderType::StopLimit,
@@ -83,7 +82,7 @@ pub const STOP_ORDER_TYPES: &[OrderType] = &[
     OrderType::LimitIfTouched,
 ];
 
-/// Order types that have limit prices.
+/// 具有限价价格的订单类型。
 pub const LIMIT_ORDER_TYPES: &[OrderType] = &[
     OrderType::Limit,
     OrderType::StopLimit,
@@ -91,21 +90,20 @@ pub const LIMIT_ORDER_TYPES: &[OrderType] = &[
     OrderType::MarketIfTouched,
 ];
 
-/// Order statuses for locally active orders (pre-submission to venue).
+/// 本地活动订单（提交到交易所之前）的状态。
 pub const LOCAL_ACTIVE_ORDER_STATUSES: &[OrderStatus] = &[
     OrderStatus::Initialized,
     OrderStatus::Emulated,
     OrderStatus::Released,
 ];
 
-/// Order statuses that are safe for cancellation queries.
+/// 可以安全进行取消查询的订单状态。
 ///
-/// These are statuses where an order is working on the venue but not already
-/// in the process of being cancelled. Including `PENDING_CANCEL` in cancellation
-/// filters can cause duplicate cancel attempts or incorrect open order counts.
+/// 这些状态表示订单正在交易所工作，且尚未处于取消处理过程中。
+/// 在取消过滤器中包含 `PENDING_CANCEL` 可能会导致重复的取消尝试或未结订单计数不正确。
 ///
-/// Note: `PENDING_UPDATE` is included as orders being updated can typically still
-/// be cancelled (update and cancel are independent operations on most venues).
+/// 注意：包含 `PENDING_UPDATE` 是因为正在更新的订单通常仍可以被取消
+/// （在大多数交易所上，更新和取消是相互独立的操作）。
 pub const CANCELLABLE_ORDER_STATUSES: &[OrderStatus] = &[
     OrderStatus::Accepted,
     OrderStatus::Triggered,
@@ -113,14 +111,13 @@ pub const CANCELLABLE_ORDER_STATUSES: &[OrderStatus] = &[
     OrderStatus::PartiallyFilled,
 ];
 
-/// Returns a cached `AHashSet` of cancellable order statuses for O(1) lookups.
+/// 返回一个缓存的 `AHashSet`，包含可取消的订单状态，用于 O(1) 查找。
 ///
-/// For the small set (4 elements), using `CANCELLABLE_ORDER_STATUSES.contains()` may be
-/// equally fast due to better cache locality. Use this function when you need set operations
-/// or are building HashSet-based filters.
+/// 对于小集合（4个元素），使用 `CANCELLABLE_ORDER_STATUSES.contains()` 可能
+/// 同样快，因为缓存局部性更好。当你需要集合操作或构建基于 HashSet 的过滤器时，请使用此函数。
 ///
-/// Note: This is a module-level convenience function. You can also use
-/// `OrderStatus::cancellable_statuses_set()` directly.
+/// 注意：这是一个模块级别的便捷函数。你也可以直接使用
+/// `OrderStatus::cancellable_statuses_set()`。
 #[must_use]
 pub fn cancellable_order_statuses_set() -> &'static AHashSet<OrderStatus> {
     OrderStatus::cancellable_statuses_set()
@@ -128,25 +125,25 @@ pub fn cancellable_order_statuses_set() -> &'static AHashSet<OrderStatus> {
 
 #[derive(thiserror::Error, Debug)]
 pub enum OrderError {
-    #[error("Order not found: {0}")]
+    #[error("未找到订单: {0}")]
     NotFound(ClientOrderId),
-    #[error("Order invariant failed: must have a side for this operation")]
+    #[error("订单不变量失败: 对于此操作，必须有订单方向")]
     NoOrderSide,
-    #[error("Invalid event for order type")]
+    #[error("订单类型的事件无效")]
     InvalidOrderEvent,
-    #[error("Invalid order state transition")]
+    #[error("无效的订单状态转换")]
     InvalidStateTransition,
-    #[error("Order was already initialized")]
+    #[error("订单已初始化")]
     AlreadyInitialized,
-    #[error("Order had no previous state")]
+    #[error("订单没有先前状态")]
     NoPreviousState,
-    #[error("Duplicate fill: trade_id {0} already applied to order")]
+    #[error("重复成交: trade_id {0} 已应用到订单")]
     DuplicateFill(TradeId),
     #[error("{0}")]
     Invariant(#[from] anyhow::Error),
 }
 
-/// Converts an IndexMap with `Ustr` keys and values to `String` keys and values.
+/// 将具有 `Ustr` 键和值的 IndexMap 转换为 `String` 键和值。
 #[must_use]
 pub fn ustr_indexmap_to_str(h: IndexMap<Ustr, Ustr>) -> IndexMap<String, String> {
     h.into_iter()
@@ -154,7 +151,7 @@ pub fn ustr_indexmap_to_str(h: IndexMap<Ustr, Ustr>) -> IndexMap<String, String>
         .collect()
 }
 
-/// Converts an IndexMap with `String` keys and values to `Ustr` keys and values.
+/// 将具有 `String` 键和值的 IndexMap 转换为 `Ustr` 键和值。
 #[must_use]
 pub fn str_indexmap_to_ustr(h: IndexMap<String, String>) -> IndexMap<Ustr, Ustr> {
     h.into_iter()
@@ -191,11 +188,11 @@ pub(crate) fn check_time_in_force(
 }
 
 impl OrderStatus {
-    /// Transitions the order state machine based on the given `event`.
+    /// 基于给定的 `event` 转换订单状态机。
     ///
     /// # Errors
     ///
-    /// Returns an error if the state transition is invalid from the current status.
+    /// 如果从当前状态进行的转换无效，则返回错误。
     #[rustfmt::skip]
     pub fn transition(&mut self, event: &OrderEventAny) -> Result<Self, OrderError> {
         let new_state = match (self, event) {
@@ -315,7 +312,7 @@ pub trait Order: 'static + Send {
     fn leaves_qty(&self) -> Quantity;
     fn overfill_qty(&self) -> Quantity;
 
-    /// Calculates potential overfill quantity without mutating order state.
+    /// 计算潜在的超额成交数量，不改变订单状态。
     fn calculate_overfill(&self, fill_qty: Quantity) -> Quantity {
         let potential_filled = self.filled_qty() + fill_qty;
         potential_filled.saturating_sub(self.quantity())
@@ -335,21 +332,19 @@ pub trait Order: 'static + Send {
     }
     fn commissions(&self) -> &IndexMap<Currency, Money>;
 
-    /// Applies the `event` to the order.
+    /// 将 `event` 应用于订单。
     ///
     /// # Errors
     ///
-    /// Returns an error if the event is invalid for the current order status.
+    /// 如果事件对于当前订单状态无效，则返回错误。
     fn apply(&mut self, event: OrderEventAny) -> Result<(), OrderError>;
     fn update(&mut self, event: &OrderUpdated);
 
     fn events(&self) -> Vec<&OrderEventAny>;
 
     fn last_event(&self) -> &OrderEventAny {
-        // SAFETY: Order specification guarantees at least one event (OrderInitialized)
-        self.events()
-            .last()
-            .expect("Order invariant violated: no events")
+        // 安全性：订单规范保证至少有一个事件 (OrderInitialized)
+        self.events().last().expect("订单不变量被破坏: 没有事件")
     }
 
     fn event_count(&self) -> usize {
@@ -362,7 +357,7 @@ pub trait Order: 'static + Send {
 
     fn has_price(&self) -> bool;
 
-    /// Returns `true` if a fill with matching trade_id, side, qty, and price already exists.
+    /// 如果存在具有匹配的 trade_id、side、qty 和 price 的成交，则返回 `true`。
     fn is_duplicate_fill(&self, fill: &OrderFilled) -> bool {
         self.events().iter().any(|event| {
             if let OrderEventAny::Filled(existing) = event {
@@ -603,7 +598,7 @@ pub struct OrderCore {
 }
 
 impl OrderCore {
-    /// Creates a new [`OrderCore`] instance.
+    /// 创建一个新的 [`OrderCore`] 实例。
     pub fn new(init: OrderInitialized) -> Self {
         let events: Vec<OrderEventAny> = vec![OrderEventAny::Initialized(init.clone())];
         Self {
@@ -653,12 +648,11 @@ impl OrderCore {
         }
     }
 
-    /// Applies the `event` to the order.
+    /// 将 `event` 应用于订单。
     ///
     /// # Errors
     ///
-    /// Returns an error if the event is invalid for the current order status, or if
-    /// `event.client_order_id()` or `event.strategy_id()` does not match the order.
+    /// 如果事件对于当前订单状态无效，或者 `event.client_order_id()` 或 `event.strategy_id()` 与订单不匹配，则返回错误。
     pub fn apply(&mut self, event: OrderEventAny) -> Result<(), OrderError> {
         if self.client_order_id != event.client_order_id() {
             return Err(OrderError::Invariant(anyhow::anyhow!(
@@ -675,10 +669,10 @@ impl OrderCore {
             )));
         }
 
-        // Save current status as previous_status for ALL transitions except:
-        // - Initialized (no prior state exists)
-        // - ModifyRejected/CancelRejected (need to preserve the pre Pending state)
-        // - When already in Pending* state (avoid overwriting the pre Pending state when receiving multiple pending requests)
+        // 除了以下情况，将当前状态保存为 previous_status 以用于所有转换：
+        // - Initialized (不存在先前状态)
+        // - ModifyRejected/CancelRejected (需要保留 Pending 之前的状态)
+        // - 已经处于 Pending* 状态时 (避免在收到多个 pending 请求时覆盖 Pending 之前的状态)
         if !matches!(
             event,
             OrderEventAny::Initialized(_)
@@ -691,7 +685,7 @@ impl OrderCore {
             self.previous_status = Some(self.status);
         }
 
-        // Check for duplicate fill before state transition to maintain consistency
+        // 在状态转换之前检查重复成交以保持一致性
         if let OrderEventAny::Filled(fill) = &event
             && self.trade_ids.contains(&fill.trade_id)
         {
@@ -836,7 +830,7 @@ impl OrderCore {
             return;
         }
 
-        // Use previous filled quantity (before current fill) to avoid double-counting
+        // 使用之前的成交数量（在当前成交之前）以避免重复计算
         let prev_filled_qty = (self.filled_qty - last_qty).as_f64();
         let last_qty_f64 = last_qty.as_f64();
         let total_qty = prev_filled_qty + last_qty_f64;
@@ -1168,7 +1162,7 @@ mod tests {
     fn test_to_own_book_order_timestamp_ordering() {
         use crate::orders::limit::LimitOrder;
 
-        // Create order with distinct timestamps to verify parameter ordering
+        // 创建具有不同时间戳的订单以验证参数顺序
         let init = OrderInitializedBuilder::default()
             .price(Some(Price::from("100.00")))
             .build()
@@ -1188,7 +1182,7 @@ mod tests {
 
         let own_book_order = order.to_own_book_order();
 
-        // Verify timestamps are in correct positions
+        // 验证时间戳在正确的位置
         assert_eq!(own_book_order.ts_submitted, UnixNanos::from(1_000_000));
         assert_eq!(own_book_order.ts_accepted, UnixNanos::from(2_000_000));
         assert_eq!(own_book_order.ts_last, UnixNanos::from(2_000_000));
@@ -1196,7 +1190,7 @@ mod tests {
 
     #[rstest]
     fn test_order_accepted_without_submitted_sets_account_id() {
-        // Test external order flow: Initialized -> Accepted (no Submitted)
+        // 测试外部订单流程：Initialized -> Accepted (无 Submitted)
         let init = OrderInitializedBuilder::default().build().unwrap();
         let accepted = OrderAcceptedBuilder::default()
             .account_id(AccountId::from("EXTERNAL-001"))
@@ -1205,20 +1199,20 @@ mod tests {
 
         let mut order: MarketOrder = init.into();
 
-        // Verify account_id is initially None
+        // 验证 account_id 初始为 None
         assert_eq!(order.account_id(), None);
 
-        // Apply accepted event directly (external order case)
+        // 直接应用 accepted 事件（外部订单情况）
         order.apply(OrderEventAny::Accepted(accepted)).unwrap();
 
-        // Verify account_id is now set from the accepted event
+        // 验证 account_id 现在是否已从 accepted 事件中设置
         assert_eq!(order.account_id(), Some(AccountId::from("EXTERNAL-001")));
         assert_eq!(order.status(), OrderStatus::Accepted);
     }
 
     #[rstest]
     fn test_order_accepted_after_submitted_preserves_account_id() {
-        // Test normal order flow: Initialized -> Submitted -> Accepted
+        // 测试正常订单流程：Initialized -> Submitted -> Accepted
         let init = OrderInitializedBuilder::default().build().unwrap();
         let submitted = OrderSubmittedBuilder::default()
             .account_id(AccountId::from("SUBMITTED-001"))
@@ -1232,20 +1226,20 @@ mod tests {
         let mut order: MarketOrder = init.into();
         order.apply(OrderEventAny::Submitted(submitted)).unwrap();
 
-        // After submitted, account_id should be set
+        // 提交后，account_id 应该被设置
         assert_eq!(order.account_id(), Some(AccountId::from("SUBMITTED-001")));
 
-        // Apply accepted event
+        // 应用 accepted 事件
         order.apply(OrderEventAny::Accepted(accepted)).unwrap();
 
-        // account_id should now be updated to the accepted event's account_id
+        // account_id 现在应该更新为 accepted 事件的 account_id
         assert_eq!(order.account_id(), Some(AccountId::from("ACCEPTED-001")));
         assert_eq!(order.status(), OrderStatus::Accepted);
     }
 
     #[rstest]
     fn test_overfill_tracks_overfill_qty() {
-        // Test that overfill is tracked on the order
+        // 测试订单是否跟踪超额成交
         let init = OrderInitializedBuilder::default()
             .quantity(Quantity::from(100_000))
             .build()
@@ -1253,7 +1247,7 @@ mod tests {
         let submitted = OrderSubmittedBuilder::default().build().unwrap();
         let accepted = OrderAcceptedBuilder::default().build().unwrap();
         let overfill = OrderFilledBuilder::default()
-            .last_qty(Quantity::from(110_000)) // Overfill: 110k > 100k
+            .last_qty(Quantity::from(110_000)) // 超额成交：110k > 100k
             .build()
             .unwrap();
 
@@ -1262,7 +1256,7 @@ mod tests {
         order.apply(OrderEventAny::Accepted(accepted)).unwrap();
         order.apply(OrderEventAny::Filled(overfill)).unwrap();
 
-        // Order should track overfill
+        // 订单应该跟踪超额成交
         assert_eq!(order.overfill_qty(), Quantity::from(10_000));
         assert_eq!(order.filled_qty(), Quantity::from(110_000));
         assert_eq!(order.leaves_qty(), Quantity::from(0));
@@ -1271,7 +1265,7 @@ mod tests {
 
     #[rstest]
     fn test_partial_fill_then_overfill() {
-        // Test multiple fills resulting in overfill
+        // 测试多次成交导致的超额成交
         let init = OrderInitializedBuilder::default()
             .quantity(Quantity::from(100_000))
             .build()
@@ -1284,7 +1278,7 @@ mod tests {
             .build()
             .unwrap();
         let fill2 = OrderFilledBuilder::default()
-            .last_qty(Quantity::from(30_000)) // Total 110k > 100k
+            .last_qty(Quantity::from(30_000)) // 总计 110k > 100k
             .trade_id(TradeId::from("TRADE-2"))
             .build()
             .unwrap();
@@ -1294,14 +1288,14 @@ mod tests {
         order.apply(OrderEventAny::Accepted(accepted)).unwrap();
         order.apply(OrderEventAny::Filled(fill1)).unwrap();
 
-        // After first fill, no overfill
+        // 第一次成交后，无超额成交
         assert_eq!(order.overfill_qty(), Quantity::from(0));
         assert_eq!(order.filled_qty(), Quantity::from(80_000));
         assert_eq!(order.leaves_qty(), Quantity::from(20_000));
 
         order.apply(OrderEventAny::Filled(fill2)).unwrap();
 
-        // After second fill, overfill detected
+        // 第二次成交后，检测到超额成交
         assert_eq!(order.overfill_qty(), Quantity::from(10_000));
         assert_eq!(order.filled_qty(), Quantity::from(110_000));
         assert_eq!(order.leaves_qty(), Quantity::from(0));
@@ -1310,7 +1304,7 @@ mod tests {
 
     #[rstest]
     fn test_exact_fill_no_overfill() {
-        // Test that exact fill doesn't trigger overfill tracking
+        // 测试精确成交不会触发超额成交跟踪
         let init = OrderInitializedBuilder::default()
             .quantity(Quantity::from(100_000))
             .build()
@@ -1318,7 +1312,7 @@ mod tests {
         let submitted = OrderSubmittedBuilder::default().build().unwrap();
         let accepted = OrderAcceptedBuilder::default().build().unwrap();
         let filled = OrderFilledBuilder::default()
-            .last_qty(Quantity::from(100_000)) // Exact fill
+            .last_qty(Quantity::from(100_000)) // 精确成交
             .build()
             .unwrap();
 
@@ -1327,7 +1321,7 @@ mod tests {
         order.apply(OrderEventAny::Accepted(accepted)).unwrap();
         order.apply(OrderEventAny::Filled(filled)).unwrap();
 
-        // No overfill
+        // 无超额成交
         assert_eq!(order.overfill_qty(), Quantity::from(0));
         assert_eq!(order.filled_qty(), Quantity::from(100_000));
         assert_eq!(order.leaves_qty(), Quantity::from(0));
@@ -1335,9 +1329,9 @@ mod tests {
 
     #[rstest]
     fn test_partial_fill_then_overfill_with_fractional_quantities() {
-        // Simulates real exchange scenario with fractional fills:
-        // Order for 2450.5 units, partially filled 1202.5, then fill of 1285.5 arrives
-        // Total filled: 2488.0, overfill: 37.5
+        // 模拟具有小数成交的真实交易所场景：
+        // 订单数量 2450.5，部分成交 1202.5，然后 1285.5 的成交到达
+        // 总成交：2488.0，超额成交：37.5
         let init = OrderInitializedBuilder::default()
             .quantity(Quantity::from("2450.5"))
             .build()
@@ -1360,7 +1354,7 @@ mod tests {
         order.apply(OrderEventAny::Accepted(accepted)).unwrap();
         order.apply(OrderEventAny::Filled(fill1)).unwrap();
 
-        // After first fill, no overfill
+        // 第一次成交后，无超额成交
         assert_eq!(order.overfill_qty(), Quantity::from(0));
         assert_eq!(order.filled_qty(), Quantity::from("1202.5"));
         assert_eq!(order.leaves_qty(), Quantity::from("1248.0"));
@@ -1368,7 +1362,7 @@ mod tests {
 
         order.apply(OrderEventAny::Filled(fill2)).unwrap();
 
-        // After second fill, overfill detected and tracked
+        // 第二次成交后，检测并跟踪到超额成交
         assert_eq!(order.overfill_qty(), Quantity::from("37.5"));
         assert_eq!(order.filled_qty(), Quantity::from("2488.0"));
         assert_eq!(order.leaves_qty(), Quantity::from(0));
@@ -1383,7 +1377,7 @@ mod tests {
             .unwrap()
             .into();
 
-        // Fill qty less than order qty - no overfill
+        // 成交数量小于订单数量 - 无超额成交
         let overfill = order.calculate_overfill(Quantity::from(50_000));
         assert_eq!(overfill, Quantity::from(0));
 
@@ -1400,7 +1394,7 @@ mod tests {
             .unwrap()
             .into();
 
-        // Fill qty exceeds order qty
+        // 成交数量超过订单数量
         let overfill = order.calculate_overfill(Quantity::from(110_000));
         assert_eq!(overfill, Quantity::from(10_000));
     }
@@ -1423,8 +1417,8 @@ mod tests {
         order.apply(OrderEventAny::Accepted(accepted)).unwrap();
         order.apply(OrderEventAny::Filled(partial_fill)).unwrap();
 
-        // Order is 60k filled, 40k remaining
-        // Fill of 50k would overfill by 10k
+        // 订单已成交 60k，剩余 40k
+        // 50k 的成交将超额成交 10k
         let overfill = order.calculate_overfill(Quantity::from(50_000));
         assert_eq!(overfill, Quantity::from(10_000));
 
@@ -1441,8 +1435,8 @@ mod tests {
             .unwrap()
             .into();
 
-        // Simulates the exact scenario from user's log
-        // Order for 2450.5, if fill of 2488.0 arrives
+        // 模拟用户日志中的确切场景
+        // 订单 2450.5，如果 2488.0 的成交到达
         let overfill = order.calculate_overfill(Quantity::from("2488.0"));
         assert_eq!(overfill, Quantity::from("37.5"));
     }
@@ -1462,7 +1456,7 @@ mod tests {
             .unwrap();
         let fill2_duplicate = OrderFilledBuilder::default()
             .last_qty(Quantity::from(50_000))
-            .trade_id(TradeId::from("TRADE-001")) // Same trade_id as fill1
+            .trade_id(TradeId::from("TRADE-001")) // 与 fill1 相同的 trade_id
             .build()
             .unwrap();
 
@@ -1471,11 +1465,11 @@ mod tests {
         order.apply(OrderEventAny::Accepted(accepted)).unwrap();
         order.apply(OrderEventAny::Filled(fill1)).unwrap();
 
-        // Verify first fill applied successfully
+        // 验证第一次成交应用成功
         assert_eq!(order.filled_qty(), Quantity::from(50_000));
         assert_eq!(order.status(), OrderStatus::PartiallyFilled);
 
-        // Applying duplicate fill should return DuplicateFill error
+        // 应用重复的成交应返回 DuplicateFill 错误
         let result = order.apply(OrderEventAny::Filled(fill2_duplicate));
         assert!(result.is_err());
         match result.unwrap_err() {
@@ -1485,7 +1479,7 @@ mod tests {
             e => panic!("Expected DuplicateFill error, was: {e:?}"),
         }
 
-        // Order state should be unchanged after rejected duplicate
+        // 拒绝重复后订单状态应保持不变
         assert_eq!(order.filled_qty(), Quantity::from(50_000));
         assert_eq!(order.status(), OrderStatus::PartiallyFilled);
     }
@@ -1505,7 +1499,7 @@ mod tests {
             .unwrap();
         let fill2 = OrderFilledBuilder::default()
             .last_qty(Quantity::from(50_000))
-            .trade_id(TradeId::from("TRADE-002")) // Different trade_id
+            .trade_id(TradeId::from("TRADE-002")) // 不同的 trade_id
             .build()
             .unwrap();
 
@@ -1515,7 +1509,7 @@ mod tests {
         order.apply(OrderEventAny::Filled(fill1)).unwrap();
         order.apply(OrderEventAny::Filled(fill2)).unwrap();
 
-        // Both fills should be applied
+        // 两个成交都应该被应用
         assert_eq!(order.filled_qty(), Quantity::from(100_000));
         assert_eq!(order.status(), OrderStatus::Filled);
         assert_eq!(order.trade_ids.len(), 2);
@@ -1523,8 +1517,8 @@ mod tests {
 
     #[rstest]
     fn test_partially_filled_order_can_be_updated() {
-        // Test that a partially filled order can receive an Updated event
-        // and remain in PartiallyFilled status
+        // 测试部分成交的订单可以接收 Updated 事件
+        // 并保持 PartiallyFilled 状态
         let init = OrderInitializedBuilder::default()
             .quantity(Quantity::from(100_000))
             .build()
@@ -1536,7 +1530,7 @@ mod tests {
             .build()
             .unwrap();
         let updated = OrderUpdatedBuilder::default()
-            .quantity(Quantity::from(80_000)) // Reduce to 80k (still > 40k filled)
+            .quantity(Quantity::from(80_000)) // 减少到 80k (仍然 > 40k 已成交)
             .build()
             .unwrap();
 
@@ -1552,13 +1546,13 @@ mod tests {
 
         assert_eq!(order.status(), OrderStatus::PartiallyFilled);
         assert_eq!(order.quantity(), Quantity::from(80_000));
-        assert_eq!(order.leaves_qty(), Quantity::from(40_000)); // 80k - 40k filled
+        assert_eq!(order.leaves_qty(), Quantity::from(40_000)); // 80k - 40k 已成交
     }
 
     #[rstest]
     fn test_triggered_order_can_be_updated() {
-        // Test that a triggered order can receive an Updated event
-        // and remain in Triggered status
+        // 测试已触发的订单可以接收 Updated 事件
+        // 并保持 Triggered 状态
         let init = OrderInitializedBuilder::default()
             .quantity(Quantity::from(100_000))
             .build()

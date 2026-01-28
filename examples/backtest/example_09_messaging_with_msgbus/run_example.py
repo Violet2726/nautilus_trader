@@ -35,17 +35,17 @@ from nautilus_trader.model.objects import Money
 
 if __name__ == "__main__":
     # ----------------------------------------------------------------------------------
-    # 1. Configure and create backtest engine
+    # 1. 配置并创建回测引擎
     # ----------------------------------------------------------------------------------
 
     engine_config = BacktestEngineConfig(
-        trader_id=TraderId("BACKTEST-EVENTS-001"),  # Unique identifier for this backtest
+        trader_id=TraderId("BACKTEST-EVENTS-001"),  # 此回测的唯一标识符
         logging=LoggingConfig(log_level="INFO"),
     )
     engine = BacktestEngine(config=engine_config)
 
     # ----------------------------------------------------------------------------------
-    # 2. Prepare market data
+    # 2. 准备市场数据
     # ----------------------------------------------------------------------------------
 
     prepared_data: dict = prepare_demo_data_eurusd_futures_1min()
@@ -55,41 +55,41 @@ if __name__ == "__main__":
     eurusd_1min_bars: list[Bar] = prepared_data["bars_list"]
 
     # ----------------------------------------------------------------------------------
-    # 3. Configure trading environment
+    # 3. 配置交易环境
     # ----------------------------------------------------------------------------------
 
-    # Set up the trading venue with a margin account
+    # 设置带保证金账户的交易场所
     engine.add_venue(
         venue=Venue(venue_name),
-        oms_type=OmsType.NETTING,  # Use a netting order management system
-        account_type=AccountType.MARGIN,  # Use a margin trading account
-        starting_balances=[Money(1_000_000, USD)],  # Set initial capital
-        base_currency=USD,  # Account currency
-        default_leverage=Decimal(1),  # No leverage (1:1)
+        oms_type=OmsType.NETTING,  # 使用净额结算订单管理系统
+        account_type=AccountType.MARGIN,  # 使用保证金交易账户
+        starting_balances=[Money(1_000_000, USD)],  # 设置初始资本
+        base_currency=USD,  # 账户币种
+        default_leverage=Decimal(1),  # 无杠杆 (1:1)
     )
 
-    # Register the trading instrument
+    # 注册交易合约
     engine.add_instrument(eurusd_instrument)
 
-    # Load historical market data
+    # 加载历史市场数据
     engine.add_data(eurusd_1min_bars)
 
     # ----------------------------------------------------------------------------------
-    # 4. Configure and run strategy
+    # 4. 配置并运行策略
     # ----------------------------------------------------------------------------------
 
-    # Create strategy configuration
+    # 创建策略配置
     strategy_config = DemoStrategyConfig(
         instrument=eurusd_instrument,
         bar_type=eurusd_1min_bartype,
     )
 
-    # Create and register the strategy
+    # 创建并注册策略
     strategy = DemoStrategy(config=strategy_config)
     engine.add_strategy(strategy)
 
-    # Execute the backtest
+    # 执行回测
     engine.run()
 
-    # Clean up resources
+    # 清理资源
     engine.dispose()

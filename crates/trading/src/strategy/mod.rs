@@ -1,16 +1,15 @@
 // -------------------------------------------------------------------------------------------------
-//  Copyright (C) 2015-2026 Nautech Systems Pty Ltd. All rights reserved.
+//  版权所有 (C) 2015-2026 Nautech Systems Pty Ltd。保留所有权利。
 //  https://nautechsystems.io
 //
-//  Licensed under the GNU Lesser General Public License Version 3.0 (the "License");
-//  You may not use this file except in compliance with the License.
-//  You may obtain a copy of the License at https://www.gnu.org/licenses/lgpl-3.0.en.html
+//  基于 GNU Lesser General Public License 3.0 版本（“许可证”）获得许可；
+//  除非符合许可证，否则您不得使用此文件。
+//  您可以在 https://www.gnu.org/licenses/lgpl-3.0.en.html 获取许可证副本。
 //
-//  Unless required by applicable law or agreed to in writing, software
-//  distributed under the License is distributed on an "AS IS" BASIS,
-//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-//  See the License for the specific language governing permissions and
-//  limitations under the License.
+//  除非适用法律要求或书面同意，
+//  否则根据许可证分发的软件是基于“按原样”基础分发的，
+//  不附带任何明示或暗示的保证或条件。
+//  请参阅许可证以了解管理许可证下的权限和限制的具体语言。
 // -------------------------------------------------------------------------------------------------
 
 pub mod config;
@@ -46,47 +45,45 @@ use nautilus_model::{
 };
 use ustr::Ustr;
 
-/// Core trait for implementing trading strategies in NautilusTrader.
+/// NautilusTrader 中实现交易策略的核心 trait。
 ///
-/// Strategies are specialized [`DataActor`]s that combine data ingestion capabilities with
-/// comprehensive order and position management functionality. By implementing this trait,
-/// custom strategies gain access to the full trading execution stack including order
-/// submission, modification, cancellation, and position management.
+/// 策略是专门的 [`DataActor`]，它结合了数据摄入能力与
+/// 全面的订单和持仓管理功能。通过实现此 trait，
+/// 自定义策略可以访问包括订单提交、修改、取消和持仓管理在内的
+/// 完整交易执行栈。
 ///
-/// # Key Capabilities
+/// # 关键能力
 ///
-/// - All [`DataActor`] capabilities (data subscriptions, event handling, timers).
-/// - Order lifecycle management (submit, modify, cancel).
-/// - Position management (open, close, monitor).
-/// - Access to the trading cache and portfolio.
-/// - Event routing to order manager and emulator.
+/// - 所有 [`DataActor`] 能力（数据订阅、事件处理、定时器）。
+/// - 订单生命周期管理（提交、修改、取消）。
+/// - 持仓管理（开仓、平仓、监控）。
+/// - 访问交易缓存和投资组合。
+/// - 将事件路由到订单管理器和模拟器。
 ///
-/// # Implementation
+/// # 实现
 ///
-/// User strategies should implement the [`Strategy::core_mut`] method to provide
-/// access to their internal [`StrategyCore`], which handles the integration with
-/// the trading engine. All order and position management methods are provided
-/// as default implementations.
+/// 用户策略应实现 [`Strategy::core_mut`] 方法以提供
+/// 对其内部 [`StrategyCore`] 的访问，该核心处理与
+/// 交易引擎的集成。所有订单和持仓管理方法均作为默认实现提供。
 pub trait Strategy: DataActor {
-    /// Provides mutable access to the internal `StrategyCore`.
+    /// 提供对内部 `StrategyCore` 的可变访问。
     ///
-    /// This method must be implemented by the user's strategy struct, typically
-    /// by returning a mutable reference to its `StrategyCore` member.
+    /// 此方法必须由用户的策略结构体实现，通常是
+    /// 返回其 `StrategyCore` 成员的可变引用。
     fn core_mut(&mut self) -> &mut StrategyCore;
 
-    /// Returns the external order claims for this strategy.
+    /// 返回此策略的外部订单认领声明。
     ///
-    /// These are instrument IDs whose external orders should be claimed by this strategy
-    /// during reconciliation.
+    /// 这些是在对账期间，其外部订单应被此策略认领的交易工具 ID。
     fn external_order_claims(&self) -> Option<Vec<InstrumentId>> {
         None
     }
 
-    /// Submits an order.
+    /// 提交订单。
     ///
     /// # Errors
     ///
-    /// Returns an error if the strategy is not registered or order submission fails.
+    /// 如果策略未注册或订单提交失败，则返回错误。
     fn submit_order(
         &mut self,
         order: OrderAny,
@@ -96,11 +93,11 @@ pub trait Strategy: DataActor {
         self.submit_order_with_params(order, position_id, client_id, IndexMap::new())
     }
 
-    /// Submits an order with adapter-specific parameters.
+    /// 提交带特定适配器参数的订单。
     ///
     /// # Errors
     ///
-    /// Returns an error if the strategy is not registered or order submission fails.
+    /// 如果策略未注册或订单提交失败，则返回错误。
     fn submit_order_with_params(
         &mut self,
         order: OrderAny,
@@ -110,7 +107,7 @@ pub trait Strategy: DataActor {
     ) -> anyhow::Result<()> {
         let core = self.core_mut();
 
-        let trader_id = core.trader_id().expect("Trader ID not set");
+        let trader_id = core.trader_id().expect("未设置交易员 ID");
         let strategy_id = StrategyId::from(core.actor_id().inner().as_str());
         let ts_init = core.clock().timestamp_ns();
 
@@ -156,12 +153,11 @@ pub trait Strategy: DataActor {
         Ok(())
     }
 
-    /// Submits an order list.
+    /// 提交订单列表。
     ///
     /// # Errors
     ///
-    /// Returns an error if the strategy is not registered, the order list is invalid,
-    /// or order list submission fails.
+    /// 如果策略未注册、订单列表无效或订单列表提交失败，则返回错误。
     fn submit_order_list(
         &mut self,
         order_list: OrderList,
@@ -170,28 +166,25 @@ pub trait Strategy: DataActor {
     ) -> anyhow::Result<()> {
         let core = self.core_mut();
 
-        let trader_id = core.trader_id().expect("Trader ID not set");
+        let trader_id = core.trader_id().expect("未设置交易员 ID");
         let strategy_id = StrategyId::from(core.actor_id().inner().as_str());
         let ts_init = core.clock().timestamp_ns();
         {
             let cache_rc = core.cache_rc();
             let cache = cache_rc.borrow();
             if cache.order_list_exists(&order_list.id) {
-                anyhow::bail!("OrderList denied: duplicate {}", order_list.id);
+                anyhow::bail!("拒绝订单列表：重复的 {}", order_list.id);
             }
 
             for order in &order_list.orders {
                 if order.status() != OrderStatus::Initialized {
                     anyhow::bail!(
-                        "Order in list denied: invalid status for {}, expected INITIALIZED",
+                        "拒绝列表中的订单：{} 状态无效，预期为 INITIALIZED",
                         order.client_order_id()
                     );
                 }
                 if cache.order_exists(&order.client_order_id()) {
-                    anyhow::bail!(
-                        "Order in list denied: duplicate {}",
-                        order.client_order_id()
-                    );
+                    anyhow::bail!("拒绝列表中的订单：重复的 {}", order.client_order_id());
                 }
             }
         }
@@ -246,12 +239,11 @@ pub trait Strategy: DataActor {
         Ok(())
     }
 
-    /// Submits an order list with adapter-specific parameters.
+    /// 提交带特定适配器参数的订单列表。
     ///
     /// # Errors
     ///
-    /// Returns an error if the strategy is not registered, the order list is invalid,
-    /// or order list submission fails.
+    /// 如果策略未注册、订单列表无效或订单列表提交失败，则返回错误。
     fn submit_order_list_with_params(
         &mut self,
         order_list: OrderList,
@@ -261,28 +253,25 @@ pub trait Strategy: DataActor {
     ) -> anyhow::Result<()> {
         let core = self.core_mut();
 
-        let trader_id = core.trader_id().expect("Trader ID not set");
+        let trader_id = core.trader_id().expect("未设置交易员 ID");
         let strategy_id = StrategyId::from(core.actor_id().inner().as_str());
         let ts_init = core.clock().timestamp_ns();
         {
             let cache_rc = core.cache_rc();
             let cache = cache_rc.borrow();
             if cache.order_list_exists(&order_list.id) {
-                anyhow::bail!("OrderList denied: duplicate {}", order_list.id);
+                anyhow::bail!("拒绝订单列表：重复的 {}", order_list.id);
             }
 
             for order in &order_list.orders {
                 if order.status() != OrderStatus::Initialized {
                     anyhow::bail!(
-                        "Order in list denied: invalid status for {}, expected INITIALIZED",
+                        "拒绝列表中的订单：{} 状态无效，预期为 INITIALIZED",
                         order.client_order_id()
                     );
                 }
                 if cache.order_exists(&order.client_order_id()) {
-                    anyhow::bail!(
-                        "Order in list denied: duplicate {}",
-                        order.client_order_id()
-                    );
+                    anyhow::bail!("拒绝列表中的订单：重复的 {}", order.client_order_id());
                 }
             }
         }
@@ -343,11 +332,11 @@ pub trait Strategy: DataActor {
         Ok(())
     }
 
-    /// Modifies an order.
+    /// 修改订单。
     ///
     /// # Errors
     ///
-    /// Returns an error if the strategy is not registered or order modification fails.
+    /// 如果策略未注册或订单修改失败，则返回错误。
     fn modify_order(
         &mut self,
         order: OrderAny,
@@ -366,11 +355,11 @@ pub trait Strategy: DataActor {
         )
     }
 
-    /// Modifies an order with adapter-specific parameters.
+    /// 修改带特定适配器参数的订单。
     ///
     /// # Errors
     ///
-    /// Returns an error if the strategy is not registered or order modification fails.
+    /// 如果策略未注册或订单修改失败，则返回错误。
     fn modify_order_with_params(
         &mut self,
         order: OrderAny,
@@ -382,7 +371,7 @@ pub trait Strategy: DataActor {
     ) -> anyhow::Result<()> {
         let core = self.core_mut();
 
-        let trader_id = core.trader_id().expect("Trader ID not set");
+        let trader_id = core.trader_id().expect("未设置交易员 ID");
         let strategy_id = StrategyId::from(core.actor_id().inner().as_str());
         let ts_init = core.clock().timestamp_ns();
 
@@ -421,20 +410,20 @@ pub trait Strategy: DataActor {
         Ok(())
     }
 
-    /// Cancels an order.
+    /// 取消订单。
     ///
     /// # Errors
     ///
-    /// Returns an error if the strategy is not registered or order cancellation fails.
+    /// 如果策略未注册或订单取消失败，则返回错误。
     fn cancel_order(&mut self, order: OrderAny, client_id: Option<ClientId>) -> anyhow::Result<()> {
         self.cancel_order_with_params(order, client_id, IndexMap::new())
     }
 
-    /// Cancels an order with adapter-specific parameters.
+    /// 取消带特定适配器参数的订单。
     ///
     /// # Errors
     ///
-    /// Returns an error if the strategy is not registered or order cancellation fails.
+    /// 如果策略未注册或订单取消失败，则返回错误。
     fn cancel_order_with_params(
         &mut self,
         order: OrderAny,
@@ -443,7 +432,7 @@ pub trait Strategy: DataActor {
     ) -> anyhow::Result<()> {
         let core = self.core_mut();
 
-        let trader_id = core.trader_id().expect("Trader ID not set");
+        let trader_id = core.trader_id().expect("未设置交易员 ID");
         let strategy_id = StrategyId::from(core.actor_id().inner().as_str());
         let ts_init = core.clock().timestamp_ns();
 
@@ -482,12 +471,11 @@ pub trait Strategy: DataActor {
         Ok(())
     }
 
-    /// Batch cancels multiple orders for the same instrument.
+    /// 批量取消同一交易工具的多个订单。
     ///
     /// # Errors
     ///
-    /// Returns an error if the strategy is not registered, the orders span multiple instruments,
-    /// or contain emulated/local orders.
+    /// 如果策略未注册、订单跨越多个交易工具、或包含模拟/本地订单，则返回错误。
     fn cancel_orders(
         &mut self,
         mut orders: Vec<OrderAny>,
@@ -495,11 +483,11 @@ pub trait Strategy: DataActor {
         params: Option<IndexMap<String, String>>,
     ) -> anyhow::Result<()> {
         if orders.is_empty() {
-            anyhow::bail!("Cannot batch cancel empty order list");
+            anyhow::bail!("无法批量取消空订单列表");
         }
 
         let core = self.core_mut();
-        let trader_id = core.trader_id().expect("Trader ID not set");
+        let trader_id = core.trader_id().expect("未设置交易员 ID");
         let strategy_id = StrategyId::from(core.actor_id().inner().as_str());
         let ts_init = core.clock().timestamp_ns();
 
@@ -511,7 +499,7 @@ pub trait Strategy: DataActor {
         let instrument_id = first.instrument_id();
 
         if first.is_emulated() || first.is_active_local() {
-            anyhow::bail!("Cannot include emulated or local orders in batch cancel");
+            anyhow::bail!("批量取消中不能包含模拟或本地订单");
         }
 
         let mut cancels = Vec::with_capacity(orders.len() + 1);
@@ -530,14 +518,14 @@ pub trait Strategy: DataActor {
         for order in orders {
             if order.instrument_id() != instrument_id {
                 anyhow::bail!(
-                    "Cannot batch cancel orders for different instruments: {} vs {}",
+                    "无法批量取消不同交易工具的订单：{} vs {}",
                     instrument_id,
                     order.instrument_id()
                 );
             }
 
             if order.is_emulated() || order.is_active_local() {
-                anyhow::bail!("Cannot include emulated or local orders in batch cancel");
+                anyhow::bail!("批量取消中不能包含模拟或本地订单");
             }
 
             cancels.push(CancelOrder::new(
@@ -568,11 +556,11 @@ pub trait Strategy: DataActor {
         Ok(())
     }
 
-    /// Cancels all open orders for the given instrument.
+    /// 取消给定交易工具的所有挂单。
     ///
     /// # Errors
     ///
-    /// Returns an error if the strategy is not registered or order cancellation fails.
+    /// 如果策略未注册或订单取消失败，则返回错误。
     fn cancel_all_orders(
         &mut self,
         instrument_id: InstrumentId,
@@ -582,11 +570,11 @@ pub trait Strategy: DataActor {
         self.cancel_all_orders_with_params(instrument_id, order_side, client_id, IndexMap::new())
     }
 
-    /// Cancels all open orders for the given instrument with adapter-specific parameters.
+    /// 取消给定交易工具的所有挂单，带特定适配器参数。
     ///
     /// # Errors
     ///
-    /// Returns an error if the strategy is not registered or order cancellation fails.
+    /// 如果策略未注册或订单取消失败，则返回错误。
     fn cancel_all_orders_with_params(
         &mut self,
         instrument_id: InstrumentId,
@@ -601,7 +589,7 @@ pub trait Strategy: DataActor {
         };
         let core = self.core_mut();
 
-        let trader_id = core.trader_id().expect("Trader ID not set");
+        let trader_id = core.trader_id().expect("未设置交易员 ID");
         let strategy_id = StrategyId::from(core.actor_id().inner().as_str());
         let ts_init = core.clock().timestamp_ns();
         let cache = core.cache();
@@ -654,7 +642,7 @@ pub trait Strategy: DataActor {
 
         if open_count == 0 && emulated_count == 0 && inflight_count == 0 && algo_count == 0 {
             let side_str = order_side.map(|s| format!(" {s}")).unwrap_or_default();
-            log::info!("No {instrument_id} open, emulated, or inflight{side_str} orders to cancel");
+            log::info!("没有 {instrument_id} 的活跃或模拟{side_str} 订单可取消");
             return Ok(());
         }
 
@@ -665,18 +653,7 @@ pub trait Strategy: DataActor {
         let side_str = order_side.map(|s| format!(" {s}")).unwrap_or_default();
 
         if open_count > 0 {
-            log::info!(
-                "Canceling {open_count} open{side_str} {instrument_id} order{}",
-                if open_count == 1 { "" } else { "s" }
-            );
-        }
-
-        if emulated_count > 0 {
-            log::info!(
-                "Canceling {emulated_count} emulated{side_str} {instrument_id} order{}",
-                if emulated_count == 1 { "" } else { "s" }
-            );
-        }
+            log::info!("正在取消 {open_count} 个活跃的{side_str} {instrument_id} 订单",);
 
         if inflight_count > 0 {
             log::info!(
@@ -701,6 +678,8 @@ pub trait Strategy: DataActor {
         }
 
         if emulated_count > 0 {
+            log::info!("正在取消 {emulated_count} 个模拟的{side_str} {instrument_id} 订单",);
+
             let command = CancelAllOrders::new(
                 trader_id,
                 client_id,
@@ -722,11 +701,11 @@ pub trait Strategy: DataActor {
         Ok(())
     }
 
-    /// Closes a position by submitting a market order for the opposite side.
+    /// 通过提交反向市价单来平仓。
     ///
     /// # Errors
     ///
-    /// Returns an error if the strategy is not registered or position closing fails.
+    /// 如果策略未注册或平仓失败，则返回错误。
     fn close_position(
         &mut self,
         position: &Position,
@@ -742,7 +721,7 @@ pub trait Strategy: DataActor {
         };
 
         if position.is_closed() {
-            log::warn!("Cannot close position (already closed): {}", position.id);
+            log::warn!("无法平仓（已平仓）：{}", position.id);
             return Ok(());
         }
 
@@ -764,11 +743,11 @@ pub trait Strategy: DataActor {
         self.submit_order(order, Some(position.id), client_id)
     }
 
-    /// Closes all open positions for the given instrument.
+    /// 平掉给定交易工具的所有持仓。
     ///
     /// # Errors
     ///
-    /// Returns an error if the strategy is not registered or position closing fails.
+    /// 如果策略未注册或平仓失败，则返回错误。
     #[allow(clippy::too_many_arguments)]
     fn close_all_positions(
         &mut self,
@@ -795,15 +774,12 @@ pub trait Strategy: DataActor {
         let side_str = position_side.map(|s| format!(" {s}")).unwrap_or_default();
 
         if positions_open.is_empty() {
-            log::info!("No {instrument_id} open{side_str} positions to close");
+            log::info!("没有 {instrument_id} 的活跃{side_str} 持仓可平配");
             return Ok(());
         }
 
         let count = positions_open.len();
-        log::info!(
-            "Closing {count} open{side_str} position{}",
-            if count == 1 { "" } else { "s" }
-        );
+        log::info!("正在平掉 {count} 个活跃的{side_str} 持仓",);
 
         let positions_data: Vec<_> = positions_open
             .iter()
@@ -842,14 +818,14 @@ pub trait Strategy: DataActor {
         Ok(())
     }
 
-    /// Queries account state from the execution client.
+    /// 从执行客户端查询账户状态。
     ///
-    /// Creates a [`QueryAccount`] command and sends it to the execution engine,
-    /// which will request the current account state from the execution client.
+    /// 创建一个 [`QueryAccount`] 命令并发送到执行引擎，
+    /// 执行引擎会向执行客户端请求当前账户状态。
     ///
     /// # Errors
     ///
-    /// Returns an error if the strategy is not registered.
+    /// 如果策略未注册，则返回错误。
     fn query_account(
         &mut self,
         account_id: AccountId,
@@ -857,7 +833,7 @@ pub trait Strategy: DataActor {
     ) -> anyhow::Result<()> {
         let core = self.core_mut();
 
-        let trader_id = core.trader_id().expect("Trader ID not set");
+        let trader_id = core.trader_id().expect("未设置交易员 ID");
         let ts_init = core.clock().timestamp_ns();
 
         let command = QueryAccount::new(trader_id, client_id, account_id, UUID4::new(), ts_init);
@@ -870,18 +846,18 @@ pub trait Strategy: DataActor {
         Ok(())
     }
 
-    /// Queries order state from the execution client.
+    /// 从执行客户端查询订单状态。
     ///
-    /// Creates a [`QueryOrder`] command and sends it to the execution engine,
-    /// which will request the current order state from the execution client.
+    /// 创建一个 [`QueryOrder`] 命令并发送到执行引擎，
+    /// 执行引擎会向执行客户端请求当前订单状态。
     ///
     /// # Errors
     ///
-    /// Returns an error if the strategy is not registered.
+    /// 如果策略未注册，则返回错误。
     fn query_order(&mut self, order: &OrderAny, client_id: Option<ClientId>) -> anyhow::Result<()> {
         let core = self.core_mut();
 
-        let trader_id = core.trader_id().expect("Trader ID not set");
+        let trader_id = core.trader_id().expect("未设置交易员 ID");
         let strategy_id = StrategyId::from(core.actor_id().inner().as_str());
         let ts_init = core.clock().timestamp_ns();
 
@@ -904,7 +880,7 @@ pub trait Strategy: DataActor {
         Ok(())
     }
 
-    /// Handles an order event, dispatching to the appropriate handler and routing to the order manager.
+    /// 处理订单事件，分发到相应的处理器，并路由至订单管理器。
     fn handle_order_event(&mut self, event: OrderEventAny) {
         {
             let core = self.core_mut();
@@ -957,7 +933,7 @@ pub trait Strategy: DataActor {
         }
     }
 
-    /// Handles a position event, dispatching to the appropriate handler.
+    /// 处理持仓事件，分发到相应的处理器。
     fn handle_position_event(&mut self, event: PositionEvent) {
         {
             let core = self.core_mut();
@@ -972,25 +948,25 @@ pub trait Strategy: DataActor {
             PositionEvent::PositionChanged(e) => self.on_position_changed(e),
             PositionEvent::PositionClosed(e) => self.on_position_closed(e),
             PositionEvent::PositionAdjusted(_) => {
-                // No handler for adjusted events yet
+                // 尚未为此事件实现处理器
             }
         }
     }
 
     // -- LIFECYCLE METHODS -----------------------------------------------------------------------
 
-    /// Called when the strategy is started.
+    /// 当策略启动时调用。
     ///
-    /// Override this method to implement custom initialization logic.
-    /// The default implementation reactivates GTD timers if `manage_gtd_expiry` is enabled.
+    /// 覆盖此方法以实现自定义初始化逻辑。
+    /// 如果启用了 `manage_gtd_expiry`，默认实现会重新激活 GTD 定时器。
     ///
     /// # Errors
     ///
-    /// Returns an error if strategy initialization fails.
+    /// 如果策略初始化失败，则返回错误。
     fn on_start(&mut self) -> anyhow::Result<()> {
         let core = self.core_mut();
         let strategy_id = StrategyId::from(core.actor_id().inner().as_str());
-        log::info!("Starting {strategy_id}");
+        log::info!("正在启动 {strategy_id}");
 
         if core.config.manage_gtd_expiry {
             self.reactivate_gtd_timers();
@@ -999,13 +975,13 @@ pub trait Strategy: DataActor {
         Ok(())
     }
 
-    /// Called when a time event is received.
+    /// 当接收到时间事件时调用。
     ///
-    /// Routes GTD expiry timer events to the expiry handler.
+    /// 将 GTD 过期定时器事件路由到过期处理器。
     ///
     /// # Errors
     ///
-    /// Returns an error if time event handling fails.
+    /// 如果时间事件处理失败，则返回错误。
     fn on_time_event(&mut self, event: &TimeEvent) -> anyhow::Result<()> {
         if event.name.starts_with("GTD-EXPIRY:") {
             self.expire_gtd_order(event.clone());
@@ -1015,119 +991,119 @@ pub trait Strategy: DataActor {
 
     // -- EVENT HANDLERS --------------------------------------------------------------------------
 
-    /// Called when an order is initialized.
+    /// 当订单初始化时调用。
     ///
-    /// Override this method to implement custom logic when an order is first created.
+    /// 覆盖此方法以实现当订单首次创建时的自定义逻辑。
     #[allow(unused_variables)]
     fn on_order_initialized(&mut self, event: OrderInitialized) {}
 
-    /// Called when an order is denied by the system.
+    /// 当订单被系统拒绝时调用。
     ///
-    /// Override this method to implement custom logic when an order is denied before submission.
+    /// 覆盖此方法以实现当订单在提交前被拒绝时的自定义逻辑。
     #[allow(unused_variables)]
     fn on_order_denied(&mut self, event: OrderDenied) {}
 
-    /// Called when an order is emulated.
+    /// 当订单被模拟时调用。
     ///
-    /// Override this method to implement custom logic when an order is taken over by the emulator.
+    /// 覆盖此方法以实现当订单被模拟器接管时的自定义逻辑。
     #[allow(unused_variables)]
     fn on_order_emulated(&mut self, event: OrderEmulated) {}
 
-    /// Called when an order is released from emulation.
+    /// 当订单从模拟中释放时调用。
     ///
-    /// Override this method to implement custom logic when an emulated order is released.
+    /// 覆盖此方法以实现当模拟订单被释放时的自定义逻辑。
     #[allow(unused_variables)]
     fn on_order_released(&mut self, event: OrderReleased) {}
 
-    /// Called when an order is submitted to the venue.
+    /// 当订单提交到交易场所时调用。
     ///
-    /// Override this method to implement custom logic when an order is submitted.
+    /// 覆盖此方法以实现当订单提交时的自定义逻辑。
     #[allow(unused_variables)]
     fn on_order_submitted(&mut self, event: OrderSubmitted) {}
 
-    /// Called when an order is rejected by the venue.
+    /// 当订单被交易场所驳回时调用。
     ///
-    /// Override this method to implement custom logic when an order is rejected.
+    /// 覆盖此方法以实现当订单被驳回时的自定义逻辑。
     #[allow(unused_variables)]
     fn on_order_rejected(&mut self, event: OrderRejected) {}
 
-    /// Called when an order is accepted by the venue.
+    /// 当订单被交易场所接受时调用。
     ///
-    /// Override this method to implement custom logic when an order is accepted.
+    /// 覆盖此方法以实现当订单被接受时的自定义逻辑。
     #[allow(unused_variables)]
     fn on_order_accepted(&mut self, event: OrderAccepted) {}
 
-    /// Called when an order expires.
+    /// 当订单过期时调用。
     ///
-    /// Override this method to implement custom logic when an order expires.
+    /// 覆盖此方法以实现当订单过期时的自定义逻辑。
     #[allow(unused_variables)]
     fn on_order_expired(&mut self, event: OrderExpired) {}
 
-    /// Called when an order is triggered.
+    /// 当订单触发时调用。
     ///
-    /// Override this method to implement custom logic when a stop or conditional order is triggered.
+    /// 覆盖此方法以实现当止损或条件订单触发时的自定义逻辑。
     #[allow(unused_variables)]
     fn on_order_triggered(&mut self, event: OrderTriggered) {}
 
-    /// Called when an order modification is pending.
+    /// 当订单修改处于待处理状态时调用。
     ///
-    /// Override this method to implement custom logic when an order is pending modification.
+    /// 覆盖此方法以实现当订单等待修改时的自定义逻辑。
     #[allow(unused_variables)]
     fn on_order_pending_update(&mut self, event: OrderPendingUpdate) {}
 
-    /// Called when an order cancellation is pending.
+    /// 当订单取消处于待处理状态时调用。
     ///
-    /// Override this method to implement custom logic when an order is pending cancellation.
+    /// 覆盖此方法以实现当订单等待取消时的自定义逻辑。
     #[allow(unused_variables)]
     fn on_order_pending_cancel(&mut self, event: OrderPendingCancel) {}
 
-    /// Called when an order modification is rejected.
+    /// 当订单修改被驳回时调用。
     ///
-    /// Override this method to implement custom logic when an order modification is rejected.
+    /// 覆盖此方法以实现当订单修改被驳回时的自定义逻辑。
     #[allow(unused_variables)]
     fn on_order_modify_rejected(&mut self, event: OrderModifyRejected) {}
 
-    /// Called when an order cancellation is rejected.
+    /// 当订单取消被驳回时调用。
     ///
-    /// Override this method to implement custom logic when an order cancellation is rejected.
+    /// 覆盖此方法以实现当订单取消被驳回时的自定义逻辑。
     #[allow(unused_variables)]
     fn on_order_cancel_rejected(&mut self, event: OrderCancelRejected) {}
 
-    /// Called when an order is updated.
+    /// 当订单更新时调用。
     ///
-    /// Override this method to implement custom logic when an order is modified.
+    /// 覆盖此方法以实现当订单修改时的自定义逻辑。
     #[allow(unused_variables)]
     fn on_order_updated(&mut self, event: OrderUpdated) {}
 
-    // Note: on_order_filled is inherited from DataActor trait
+    // Note: on_order_filled 继承自 DataActor trait
 
-    /// Called when a position is opened.
+    /// 当持仓开启时调用。
     ///
-    /// Override this method to implement custom logic when a position is opened.
+    /// 覆盖此方法以实现当持仓开启时的自定义逻辑。
     #[allow(unused_variables)]
     fn on_position_opened(&mut self, event: PositionOpened) {}
 
-    /// Called when a position is changed (quantity or price updated).
+    /// 当持仓变更（数量或价格更新）时调用。
     ///
-    /// Override this method to implement custom logic when a position changes.
+    /// 覆盖此方法以实现当持仓变更时的自定义逻辑。
     #[allow(unused_variables)]
     fn on_position_changed(&mut self, event: PositionChanged) {}
 
-    /// Called when a position is closed.
+    /// 当持仓关闭时调用。
     ///
-    /// Override this method to implement custom logic when a position is closed.
+    /// 覆盖此方法以实现当持仓关闭时的自定义逻辑。
     #[allow(unused_variables)]
     fn on_position_closed(&mut self, event: PositionClosed) {}
 
     // -- GTD EXPIRY MANAGEMENT -------------------------------------------------------------------
 
-    /// Sets a GTD expiry timer for an order.
+    /// 为订单设置 GTD 过期定时器。
     ///
-    /// Creates a timer that will automatically cancel the order when it expires.
+    /// 创建一个在订单过期时自动取消订单的定时器。
     ///
     /// # Errors
     ///
-    /// Returns an error if timer creation fails.
+    /// 如果定时器创建失败，则返回错误。
     fn set_gtd_expiry(&mut self, order: &OrderAny) -> anyhow::Result<()> {
         let core = self.core_mut();
 
@@ -1148,7 +1124,7 @@ pub trait Strategy: DataActor {
         };
 
         if current_time_ns >= expire_time.as_u64() {
-            log::info!("GTD order {client_order_id} already expired, canceling immediately");
+            log::info!("GTD 订单 {client_order_id} 已过期，立即取消");
             return self.cancel_order(order.clone(), None);
         }
 
@@ -1160,33 +1136,33 @@ pub trait Strategy: DataActor {
         core.gtd_timers
             .insert(client_order_id, Ustr::from(&timer_name));
 
-        log::debug!("Set GTD expiry timer for {client_order_id} at {expire_time}");
+        log::debug!("为 {client_order_id} 设置 GTD 过期定时器，时间：{expire_time}");
         Ok(())
     }
 
-    /// Cancels a GTD expiry timer for an order.
+    /// 取消订单的 GTD 过期定时器。
     fn cancel_gtd_expiry(&mut self, client_order_id: &ClientOrderId) {
         let core = self.core_mut();
 
         if let Some(timer_name) = core.gtd_timers.remove(client_order_id) {
             core.clock().cancel_timer(timer_name.as_str());
-            log::debug!("Canceled GTD expiry timer for {client_order_id}");
+            log::debug!("取消了 {client_order_id} 的 GTD 过期定时器");
         }
     }
 
-    /// Checks if a GTD expiry timer exists for an order.
+    /// 检查是否存在订单的 GTD 过期定时器。
     fn has_gtd_expiry_timer(&mut self, client_order_id: &ClientOrderId) -> bool {
         let core = self.core_mut();
         core.gtd_timers.contains_key(client_order_id)
     }
 
-    /// Handles GTD order expiry by canceling the order.
+    /// 处理 GTD 订单过期，自动取消订单。
     ///
-    /// This method is called when a GTD expiry timer fires.
+    /// 当 GTD 定时器触发时调用此方法。
     fn expire_gtd_order(&mut self, event: TimeEvent) {
         let timer_name = event.name.to_string();
         let Some(client_order_id_str) = timer_name.strip_prefix("GTD-EXPIRY:") else {
-            log::error!("Invalid GTD timer name format: {timer_name}");
+            log::error!("无效的 GTD 定时器名称格式: {timer_name}");
             return;
         };
 
@@ -1197,24 +1173,24 @@ pub trait Strategy: DataActor {
 
         let cache = core.cache();
         let Some(order) = cache.order(&client_order_id) else {
-            log::warn!("GTD order {client_order_id} not found in cache");
+            log::warn!("在缓存中未找到 GTD 订单 {client_order_id}");
             return;
         };
 
         let order = order.clone();
         drop(cache);
 
-        log::info!("GTD order {client_order_id} expired");
+        log::info!("GTD 订单 {client_order_id} 已过期");
 
         if let Err(e) = self.cancel_order(order, None) {
-            log::error!("Failed to cancel expired GTD order {client_order_id}: {e}");
+            log::error!("未能取消已过期的 GTD 订单 {client_order_id}: {e}");
         }
     }
 
-    /// Reactivates GTD timers for open orders on strategy start.
+    /// 在策略启动时为活跃订单重新激活 GTD 定时器。
     ///
-    /// Queries the cache for all open GTD orders and creates timers for those
-    /// that haven't expired yet. Orders that have already expired are canceled immediately.
+    /// 查询缓存中所有未过期的活跃 GTD 订单并为其创建定时器。
+    /// 已经过期的订单将立即取消。
     fn reactivate_gtd_timers(&mut self) {
         let core = self.core_mut();
         let strategy_id = StrategyId::from(core.actor_id().inner().as_str());
@@ -1240,12 +1216,12 @@ pub trait Strategy: DataActor {
             let client_order_id = order.client_order_id();
 
             if current_time_ns >= expire_time_ns {
-                log::info!("GTD order {client_order_id} already expired, canceling immediately");
+                log::info!("GTD 订单 {client_order_id} 已过期，立即取消");
                 if let Err(e) = self.cancel_order(order, None) {
-                    log::error!("Failed to cancel expired GTD order {client_order_id}: {e}");
+                    log::error!("未能取消已过期的 GTD 订单 {client_order_id}: {e}");
                 }
             } else if let Err(e) = self.set_gtd_expiry(&order) {
-                log::error!("Failed to set GTD expiry timer for {client_order_id}: {e}");
+                log::error!("未能为 {client_order_id} 设置 GTD 过期定时器: {e}");
             }
         }
     }

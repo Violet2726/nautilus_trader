@@ -35,27 +35,27 @@ from nautilus_trader.test_kit.providers import TestInstrumentProvider
 
 
 if __name__ == "__main__":
-    # Step 1: Configure and create backtest engine
+    # 步骤 1: 配置并创建回测引擎
     engine_config = BacktestEngineConfig(
         trader_id=TraderId("BACKTEST_TRADER-001"),
         logging=LoggingConfig(
-            log_level="DEBUG",  # set DEBUG log level for console to see loaded bars in logs
+            log_level="DEBUG",  # 将控制台日志级别设置为 DEBUG 以在日志中查看加载的 K 线数据
         ),
     )
     engine = BacktestEngine(config=engine_config)
 
-    # Step 2: Define exchange and add it to the engine
+    # 步骤 2: 定义交易所并将其添加到引擎
     XCME = Venue("XCME")
     engine.add_venue(
         venue=XCME,
-        oms_type=OmsType.NETTING,  # Order Management System type
-        account_type=AccountType.MARGIN,  # Type of trading account
-        starting_balances=[Money(1_000_000, USD)],  # Initial account balance
-        base_currency=USD,  # Base currency for account
-        default_leverage=Decimal(1),  # No leverage used for account
+        oms_type=OmsType.NETTING,  # 订单管理系统类型 (净额结算)
+        account_type=AccountType.MARGIN,  # 交易账户类型 (保证金账户)
+        starting_balances=[Money(1_000_000, USD)],  # 初始账户余额
+        base_currency=USD,  # 账户基础货币
+        default_leverage=Decimal(1),  # 账户不使用杠杆
     )
 
-    # Step 3: Create instrument definition and add it to the engine
+    # 步骤 3: 创建交易品种定义并将其添加到引擎
     EURUSD_FUTURES_INSTRUMENT = TestInstrumentProvider.eurusd_future(
         expiry_year=2024,
         expiry_month=3,
@@ -64,48 +64,49 @@ if __name__ == "__main__":
     engine.add_instrument(EURUSD_FUTURES_INSTRUMENT)
 
     # ==========================================================================================
-    # POINT OF FOCUS: Loading bars from CSV
+    # 重点关注：从 CSV 加载 K 线数据
     # ------------------------------------------------------------------------------------------
 
-    # Step 4a: Load bar data from CSV file -> into pandas DataFrame
-    csv_file_path = r"6EH4.XCME_1min_bars.csv"
+    # 步骤 4a: 从 CSV 文件加载 K 线数据 -> 进入 pandas DataFrame
+    from pathlib import Path
+    csv_file_path = Path(__file__).parent / "6EH4.XCME_1min_bars.csv"
     df = pd.read_csv(csv_file_path, sep=";", decimal=".", header=0, index_col=False)
 
-    # Step 4b: Restructure DataFrame into required structure, that can be passed `BarDataWrangler`
-    #   - 5 columns: 'open', 'high', 'low', 'close', 'volume' (volume is optional)
-    #   - 'timestamp' as index
+    # 步骤 4b: 重构 DataFrame 为所需结构，以便传递给 `BarDataWrangler`
+    #   - 5 列：'open', 'high', 'low', 'close', 'volume'（成交量是可选的）
+    #   - 'timestamp' 作为索引
 
-    # Change order of columns
+    # 更改列顺序
     df = df.reindex(columns=["timestamp_utc", "open", "high", "low", "close", "volume"])
-    # Convert string timestamps into datetime
+    # 将字符串时间戳转换为 datetime 对象
     df["timestamp_utc"] = pd.to_datetime(df["timestamp_utc"], format="%Y-%m-%d %H:%M:%S")
-    # Rename column to required name
+    # 将列重命名为所需名称
     df = df.rename(columns={"timestamp_utc": "timestamp"})
-    # Seet column `timestamp` as index
+    # 设置 `timestamp` 列为索引
     df = df.set_index("timestamp")
 
-    # Step 4c: Define type of loaded bars
+    # 步骤 4c: 定义加载的 K 线类型
     EURUSD_FUTURES_1MIN_BARTYPE = BarType.from_str(
         f"{EURUSD_FUTURES_INSTRUMENT.id}-1-MINUTE-LAST-EXTERNAL",
     )
 
-    # Step 4d: `BarDataWrangler` converts each row into objects of type `Bar`
+    # 步骤 4d: `BarDataWrangler` 将每一行转换为 `Bar` 类型的对象
     wrangler = BarDataWrangler(EURUSD_FUTURES_1MIN_BARTYPE, EURUSD_FUTURES_INSTRUMENT)
     eurusd_1min_bars_list: list[Bar] = wrangler.process(df)
 
-    # Step 4e: Add loaded data to the engine
+    # 步骤 4e: 将加载的数据添加到引擎
     engine.add_data(eurusd_1min_bars_list)
 
     # ------------------------------------------------------------------------------------------
-    # END OF POINT OF FOCUS
+    # 结束关注点
     # ==========================================================================================
 
-    # Step 5: Create strategy and add it to the engine
+    # 步骤 5: 创建策略并将其添加到引擎
     strategy = DemoStrategy(primary_bar_type=EURUSD_FUTURES_1MIN_BARTYPE)
     engine.add_strategy(strategy)
 
-    # Step 6: Run engine = Run backtest
+    # 步骤 6: 运行引擎 = 运行回测
     engine.run()
 
-    # Step 7: Release system resources
+    # 步骤 7: 释放系统资源
     engine.dispose()

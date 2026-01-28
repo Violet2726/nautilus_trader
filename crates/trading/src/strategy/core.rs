@@ -1,16 +1,15 @@
 // -------------------------------------------------------------------------------------------------
-//  Copyright (C) 2015-2026 Nautech Systems Pty Ltd. All rights reserved.
+//  版权所有 (C) 2015-2026 Nautech Systems Pty Ltd。保留所有权利。
 //  https://nautechsystems.io
 //
-//  Licensed under the GNU Lesser General Public License Version 3.0 (the "License");
-//  You may not use this file except in compliance with the License.
-//  You may obtain a copy of the License at https://www.gnu.org/licenses/lgpl-3.0.en.html
+//  基于 GNU Lesser General Public License 3.0 版本（“许可证”）获得许可；
+//  除非符合许可证，否则您不得使用此文件。
+//  您可以在 https://www.gnu.org/licenses/lgpl-3.0.en.html 获取许可证副本。
 //
-//  Unless required by applicable law or agreed to in writing, software
-//  distributed under the License is distributed on an "AS IS" BASIS,
-//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-//  See the License for the specific language governing permissions and
-//  limitations under the License.
+//  除非适用法律要求或书面同意，
+//  否则根据许可证分发的软件是基于“按原样”基础分发的，
+//  不附带任何明示或暗示的保证或条件。
+//  请参阅许可证以了解管理许可证下的权限和限制的具体语言。
 // -------------------------------------------------------------------------------------------------
 
 use std::{
@@ -34,24 +33,24 @@ use ustr::Ustr;
 
 use super::config::StrategyConfig;
 
-/// The core component of a [`Strategy`](super::Strategy), managing data, orders, and state.
+/// [`Strategy`](super::Strategy) 的核心组件，管理数据、订单和状态。
 ///
-/// This struct is intended to be held as a member within a user's custom strategy struct.
-/// The user's struct should then `Deref` and `DerefMut` to this `StrategyCore` instance
-/// to satisfy the trait bounds of [`Strategy`](super::Strategy) and
-/// [`DataActor`](nautilus_common::actor::data_actor::DataActor).
+/// 该结构体旨在作为成员持有在用户的自定义策略结构体中。
+/// 用户的结构体应通过 `Deref` 和 `DerefMut` 解引用到此 `StrategyCore` 实例，
+/// 以满足 [`Strategy`](super::Strategy) 和
+/// [`DataActor`](nautilus_common::actor::data_actor::DataActor) 的 trait 约束。
 pub struct StrategyCore {
-    /// The underlying data actor core.
+    /// 底层数据参与者（Actor）核心。
     pub actor: DataActorCore,
-    /// The strategy configuration.
+    /// 策略配置。
     pub config: StrategyConfig,
-    /// The order manager.
+    /// 订单管理器。
     pub order_manager: Option<OrderManager>,
-    /// The order factory.
+    /// 订单工厂。
     pub order_factory: Option<OrderFactory>,
-    /// The portfolio.
+    /// 投资组合。
     pub portfolio: Option<Rc<RefCell<Portfolio>>>,
-    /// Maps client order IDs to GTD expiry timer names.
+    /// 将客户订单 ID 映射到 GTD 过期定时器名称。
     pub gtd_timers: AHashMap<ClientOrderId, Ustr>,
 }
 
@@ -67,7 +66,7 @@ impl Debug for StrategyCore {
 }
 
 impl StrategyCore {
-    /// Creates a new [`StrategyCore`] instance.
+    /// 创建一个新的 [`StrategyCore`] 实例。
     pub fn new(config: StrategyConfig) -> Self {
         let actor_config = DataActorConfig {
             actor_id: config
@@ -87,13 +86,13 @@ impl StrategyCore {
         }
     }
 
-    /// Registers the strategy with the trading engine components.
+    /// 向交易引擎组件注册策略。
     ///
-    /// This is typically called by the framework when the strategy is added to an engine.
+    /// 这通常由框架在策略添加到引擎时调用。
     ///
     /// # Errors
     ///
-    /// Returns an error if registration with the actor core fails.
+    /// 如果与参与者核心注册失败，则返回错误。
     pub fn register(
         &mut self,
         trader_id: TraderId,

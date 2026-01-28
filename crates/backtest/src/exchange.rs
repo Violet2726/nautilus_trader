@@ -13,9 +13,9 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! Provides a `SimulatedExchange` venue for backtesting on historical data.
+//! 提供用于基于历史数据进行回测的 `SimulatedExchange` 场所。
 
-// Under development
+// 开发中
 #![allow(dead_code)]
 #![allow(unused_variables)]
 
@@ -55,9 +55,9 @@ use rust_decimal::Decimal;
 
 use crate::modules::SimulationModule;
 
-/// Represents commands with simulated network latency in a min-heap priority queue.
-/// The commands are ordered by timestamp for FIFO processing, with the
-/// earliest timestamp having the highest priority in the queue.
+/// 表示最小堆优先级队列中具有模拟网络延迟的命令。
+/// 命令按时间戳排序以进行 FIFO 处理，
+/// 时间戳最早的命令在队列中具有最高优先级。
 #[derive(Debug, Eq, PartialEq)]
 struct InflightCommand {
     timestamp: UnixNanos,
@@ -77,7 +77,7 @@ impl InflightCommand {
 
 impl Ord for InflightCommand {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        // Reverse ordering for min-heap (earliest timestamp first then lowest counter)
+        // 最小堆的反向排序（最早的时间戳优先，然后是最低的计数器）
         other
             .timestamp
             .cmp(&self.timestamp)
@@ -91,21 +91,20 @@ impl PartialOrd for InflightCommand {
     }
 }
 
-/// Simulated exchange venue for realistic trading execution during backtesting.
+/// 用于回测期间真实交易执行的模拟交易所场所。
 ///
-/// The `SimulatedExchange` provides a comprehensive simulation of a trading venue,
-/// including order matching engines, account management, and realistic execution
-/// models. It maintains order books, processes market data, and executes trades
-/// with configurable latency and fill models to accurately simulate real market
-/// conditions during backtesting.
+/// `SimulatedExchange` 提供了交易场所的全面模拟，
+/// 包括订单撮合引擎、账户管理和真实的执行模型。
+/// 它维护订单簿，处理市场数据，并使用可配置的延迟和成交模型
+/// 执行交易，以准确模拟回测期间的真实市场状况。
 ///
-/// Key features:
-/// - Multi-instrument order matching with realistic execution
-/// - Configurable fee, fill, and latency models
-/// - Support for various order types and execution options
-/// - Account balance and position management
-/// - Market data processing and order book maintenance
-/// - Simulation modules for custom venue behaviors
+/// 主要特性：
+/// - 支持真实执行的多工具订单撮合
+/// - 可配置的费用、成交和延迟模型
+/// - 支持各种订单类型和执行选项
+/// - 账户余额和持仓管理
+/// - 市场数据处理和订单簿维护
+/// - 用于自定义场所行为的模拟模块
 pub struct SimulatedExchange {
     pub id: Venue,
     pub oms_type: OmsType,
@@ -153,13 +152,13 @@ impl Debug for SimulatedExchange {
 }
 
 impl SimulatedExchange {
-    /// Creates a new [`SimulatedExchange`] instance.
+    /// 创建一个新的 [`SimulatedExchange`] 实例。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if:
-    /// - `starting_balances` is empty.
-    /// - `base_currency` is `Some` but `starting_balances` contains multiple currencies.
+    /// 如果满足以下条件，则返回错误：
+    /// - `starting_balances` 为空。
+    /// - `base_currency` 为 `Some` 但 `starting_balances` 包含多种货币。
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         venue: Venue,
@@ -197,7 +196,7 @@ impl SimulatedExchange {
         if base_currency.is_some() && starting_balances.len() > 1 {
             anyhow::bail!("single-currency account has multiple starting currencies")
         }
-        // TODO register and load modules
+        // 待办：注册并加载模块
         Ok(Self {
             id: venue,
             oms_type,
@@ -260,15 +259,15 @@ impl SimulatedExchange {
         self.generate_fresh_account_state();
     }
 
-    /// Adds an instrument to the simulated exchange and initializes its matching engine.
+    /// 向模拟交易所添加工具并初始化其撮合引擎。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if the exchange account type is `Cash` and the instrument is a `CryptoPerpetual` or `CryptoFuture`.
+    /// 如果交易所账户类型为 `Cash` 且工具为 `CryptoPerpetual` 或 `CryptoFuture`，则返回错误。
     ///
-    /// # Panics
+    /// # Panic
     ///
-    /// Panics if the instrument cannot be added to the exchange.
+    /// 如果无法将工具添加到交易所，则会 panic。
     pub fn add_instrument(&mut self, instrument: InstrumentAny) -> anyhow::Result<()> {
         check_equal(
             &instrument.id().venue,
@@ -415,9 +414,9 @@ impl SimulatedExchange {
             })
     }
 
-    /// # Panics
+    /// # Panic
     ///
-    /// Panics if retrieving the account from the execution client fails.
+    /// 如果从执行客户端检索账户失败，则会 panic。
     #[must_use]
     pub fn get_account(&self) -> Option<AccountAny> {
         self.exec_client
@@ -425,18 +424,18 @@ impl SimulatedExchange {
             .map(|client| client.get_account().unwrap())
     }
 
-    /// Returns a reference to the cache.
+    /// 返回缓存的引用。
     #[must_use]
     pub fn cache(&self) -> &Rc<RefCell<Cache>> {
         &self.cache
     }
 
-    /// # Panics
+    /// # Panic
     ///
-    /// Panics if generating account state fails during adjustment.
+    /// 如果在调整期间生成账户状态失败，则会 panic。
     pub fn adjust_account(&mut self, adjustment: Money) {
         if self.frozen_account {
-            // Nothing to adjust
+            // 无需调整
             return;
         }
 
@@ -491,9 +490,9 @@ impl SimulatedExchange {
         }
     }
 
-    /// # Panics
+    /// # Panic
     ///
-    /// Panics if the command is invalid when generating inflight command.
+    /// 如果在生成在途命令时命令无效，则会 panic。
     pub fn generate_inflight_command(&mut self, command: &TradingCommand) -> (UnixNanos, u32) {
         if let Some(latency_model) = &self.latency_model {
             let ts = match command {
@@ -523,9 +522,9 @@ impl SimulatedExchange {
         }
     }
 
-    /// # Panics
+    /// # Panic
     ///
-    /// Panics if adding a missing instrument during delta processing fails.
+    /// 如果在增量处理期间添加缺失的工具失败，则会 panic。
     pub fn process_order_book_delta(&mut self, delta: OrderBookDelta) {
         for module in &self.modules {
             module.pre_process(Data::Delta(delta));
@@ -554,9 +553,9 @@ impl SimulatedExchange {
         }
     }
 
-    /// # Panics
+    /// # Panic
     ///
-    /// Panics if adding a missing instrument during deltas processing fails.
+    /// 如果在增量处理期间添加缺失的工具失败，则会 panic。
     pub fn process_order_book_deltas(&mut self, deltas: OrderBookDeltas) {
         for module in &self.modules {
             module.pre_process(Data::Deltas(OrderBookDeltas_API::new(deltas.clone())));
@@ -585,9 +584,9 @@ impl SimulatedExchange {
         }
     }
 
-    /// # Panics
+    /// # Panic
     ///
-    /// Panics if adding a missing instrument during quote tick processing fails.
+    /// 如果在报价 tick 处理期间添加缺失的工具失败，则会 panic。
     pub fn process_quote_tick(&mut self, quote: &QuoteTick) {
         for module in &self.modules {
             module.pre_process(Data::Quote(quote.to_owned()));
@@ -616,9 +615,9 @@ impl SimulatedExchange {
         }
     }
 
-    /// # Panics
+    /// # Panic
     ///
-    /// Panics if adding a missing instrument during trade tick processing fails.
+    /// 如果在成交 tick 处理期间添加缺失的工具失败，则会 panic。
     pub fn process_trade_tick(&mut self, trade: &TradeTick) {
         for module in &self.modules {
             module.pre_process(Data::Trade(trade.to_owned()));
@@ -647,9 +646,9 @@ impl SimulatedExchange {
         }
     }
 
-    /// # Panics
+    /// # Panic
     ///
-    /// Panics if adding a missing instrument during bar processing fails.
+    /// 如果在 bar 处理期间添加缺失的工具失败，则会 panic。
     pub fn process_bar(&mut self, bar: Bar) {
         for module in &self.modules {
             module.pre_process(Data::Bar(bar));
@@ -678,11 +677,11 @@ impl SimulatedExchange {
         }
     }
 
-    /// # Panics
+    /// # Panic
     ///
-    /// Panics if adding a missing instrument during instrument status processing fails.
+    /// 如果在工具状态处理期间添加缺失的工具失败，则会 panic。
     pub fn process_instrument_status(&mut self, status: InstrumentStatus) {
-        // TODO add module preprocessing
+        // 待办：添加模块预处理
 
         if !self.matching_engines.contains_key(&status.instrument_id) {
             let instrument = {
@@ -707,24 +706,24 @@ impl SimulatedExchange {
         }
     }
 
-    /// # Panics
+    /// # Panic
     ///
-    /// Panics if popping an inflight command fails during processing.
+    /// 如果在处理期间弹出在途命令失败，则会 panic。
     pub fn process(&mut self, ts_now: UnixNanos) {
-        // TODO implement correct clock fixed time setting self.clock.set_time(ts_now);
+        // 待办：实现正确的时钟固定时间设置 self.clock.set_time(ts_now);
 
-        // Process inflight commands
+        // 处理在途命令
         while let Some(inflight) = self.inflight_queue.peek() {
             if inflight.timestamp > ts_now {
-                // Future commands remain in the queue
+                // 未来的命令保留在队列中
                 break;
             }
-            // We get the inflight command, remove it from the queue and process it
+            // 我们获取在途命令，将其从队列中移除并处理
             let inflight = self.inflight_queue.pop().unwrap();
             self.process_trading_command(inflight.command);
         }
 
-        // Process regular message queue
+        // 处理常规消息队列
         while let Some(command) = self.message_queue.pop_front() {
             self.process_trading_command(command);
         }
@@ -741,13 +740,13 @@ impl SimulatedExchange {
             matching_engine.reset();
         }
 
-        // TODO Clear the inflight and message queues
+        // 待办：清除在途和消息队列
         log::info!("Resetting exchange state");
     }
 
-    /// # Panics
+    /// # Panic
     ///
-    /// Panics if execution client is uninitialized when processing trading command.
+    /// 如果在处理交易命令时执行客户端未初始化，则会 panic。
     pub fn process_trading_command(&mut self, command: TradingCommand) {
         if let Some(matching_engine) = self.matching_engines.get_mut(&command.instrument_id()) {
             let account_id = if let Some(exec_client) = &self.exec_client {
@@ -792,9 +791,9 @@ impl SimulatedExchange {
         }
     }
 
-    /// # Panics
+    /// # Panic
     ///
-    /// Panics if generating fresh account state fails.
+    /// 如果生成新的账户状态失败，则会 panic。
     pub fn generate_fresh_account_state(&self) {
         let balances: Vec<AccountBalance> = self
             .starting_balances
@@ -808,11 +807,11 @@ impl SimulatedExchange {
                 .unwrap();
         }
 
-        // Set leverages
+        // 设置杠杆
         if let Some(AccountAny::Margin(mut margin_account)) = self.get_account() {
             margin_account.set_default_leverage(self.default_leverage);
 
-            // Set instrument specific leverages
+            // 设置工具特定杠杆
             for (instrument_id, leverage) in &self.leverages {
                 margin_account.set_leverage(*instrument_id, *leverage);
             }
@@ -941,7 +940,7 @@ mod tests {
             order.init_event().clone(),
             None,
             None,
-            None, // params
+            None, // 参数
             UUID4::default(),
             ts_init,
         ));
@@ -988,10 +987,10 @@ mod tests {
         );
         let instrument = InstrumentAny::CryptoPerpetual(crypto_perpetual_ethusdt);
 
-        // register instrument
+        // 注册工具
         exchange.borrow_mut().add_instrument(instrument).unwrap();
 
-        // process tick
+        // 处理 tick
         let quote_tick = QuoteTick::new(
             crypto_perpetual_ethusdt.id,
             Price::from("1000.00"),
@@ -1023,10 +1022,10 @@ mod tests {
         );
         let instrument = InstrumentAny::CryptoPerpetual(crypto_perpetual_ethusdt);
 
-        // register instrument
+        // 注册工具
         exchange.borrow_mut().add_instrument(instrument).unwrap();
 
-        // process tick
+        // 处理 tick
         let trade_tick = TradeTick::new(
             crypto_perpetual_ethusdt.id,
             Price::from("1000.00"),
@@ -1058,10 +1057,10 @@ mod tests {
         );
         let instrument = InstrumentAny::CryptoPerpetual(crypto_perpetual_ethusdt);
 
-        // register instrument
+        // 注册工具
         exchange.borrow_mut().add_instrument(instrument).unwrap();
 
-        // process bar
+        // 处理 bar
         let bar = Bar::new(
             BarType::from("ETHUSDT-PERP.BINANCE-1-MINUTE-LAST-EXTERNAL"),
             Price::from("1500.00"),
@@ -1074,7 +1073,7 @@ mod tests {
         );
         exchange.borrow_mut().process_bar(bar);
 
-        // this will be processed as ticks so both bid and ask will be the same as close of the bar
+        // 这将被作为 tick 处理，因此买入价和卖出价都将与 bar 的收盘价相同
         let best_bid_price = exchange
             .borrow()
             .best_bid_price(crypto_perpetual_ethusdt.id);
@@ -1095,11 +1094,11 @@ mod tests {
         );
         let instrument = InstrumentAny::CryptoPerpetual(crypto_perpetual_ethusdt);
 
-        // register instrument
+        // 注册工具
         exchange.borrow_mut().add_instrument(instrument).unwrap();
 
-        // create both bid and ask based bars
-        // add +1 on ask to make sure it is different from bid
+        // 创建基于买入和卖出的 bar
+        // 在卖出上加 +1 以确保其与买入不同
         let bar_bid = Bar::new(
             BarType::from("ETHUSDT-PERP.BINANCE-1-MINUTE-BID-EXTERNAL"),
             Price::from("1500.00"),
@@ -1121,11 +1120,11 @@ mod tests {
             UnixNanos::from(1),
         );
 
-        // process them
+        // 处理它们
         exchange.borrow_mut().process_bar(bar_bid);
         exchange.borrow_mut().process_bar(bar_ask);
 
-        // current bid and ask prices will be the corresponding close of the ask and bid bar
+        // 当前买入价和卖出价将是对应的卖出和买入 bar 的收盘价
         let best_bid_price = exchange
             .borrow()
             .best_bid_price(crypto_perpetual_ethusdt.id);
@@ -1146,10 +1145,10 @@ mod tests {
         );
         let instrument = InstrumentAny::CryptoPerpetual(crypto_perpetual_ethusdt);
 
-        // register instrument
+        // 注册工具
         exchange.borrow_mut().add_instrument(instrument).unwrap();
 
-        // create order book delta at both bid and ask with incremented ts init and sequence
+        // 在买入和卖出两侧创建订单簿增量，增加 ts init 和序列号
         let delta_buy = OrderBookDelta::new(
             crypto_perpetual_ethusdt.id,
             BookAction::Add,
@@ -1179,7 +1178,7 @@ mod tests {
             UnixNanos::from(2),
         );
 
-        // process both deltas
+        // 处理两个增量
         exchange.borrow_mut().process_order_book_delta(delta_buy);
         exchange.borrow_mut().process_order_book_delta(delta_sell);
 
@@ -1211,10 +1210,10 @@ mod tests {
         );
         let instrument = InstrumentAny::CryptoPerpetual(crypto_perpetual_ethusdt);
 
-        // register instrument
+        // 注册工具
         exchange.borrow_mut().add_instrument(instrument).unwrap();
 
-        // create two sell order book deltas with same timestamps and higher sequence
+        // 创建两个具有相同时间戳和更高序列号的卖出订单簿增量
         let delta_sell_1 = OrderBookDelta::new(
             crypto_perpetual_ethusdt.id,
             BookAction::Add,
@@ -1248,7 +1247,7 @@ mod tests {
             vec![delta_sell_1, delta_sell_2],
         );
 
-        // process both deltas
+        // 处理两个增量
         exchange
             .borrow_mut()
             .process_order_book_deltas(orderbook_deltas);
@@ -1264,12 +1263,12 @@ mod tests {
         let best_bid_price = exchange
             .borrow()
             .best_bid_price(crypto_perpetual_ethusdt.id);
-        // no bid orders in orderbook deltas
+        // 订单簿增量中没有买入订单
         assert_eq!(best_bid_price, None);
         let best_ask_price = exchange
             .borrow()
             .best_ask_price(crypto_perpetual_ethusdt.id);
-        // best ask price is the first order in orderbook deltas
+        // 最佳卖出价是订单簿增量中的第一个订单
         assert_eq!(best_ask_price, Some(Price::from("1000.00")));
     }
 
@@ -1283,12 +1282,12 @@ mod tests {
         );
         let instrument = InstrumentAny::CryptoPerpetual(crypto_perpetual_ethusdt);
 
-        // register instrument
+        // 注册工具
         exchange.borrow_mut().add_instrument(instrument).unwrap();
 
         let instrument_status = InstrumentStatus::new(
             crypto_perpetual_ethusdt.id,
-            MarketStatusAction::Close, // close the market
+            MarketStatusAction::Close, // 关闭市场
             UnixNanos::from(1),
             UnixNanos::from(1),
             None,
@@ -1337,7 +1336,7 @@ mod tests {
         let () = cache
             .add_account(AccountAny::Margin(margin_account))
             .unwrap();
-        // build indexes
+        // 构建索引
         cache.build_index();
 
         let exchange = get_exchange(
@@ -1348,10 +1347,10 @@ mod tests {
         );
         exchange.borrow_mut().initialize_account();
 
-        // Test adjust account, increase balance by 500 USD
+        // 测试调整账户，余额增加 500 USD
         exchange.borrow_mut().adjust_account(Money::from("500 USD"));
 
-        // Check if we received two messages, one for initial account state and one for adjusted account state
+        // 检查我们是否收到了两条消息，一条用于初始账户状态，一条用于调整后的账户状态
         let messages = saving_handler.get_messages();
         assert_eq!(messages.len(), 2);
         let account_state_first = messages.first().unwrap();
@@ -1372,7 +1371,7 @@ mod tests {
 
     #[rstest]
     fn test_inflight_commands_binary_heap_ordering_respecting_timestamp_counter() {
-        // Create 3 inflight commands with different timestamps and counters
+        // 创建 3 个具有不同时间戳和计数器的在途命令
         let (_, cmd1) = create_submit_order_command(UnixNanos::from(100), "O-1");
         let (_, cmd2) = create_submit_order_command(UnixNanos::from(200), "O-2");
         let (_, cmd3) = create_submit_order_command(UnixNanos::from(100), "O-3");
@@ -1381,14 +1380,14 @@ mod tests {
         let inflight2 = InflightCommand::new(UnixNanos::from(200), 2, cmd2);
         let inflight3 = InflightCommand::new(UnixNanos::from(100), 2, cmd3);
 
-        // Create a binary heap and push the inflight commands
+        // 创建一个二叉堆并推送在途命令
         let mut inflight_heap = BinaryHeap::new();
         inflight_heap.push(inflight1);
         inflight_heap.push(inflight2);
         inflight_heap.push(inflight3);
 
-        // Pop the inflight commands and check if they are in the correct order
-        // by our custom ordering with counter and timestamp
+        // 弹出的在途命令并检查它们是否顺序正确
+        // 按照我们的自定义计数器和时间戳排序
         let first = inflight_heap.pop().unwrap();
         let second = inflight_heap.pop().unwrap();
         let third = inflight_heap.pop().unwrap();
@@ -1432,12 +1431,12 @@ mod tests {
         exchange.borrow_mut().send(command1);
         exchange.borrow_mut().send(command2);
 
-        // Verify that message queue has 2 commands and inflight queue is empty
-        // as we are not using latency model
+        // 验证消息队列有 2 个命令且在途队列为空
+        // 因为我们没有使用延迟模型
         assert_eq!(exchange.borrow().message_queue.len(), 2);
         assert_eq!(exchange.borrow().inflight_queue.len(), 0);
 
-        // Process command and check that queues is empty
+        // 处理命令并检查队列是否为空
         exchange.borrow_mut().process(UnixNanos::from(300));
         assert_eq!(exchange.borrow().message_queue.len(), 0);
         assert_eq!(exchange.borrow().inflight_queue.len(), 0);
@@ -1445,8 +1444,8 @@ mod tests {
 
     #[rstest]
     fn test_process_with_latency_model(crypto_perpetual_ethusdt: CryptoPerpetual) {
-        // StaticLatencyModel adds base_latency to each operation latency
-        // base=100, insert=200 -> effective insert latency = 300
+        // StaticLatencyModel 将基础延迟添加到每个操作延迟
+        // base=100, insert=200 -> 有效插入延迟 = 300
         let latency_model = StaticLatencyModel::new(
             UnixNanos::from(100),
             UnixNanos::from(200),
@@ -1485,10 +1484,10 @@ mod tests {
         exchange.borrow_mut().send(command1);
         exchange.borrow_mut().send(command2);
 
-        // Verify that inflight queue has 2 commands and message queue is empty
+        // 验证消息队列为空，在途队列有 2 个命令
         assert_eq!(exchange.borrow().message_queue.len(), 0);
         assert_eq!(exchange.borrow().inflight_queue.len(), 2);
-        // First inflight command: ts_init=100 + effective_insert_latency=300 = 400
+        // 第一个在途命令：ts_init=100 + 有效插入延迟=300 = 400
         assert_eq!(
             exchange
                 .borrow()
@@ -1499,7 +1498,7 @@ mod tests {
                 .timestamp,
             UnixNanos::from(400)
         );
-        // Second inflight command: ts_init=150 + effective_insert_latency=300 = 450
+        // 第二个在途命令：ts_init=150 + 有效插入延迟=300 = 450
         assert_eq!(
             exchange
                 .borrow()
@@ -1511,7 +1510,7 @@ mod tests {
             UnixNanos::from(450)
         );
 
-        // Process at timestamp 420, and test that only first command is processed
+        // 在时间戳 420 处理，并测试仅处理第一个命令
         exchange.borrow_mut().process(UnixNanos::from(420));
         assert_eq!(exchange.borrow().message_queue.len(), 0);
         assert_eq!(exchange.borrow().inflight_queue.len(), 1);

@@ -38,42 +38,42 @@ from nautilus_trader.test_kit.providers import TestInstrumentProvider
 
 
 if __name__ == "__main__":
-    # Configure backtest engine
+    # 配置回测引擎
     config = BacktestEngineConfig(
         trader_id=TraderId("BACKTESTER-001"),
     )
 
-    # Build the backtest engine
+    # 构建回测引擎
     engine = BacktestEngine(config=config)
 
-    # Optional plug in module to simulate rollover interest,
-    # the data is coming from packaged test data.
+    # 可选的插件模块用于模拟展期利息（rollover interest），
+    # 数据来源于封装好的测试数据。
     provider = TestDataProvider()
     interest_rate_data = provider.read_csv("short-term-interest.csv")
     config = FXRolloverInterestConfig(interest_rate_data)
     fx_rollover_interest = FXRolloverInterestModule(config=config)
 
-    # Add a trading venue (multiple venues possible)
+    # 添加交易场所（可以添加多个）
     SIM = Venue("SIM")
     engine.add_venue(
         venue=SIM,
-        oms_type=OmsType.HEDGING,  # Venue will generate position IDs
+        oms_type=OmsType.HEDGING,  # 交易场所将生成持仓 ID
         account_type=AccountType.MARGIN,
-        base_currency=USD,  # Standard single-currency account
-        starting_balances=[Money(1_000_000, USD)],  # Single-currency or multi-currency accounts
+        base_currency=USD,  # 标准单币种账户
+        starting_balances=[Money(1_000_000, USD)],  # 单币种或多币种账户
         modules=[fx_rollover_interest],
     )
 
-    # Add instruments
+    # 添加交易合约
     AUDUSD_SIM = TestInstrumentProvider.default_fx_ccy("AUD/USD", SIM)
     engine.add_instrument(AUDUSD_SIM)
 
-    # Add data
+    # 添加数据
     wrangler = QuoteTickDataWrangler(instrument=AUDUSD_SIM)
     ticks = wrangler.process(provider.read_csv_ticks("truefx/audusd-ticks.csv"))
     engine.add_data(ticks)
 
-    # Configure your strategy
+    # 配置策略
     strategy_config = EMACrossConfig(
         instrument_id=AUDUSD_SIM.id,
         bar_type=BarType.from_str("AUD/USD.SIM-1-MINUTE-MID-INTERNAL"),
@@ -81,17 +81,17 @@ if __name__ == "__main__":
         slow_ema_period=20,
         trade_size=Decimal(1_000_000),
     )
-    # Instantiate and add your strategy
+    # 实例化并添加策略
     strategy = EMACross(config=strategy_config)
     engine.add_strategy(strategy=strategy)
 
     time.sleep(0.1)
-    input("Press Enter to continue...")
+    input("按下回车键继续...")
 
-    # Run the engine (from start to end of data)
+    # 运行引擎（从数据的开始到结束）
     engine.run()
 
-    # Optionally view reports
+    # 可选：查看报告
     with pd.option_context(
         "display.max_rows",
         100,
@@ -104,8 +104,8 @@ if __name__ == "__main__":
         print(engine.trader.generate_order_fills_report())
         print(engine.trader.generate_positions_report())
 
-    # For repeated backtest runs make sure to reset the engine
+    # 如需重复运行回测，请确保重置引擎
     engine.reset()
 
-    # Good practice to dispose of the object when done
+    # 完成后销毁对象是一个好习惯
     engine.dispose()

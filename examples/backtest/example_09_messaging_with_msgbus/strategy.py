@@ -28,28 +28,29 @@ from nautilus_trader.trading.strategy import Strategy
 @dataclass
 class Each10thBarEvent(Event):
     """
-    A custom event that is published every 10th bar.
+    每隔 10 个 Bar 发布一次的自定义事件。
 
-    By inheriting from `Event` class, we automatically get important attributes:
-     - `id`: A unique string identifier for each event (in UUID format)
-     - `ts_event`: Timestamp when the event occurred (used for event ordering)
-     - `ts_init`: Timestamp when the event was initialized
+    通过继承 `Event` 类，我们会自动获得一些重要属性：
+     - `id`: 每个事件的唯一字符串标识符（UUID 格式）
+     - `ts_event`: 事件发生时的时间戳（用于事件排序）
+     - `ts_init`: 事件初始化时的时间戳
 
-    These attributes are crucial for correct event processing and ordering in the message bus,
-    especially during backtesting where event timing is important.
+    这些属性对于消息总线（message bus）中的正确事件处理和排序至关重要，
+    特别是在事件时序非常重要的回测过程中。
 
-    Event class offers complete flexibility in terms of attributes:
-    - Can contain attributes of any Python type (int, float, str, custom objects, etc.)
+    Event 类在属性方面提供了完全的灵活性：
+    - 可以包含任何 Python 类型的属性（int、float、str、自定义对象等）
 
     """
 
-    bar: Bar  # The 10th bar related to this event
-    TOPIC: str = "each_10th_bar_event"  # Topic name for message bus publish/subscribe
+    bar: Bar  # 与此事件相关的第 10 个 Bar
+    TOPIC: str = "each_10th_bar_event"  # 消息总线发布/订阅的主题名称
 
 
+@dataclass
 class DemoStrategyConfig(StrategyConfig, frozen=True):
     """
-    Configuration for the demo strategy.
+    演示策略的配置。
     """
 
     instrument: Instrument
@@ -58,54 +59,54 @@ class DemoStrategyConfig(StrategyConfig, frozen=True):
 
 class DemoStrategy(Strategy):
     """
-    A demonstration strategy showing how to use custom events and the message bus.
+    演示如何使用自定义事件和消息总线的策略。
     """
 
     def __init__(self, config: DemoStrategyConfig):
         super().__init__(config)
 
-        # Counter for processed bars
+        # 已处理 Bar 的计数器
         self.bars_processed = 0
 
     def on_start(self):
-        # Subscribe to market data
+        # 订阅市场数据
         self.subscribe_bars(self.config.bar_type)
         self.log.info(f"Subscribed to {self.config.bar_type}", color=LogColor.YELLOW)
 
-        # The message bus implements a topic-based publish/subscribe pattern:
-        # - Publishers can publish events to one or more named topics
-        # - Subscribers can subscribe to one or more topics of interest
+        # 消息总线实现了基于主题的发布/订阅模式：
+        # - 发布者可以将事件发布到一个或多个命名主题
+        # - 订阅者可以订阅一个或多个感兴趣的主题
 
-        # Subscribe to our custom event
-        # First argument is the topic name to subscribe to, second is the custom handler method
+        # 订阅我们的自定义事件
+        # 第一个参数是要订阅的主题名称，第二个是自定义处理方法
         self.msgbus.subscribe(Each10thBarEvent.TOPIC, self.on_each_10th_bar)
         self.log.info(f"Subscribed to {Each10thBarEvent.TOPIC}", color=LogColor.YELLOW)
 
     def on_bar(self, bar: Bar):
-        # Count processed bars
+        # 统计处理过的 Bar
         self.bars_processed += 1
         self.log.info(
             f"Bar #{self.bars_processed} | Bar: {bar} | Time={unix_nanos_to_dt(bar.ts_event)}",
         )
 
-        # Every 10th bar, publish our custom event
+        # 每隔 10 个 Bar，发布一次我们的自定义事件
         if self.bars_processed % 10 == 0:
-            # Log our plans
+            # 记录我们的计划
             self.log.info(
                 f"Going to publish event for topic: {Each10thBarEvent.TOPIC}",
                 color=LogColor.GREEN,
             )
 
-            # Create and publish the event
-            # This demonstrates how to use the message bus to send events
+            # 创建并发布事件
+            # 这演示了如何使用消息总线发送事件
             event = Each10thBarEvent(bar=bar)
             self.msgbus.publish(Each10thBarEvent.TOPIC, event)
 
     def on_each_10th_bar(self, event: Each10thBarEvent):
         """
-        Handle each 10th bar event received from the message bus.
+        处理从消息总线接收到的每 10 个 Bar 的事件。
         """
-        # Log the event details
+        # 记录事件详情
         self.log.info(
             f"Received event for topic: {Each10thBarEvent.TOPIC} at bar # {self.bars_processed}| "
             f"Bar detail: {event.bar}",

@@ -30,20 +30,20 @@ from nautilus_trader.model.orders.base cimport Order
 
 cdef class MatchingCore:
     """
-    Provides a generic order matching core.
+    提供一个通用的订单撮合核心。
 
     Parameters
     ----------
     instrument_id : InstrumentId
-        The instrument ID for the matching core.
+        撮合核心的合约 ID。
     price_increment : Price
-        The minimum price increment (tick size) for the matching core.
+        撮合核心的最小价格增量（Tick 大格）。
     trigger_stop_order : Callable[[Order], None]
-        The callable when a stop order is triggered.
+        止损单触发时的回调函数。
     fill_market_order : Callable[[Order], None]
-        The callable when a market order is filled.
+        市价单成交时的回调函数。
     fill_limit_order : Callable[[Order], None]
-        The callable when a limit order is filled.
+        限价单成交时的回调函数。
     """
 
     def __init__(
@@ -58,7 +58,7 @@ cdef class MatchingCore:
         self._price_increment = price_increment
         self._price_precision = price_increment.precision
 
-        # Market
+        # 市场
         self.bid_raw = 0
         self.ask_raw = 0
         self.last_raw = 0
@@ -66,12 +66,12 @@ cdef class MatchingCore:
         self.is_ask_initialized = False
         self.is_last_initialized = False
 
-        # Event handlers
+        # 事件处理器
         self._trigger_stop_order = trigger_stop_order
         self._fill_market_order = fill_market_order
         self._fill_limit_order = fill_limit_order
 
-        # Orders
+        # 订单
         self._orders: dict[ClientOrderId, Order] = {}
         self._orders_bid: list[Order] = []
         self._orders_ask: list[Order] = []
@@ -79,7 +79,7 @@ cdef class MatchingCore:
     @property
     def instrument_id(self) -> InstrumentId:
         """
-        Return the instrument ID for the matching core.
+        返回撮合核心的合约 ID。
 
         Returns
         -------
@@ -91,7 +91,7 @@ cdef class MatchingCore:
     @property
     def price_precision(self) -> int:
         """
-        Return the instruments price precision for the matching core.
+        返回撮合核心的工具价格精度。
 
         Returns
         -------
@@ -103,7 +103,7 @@ cdef class MatchingCore:
     @property
     def price_increment(self) -> Price:
         """
-        Return the instruments minimum price increment (tick size) for the matching core.
+        返回撮合核心的工具最小价格增量（Tick 大小）。
 
         Returns
         -------
@@ -115,11 +115,11 @@ cdef class MatchingCore:
     @property
     def bid(self) -> Price | None:
         """
-        Return the current bid price for the matching core.
+        返回撮合核心当前的买入价。
 
         Returns
         -------
-        Price or ``None``
+        Price 或 ``None``
 
         """
         if not self.is_bid_initialized:
@@ -130,11 +130,11 @@ cdef class MatchingCore:
     @property
     def ask(self) -> Price | None:
         """
-        Return the current ask price for the matching core.
+        返回撮合核心当前的卖出价。
 
         Returns
         -------
-        Price or ``None``
+        Price 或 ``None``
 
         """
         if not self.is_ask_initialized:
@@ -145,11 +145,11 @@ cdef class MatchingCore:
     @property
     def last(self) -> Price | None:
         """
-        Return the current last price for the matching core.
+        返回撮合核心当前的最新价。
 
         Returns
         -------
-        Price or ``None``
+        Price 或 ``None``
 
         """
         if not self.is_last_initialized:
@@ -157,7 +157,7 @@ cdef class MatchingCore:
         else:
             return Price.from_raw_c(self.last_raw, self._price_precision)
 
-# -- QUERIES --------------------------------------------------------------------------------------
+# -- 查询 --------------------------------------------------------------------------------------
 
     cpdef Order get_order(self, ClientOrderId client_order_id):
         Condition.not_none(client_order_id, "client_order_id")
@@ -176,7 +176,7 @@ cdef class MatchingCore:
     cpdef list get_orders_ask(self):
         return self._orders_ask
 
-# -- COMMANDS -------------------------------------------------------------------------------------
+# -- 命令 -------------------------------------------------------------------------------------
 
     cdef void set_bid_raw(self, PriceRaw bid_raw):
         self.is_bid_initialized = True
@@ -204,11 +204,11 @@ cdef class MatchingCore:
     cpdef void add_order(self, Order order):
         Condition.not_none(order, "order")
 
-        # Needed as closures not supported in cpdef functions
+        # 由于 cpdef 函数不支持闭包，所以需要此步骤
         self._add_order(order)
 
     cdef void _add_order(self, Order order):
-        # Index order
+        # 索引订单
         self._orders[order.client_order_id] = order
 
         if order.side == OrderSide.BUY:
@@ -218,7 +218,7 @@ cdef class MatchingCore:
             self._orders_ask.append(order)
             self.sort_ask_orders()
         else:
-            raise RuntimeError(f"invalid `OrderSide`, was {order.side}")  # pragma: no cover (design-time error)
+            raise RuntimeError(f"无效的 `OrderSide`，原为 {order.side}")  # pragma: no cover (设计时错误)
 
     cdef void sort_bid_orders(self):
         self._orders_bid.sort(key=order_sort_key, reverse=True)
@@ -238,32 +238,32 @@ cdef class MatchingCore:
             if order in self._orders_ask:
                 self._orders_ask.remove(order)
         else:
-            raise RuntimeError(f"invalid `OrderSide`, was {order.side}")  # pragma: no cover (design-time error)
+            raise RuntimeError(f"无效的 `OrderSide`，原为 {order.side}")  # pragma: no cover (设计时错误)
 
     cpdef void iterate(self, uint64_t timestamp_ns):
         cdef Order order
-        for order in self._orders_bid + self._orders_ask:  # Lists implicitly copied
+        for order in self._orders_bid + self._orders_ask:  # 列表会被隐式复制
             if order.is_closed_c():
-                continue  # Orders state has changed since iteration started  # pragma: no cover
+                continue  # 订单状态在迭代开始后发生了变化  # pragma: no cover
             self.match_order(order)
 
-# -- MATCHING -------------------------------------------------------------------------------------
+# -- 撮合 -------------------------------------------------------------------------------------
 
     cpdef void match_order(self, Order order, bint initial = False):
         """
-        Match the given order.
+        撮合给定的订单。
 
         Parameters
         ----------
         order : Order
-            The order to match.
-        initial : bool, default False
-            If this is an initial match.
+            要撮合的订单。
+        initial : bool, 默认 False
+            这是否是初始撮合。
 
         Raises
         ------
         TypeError
-            If the `order.order_type` is an invalid type for the core (e.g. `MARKET`).
+            如果 `order.order_type` 对于核心来说是无效类型（例如 `MARKET`）。
 
         """
         Condition.not_none(order, "order")
@@ -300,7 +300,7 @@ cdef class MatchingCore:
 
         if self.is_stop_triggered(order.side, order.trigger_price):
             order.set_triggered_price_c(order.trigger_price)
-            # Triggered stop places market order
+            # 触发后的止损单作为市价单处理
             self._fill_market_order(order)
 
     cpdef void match_stop_limit_order(self, Order order, bint initial):
@@ -321,7 +321,7 @@ cdef class MatchingCore:
                 order.price,
                 order.trigger_price,
             )
-            # Check if immediately marketable
+            # 检查是否可立即成交
             self._trigger_stop_order(order)
 
     cpdef void match_market_if_touched_order(self, Order order):
@@ -329,7 +329,7 @@ cdef class MatchingCore:
 
         if self.is_touch_triggered(order.side, order.trigger_price):
             order.set_triggered_price_c(order.trigger_price)
-            # Triggered stop places market order
+            # 触发后的止损单作为市价单处理
             self._fill_market_order(order)
 
     cpdef void match_limit_if_touched_order(self, Order order, bint initial):
@@ -351,7 +351,7 @@ cdef class MatchingCore:
                 order.price,
                 order.trigger_price,
             )
-            # Check if immediately marketable
+            # 检查是否可立即成交
             self._trigger_stop_order(order)
 
     cpdef void match_trailing_stop_limit_order(self, Order order, bint initial):
@@ -367,42 +367,42 @@ cdef class MatchingCore:
 
         if side == OrderSide.BUY:
             if not self.is_ask_initialized:
-                return False  # No market
+                return False  # 无行情
             return self.ask_raw <= price._mem.raw
         elif side == OrderSide.SELL:
             if not self.is_bid_initialized:
-                return False  # No market
+                return False  # 无行情
             return self.bid_raw >= price._mem.raw
         else:
-            raise ValueError(f"invalid `OrderSide`, was {side}")  # pragma: no cover (design-time error)
+            raise ValueError(f"无效的 `OrderSide`，原为 {side}")  # pragma: no cover (设计时错误)
 
     cpdef bint is_stop_triggered(self, OrderSide side, Price trigger_price):
         Condition.not_none(trigger_price, "trigger_price")
 
         if side == OrderSide.BUY:
             if not self.is_ask_initialized:
-                return False  # No market
+                return False  # 无行情
             return self.ask_raw >= trigger_price._mem.raw
         elif side == OrderSide.SELL:
             if not self.is_bid_initialized:
-                return False  # No market
+                return False  # 无行情
             return self.bid_raw <= trigger_price._mem.raw
         else:
-            raise ValueError(f"invalid `OrderSide`, was {side}")  # pragma: no cover (design-time error)
+            raise ValueError(f"无效的 `OrderSide`，原为 {side}")  # pragma: no cover (设计时错误)
 
     cpdef bint is_touch_triggered(self, OrderSide side, Price trigger_price):
         Condition.not_none(trigger_price, "trigger_price")
 
         if side == OrderSide.BUY:
             if not self.is_ask_initialized:
-                return False  # No market
+                return False  # 无行情
             return self.ask_raw <= trigger_price._mem.raw
         elif side == OrderSide.SELL:
             if not self.is_bid_initialized:
-                return False  # No market
+                return False  # 无行情
             return self.bid_raw >= trigger_price._mem.raw
         else:
-            raise ValueError(f"invalid `OrderSide`, was {side}")  # pragma: no cover (design-time error)
+            raise ValueError(f"无效的 `OrderSide`，原为 {side}")  # pragma: no cover (设计时错误)
 
     cdef LiquiditySide _determine_order_liquidity(
         self,
@@ -453,7 +453,7 @@ cdef inline int64_t order_sort_key(Order order):
         price = order.price
         return price._mem.raw if order.is_triggered else trigger_price._mem.raw
     else:
-        raise RuntimeError(  # pragma: no cover (design-time error)
-            f"invalid order type to sort in book, "  # pragma: no cover (design-time error)
-            f"was {order_type_to_str(order.order_type)}",  # pragma: no cover (design-time error)
+        raise RuntimeError(  # pragma: no cover (设计时错误)
+            f"排序订单簿时的订单类型无效，"  # pragma: no cover (设计时错误)
+            f"原为 {order_type_to_str(order.order_type)}",  # pragma: no cover (设计时错误)
         )

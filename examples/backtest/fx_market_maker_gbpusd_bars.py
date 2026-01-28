@@ -40,46 +40,46 @@ from nautilus_trader.test_kit.providers import TestInstrumentProvider
 
 
 if __name__ == "__main__":
-    # Configure backtest engine
+    # 配置回测引擎
     config = BacktestEngineConfig(
         trader_id=TraderId("BACKTESTER-001"),
     )
 
-    # Build the backtest engine
+    # 构建回测引擎
     engine = BacktestEngine(config=config)
 
-    # Optional plug in module to simulate rollover interest,
-    # the data is coming from packaged test data.
+    # 可选的插件模块用于模拟展期利息（rollover interest），
+    # 数据来源于封装好的测试数据。
     provider = TestDataProvider()
     interest_rate_data = provider.read_csv("short-term-interest.csv")
     config = FXRolloverInterestConfig(interest_rate_data)
     fx_rollover_interest = FXRolloverInterestModule(config=config)
 
-    # Create a fill model (optional)
+    # 创建成交模型（可选）
     fill_model = FillModel(
-        prob_fill_on_limit=0.2,
-        prob_slippage=0.5,
-        random_seed=42,
+        prob_fill_on_limit=0.2,  # 限价单成交概率
+        prob_slippage=0.5,  # 滑点概率
+        random_seed=42,  # 随机种子，用于结果可复现
     )
 
-    # Add a trading venue (multiple venues possible)
+    # 添加交易场所（可以添加多个）
     SIM = Venue("SIM")
     engine.add_venue(
         venue=SIM,
         oms_type=OmsType.NETTING,
         account_type=AccountType.MARGIN,
-        base_currency=USD,  # Standard single-currency account
-        starting_balances=[Money(10_000_000, USD)],  # Single-currency or multi-currency accounts
+        base_currency=USD,  # 标准单币种账户
+        starting_balances=[Money(10_000_000, USD)],  # 单币种或多币种账户
         fill_model=fill_model,
         modules=[fx_rollover_interest],
-        bar_execution=True,  # If bar data should move the market (True by default)
+        bar_execution=True,  # K 线数据是否驱动市场（默认为 True）
     )
 
-    # Add instruments
+    # 添加交易合约
     GBPUSD_SIM = TestInstrumentProvider.default_fx_ccy("GBP/USD", SIM)
     engine.add_instrument(GBPUSD_SIM)
 
-    # Add data
+    # 添加数据
     wrangler = QuoteTickDataWrangler(GBPUSD_SIM)
     ticks = wrangler.process_bar_data(
         bid_data=provider.read_csv_bars("fxcm/gbpusd-m1-bid-2012.csv"),
@@ -87,26 +87,26 @@ if __name__ == "__main__":
     )
     engine.add_data(ticks)
 
-    # Configure your strategy
+    # 配置策略
     strategy_config = VolatilityMarketMakerConfig(
         instrument_id=GBPUSD_SIM.id,
         bar_type=BarType.from_str("GBP/USD.SIM-5-MINUTE-BID-INTERNAL"),
-        atr_period=20,
-        atr_multiple=3.0,
-        trade_size=Decimal(500_000),
-        emulation_trigger="NO_TRIGGER",
+        atr_period=20,  # ATR 周期
+        atr_multiple=3.0,  # ATR 倍数
+        trade_size=Decimal(500_000),  # 交易量
+        emulation_trigger="NO_TRIGGER",  # 不使用仿真触发
     )
-    # Instantiate and add your strategy
+    # 实例化并添加策略
     strategy = VolatilityMarketMaker(config=strategy_config)
     engine.add_strategy(strategy=strategy)
 
     time.sleep(0.1)
-    input("Press Enter to continue...")
+    input("按下回车键继续...")
 
-    # Run the engine (from start to end of data)
+    # 运行引擎（从数据的开始到指定结束时间）
     engine.run(end=datetime(2012, 2, 10))
 
-    # Optionally view reports
+    # 可选：查看报告
     with pd.option_context(
         "display.max_rows",
         100,
@@ -119,8 +119,8 @@ if __name__ == "__main__":
         print(engine.trader.generate_order_fills_report())
         print(engine.trader.generate_positions_report())
 
-    # For repeated backtest runs make sure to reset the engine
+    # 如需重复运行回测，请确保重置引擎
     engine.reset()
 
-    # Good practice to dispose of the object when done
+    # 完成后销毁对象是一个好习惯
     engine.dispose()

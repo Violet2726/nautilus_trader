@@ -198,18 +198,17 @@ from nautilus_trader.trading.strategy cimport Strategy
 
 cdef class BacktestEngine:
     """
-    Provides a backtest engine to run a portfolio of strategies over historical
-    data.
+    提供回测引擎，通过历史数据运行策略组合。
 
     Parameters
     ----------
     config : BacktestEngineConfig, optional
-        The configuration for the instance.
+        实例的配置。
 
     Raises
     ------
     TypeError
-        If `config` is not of type `BacktestEngineConfig`.
+        如果 `config` 不是 `BacktestEngineConfig` 类型。
     """
 
     def __init__(self, config: BacktestEngineConfig | None = None) -> None:
@@ -220,14 +219,14 @@ cdef class BacktestEngine:
 
         self._config: BacktestEngineConfig  = config
 
-        # Set up components
+        # 设置组件
         self._accumulator = <TimeEventAccumulator_API>time_event_accumulator_new()
-
-        # Run IDs
+ 
+        # 运行 ID
         self._run_config_id: str | None = None
         self._run_id: UUID4 | None = None
-
-        # Venues and data
+ 
+        # 场所和数据
         self._venues: dict[Venue, SimulatedExchange] = {}
         self._has_data: set[InstrumentId] = set()
         self._has_book_data: set[InstrumentId] = set()
@@ -237,21 +236,21 @@ cdef class BacktestEngine:
         self._last_ns : uint64_t = 0
         self._end_ns : uint64_t = 0
         self._sorted: bint = True
-
-        # Timing
+ 
+        # 计时
         self._run_started: pd.Timestamp | None = None
         self._run_finished: pd.Timestamp | None = None
         self._backtest_start: pd.Timestamp | None = None
         self._backtest_end: pd.Timestamp | None = None
-
-        # Build core system kernel
+ 
+        # 构建核心系统内核
         self._kernel = NautilusKernel(name=type(self).__name__, config=config)
         self._instance_id = self._kernel.instance_id
         self._log = Logger(type(self).__name__)
-
+ 
         self._data_engine: DataEngine = self._kernel.data_engine
-
-        # Set up data iterator
+ 
+        # 设置数据迭代器
         self._data_requests: dict[str, RequestData] = {}
         self._last_subscription_ts: dict[str, uint64_t] = {}
         self._backtest_subscription_names = set()
@@ -266,7 +265,7 @@ cdef class BacktestEngine:
     @property
     def trader_id(self) -> TraderId:
         """
-        Return the engines trader ID.
+        返回引擎的交易员 ID。
 
         Returns
         -------
@@ -278,7 +277,7 @@ cdef class BacktestEngine:
     @property
     def machine_id(self) -> str:
         """
-        Return the engines machine ID.
+        返回引擎的机器 ID。
 
         Returns
         -------
@@ -290,9 +289,9 @@ cdef class BacktestEngine:
     @property
     def instance_id(self) -> UUID4:
         """
-        Return the engines instance ID.
+        返回引擎的实例 ID。
 
-        This is a unique identifier per initialized engine.
+        这是每个初始化引擎的唯一标识符。
 
         Returns
         -------
@@ -304,7 +303,7 @@ cdef class BacktestEngine:
     @property
     def kernel(self) -> NautilusKernel:
         """
-        Return the internal kernel for the engine.
+        返回引擎的内部内核。
 
         Returns
         -------
@@ -316,7 +315,7 @@ cdef class BacktestEngine:
     @property
     def logger(self) -> Logger:
         """
-        Return the internal logger for the engine.
+        返回引擎的内部日志记录器。
 
         Returns
         -------
@@ -328,7 +327,7 @@ cdef class BacktestEngine:
     @property
     def run_config_id(self) -> str:
         """
-        Return the last backtest engine run config ID.
+        返回最后一次回测引擎运行配置 ID。
 
         Returns
         -------
@@ -340,7 +339,7 @@ cdef class BacktestEngine:
     @property
     def run_id(self) -> UUID4:
         """
-        Return the last backtest engine run ID (if run).
+        返回最后一次回测引擎运行 ID（如果已运行）。
 
         Returns
         -------
@@ -352,7 +351,7 @@ cdef class BacktestEngine:
     @property
     def iteration(self) -> int:
         """
-        Return the backtest engine iteration count.
+        返回回测引擎迭代计数。
 
         Returns
         -------
@@ -364,7 +363,7 @@ cdef class BacktestEngine:
     @property
     def run_started(self) -> pd.Timestamp | None:
         """
-        Return when the last backtest run started (if run).
+        返回最后一次回测运行开始的时间（如果已运行）。
 
         Returns
         -------
@@ -376,7 +375,7 @@ cdef class BacktestEngine:
     @property
     def run_finished(self) -> pd.Timestamp | None:
         """
-        Return when the last backtest run finished (if run).
+        返回最后一次回测运行结束的时间（如果已运行）。
 
         Returns
         -------
@@ -388,7 +387,7 @@ cdef class BacktestEngine:
     @property
     def backtest_start(self) -> pd.Timestamp | None:
         """
-        Return the last backtest run time range start (if run).
+        返回最后一次回测运行时间范围的开始（如果已运行）。
 
         Returns
         -------
@@ -400,7 +399,7 @@ cdef class BacktestEngine:
     @property
     def backtest_end(self) -> pd.Timestamp | None:
         """
-        Return the last backtest run time range end (if run).
+        返回最后一次回测运行时间范围的结束（如果已运行）。
 
         Returns
         -------
@@ -412,7 +411,7 @@ cdef class BacktestEngine:
     @property
     def trader(self) -> Trader:
         """
-        Return the engines internal trader.
+        返回引擎的内部交易员。
 
         Returns
         -------
@@ -424,7 +423,7 @@ cdef class BacktestEngine:
     @property
     def cache(self) -> CacheFacade:
         """
-        Return the engines internal read-only cache.
+        返回引擎的内部只读缓存。
 
         Returns
         -------
@@ -436,7 +435,7 @@ cdef class BacktestEngine:
     @property
     def data(self) -> list[Data]:
         """
-        Return the engines internal data stream.
+        返回引擎的内部数据流。
 
         Returns
         -------
@@ -448,7 +447,7 @@ cdef class BacktestEngine:
     @property
     def portfolio(self) -> PortfolioFacade:
         """
-        Return the engines internal read-only portfolio.
+        返回引擎的内部只读投资组合。
 
         Returns
         -------
@@ -459,9 +458,9 @@ cdef class BacktestEngine:
 
     def get_log_guard(self) -> nautilus_pyo3.LogGuard | LogGuard | None:
         """
-        Return the global logging subsystems log guard.
+        返回全局日志子系统的日志守卫。
 
-        May return ``None`` if the logging subsystem was already initialized.
+        如果日志子系统已初始化，可能返回 ``None``。
 
         Returns
         -------
@@ -472,7 +471,7 @@ cdef class BacktestEngine:
 
     def list_venues(self) -> list[Venue]:
         """
-        Return the venues contained within the engine.
+        返回引擎中包含的场所。
 
         Returns
         -------
@@ -515,101 +514,98 @@ cdef class BacktestEngine:
         price_protection_points=None,
     ) -> None:
         """
-        Add a `SimulatedExchange` with the given parameters to the backtest engine.
+        向回测引擎添加具有给定参数的 `SimulatedExchange`。
 
         Parameters
         ----------
         venue : Venue
-            The venue ID.
+            场所 ID。
         oms_type : OmsType {``HEDGING``, ``NETTING``}
-            The order management system type for the exchange. If ``HEDGING`` will
-            generate new position IDs.
+            交易所的订单管理系统类型。如果为 ``HEDGING``，将生成新的持仓 ID。
         account_type : AccountType
-            The account type for the exchange.
+            交易所的账户类型。
         starting_balances : list[Money]
-            The starting account balances (specify one for a single asset account).
+            账户期初余额（单资产账户指定一个）。
         base_currency : Currency, optional
-            The account base currency for the client. Use ``None`` for multi-currency accounts.
+            客户的账户基础货币。对于多币种账户，使用 ``None``。
         default_leverage : Decimal, optional
-            The account default leverage (for margin accounts).
+            账户默认杠杆（用于保证金账户）。
         leverages : dict[InstrumentId, Decimal], optional
-            The instrument specific leverage configuration (for margin accounts).
+            特定工具的杠杆配置（用于保证金账户）。
         margin_model : MarginModelConfig, optional
-            The margin calculation model configuration. Default 'leveraged'.
+            保证金计算模型配置。默认为 'leveraged'。
         modules : list[SimulationModule], optional
-            The simulation modules to load into the exchange.
+            要加载到交易所的模拟模块。
         fill_model : FillModel, optional
-            The fill model for the exchange.
+            交易所的成交模型。
         fee_model : FeeModel, optional
-            The fee model for the venue.
+            场所的费用模型。
         latency_model : LatencyModel, optional
-            The latency model for the exchange.
+            交易所的延迟模型。
         book_type : BookType, default ``BookType.L1_MBP``
-            The default order book type.
+            默认订单簿类型。
         routing : bool, default False
-            If multi-venue routing should be enabled for the execution client.
+            是否应为执行客户端启用多场所路由。
         reject_stop_orders : bool, default True
-            If stop orders are rejected on submission if trigger price is in the market.
+            如果提交时触发价格在市场价格范围内，是否拒绝止损单。
         support_gtd_orders : bool, default True
-            If orders with GTD time in force will be supported by the venue.
+            场所是否支持 GTD（Good Till Date）有效时间的订单。
         support_contingent_orders : bool, default True
-            If contingent orders will be supported/respected by the venue.
-            If False, then it's expected the strategy will be managing any contingent orders.
+            场所是否支持/遵循条件订单。
+            如果为 False，则预期策略将管理任何条件订单。
         oto_trigger_mode : OtoTriggerMode, default ``OtoTriggerMode.PARTIAL``
-            The OTO trigger mode for contingent orders:
-            - ``PARTIAL``: release child orders pro-rata to each partial fill (default).
-            - ``FULL``: release child orders only once the parent is fully filled.
+            条件订单的 OTO 触发模式：
+            - ``PARTIAL``：根据每次部分成交按比例释放子订单（默认）。
+            - ``FULL``：仅在父订单完全成交后释放子订单。
         use_position_ids : bool, default True
-            If venue position IDs will be generated on order fills.
+            是否在订单成交时生成场所持仓 ID。
         use_random_ids : bool, default False
-            If all venue generated identifiers will be random UUID4's.
+            是否所有场所生成的标识符都是随机 UUID4。
         use_reduce_only : bool, default True
-            If the `reduce_only` execution instruction on orders will be honored.
+            是否遵循订单上的 `reduce_only` 执行指令。
         use_message_queue : bool, default True
-            If an internal message queue should be used to process trading commands in sequence after
-            they have initially arrived. Setting this to False would be appropriate for real-time
-            sandbox environments, where we don't want to introduce additional latency of waiting for
-            the next data event before processing the trading command.
+            是否应使用内部消息队列按顺序处理交易指令。对于实时沙盒环境，
+            将其设置为 False 可能更合适，因为我们不想在处理交易指令之前引入
+            等待下一个数据事件的额外延迟。
         use_market_order_acks : bool, default False
-            If OrderAccepted events will be generated for market orders before filling.
+            是否在成交前为市价单生成 OrderAccepted 事件。
         bar_execution : bool, default True
-            If bars should be processed by the matching engine(s) (and move the market).
+            是否应由撮合引擎处理 Bar 数据（并推动市场）。
         bar_adaptive_high_low_ordering : bool, default False
-            Determines whether the processing order of bar prices is adaptive based on a heuristic.
-            This setting is only relevant when `bar_execution` is True.
-            If False, bar prices are always processed in the fixed order: Open, High, Low, Close.
-            If True, the processing order adapts with the heuristic:
-            - If High is closer to Open than Low then the processing order is Open, High, Low, Close.
-            - If Low is closer to Open than High then the processing order is Open, Low, High, Close.
+            决定是否根据启发式算法自适应处理 Bar 价格顺序。
+            此设置仅在 `bar_execution` 为 True 时相关。
+            如果为 False，Bar 价格始终按固定顺序处理：Open, High, Low, Close。
+            如果为 True，处理顺序随启发式算法调整：
+            - 如果 High 比 Low 更接近 Open，则处理顺序为 Open, High, Low, Close。
+            - 如果 Low 比 High 更接近 Open，则处理顺序为 Open, Low, High, Close。
         trade_execution : bool, default False
-            If trades should be processed by the matching engine(s) (and move the market).
+            是否应由撮合引擎处理 Trade 数据（并推动市场）。
         liquidity_consumption : bool, default False
-            If liquidity consumption should be tracked per price level. When enabled, fills
-            consume available liquidity which resets when fresh data arrives at that level.
-            When disabled, each iteration can fill against the full book liquidity independently.
+            是否应按价格水平跟踪流动性消耗。启用时，成交会消耗可用流动性，
+            当该水平的新数据到达时重置。禁用时，每次迭代都可以独立地根据
+            全额订单簿流动性进行成交。
         allow_cash_borrowing : bool, default False
-            If cash accounts should allow borrowing (negative balances).
+            现金账户是否允许借贷（负余额）。
         frozen_account : bool, default False
-            If the account for this exchange is frozen (balances will not change).
+            此交易所的账户是否冻结（余额不会改变）。
         price_protection_points : int, optional
-            Defines an exchange-calculated price boundary (in points) to prevent
-            marketable orders from executing at excessively aggressive prices.
+            定义交易所计算的价格边界（以点为单位），以防止市价单在过于激进的价格执行。
 
         Raises
         ------
         ValueError
-            If `venue` is already registered with the engine.
+            如果 `venue` 已经在引擎中注册。
 
         """
         if modules is None:
             modules = []
-
+ 
         if margin_model is None:
             margin_model = LeveragedMarginModel()
-
+ 
         if fill_model is None:
             fill_model = FillModel()
-
+ 
         if fee_model is None:
             fee_model = MakerTakerFeeModel()
 
@@ -682,14 +678,14 @@ cdef class BacktestEngine:
 
     def change_fill_model(self, Venue venue, FillModel model) -> None:
         """
-        Change the fill model for the exchange of the given venue.
+        更改给定场所交易所的成交模型。
 
         Parameters
         ----------
         venue : Venue
-            The venue of the simulated exchange.
+            模拟交易所的场所。
         model : FillModel
-            The fill model to change to.
+            要更改为的成交模型。
 
         """
         Condition.not_none(venue, "venue")
@@ -700,23 +696,22 @@ cdef class BacktestEngine:
 
     def add_instrument(self, Instrument instrument) -> None:
         """
-        Add the instrument to the backtest engine.
+        将工具添加到回测引擎。
 
-        The instrument must be valid for its associated venue. For instance,
-        derivative instruments which would trade on margin cannot be added to
-        a venue with a ``CASH`` account.
+        该工具必须对其关联场所有效。例如，不能将以保证金交易的衍生工具
+        添加到具有 ``CASH`` 账户的场所。
 
         Parameters
         ----------
         instrument : Instrument
-            The instrument to add.
+            要添加的工具。
 
         Raises
         ------
         InvalidConfiguration
-            If the venue for the `instrument` has not been added to the engine.
+            如果尚未将 `instrument` 的场所添加到引擎中。
         InvalidConfiguration
-            If `instrument` is not valid for its associated venue.
+            如果 `instrument` 对其关联场所无效。
 
         """
         Condition.not_none(instrument, "instrument")
@@ -727,27 +722,26 @@ cdef class BacktestEngine:
                 f"Add the {instrument.id.venue} venue using the `add_venue` method."
             )
 
-        # Validate instrument is correct for the venue
+        # 验证工具是否适用于该场所
         cdef SimulatedExchange venue = self._venues[instrument.id.venue]
-
+ 
         if (
             isinstance(instrument, CurrencyPair)
             and venue.account_type != AccountType.MARGIN
-            and venue.base_currency is not None  # Single-currency account
+            and venue.base_currency is not None  # 单币种账户
         ):
             raise InvalidConfiguration(
-                f"Cannot add `CurrencyPair` instrument {instrument} "
-                "for a venue with a single-currency CASH account.",
+                f"无法为具有单币种现金账户的场所添加 `CurrencyPair` 工具 {instrument}。",
             )
-
-        # Check client has been registered
+ 
+        # 检查客户端是否已注册
         self._add_market_data_client_if_not_exists(instrument.id.venue)
-
-        # Add data
-        self._kernel.data_engine.process(instrument)  # Adds to cache
+ 
+        # 添加数据
+        self._kernel.data_engine.process(instrument)  # 添加到缓存
         self._venues[instrument.id.venue].add_instrument(instrument)
-
-        self._log.info(f"Added {instrument.id} Instrument")
+ 
+        self._log.info(f"已添加 {instrument.id} 工具")
 
     def add_data(
         self,
@@ -757,65 +751,65 @@ cdef class BacktestEngine:
         bint sort = True,
     ) -> None:
         """
-        Add the given `data` to the backtest engine.
+        将给定的 `data` 添加到回测引擎。
 
         Parameters
         ----------
         data : list[Data]
-            The data to add.
+            要添加的数据。
         client_id : ClientId, optional
-            The client ID to associate with the data.
+            与数据关联的客户端 ID。
         validate : bool, default True
-            If `data` should be validated
-            (recommended when adding data directly to the engine).
+            如果应验证 `data`（直接向引擎添加数据时建议使用）。
         sort : bool, default True
-            If `data` should be sorted by `ts_init` with the rest of the stream after adding
-            (recommended when adding data directly to the engine).
+            如果 `data` 在添加后应与流的其余部分按 `ts_init` 排序
+            （直接向引擎添加数据时建议使用）。
 
         Raises
         ------
         ValueError
-            If `data` is empty.
+            如果 `data` 为空。
         ValueError
-            If `data` contains objects which are not a type of `Data`.
+            如果 `data` 包含非 `Data` 类型的对象。
         ValueError
-            If `instrument_id` for the data is not found in the cache.
+            如果在缓存中找不到数据的 `instrument_id`。
         ValueError
-            If `data` elements do not have an `instrument_id` and `client_id` is ``None``.
+            如果 `data` 元素没有 `instrument_id` 且 `client_id` 为 ``None``。
         TypeError
-            If `data` is a Rust PyO3 data type (cannot add directly to engine yet).
+            如果 `data` 是 Rust PyO3 数据类型（尚无法直接添加到引擎）。
 
         Warnings
         --------
-        Assumes all data elements are of the same type. Adding lists of varying
-        data types could result in incorrect backtest logic.
+        假设所有数据元素都是相同类型。添加不同数据类型的列表可能会导致不正确的回测逻辑。
 
-        Caution if adding data without `sort` being True, as this could lead to running backtests
-        on a stream which does not have monotonically increasing timestamps.
+        如果添加数据时 `sort` 不为 True，请小心，因为这可能导致在时间戳非
+        单调递增的流上运行回测。
 
         Notes
         -----
-        For optimal performance when loading large datasets, consider using `sort=False` for all
-        calls to `add_data()`, then calling `sort_data()` once after all data has been added:
+        为了加载大型数据集时获得最佳性能，请考虑对所有 `add_data()` 调用
+        使用 `sort=False`，然后在添加所有数据后调用一次 `sort_data()`：
 
         .. code-block:: python
 
             # Add multiple data streams without sorting
+            # 添加多个数据流而不排序
             engine.add_data(instrument1_bars, sort=False)
             engine.add_data(instrument2_bars, sort=False)
             engine.add_data(instrument3_bars, sort=False)
 
             # Sort once at the end
+            # 最后排序一次
             engine.sort_data()
 
-        This approach avoids repeatedly sorting the entire data stream on each call,
-        significantly reducing load time for large datasets.
+        这种方法避免了在每次调用时重复对整个数据流进行排序，从而显着减少了
+        大型数据集的加载时间。
 
-        **Contract invariants:**
+        **合约不变量：**
 
-        - When `sort=True`: Data is immediately available for backtesting via `run()`.
-        - When `sort=False`: You **must** call `sort_data()` or add data with `sort=True` before `run()`.
-        - The provided `data` list is always copied internally to prevent external mutations from affecting the engine state.
+        - 当 `sort=True` 时：数据可通过 `run()` 立即用于回测。
+        - 当 `sort=False` 时：在 `run()` 之前，您 **必须** 调用 `sort_data()` 或使用 `sort=True` 添加数据。
+        - 提供的 `data` 列表始终在内部复制，以防止外部突变影响引擎状态。
 
         """
         Condition.not_empty(data, "data")
@@ -866,8 +860,8 @@ cdef class BacktestEngine:
 
             if type(first) in BOOK_DATA_TYPES:
                 self._has_book_data.add(first.instrument_id)
-
-        # Add data
+ 
+        # 添加数据
         self._data.extend(data)
 
         if sort:
@@ -898,21 +892,21 @@ cdef class BacktestEngine:
         ClientId client_id = None,
     ) -> None:
         """
-        Add a single stream generator that yields ``list[Data]`` objects for the low-level streaming backtest API.
+        为底层流式回测 API 添加产生 ``list[Data]`` 对象的单流生成器。
 
         Parameters
         ----------
         data_name : str
-            The name identifier for the data stream.
+            数据流的名称标识符。
         generator : Generator[list[Data], None, None]
-            A Python generator that yields lists of ``Data`` objects.
+            产生 ``Data`` 对象列表的 Python 生成器。
         client_id : ClientId, optional
-            The client ID to associate with the data.
+            与数据关联的客户端 ID。
 
         Notes
         -----
-        This method enables streaming large datasets by loading data in chunks.
-        The generator should yield ``list[Data]`` objects sorted by `ts_init` timestamp.
+        该方法通过分块加载数据来实现大型数据集的流式传输。
+        生成器应产生按 `ts_init` 时间戳排序的 ``list[Data]`` 对象。
 
         """
         self._data_iterator.init_data(
@@ -940,14 +934,14 @@ cdef class BacktestEngine:
         if subscription_name in self._data_requests or subscription_name in self._backtest_subscription_names:
             return
 
-        self._log.debug(f"Subscribing to {subscription_name}, {command.params.get('durations_seconds')=}")
-
+        self._log.debug(f"正在订阅 {subscription_name}，{command.params.get('durations_seconds')=}")
+ 
         time_range_generator = get_time_range_generator(
             request.params.get("time_range_generator", "")
         )(request)
         cdef bint append_data = request.params.get("append_data", True)
-        request.params.pop("time_range_generator", None) # so sub_requests don't use long data range requests as well
-
+        request.params.pop("time_range_generator", None) # 这样子请求就不会也使用长数据范围请求
+ 
         self._data_requests[subscription_name] = request
         self._data_iterator.init_data(
             subscription_name,
@@ -964,36 +958,36 @@ cdef class BacktestEngine:
         time_range_generator: TimeRangeGenerator,
     ):
         """
-        Generator that yields a range of backtest data for a subscription using a time range generator.
+        使用时间范围生成器产生产生订阅的回测数据范围的生成器。
         """
         def get_next_time_range(data_received):
-            # Helper to get next time range with proper error handling, data_received is a signal sent to the time_range_generator
-            # to indicate if data has been received in the previous call to _update_subscription_data
+            # 获取下一个时间范围的辅助函数，具有适当的错误处理，data_received 是发送到 time_range_generator 的信号，
+            # 用于指示在上一次调用 _update_subscription_data 时是否收到数据
             try:
                 return time_range_generator.send(data_received) if data_received is not None else next(time_range_generator)
             except StopIteration:
                 return None, None
-
-        # Get initial time range
+ 
+        # 获取初始时间范围
         request_start_ns, request_end_ns = get_next_time_range(None)
 
         try:
             while request_start_ns is not None and request_start_ns <= self._end_ns:
-                # Clear and update response data
+                # 清除并更新响应数据
                 self._response_data = []
                 self._update_subscription_data(subscription_name, request_start_ns, request_end_ns)
-
-                # Determine signal based on whether we got data
+ 
+                # 根据是否获得数据来确定信号
                 data_received = len(self._response_data) > 0
-
-                # Yield data if we have any
+ 
+                # 如果有数据，则产生数据
                 if self._response_data:
                     yield self._response_data
-
-                # Get next time range
+ 
+                # 获取下一个时间范围
                 request_start_ns, request_end_ns = get_next_time_range(data_received)
         finally:
-            # Ensure generator is properly closed
+            # 确保生成器被正确关闭
             try:
                 time_range_generator.close()
             except (StopIteration, GeneratorExit):
@@ -1013,12 +1007,12 @@ cdef class BacktestEngine:
     cpdef void _handle_data_response(self, DataResponse response):
         cdef list[Data] data = response.data
         cdef str subscription_name = response.params["subscription_name"]
-
+ 
         if not data:
-            self._log.debug(f"Empty data for {subscription_name}")
+            self._log.debug(f"{subscription_name} 数据为空")
         else:
-            self._log.debug(f"Received subscribe {subscription_name} data from {unix_nanos_to_dt(data[0].ts_init)} to {unix_nanos_to_dt(data[-1].ts_init)}")
-
+            self._log.debug(f"已收到订阅 {subscription_name} 数据，从 {unix_nanos_to_dt(data[0].ts_init)} 到 {unix_nanos_to_dt(data[-1].ts_init)}")
+ 
         self._response_data = data
 
     cpdef void _handle_unsubscribe(self, UnsubscribeData command):
@@ -1031,13 +1025,13 @@ cdef class BacktestEngine:
         else:
             subscription_name = f"{command.data_type.type.__name__}.{command.instrument_id}"
 
-        self._log.debug(f"Unsubscribing {subscription_name}")
+        self._log.debug(f"正在取消订阅 {subscription_name}")
         self._data_iterator.remove_data(subscription_name, complete_remove=True)
         self._data_requests.pop(subscription_name, None)
 
     def dump_pickled_data(self) -> bytes:
         """
-        Return the internal data stream pickled.
+        返回序列化（pickle）的内部数据流。
 
         Returns
         -------
@@ -1048,18 +1042,17 @@ cdef class BacktestEngine:
 
     def load_pickled_data(self, bytes data) -> None:
         """
-        Load the given pickled data directly into the internal data stream.
+        将给定的序列化数据直接加载到内部数据流中。
 
-        It is highly advised to only pass data to this method which was obtained
-        through a call to `.dump_pickled_data()`.
+        强烈建议仅将通过调用 `.dump_pickled_data()` 获得的数据传递给此方法。
 
         Warnings
         --------
-        This low-level direct access method makes the following assumptions:
-         - The data contains valid Nautilus objects only, which inherit from `Data`.
-         - The data was successfully pickled from a call to `pickle.dumps()`.
-         - The data was sorted prior to pickling.
-         - All required instruments have been added to the engine.
+        此底层直接访问方法做出以下假设：
+         - 数据仅包含有效的 Nautilus 对象，且继承自 `Data`。
+         - 数据已通过调用 `pickle.dumps()` 成功序列化。
+         - 数据在序列化之前已排序。
+         - 所有即将需要的工具都已添加到引擎中。
 
         """
         Condition.not_none(data, "data")
@@ -1074,7 +1067,7 @@ cdef class BacktestEngine:
 
     def add_actor(self, actor: Actor) -> None:
         """
-        Add the given actor to the backtest engine.
+        将给定的 actor 添加到回测引擎。
 
         Parameters
         ----------
@@ -1087,20 +1080,20 @@ cdef class BacktestEngine:
 
     def add_actors(self, actors: list[Actor]) -> None:
         """
-        Add the given list of actors to the backtest engine.
+        将给定的 actors 列表添加到回测引擎。
 
         Parameters
         ----------
         actors : list[Actor]
-            The actors to add.
-
+            要添加的 actor 列表。
+ 
         """
-        # Checked inside trader
+        # 在交易员内部检查
         self._kernel.trader.add_actors(actors)
 
     def add_strategy(self, strategy: Strategy) -> None:
         """
-        Add the given strategy to the backtest engine.
+        将给定的策略添加到回测引擎。
 
         Parameters
         ----------
@@ -1113,115 +1106,115 @@ cdef class BacktestEngine:
 
     def add_strategies(self, strategies: list[Strategy]) -> None:
         """
-        Add the given list of strategies to the backtest engine.
+        将给定的策略列表添加到回测引擎。
 
         Parameters
         ----------
         strategies : list[Strategy]
-            The strategies to add.
-
+            要添加的策略列表。
+ 
         """
-        # Checked inside trader
+        # 在交易员内部检查
         self._kernel.trader.add_strategies(strategies)
 
     def add_exec_algorithm(self, exec_algorithm: ExecAlgorithm) -> None:
         """
-        Add the given execution algorithm to the backtest engine.
+        将给定的执行算法添加到回测引擎。
 
         Parameters
         ----------
         exec_algorithm : ExecAlgorithm
-            The execution algorithm to add.
-
+            要添加的执行算法。
+ 
         """
-        # Checked inside trader
+        # 在交易员内部检查
         self._kernel.trader.add_exec_algorithm(exec_algorithm)
 
     def add_exec_algorithms(self, exec_algorithms: list[ExecAlgorithm]) -> None:
         """
-        Add the given list of execution algorithms to the backtest engine.
+        将给定的执行算法列表添加到回测引擎。
 
         Parameters
         ----------
         exec_algorithms : list[ExecAlgorithm]
-            The execution algorithms to add.
-
+            要添加的执行算法列表。
+ 
         """
-        # Checked inside trader
+        # 在交易员内部检查
         self._kernel.trader.add_exec_algorithms(exec_algorithms)
 
     def reset(self) -> None:
         """
-        Reset the backtest engine.
-
-        All stateful fields are reset to their initial value, except for data and instruments which persist.
-
+        重置回测引擎。
+ 
+        所有有状态字段都将重置为其初始值，但数据和工具除外（它们会保留）。
+ 
         Notes
         -----
-        Data and instruments are retained across resets by default to enable repeated runs
-        with different strategies or parameters against the same dataset.
-
+        默认情况下，数据和工具在重置后会保留，以便能够针对同一数据集使用不同的策略
+        或参数进行重复运行。
+ 
         See Also
         --------
         https://nautilustrader.io/docs/concepts/backtesting#repeated-runs
-
+ 
         """
-        self._log.debug(f"Resetting")
-
+        self._log.debug(f"正在重置")
+ 
         if self._kernel.trader.is_running:
-            # End current backtest run
+            # 结束当前回测运行
             self.end()
-
-        # Reset DataEngine
+ 
+        # 重置数据引擎 (DataEngine)
         if self._kernel.data_engine.is_running:
             self._kernel.data_engine.stop()
-
+ 
         self._kernel.data_engine.reset()
-
-        # Reset ExecEngine
+ 
+        # 重置执行引擎 (ExecEngine)
         if self._kernel.exec_engine.is_running:
             self._kernel.exec_engine.stop()
-
+ 
         self._kernel.exec_engine.reset()
-
-        # Reset RiskEngine
+ 
+        # 重置风险引擎 (RiskEngine)
         if self._kernel.risk_engine.is_running:
             self._kernel.risk_engine.stop()
-
+ 
         self._kernel.risk_engine.reset()
-
-        # Reset Emulator
+ 
+        # 重置仿真器 (Emulator)
         if self._kernel.emulator.is_running:
             self._kernel.emulator.stop()
-
+ 
         self._kernel.emulator.reset()
-
+ 
         self._kernel.trader.reset()
-
+ 
         for exchange in self._venues.values():
             exchange.reset()
-
-        # Reset run IDs
+ 
+        # 重置运行 ID
         self._run_config_id = None
         self._run_id = None
-
-        # Reset timing
+ 
+        # 重置计时
         self._iteration = 0
         self._data_iterator = BacktestDataIterator()
-
+ 
         if self._sorted:
             self._data_iterator.add_data("backtest_data", self._data, append_data=True, presorted=True)
-
+ 
         self._run_started = None
         self._run_finished = None
         self._backtest_start = None
         self._backtest_end = None
-
-        self._log.info("Reset")
+ 
+        self._log.info("已重置")
 
     def sort_data(self) -> None:
         """
-        Sort the engines internal data stream.
+        对引擎的内部数据流进行排序。
 
         """
         self._data = sorted(self._data, key=lambda x: x.ts_init)
@@ -1230,9 +1223,9 @@ cdef class BacktestEngine:
 
     def clear_data(self) -> None:
         """
-        Clear the engines internal data stream.
+        清除引擎的内部数据流。
 
-        Does not clear added instruments.
+        不会清除已添加的工具。
 
         """
         self._has_data.clear()
@@ -1244,31 +1237,31 @@ cdef class BacktestEngine:
 
     def clear_actors(self) -> None:
         """
-        Clear all actors from the engines internal trader.
+        清除引擎内部交易员的所有 actor。
 
         """
         self._kernel.trader.clear_actors()
 
     def clear_strategies(self) -> None:
         """
-        Clear all trading strategies from the engines internal trader.
+        清除引擎内部交易员的所有交易策略。
 
         """
         self._kernel.trader.clear_strategies()
 
     def clear_exec_algorithms(self) -> None:
         """
-        Clear all execution algorithms from the engines internal trader.
+        清除引擎内部交易员的所有执行算法。
 
         """
         self._kernel.trader.clear_exec_algorithms()
 
     def dispose(self) -> None:
         """
-        Dispose of the backtest engine by disposing the trader and releasing system resources.
+        通过释放交易员和系统资源来销毁回测引擎。
 
-        Calling this method multiple times has the same effect as calling it once (it is idempotent).
-        Once called, it cannot be reversed, and no other methods should be called on this instance.
+        多次调用此方法的效果与调用一次相同（它是幂等的）。
+        一旦调用，它就不能被逆转，并且不应在此实例上调用其他方法。
 
         """
         self.clear_data()
@@ -1282,51 +1275,49 @@ cdef class BacktestEngine:
         streaming: bool = False,
     ) -> None:
         """
-        Run a backtest.
+        运行回测。
 
-        At the end of the run the trader and strategies will be stopped, then
-        post-run analysis performed.
+        运行结束时，交易员和策略将停止，然后执行运行后分析。
 
-        For datasets larger than available memory, use `streaming` mode with the
-        following sequence:
-        - 1. Add initial data batch and strategies
-        - 2. Call `run(streaming=True)`
-        - 3. Call `clear_data()`
-        - 4. Add next batch of data stream
-        - 5. Call `run(streaming=False)` or `end()` when processing the final batch
+        对于大于可用内存的数据集，请使用带有以下顺序的 `streaming` 模式：
+        - 1. 添加初始数据批次和策略
+        - 2. 调用 `run(streaming=True)`
+        - 3. 调用 `clear_data()`
+        - 4. 添加下一批数据流
+        - 5. 处理最后一批时调用 `run(streaming=False)` 或 `end()`
 
         Parameters
         ----------
         start : datetime or str or int, optional
-            The start datetime (UTC) for the backtest run.
-            If ``None`` engine runs from the start of the data.
+            回测运行的开始日期时间（UTC）。
+            如果为 ``None``，引擎从数据开始处运行。
         end : datetime or str or int, optional
-            The end datetime (UTC) for the backtest run.
-            If ``None`` engine runs to the end of the data.
+            回测运行的结束日期时间（UTC）。
+            如果为 ``None``，引擎运行到数据结束处。
         run_config_id : str, optional
-            The tokenized `BacktestRunConfig` ID.
+            标记化的 `BacktestRunConfig` ID。
         streaming : bool, default False
-            Controls data loading and processing mode:
-            - If False (default): Loads all data at once.
-              This is currently the only supported mode for custom data (e.g., option Greeks).
-            - If True, loads data in chunks for memory-efficient processing of large datasets.
+            控制数据加载和处理模式：
+            - 如果为 False（默认）：一次加载所有数据。
+              这是目前自定义数据（例如期权希腊字母）唯一支持的模式。
+            - 如果为 True：按块加载数据，以便内存高效地处理大型数据集。
 
         Raises
         ------
         ValueError
-            If no data has been added to the engine.
+            如果尚未向引擎添加数据。
         ValueError
-            If the `start` is >= the `end` datetime.
+            如果 `start` >= `end` 日期时间。
         RuntimeError
-            If data has been added with `sort=False` but `sort_data()` has not been called.
+            如果使用 `sort=False` 添加了数据，但未调用 `sort_data()`。
 
         Notes
         -----
-        **Contract invariants:**
+        **合约不变量：**
 
-        - All data added via `add_data()` must be sorted and synced to the internal iterator before calling `run()`.
-        - If any data was added with `sort=False`, you must call `sort_data()` or add data with `sort=True` before this method.
-        - The engine validates this requirement and will raise `RuntimeError` if unsorted data is detected.
+        - 通过 `add_data()` 添加的所有数据必须在调用 `run()` 之前进行排序并同步到内部迭代器。
+        - 如果使用 `sort=False` 添加了任何数据，则必须在此方法之前调用 `sort_data()` 或使用 `sort=True` 添加数据。
+        - 引擎会验证此要求，并在检测到未排序数据时引发 `RuntimeError`。
 
         """
         self._run(start, end, run_config_id, streaming)
@@ -1336,11 +1327,11 @@ cdef class BacktestEngine:
 
     def end(self):
         """
-        Manually end the backtest.
+        手动结束回测。
 
         Notes
         -----
-        Only required if you have previously been running with streaming.
+        仅当您之前一直在使用流式传输运行时才需要。
 
         """
         if self._kernel.trader.is_running:
@@ -1359,7 +1350,7 @@ cdef class BacktestEngine:
             self._kernel.emulator.stop()
 
         try:
-            # Process remaining messages
+            # 处理剩余消息
             for exchange in self._venues.values():
                 exchange.process(self._kernel.clock.timestamp_ns())
         except AccountError:
@@ -1368,9 +1359,9 @@ cdef class BacktestEngine:
         self._run_finished = pd.Timestamp.utcnow()
         self._backtest_end = self._kernel.clock.utc_now()
 
-        # Change logger clock back to real-time for consistent time stamping
+        # 将日志时钟改回实时模式，以保持时间戳一致
         set_logging_clock_realtime_mode()
-
+ 
         if LOGGING_PYO3:
             nautilus_pyo3.logging_clock_set_realtime_mode()
 
@@ -1383,7 +1374,7 @@ cdef class BacktestEngine:
 
     def get_result(self):
         """
-        Return the backtest result from the last run.
+        返回最后一次运行的回测结果。
 
         Returns
         -------
@@ -1426,14 +1417,14 @@ cdef class BacktestEngine:
         run_config_id: str | None = None,
         bint streaming = False,
     ):
-        # Validate data has been sorted and synced to iterator
+        # 验证数据已排序并同步至迭代器
         if self._data and not self._sorted:
             raise RuntimeError(
-                "Data has been added but not sorted, "
-                "call `engine.sort_data()` or use `engine.add_data(..., sort=True)` before running"
+                "数据已添加但未排序，"
+                "在运行前调用 `engine.sort_data()` 或使用 `engine.add_data(..., sort=True)`"
             )
-
-        # Validate data
+ 
+        # 验证数据
         cdef:
             SimulatedExchange exchange
             InstrumentId instrument_id
@@ -1445,37 +1436,37 @@ cdef class BacktestEngine:
                 has_data = instrument_id in self._has_data
                 missing_book_data = instrument_id not in self._has_book_data
                 book_type_has_depth = exchange.book_type > BookType.L1_MBP
-
+ 
                 if book_type_has_depth and has_data and missing_book_data:
                     raise InvalidConfiguration(
-                        f"No order book data found for instrument '{instrument_id }' when `book_type` is '{book_type_to_str(exchange.book_type)}'. "
-                        "Set the venue `book_type` to 'L1_MBP' (for top-of-book data like quotes, trades, and bars) or provide order book data for this instrument."
+                        f"当 `book_type` 为 '{book_type_to_str(exchange.book_type)}' 时，未找到工具 '{instrument_id }' 的订单簿数据。"
+                        "请将场所的 `book_type` 设置为 'L1_MBP'（适用于报价、成交和 Bar 等盘口数据）或为该工具提供订单簿数据。"
                     )
 
         cdef uint64_t start_ns
         cdef uint64_t end_ns
 
-        # Time range check and set
+        # 时间范围检查和设置
         if start is None:
-            # Set `start` to start of data
+            # 将 `start` 设置为数据开始时间
             start_ns = self._data[0].ts_init if self._data else 0
             start = unix_nanos_to_dt(start_ns)
         else:
             start = pd.to_datetime(start, utc=True)
             start_ns = start.value
-
+ 
         if end is None:
-            # Set `end` to end of data
-            end_ns = self._data[-1].ts_init if self._data else 4102444800000000000  # Year 2100-01-01 00:00:00 UTC
+            # 将 `end` 设置为数据结束时间
+            end_ns = self._data[-1].ts_init if self._data else 4102444800000000000  # 2100-01-01 00:00:00 UTC
             end = unix_nanos_to_dt(end_ns)
         else:
             end = pd.to_datetime(end, utc=True)
             end_ns = end.value
-
-        Condition.is_true(start_ns <= end_ns, "start was > end")
+ 
+        Condition.is_true(start_ns <= end_ns, "开始时间大于结束时间")
         self._end_ns = end_ns
-
-        # Set clocks
+ 
+        # 设置时钟
         self._last_ns = start_ns
 
         cdef TestClock clock
@@ -1483,63 +1474,63 @@ cdef class BacktestEngine:
             clock.set_time(start_ns)
 
         if self._iteration == 0:
-            # Initialize run
-            self._run_config_id = run_config_id  # Can be None
+            # 初始化运行
+            self._run_config_id = run_config_id  # 可以为 None
             self._run_id = UUID4()
             self._run_started = pd.Timestamp.utcnow()
             self._backtest_start = start
-
+ 
             for exchange in self._venues.values():
                 exchange.initialize_account()
                 open_orders = self._kernel.cache.orders_open(venue=exchange.id)
-
+ 
                 for order in open_orders:
                     if order.is_emulated:
-                        # Order should be loaded in the emulator already
+                        # 订单应该已经在仿真器中加载
                         continue
-
+ 
                     matching_engine = exchange.get_matching_engine(order.instrument_id)
-
+ 
                     if matching_engine is None:
                         self._log.error(
-                            f"No matching engine for {order.instrument_id} to process {order}",
+                            f"没有用于 {order.instrument_id} 的撮合引擎来处理 {order}",
                         )
                         continue
-
+ 
                     matching_engine.process_order(order, order.account_id)
-
-            # Reset any previously set FORCE_STOP
+ 
+            # 重置之前设置的任何 FORCE_STOP
             set_backtest_force_stop(False)
-
-            # Set start time of all components including logging
+ 
+            # 设置所有组件（包括日志）的开始时间
             for clock in get_component_clocks(self._instance_id):
                 clock.set_time(start_ns)
-
+ 
             set_logging_clock_static_mode()
             set_logging_clock_static_time(start_ns)
-
+ 
             if LOGGING_PYO3:
                 nautilus_pyo3.logging_clock_set_static_mode()
                 nautilus_pyo3.logging_clock_set_static_time(start_ns)
-
-            # Common kernel start-up sequence
+ 
+            # 通用内核启动序列
             self._kernel.start()
-
+ 
             self._log_pre_run()
-
+ 
         self._log_run(start, end)
 
-        # Set starting index
+        # 设置开始索引
         cdef uint64_t i
         self._data_len = len(self._data)
-
+ 
         if self._data_len > 0:
             for i in range(self._data_len):
                 if start_ns <= self._data[i].ts_init:
                     self._data_iterator.set_index("backtest_data", i)
                     break
-
-        # -- MAIN BACKTEST LOOP -----------------------------------------------#
+ 
+        # -- 回测主循环 -----------------------------------------------#
         self._last_ns = 0
         cdef uint64_t raw_handlers_count = 0
         cdef Data data = self._data_iterator.next()
@@ -1547,16 +1538,16 @@ cdef class BacktestEngine:
         try:
             while data is not None:
                 if data.ts_init > end_ns:
-                    # End of backtest
+                    # 回测结束
                     break
-
+ 
                 if data.ts_init > self._last_ns:
-                    # Advance clocks to the next data timestamp
+                    # 将时钟推进到下一个数据时间戳
                     self._last_ns = data.ts_init
                     raw_handlers = self._advance_time(data.ts_init)
                     raw_handlers_count = raw_handlers.len
-
-                # Process data through exchange
+ 
+                # 通过交易所处理数据
                 if isinstance(data, Instrument):
                     exchange = self._venues[data.id.venue]
                     exchange.update_instrument(data)
@@ -1584,15 +1575,15 @@ cdef class BacktestEngine:
                 elif isinstance(data, InstrumentStatus):
                     exchange = self._venues[data.instrument_id.venue]
                     exchange.process_instrument_status(data)
-
+ 
                 self._data_engine.process(data)
-
-                # Process all exchange messages
+ 
+                # 处理所有交易所消息
                 for exchange in self._venues.values():
                     exchange.process(data.ts_init)
-
+ 
                 data = self._data_iterator.next()
-
+ 
                 if data is None or data.ts_init > self._last_ns:
                     self._process_raw_time_event_handlers(
                         raw_handlers,
@@ -1602,35 +1593,33 @@ cdef class BacktestEngine:
                     if raw_handlers.ptr != NULL:
                         vec_time_event_handlers_drop(raw_handlers)
                     raw_handlers_count = 0
-
+ 
                 self._iteration += 1
         except AccountError as e:
             set_backtest_force_stop(True)
-            self._log.error(f"Stopping backtest from {e}")
+            self._log.error(f"正因 {e} 而停止回测")
             if streaming:
-                # Reraise exception to interrupt batch streaming
+                # 重新引发异常以中断分批流式传输
                 raise
-
+ 
         # ---------------------------------------------------------------------#
-
+ 
         if FORCE_STOP:
             return
-
-        # Process remaining messages
+ 
+        # 处理剩余消息
         for exchange in self._venues.values():
             exchange.process(self._kernel.clock.timestamp_ns())
-
-        # Flush remaining events at the last data timestamp
+ 
+        # 在最后一个数据时间戳刷新剩余事件
         if self._last_ns > 0:
             self._flush_accumulator_events(self._last_ns)
 
     cdef CVec _advance_time(self, uint64_t ts_now):
-        # Advance clocks and process all events before ts_now in timestamp order.
+        # 推进时钟并按时间戳顺序处理 ts_now 之前的所有事件。
         #
-        # This method uses iterative processing: after each callback executes,
-        # clocks are re-advanced to capture any newly scheduled timers. This ensures
-        # that chained alerts (alert schedules another alert) are processed in
-        # correct timestamp order, maintaining clock monotonicity.
+        # 此方法使用迭代处理：在每个回调执行后，重新推进时钟以捕获任何新调度的定时器。
+        # 这确保了链式警报（一个警报调度另一个警报）能够按正确的时间戳顺序处理，保持时钟单调性。
         cdef list[TestClock] clocks = get_component_clocks(self._instance_id)
         cdef TestClock clock
         cdef TimeEventHandler_t handler
@@ -1648,8 +1637,8 @@ cdef class BacktestEngine:
                 ts_now,
                 False,
             )
-
-        # Process events < ts_now, re-checking for newly scheduled timers after each callback
+ 
+        # 处理 < ts_now 的事件，每次回调后重新检查新调度的定时器
         while ts_now > 0:
             if FORCE_STOP:
                 break
@@ -1681,8 +1670,8 @@ cdef class BacktestEngine:
                 ts_last = ts_event
                 for exchange in self._venues.values():
                     exchange.process(ts_event)
-
-            # Re-advance to capture timers scheduled by callback
+ 
+            # 重新推进以捕获由回调调度的定时器
             for clock in clocks:
                 time_event_accumulator_advance_clock(
                     &self._accumulator,
@@ -1716,7 +1705,7 @@ cdef class BacktestEngine:
         cdef object callback
         cdef SimulatedExchange exchange
 
-        # Advance clocks first to capture alerts scheduled during last callbacks
+        # 先推进时钟以捕获在最后一次回调期间调度的警报
         for clock in clocks:
             time_event_accumulator_advance_clock(
                 &self._accumulator,
@@ -1756,8 +1745,8 @@ cdef class BacktestEngine:
                 ts_last = ts_event
                 for exchange in self._venues.values():
                     exchange.process(ts_event)
-
-            # Re-advance clocks to capture chained alerts scheduled by callback
+ 
+            # 重新推进时钟以捕获由回调调度的链式警报
             for clock in clocks:
                 time_event_accumulator_advance_clock(
                     &self._accumulator,
@@ -1821,8 +1810,8 @@ cdef class BacktestEngine:
                 ts_last = ts_event
                 for exchange in self._venues.values():
                     exchange.process(ts_event)
-
-            # Re-advance to capture timers scheduled by callback
+ 
+            # 重新推进以捕获由回调调度的定时器
             for clock in clocks:
                 time_event_accumulator_advance_clock(
                     &self._accumulator,
@@ -1849,10 +1838,10 @@ cdef class BacktestEngine:
             self._log.info(f"{color}=================================================================")
             self._log.info(f"{repr(account)}")
             self._log.info(f"{color}-----------------------------------------------------------------")
-            self._log.info(f"Balances starting:")
-
+            self._log.info(f"期初余额：")
+ 
             if exchange.is_frozen_account:
-                self._log.warning(f"ACCOUNT FROZEN")
+                self._log.warning(f"账户已冻结")
             else:
                 for b in account.starting_balances().values():
                     self._log.info(b.to_formatted_str())
@@ -1861,14 +1850,14 @@ cdef class BacktestEngine:
         cdef str color = self._get_log_color_code()
 
         self._log.info(f"{color}=================================================================")
-        self._log.info(f"{color} BACKTEST RUN")
+        self._log.info(f"{color} 回测运行")
         self._log.info(f"{color}=================================================================")
-        self._log.info(f"Run config ID:  {self._run_config_id}")
-        self._log.info(f"Run ID:         {self._run_id}")
-        self._log.info(f"Run started:    {format_optional_iso8601(self._run_started)}")
-        self._log.info(f"Backtest start: {format_optional_iso8601(self._backtest_start)}")
-        self._log.info(f"Batch start:    {format_optional_iso8601(start)}")
-        self._log.info(f"Batch end:      {format_optional_iso8601(end)}")
+        self._log.info(f"运行配置 ID:  {self._run_config_id}")
+        self._log.info(f"运行 ID:       {self._run_id}")
+        self._log.info(f"运行开始时间:  {format_optional_iso8601(self._run_started)}")
+        self._log.info(f"回测开始时间:  {format_optional_iso8601(self._backtest_start)}")
+        self._log.info(f"批次开始时间:  {format_optional_iso8601(start)}")
+        self._log.info(f"批次结束时间:  {format_optional_iso8601(end)}")
         self._log.info(f"{color}-----------------------------------------------------------------")
 
     def _log_post_run(self):
@@ -1885,27 +1874,27 @@ cdef class BacktestEngine:
         cdef str color = self._get_log_color_code()
 
         self._log.info(f"{color}=================================================================")
-        self._log.info(f"{color} BACKTEST POST-RUN")
+        self._log.info(f"{color} 回测运行后总结")
         self._log.info(f"{color}=================================================================")
-        self._log.info(f"Run config ID:  {self._run_config_id}")
-        self._log.info(f"Run ID:         {self._run_id}")
-        self._log.info(f"Run started:    {format_optional_iso8601(self._run_started)}")
-        self._log.info(f"Run finished:   {format_optional_iso8601(self._run_finished)}")
-        self._log.info(f"Elapsed time:   {elapsed_time}")
-        self._log.info(f"Backtest start: {format_optional_iso8601(self._backtest_start)}")
-        self._log.info(f"Backtest end:   {format_optional_iso8601(self._backtest_end)}")
-        self._log.info(f"Backtest range: {backtest_range}")
-        self._log.info(f"Iterations: {self._iteration:_}")
-        self._log.info(f"Total events: {self._kernel.exec_engine.event_count:_}")
-        self._log.info(f"Total orders: {self._kernel.cache.orders_total_count():_}")
+        self._log.info(f"运行配置 ID:    {self._run_config_id}")
+        self._log.info(f"运行 ID:         {self._run_id}")
+        self._log.info(f"运行开始时间:    {format_optional_iso8601(self._run_started)}")
+        self._log.info(f"运行结束时间:    {format_optional_iso8601(self._run_finished)}")
+        self._log.info(f"耗时:            {elapsed_time}")
+        self._log.info(f"回测开始时间:    {format_optional_iso8601(self._backtest_start)}")
+        self._log.info(f"回测结束时间:    {format_optional_iso8601(self._backtest_end)}")
+        self._log.info(f"回测范围:        {backtest_range}")
+        self._log.info(f"迭代次数:        {self._iteration:_}")
+        self._log.info(f"总事件数:        {self._kernel.exec_engine.event_count:_}")
+        self._log.info(f"总订单数:        {self._kernel.cache.orders_total_count():_}")
 
-        # Get all positions for venue
+        # 获取场地的所有持仓
         cdef list[Position] positions = []
-
+ 
         for position in self._kernel.cache.positions() + self._kernel.cache.position_snapshots():
             positions.append(position)
-
-        self._log.info(f"Total positions: {len(positions):_}")
+ 
+        self._log.info(f"总持仓数: {len(positions):_}")
 
         if not self._config.run_analysis:
             return
@@ -1921,66 +1910,66 @@ cdef class BacktestEngine:
             self._log.info(f"{repr(account)}")
             self._log.info(f"{color}-----------------------------------------------------------------")
             unrealized_pnls: dict[Currency, Money] | None = None
-
+ 
             if venue.is_frozen_account:
-                self._log.warning(f"ACCOUNT FROZEN")
+                self._log.warning(f"账户已冻结")
             else:
                 if account is None:
                     continue
-
-                self._log.info(f"Balances starting:")
+ 
+                self._log.info(f"期初余额：")
 
                 for b in account.starting_balances().values():
                     self._log.info(b.to_formatted_str())
 
                 self._log.info(f"{color}-----------------------------------------------------------------")
-                self._log.info(f"Balances ending:")
-
+                self._log.info(f"期末余额：")
+ 
                 for b in account.balances_total().values():
                     self._log.info(b.to_formatted_str())
-
+ 
                 self._log.info(f"{color}-----------------------------------------------------------------")
-                self._log.info(f"Commissions:")
-
+                self._log.info(f"佣金费用：")
+ 
                 for c in account.commissions().values():
-                    self._log.info(Money(-c.as_double(), c.currency).to_formatted_str())  # Display commission as negative
-
+                    self._log.info(Money(-c.as_double(), c.currency).to_formatted_str())  # 将佣金显示为负数
+ 
                 self._log.info(f"{color}-----------------------------------------------------------------")
-                self._log.info(f"Unrealized PnLs (included in totals):")
+                self._log.info(f"未实现盈亏（已包含在总额中）：")
                 unrealized_pnls = self.portfolio.unrealized_pnls(Venue(venue.id.value))
-
+ 
                 if not unrealized_pnls:
-                    self._log.info("None")
+                    self._log.info("无")
                 else:
                     for b in unrealized_pnls.values():
                         self._log.info(b.to_formatted_str())
-
-            # Log output diagnostics for all simulation modules
+ 
+            # 记录所有模拟模块的输出诊断信息
             for module in venue.modules:
                 module.log_diagnostics(self._log)
-
+ 
             self._log.info(f"{color}=================================================================")
-            self._log.info(f"{color} PORTFOLIO PERFORMANCE")
+            self._log.info(f"{color} 投资组合表现")
             self._log.info(f"{color}=================================================================")
 
-            # Collect all positions and currencies for venue
+            # 收集该场地的所有持仓和货币
             venue_positions = []
             venue_currencies = set()
-
+ 
             for position in positions:
                 if position.instrument_id.venue == venue.id:
                     venue_positions.append(position)
                     venue_currencies.add(position.quote_currency)
-
+ 
                     if position.base_currency is not None:
                         venue_currencies.add(position.base_currency)
-
-            # Calculate statistics
+ 
+            # 计算统计数据
             self._kernel.portfolio.analyzer.calculate_statistics(account, venue_positions)
-
-            # Present PnL performance stats per asset
+ 
+            # 按资产展示盈亏表现统计数据
             for currency in sorted(list(venue_currencies), key=lambda x: x.code):
-                self._log.info(f" PnL Statistics ({str(currency)})")
+                self._log.info(f" 盈亏统计 ({str(currency)})")
                 self._log.info(f"{color}-----------------------------------------------------------------")
                 unrealized_pnl = unrealized_pnls.get(currency) if unrealized_pnls else None
 
@@ -1988,21 +1977,21 @@ cdef class BacktestEngine:
                     self._log.info(stat)
 
                 self._log.info(f"{color}-----------------------------------------------------------------")
-
-            self._log.info(" Returns Statistics")
+ 
+            self._log.info(" 收益统计")
             self._log.info(f"{color}-----------------------------------------------------------------")
-
+ 
             for stat in self._kernel.portfolio.analyzer.get_stats_returns_formatted():
                 self._log.info(stat)
-
+ 
             self._log.info(f"{color}-----------------------------------------------------------------")
-
-            self._log.info(" General Statistics")
+ 
+            self._log.info(" 通用统计")
             self._log.info(f"{color}-----------------------------------------------------------------")
-
+ 
             for stat in self._kernel.portfolio.analyzer.get_stats_general_formatted():
                 self._log.info(stat)
-
+ 
             self._log.info(f"{color}-----------------------------------------------------------------")
 
     def _add_data_client_if_not_exists(self, ClientId client_id) -> None:
@@ -2040,43 +2029,36 @@ cdef class BacktestEngine:
 
 cdef class BacktestDataIterator:
     """
-    Time-ordered multiplexer for historical ``Data`` streams in backtesting.
+    回测中历史 ``Data`` 流的时间顺序多路复用器。
 
-    The iterator efficiently manages multiple data streams and yields ``Data`` objects
-    in strict chronological order based on their ``ts_init`` timestamps. It supports
-    both static data lists and dynamic data generators for streaming large datasets.
+    该迭代器有效地管理多个数据流，并根据其 ``ts_init`` 时间戳以严格的时间顺序产生 ``Data`` 对象。
+    它支持用于流式传输大型数据集的静态数据列表和动态数据生成器。
 
-    **Architecture:**
+    **架构：**
 
-    - **Single-stream optimization**: When exactly one stream is loaded, uses a fast
-      array walk for optimal performance.
-    - **Multi-stream merging**: With two or more streams, employs a binary min-heap
-      to perform efficient k-way merge sorting.
-    - **Dynamic streaming**: Supports Python generators that yield data chunks on-demand,
-      enabling processing of datasets larger than available memory.
+    - **单流优化**：当只加载一个流时，使用快速数组遍历以获得最佳性能。
+    - **多流合并**：对于两个或更多流，使用二进制最小堆执行高效的 k 路归并排序。
+    - **动态流式传输**：支持按需产生数据块的 Python 生成器，从而能够处理大于可用内存的数据集。
 
-    **Stream Priority:**
+    **流优先级：**
 
-    Streams can be assigned different priorities using the ``append_data`` parameter:
+    不仅可以使用 ``append_data`` 参数为流分配不同的优先级：
 
-    - ``append_data=True`` (default): Lower priority, processed after existing streams
-    - ``append_data=False``: Higher priority, processed before existing streams
+    - ``append_data=True``（默认）：较低优先级，在现有流之后处理
+    - ``append_data=False``：较高优先级，在现有流之前处理
 
-    When multiple data points have identical timestamps, higher priority streams
-    are yielded first.
+    当多个数据点具有相同的时间戳时，优先生成较高优先级的流。
 
-    **Performance Characteristics:**
+    **性能特征：**
 
-    - **Memory efficient**: Dynamic generators load data incrementally
-    - **Time complexity**: O(log n) per item for n streams (heap operations)
-    - **Space complexity**: O(k) where k is the total number of active data points
-      across all streams at any given time
+    - **内存效率**：动态生成器增量加载数据
+    - **时间复杂度**：n 个流的每项 O(log n)（堆操作）
+    - **空间复杂度**：O(k)，其中 k 是任何给定时间所有流中活动数据点的总数
 
     Notes
     -----
-    When using ``add_data()`` with ``presorted=False`` (default), the data will be
-    sorted internally. When using ``presorted=True`` or ``init_data()``, the data
-    must be pre-sorted by ``ts_init`` in ascending order.
+    当使用 ``presorted=False``（默认）的 ``add_data()`` 时，数据将在内部排序。
+    当使用 ``presorted=True`` 或 ``init_data()`` 时，数据必须按 ``ts_init`` 升序预先排序。
 
     See Also
     --------
@@ -2095,8 +2077,8 @@ cdef class BacktestDataIterator:
         self._data_update_function = {} # key=data_priority, value=data_update_function, Callable[[], list] | None
 
         self._heap = []
-        # Counter for assigning priorities to data streams.
-        # Incremented before use so that a priority of zero is never assigned.
+        # 用于为数据流分配优先级的计数器。
+        # 在使用前递增，以便永远不会分配零优先级。
         self._next_data_priority = 0
         self._reset_single_data()
 
@@ -2116,30 +2098,28 @@ cdef class BacktestDataIterator:
         bint presorted = False,
     ) -> None:
         """
-        Add (or replace) a named data list for static data loading.
+        添加（或替换）用于静态数据加载的命名数据列表。
 
-        If a stream with the same ``data_name`` already exists, it will be replaced
-        with the new data.
+        如果已存在具有相同 ``data_name`` 的流，它将被新数据替换。
 
         Parameters
         ----------
         data_name : str
-            Unique identifier for the data stream.
+            数据流的唯一标识符。
         data : list[Data]
-            Data instances to add. Must be pre-sorted by `ts_init` if ``presorted=True``.
+            要添加的数据实例。如果 ``presorted=True``，必须按 `ts_init` 预先排序。
         append_data : bool, default ``True``
-            Controls stream priority for timestamp ties:
-            ``True`` – lower priority (appended).
-            ``False`` – higher priority (prepended).
+            控制时间戳并列时的流优先级：
+            ``True`` – 较低优先级（追加）。
+            ``False`` – 较高优先级（前置）。
         presorted : bool, default ``False``
-            If ``True``, assumes the data is already sorted by `ts_init` and
-            skips internal sorting for better performance. If ``False`` (default),
-            the data will be sorted internally.
+            如果 ``True``，假设数据已按 `ts_init` 排序，并跳过内部排序以获得更好的性能。
+            如果 ``False``（默认），数据将在内部排序。
 
         Raises
         ------
         ValueError
-            If `data_name` is not a valid string.
+            如果 `data_name` 不是有效的字符串。
 
         """
         Condition.valid_string(data_name, "data_name")
@@ -2156,32 +2136,29 @@ cdef class BacktestDataIterator:
         bint append_data = True,
     ) -> None:
         """
-        Add (or replace) a named data generator for streaming large datasets.
+        添加（或替换）用于流式传输大型数据集的命名数据生成器。
 
-        This method enables memory-efficient processing of large datasets by using
-        Python generators that yield data chunks on-demand. The generator is called
-        incrementally as data is consumed, allowing datasets larger than available
-        memory to be processed.
+        此方法通过使用按需生成数据块的 Python 生成器来实现大型数据集的内存高效处理。
+        随着数据的消耗，生成器被增量调用，从而允许处理大于可用内存的数据集。
 
-        The generator should yield lists of ``Data`` objects, where each list represents
-        a chunk of data. When a chunk is exhausted, the iterator automatically calls
-        ``next()`` on the generator to fetch the next chunk.
+        生成器应产生 ``Data`` 对象列表，其中这每个列表代表一个数据块。
+        当一个块耗尽时，迭代器会自动调用生成器上的 ``next()`` 来获取下一个块。
 
         Parameters
         ----------
         data_name : str
-            Unique identifier for the data stream.
+            数据流的唯一标识符。
         data_generator : Generator[list[Data], None, None]
-            A Python generator that yields lists of ``Data`` instances sorted ascending by `ts_init`.
+            产生按 `ts_init` 升序排序的 ``Data`` 实例列表的 Python 生成器。
         append_data : bool, default ``True``
-            Controls stream priority for timestamp ties:
-            ``True`` – lower priority (appended).
-            ``False`` – higher priority (prepended).
+            控制时间戳并列时的流优先级：
+            ``True`` – 较低优先级（追加）。
+            ``False`` – 较高优先级（前置）。
 
         Raises
         ------
         ValueError
-            If `data_name` is not a valid string.
+            如果 `data_name` 不是有效的字符串。
 
         """
         Condition.valid_string(data_name, "data_name")
@@ -2190,13 +2167,13 @@ cdef class BacktestDataIterator:
 
         try:
             data = next(data_generator)
-
+ 
             if data:
                 self._data_update_function[data_name] = data_generator
                 self._add_data(data_name, data, append_data)
-                self._log.debug(f"Added {len(data):_} data elements from iterator '{data_name}'")
+                self._log.debug(f"已从迭代器 '{data_name}' 添加 {len(data):_} 个数据元素")
         except StopIteration:
-            # Generator is already exhausted, nothing to add
+            # 生成器已耗尽，无内容可添加
             pass
 
     cdef void _add_data(
@@ -2215,17 +2192,16 @@ cdef class BacktestDataIterator:
             data_priority = self._data_priority[data_name]
             self.remove_data(data_name)
         else:
-            # heapq is a min priority queue so smaller values are popped first.
-            # Increment the counter *before* applying the sign so that priority
-            # zero is never produced (zero would undermine prepend/append
-            # semantics when ordering streams).
+            # heapq 是一个最小优先级队列，因此较小的值会先弹出。
+            # 在应用符号 *之前* 递增计数器，以便永远不会产生零优先级
+            # （零在对流进行排序时会破坏前置/追加语义）。
             self._next_data_priority += 1
             data_priority = (1 if append_data else -1) * self._next_data_priority
 
         if self._is_single_data:
             self._deactivate_single_data()
-
-        # Copy and optionally sort to avoid aliasing caller's list
+ 
+        # 复制并根据需要选择排序，以避免对调用者的列表起别名
         if presorted:
             self._data[data_priority] = list(data_list)
         else:
@@ -2244,24 +2220,21 @@ cdef class BacktestDataIterator:
 
     cpdef void remove_data(self, str data_name, bint complete_remove=False):
         """
-        Remove the data stream identified by ``data_name``. The operation is silently
-        ignored if the specified stream does not exist.
+        删除由 ``data_name`` 标识的数据流。如果指定的流不存在，则静默忽略该操作。
 
         Parameters
         ----------
         data_name : str
-            The unique identifier of the data stream to remove.
+            要删除的数据流的唯一标识符。
         complete_remove : bool, default False
-            Controls the level of cleanup performed:
-            - ``False``: Remove stream data but preserve generator function for potential
-              re-initialization (useful for temporary stream removal)
-            - ``True``: Complete removal including any associated generator function
-              (recommended for permanent stream removal)
+            控制执行清理的级别：
+            - ``False``：删除流数据但保留生成器函数以便潜在的重新初始化（对于临时流删除很有用）
+            - ``True``：完全删除，包括任何关联的生成器函数（建议用于永久流删除）
 
         Raises
         ------
         ValueError
-            If `data_name` is not a valid string.
+            如果 `data_name` 不是有效的字符串。
 
         """
         Condition.valid_string(data_name, "data_name")
@@ -2286,8 +2259,8 @@ cdef class BacktestDataIterator:
         if len(self._data) == 0:
             self._reset_single_data()
             return
-
-        # rebuild heap excluding data_priority
+ 
+        # 排除 data_priority 后重构堆
         self._heap = [item for item in self._heap if item[1] != data_priority]
         heapq.heapify(self._heap)
 
@@ -2316,31 +2289,28 @@ cdef class BacktestDataIterator:
     @cython.wraparound(False)
     cpdef Data next(self):
         """
-        Return the next ``Data`` object in chronological order.
+        按时间顺序返回下一个 ``Data`` 对象。
 
-        This method implements the core iteration logic, yielding data points from
-        all streams in strict chronological order based on ``ts_init`` timestamps.
-        When multiple data points have identical timestamps, stream priority
-        determines the order.
+        此方法实现了核心迭代逻辑，根据 ``ts_init`` 时间戳以严格的时间顺序
+        产生来自所有流的数据点。当多个数据点具有相同的时间戳时，流优先级决定顺序。
 
-        The method automatically handles:
-        - Single-stream optimization for performance
-        - Multi-stream heap-based merging
-        - Dynamic data loading from generators
-        - Stream exhaustion and cleanup
+        该方法自动处理：
+        - 性能的单流优化
+        - 基于堆的多流合并
+        - 来自生成器的动态数据加载
+        - 流耗尽和清理
 
         Returns
         -------
         Data or None
-            The next ``Data`` object in chronological order, or ``None`` when
-            all streams are exhausted.
+            按时间顺序的下一个 ``Data`` 对象，或者当所有流耗尽时为 ``None``。
 
         Notes
         -----
-        - Returns ``None`` when all streams are exhausted
-        - Automatically triggers generator calls for streaming data
-        - Performance is optimized for single-stream scenarios
-        - Thread-safe only when called from a single thread
+        - 当所有流耗尽时返回 ``None``
+        - 自动触发流数据的生成器调用
+        - 针对单流场景优化了性能
+        - 仅当从单个线程调用时才线程安全
 
         """
         cdef:
@@ -2393,32 +2363,32 @@ cdef class BacktestDataIterator:
 
         try:
             data = next(self._data_update_function[data_name])
-
+ 
             if data:
-                # No need for append_data bool as it's an update
+                # 无需 append_data 布尔值，因为它是一个更新
                 self._add_data(data_name, data)
-                self._log.debug(f"Adding {len(data):_} data elements from iterator '{data_name}'")
+                self._log.debug(f"正在从迭代器 '{data_name}' 添加 {len(data):_} 个数据元素")
             else:
                 self.remove_data(data_name, complete_remove=True)
         except StopIteration:
-            # Generator is exhausted, remove the stream
+            # 生成器已耗尽，删除流
             self.remove_data(data_name, complete_remove=True)
 
     cpdef void set_index(self, str data_name, int index):
         """
-        Move the cursor of `data_name` to `index` and rebuild ordering.
-
+        将 `data_name` 的游标移动到 `index` 并重新构建排序。
+ 
         Raises
         ------
         ValueError
-            If `data_name` is not a valid string.
-
+            如果 `data_name` 不是有效的字符串。
+ 
         """
         Condition.valid_string(data_name, "data_name")
-
+ 
         if data_name not in self._data_priority:
             return
-
+ 
         cdef int data_priority = self._data_priority[data_name]
         self._data_index[data_priority] = index
         self._reset_heap()
@@ -2435,7 +2405,7 @@ cdef class BacktestDataIterator:
 
     cpdef bint is_done(self):
         """
-        Return ``True`` when every stream has been fully consumed.
+        当每个流都已完全消耗时返回 ``True``。
         """
         if self._is_single_data:
             return self._single_data_index >= self._single_data_len
@@ -2444,14 +2414,14 @@ cdef class BacktestDataIterator:
 
     cpdef dict all_data(self):
         """
-        Return a *shallow* mapping of ``{stream_name: list[Data]}``.
+        返回 ``{stream_name: list[Data]}`` 的 *浅* 映射。
         """
-        # we assume dicts are ordered by order of insertion
+        # 我们假设字典按插入顺序排列
         return {data_name:self._data[data_priority] for data_priority, data_name in self._data_name.items()}
 
     cpdef list[Data] data(self, str data_name):
         """
-        Return the underlying data list for `data_name`.
+        返回 `data_name` 的底层数据列表。
 
         Returns
         -------
@@ -2460,9 +2430,9 @@ cdef class BacktestDataIterator:
         Raises
         ------
         ValueError
-            If `data_name` is not a valid string.
+            如果 `data_name` 不是有效的字符串。
         KeyError
-            If the stream is unknown.
+            如果流未知。
 
         """
         Condition.valid_string(data_name, "data_name")
@@ -2484,101 +2454,99 @@ cdef class BacktestDataIterator:
 
 cdef class SimulatedExchange:
     """
-    Provides a simulated exchange venue.
+    提供一个模拟交易所场所。
 
     Parameters
     ----------
     venue : Venue
-        The venue to simulate.
+        要模拟的场所。
     oms_type : OmsType {``HEDGING``, ``NETTING``}
-        The order management system type used by the exchange.
+        交易所使用的订单管理系统类型。
     account_type : AccountType
-        The account type for the client.
+        客户的账户类型。
     starting_balances : list[Money]
-        The starting balances for the exchange.
+        交易所的期初余额。
     base_currency : Currency, optional
-        The account base currency for the client. Use ``None`` for multi-currency accounts.
+        客户的账户基础货币。对于多币种账户，使用 ``None``。
     default_leverage : Decimal
-        The account default leverage (for margin accounts).
+        账户默认杠杆（用于保证金账户）。
     leverages : dict[InstrumentId, Decimal]
-        The instrument specific leverage configuration (for margin accounts).
+        特定工具的杠杆配置（用于保证金账户）。
     modules : list[SimulationModule]
-        The simulation modules for the exchange.
+        交易所的模拟模块。
     portfolio : PortfolioFacade
-        The read-only portfolio for the exchange.
+        交易所的只读投资组合。
     msgbus : MessageBus
-        The message bus for the exchange.
+        交易所的消息总线。
     cache : CacheFacade
-        The read-only cache for the exchange.
+        交易所的只读缓存。
     clock : TestClock
-        The clock for the exchange.
+        交易所的时钟。
     fill_model : FillModel
-        The fill model for the exchange.
+        交易所的成交模型。
     fee_model : FeeModel
-        The fee model for the exchange.
+        交易所的费用模型。
     latency_model : LatencyModel, optional
-        The latency model for the exchange.
+        交易所的延迟模型。
     book_type : BookType
-        The order book type for the exchange.
+        交易所的订单簿类型。
     frozen_account : bool, default False
-        If the account for this exchange is frozen (balances will not change).
+        此交易所的账户是否冻结（余额不会改变）。
     reject_stop_orders : bool, default True
-        If stop orders are rejected on submission if in the market.
+        如果提交时触发价格在市场价格范围内，是否拒绝止损单。
     support_gtd_orders : bool, default True
-        If orders with GTD time in force will be supported by the exchange.
+        交易所是否支持 GTD（Good Till Date）有效时间的订单。
     support_contingent_orders : bool, default True
-        If contingent orders will be supported/respected by the exchange.
-        If False, then its expected the strategy will be managing any contingent orders.
+        交易所是否支持/遵循条件订单。
+        如果为 False，则预期策略将管理任何条件订单。
     oto_trigger_mode : OtoTriggerMode, default ``OtoTriggerMode.PARTIAL``
-        The OTO trigger mode for contingent orders:
-        - ``PARTIAL``: release child orders pro-rata to each partial fill (default).
-        - ``FULL``: release child orders only once the parent is fully filled.
+        条件订单的 OTO 触发模式：
+        - ``PARTIAL``：根据每次部分成交按比例释放子订单（默认）。
+        - ``FULL``：仅在父订单完全成交后释放子订单。
     use_position_ids : bool, default True
-        If venue position IDs will be generated on order fills.
+        是否在订单成交时生成场所持仓 ID。
     use_random_ids : bool, default False
-        If all exchange generated identifiers will be random UUID4's.
+        是否所有交易所生成的标识符都是随机 UUID4。
     use_reduce_only : bool, default True
-        If the `reduce_only` execution instruction on orders will be honored.
+        是否遵循订单上的 `reduce_only` 执行指令。
     use_message_queue : bool, default True
-        If an internal message queue should be used to process trading commands in sequence after
-        they have initially arrived. Setting this to False would be appropriate for real-time
-        sandbox environments, where we don't want to introduce additional latency of waiting for
-        the next data event before processing the trading command.
+        是否应使用内部消息队列按顺序处理交易指令。对于实时沙盒环境，
+        将其设置为 False 可能更合适，因为我们不想在处理交易指令之前引入
+        等待下一个数据事件的额外延迟。
     use_market_order_acks : bool, default False
-        If OrderAccepted events will be generated for market orders before filling.
+        是否在成交前为市价单生成 OrderAccepted 事件。
     bar_execution : bool, default True
-        If bars should be processed by the matching engine(s) (and move the market).
+        是否应由撮合引擎处理 Bar 数据（并推动市场）。
     bar_adaptive_high_low_ordering : bool, default False
-        Determines whether the processing order of bar prices is adaptive based on a heuristic.
-        This setting is only relevant when `bar_execution` is True.
-        If False, bar prices are always processed in the fixed order: Open, High, Low, Close.
-        If True, the processing order adapts with the heuristic:
-        - If High is closer to Open than Low then the processing order is Open, High, Low, Close.
-        - If Low is closer to Open than High then the processing order is Open, Low, High, Close.
+        决定是否根据启发式算法自适应处理 Bar 价格顺序。
+        此设置仅在 `bar_execution` 为 True 时相关。
+        如果为 False，Bar 价格始终按固定顺序处理：Open, High, Low, Close。
+        如果为 True，处理顺序随启发式算法调整：
+        - 如果 High 比 Low 更接近 Open，则处理顺序为 Open, High, Low, Close。
+        - 如果 Low 比 High 更接近 Open，则处理顺序为 Open, Low, High, Close。
     price_protection_points : int, optional
-        Defines an exchange-calculated price boundary (in points) to prevent
-        marketable orders from executing at excessively aggressive prices.
+        定义交易所计算的价格边界（以点为单位），以防止市价单在过于激进的价格执行。
     trade_execution : bool, default False
-        If trades should be processed by the matching engine(s) (and move the market).
+        是否应由撮合引擎处理 Trade 数据（并推动市场）。
     liquidity_consumption : bool, default False
-        If liquidity consumption should be tracked per price level. When enabled, fills
-        consume available liquidity which resets when fresh data arrives at that level.
-        When disabled, each iteration can fill against the full book liquidity independently.
+        是否应按价格水平跟踪流动性消耗。启用时，成交会消耗可用流动性，
+        当该水平的新数据到达时重置。禁用时，每次迭代都可以独立地根据
+        全额订单簿流动性进行成交。
 
     Raises
     ------
     ValueError
-        If `instruments` is empty.
+        如果 `instruments` 为空。
     ValueError
-        If `instruments` contains a type other than `Instrument`.
+        如果 `instruments` 包含非 `Instrument` 类型。
     ValueError
-        If `starting_balances` is empty.
+        如果 `starting_balances` 为空。
     ValueError
-        If `starting_balances` contains a type other than `Money`.
+        如果 `starting_balances` 包含非 `Money` 类型。
     ValueError
-        If `base_currency` and multiple starting balances.
+        如果指定了 `base_currency` 且有多个期初余额。
     ValueError
-        If `modules` contains a type other than `SimulationModule`.
+        如果 `modules` 包含非 `SimulationModule` 类型。
 
     """
 
@@ -2635,9 +2603,9 @@ cdef class SimulatedExchange:
 
         self.msgbus = msgbus
         self.cache = cache
-        self.exec_client = None  # Initialized when execution client registered
-
-        # Accounting
+        self.exec_client = None  # 在注册执行客户端时初始化
+ 
+        # 会计
         self.account_type = account_type
         self.base_currency = base_currency
         self.starting_balances = starting_balances
@@ -2645,8 +2613,8 @@ cdef class SimulatedExchange:
         self.leverages = leverages
         self.margin_model = margin_model
         self.is_frozen_account = frozen_account
-
-        # Execution config
+ 
+        # 执行配置
         self.reject_stop_orders = reject_stop_orders
         self.support_gtd_orders = support_gtd_orders
         self.support_contingent_orders = support_contingent_orders
@@ -2661,13 +2629,13 @@ cdef class SimulatedExchange:
         self.trade_execution = trade_execution
         self.liquidity_consumption = liquidity_consumption
         self.price_protection_points = price_protection_points if price_protection_points is not None else 0
-
-        # Execution models
+ 
+        # 执行模型
         self.fill_model = fill_model
         self.fee_model = fee_model
         self.latency_model = latency_model
-
-        # Load modules
+ 
+        # 加载模块
         self.modules = []
         for module in modules:
             Condition.not_in(module, self.modules, "module", "modules")
@@ -2677,22 +2645,22 @@ cdef class SimulatedExchange:
                 cache=cache,
                 clock=clock,
             )
-            # The OptionExerciseModule subscribes to position events in the `register_venue` method.
-            # The msgbus needs to be available to subscribe to the events.
-            # Thus, `register_base` is called before `register_venue`.
+            # OptionExerciseModule 在 `register_venue` 方法中订阅持仓事件。
+            # 订阅事件需要消息总线可用。
+            # 因此，`register_base` 在 `register_venue` 之前调用。
             module.register_venue(self)
             self.modules.append(module)
-            self._log.info(f"Loaded {module}")
-
-        # Markets
+            self._log.info(f"已加载 {module}")
+ 
+        # 市场
         self.instruments: dict[InstrumentId, Instrument] = {}
         self._matching_engines: dict[InstrumentId, OrderMatchingEngine] = {}
-
+ 
         self._message_queue = deque()
         self._inflight_queue: list[tuple[(uint64_t, uint64_t), TradingCommand]] = []
         self._inflight_counter: dict[uint64_t, uint64_t] = {}
-
-        # For direct communication from SpreadQuoteAggregator
+ 
+        # 用于来自 SpreadQuoteAggregator 的直接通信
         spread_quote_endpoint = f"SimulatedExchange.spread_quote.{venue}"
         if spread_quote_endpoint not in self.msgbus._endpoints:
             self.msgbus.register(endpoint=spread_quote_endpoint, handler=self.process_quote_tick)
@@ -2709,28 +2677,28 @@ cdef class SimulatedExchange:
 
     cpdef void register_client(self, BacktestExecClient client):
         """
-        Register the given execution client with the simulated exchange.
+        向模拟交易所注册给定的执行客户端。
 
         Parameters
         ----------
         client : BacktestExecClient
-            The client to register
-
+            要注册的客户端。
+ 
         """
         Condition.not_none(client, "client")
-
+ 
         self.exec_client = client
-
-        self._log.info(f"Registered ExecutionClient-{client}")
+ 
+        self._log.info(f"已注册 ExecutionClient-{client}")
 
     cpdef void set_fill_model(self, FillModel fill_model):
         """
-        Set the fill model for all matching engines.
+        设置所有撮合引擎的成交模型。
 
         Parameters
         ----------
         fill_model : FillModel
-            The fill model to set.
+            要设置的成交模型。
 
         """
         Condition.not_none(fill_model, "fill_model")
@@ -2741,60 +2709,59 @@ cdef class SimulatedExchange:
         for matching_engine in self._matching_engines.values():
             matching_engine.set_fill_model(fill_model)
             self._log.info(
-                f"Changed `FillModel` for {matching_engine.venue} "
-                f"to {self.fill_model}",
+                f"已将 {matching_engine.venue} 的 `FillModel` "
+                f"更改为 {self.fill_model}",
             )
 
     cpdef void set_latency_model(self, LatencyModel latency_model):
         """
-        Change the latency model for this exchange.
+        更改此交易所的延迟模型。
 
         Parameters
         ----------
         latency_model : LatencyModel
-            The latency model to set.
+            要设置的延迟模型。
 
         """
         Condition.not_none(latency_model, "latency_model")
-
+ 
         self.latency_model = latency_model
-
-        self._log.info("Changed latency model")
+ 
+        self._log.info("已更改延迟模型")
 
     cpdef void initialize_account(self):
         """
-        Initialize the account to the starting balances.
+        初始化账户至期初余额。
 
         """
         self._generate_fresh_account_state()
 
     cpdef void add_instrument(self, Instrument instrument):
         """
-        Add the given instrument to the exchange.
+        将给定的工具添加到交易所。
 
         Parameters
         ----------
         instrument : Instrument
-            The instrument to add.
+            要添加的工具。
 
         Raises
         ------
         ValueError
-            If `instrument.id.venue` is not equal to the venue ID.
+            如果 `instrument.id.venue` 不等于场所 ID。
         InvalidConfiguration
-            If `instrument` is invalid for this venue.
+            如果 `instrument` 对此场所无效。
 
         """
         Condition.not_none(instrument, "instrument")
         Condition.equal(instrument.id.venue, self.id, "instrument.id.venue", "self.id")
 
-        # Validate instrument
+        # 验证工具
         if isinstance(instrument, (CryptoPerpetual, CryptoFuture)):
             if self.account_type == AccountType.CASH:
                 raise InvalidConfiguration(
-                    f"Cannot add a `{type(instrument).__name__}` type instrument "
-                    f"to a venue with a `CASH` account type. Add to a "
-                    f"venue with a `MARGIN` account type.",
+                    f"无法将 `{type(instrument).__name__}` 类型的工具添加到具有 `CASH` 账户类型的场所。"
+                    f"请添加至具有 `MARGIN` 账户类型的场所。",
                 )
 
         self.instruments[instrument.id] = instrument
@@ -2826,19 +2793,19 @@ cdef class SimulatedExchange:
         )
 
         self._matching_engines[instrument.id] = matching_engine
-
-        self._log.info(f"Added instrument {instrument.id} and created matching engine")
+ 
+        self._log.info(f"已添加工具 {instrument.id} 并创建撮合引擎")
 
 # -- QUERIES --------------------------------------------------------------------------------------
 
     cpdef Price best_bid_price(self, InstrumentId instrument_id):
         """
-        Return the best bid price for the given instrument ID (if found).
+        返回给定工具 ID 的最佳买入价格（如果找到）。
 
         Parameters
         ----------
         instrument_id : InstrumentId
-            The instrument ID for the price.
+            价格的工具 ID。
 
         Returns
         -------
@@ -2855,12 +2822,12 @@ cdef class SimulatedExchange:
 
     cpdef Price best_ask_price(self, InstrumentId instrument_id):
         """
-        Return the best ask price for the given instrument ID (if found).
+        返回给定工具 ID 的最佳卖出价格（如果找到）。
 
         Parameters
         ----------
         instrument_id : InstrumentId
-            The instrument ID for the price.
+            价格的工具 ID。
 
         Returns
         -------
@@ -2877,12 +2844,12 @@ cdef class SimulatedExchange:
 
     cpdef OrderBook get_book(self, InstrumentId instrument_id):
         """
-        Return the order book for the given instrument ID.
+        返回给定工具 ID 的订单簿。
 
         Parameters
         ----------
         instrument_id : InstrumentId
-            The instrument ID for the price.
+            价格的工具 ID。
 
         Returns
         -------
@@ -2899,12 +2866,12 @@ cdef class SimulatedExchange:
 
     cpdef OrderMatchingEngine get_matching_engine(self, InstrumentId instrument_id):
         """
-        Return the matching engine for the given instrument ID (if found).
+        返回给定工具 ID 的撮合引擎（如果找到）。
 
         Parameters
         ----------
         instrument_id : InstrumentId
-            The instrument ID for the matching engine.
+            撮合引擎的工具 ID。
 
         Returns
         -------
@@ -2915,7 +2882,7 @@ cdef class SimulatedExchange:
 
     cpdef dict get_matching_engines(self):
         """
-        Return all matching engines for the exchange (for every instrument).
+        返回交易所的所有撮合引擎（针对每个工具）。
 
         Returns
         -------
@@ -2926,7 +2893,7 @@ cdef class SimulatedExchange:
 
     cpdef dict get_books(self):
         """
-        Return all order books within the exchange.
+        返回交易所内的所有订单簿。
 
         Returns
         -------
@@ -2943,12 +2910,12 @@ cdef class SimulatedExchange:
 
     cpdef list[Order] get_open_orders(self, InstrumentId instrument_id = None):
         """
-        Return the open orders at the exchange.
+        返回交易所的挂单。
 
         Parameters
         ----------
         instrument_id : InstrumentId, optional
-            The instrument_id query filter.
+            工具 ID 查询过滤器。
 
         Returns
         -------
@@ -2971,12 +2938,12 @@ cdef class SimulatedExchange:
 
     cpdef list[Order] get_open_bid_orders(self, InstrumentId instrument_id = None):
         """
-        Return the open bid orders at the exchange.
+        返回交易所的买入挂单。
 
         Parameters
         ----------
         instrument_id : InstrumentId, optional
-            The instrument_id query filter.
+            工具 ID 查询过滤器。
 
         Returns
         -------
@@ -2999,12 +2966,12 @@ cdef class SimulatedExchange:
 
     cpdef list[Order] get_open_ask_orders(self, InstrumentId instrument_id = None):
         """
-        Return the open ask orders at the exchange.
+        返回交易所的卖出挂单。
 
         Parameters
         ----------
         instrument_id : InstrumentId, optional
-            The instrument_id query filter.
+            工具 ID 查询过滤器。
 
         Returns
         -------
@@ -3027,7 +2994,7 @@ cdef class SimulatedExchange:
 
     cpdef Account get_account(self):
         """
-        Return the account for the registered client (if registered).
+        返回注册客户端的账户（如果已注册）。
 
         Returns
         -------
@@ -3042,12 +3009,12 @@ cdef class SimulatedExchange:
 
     cpdef void adjust_account(self, Money adjustment):
         """
-        Adjust the account at the exchange with the given adjustment.
+        使用给定的调整量调整交易所的账户。
 
         Parameters
         ----------
         adjustment : Money
-            The adjustment for the account.
+            账户的调整量。
 
         """
         Condition.not_none(adjustment, "adjustment")
@@ -3058,14 +3025,14 @@ cdef class SimulatedExchange:
         cdef Account account = self.cache.account_for_venue(self.exec_client.venue)
         if account is None:
             self._log.error(
-                f"Cannot adjust account: no account found for {self.exec_client.venue}"
+                f"无法调整账户：未找到 {self.exec_client.venue} 的账户"
             )
             return
 
         cdef AccountBalance balance = account.balance(adjustment.currency)
         if balance is None:
             self._log.error(
-                f"Cannot adjust account: no balance found for {adjustment.currency}"
+                f"无法调整账户：未找到 {adjustment.currency} 的余额"
             )
             return
 
@@ -3075,8 +3042,8 @@ cdef class SimulatedExchange:
         cdef list[MarginBalance] margins = []
         if account.is_margin_account:
             margins = list(account.margins().values())
-
-        # Generate and handle event
+ 
+        # 生成并处理事件
         self.exec_client.generate_account_state(
             balances=[balance],
             margins=margins,
@@ -3086,12 +3053,12 @@ cdef class SimulatedExchange:
 
     cpdef void update_instrument(self, Instrument instrument):
         """
-        Update the venues current instrument definition with the given instrument.
+        使用给定的工具更新场所当前的工具定义。
 
         Parameters
         ----------
         instrument : Instrument
-            The instrument definition to update.
+            要更新的工具定义。
 
         """
         Condition.not_none(instrument, "instrument")
@@ -3105,12 +3072,12 @@ cdef class SimulatedExchange:
 
     cpdef void send(self, TradingCommand command):
         """
-        Send the given trading command into the exchange.
+        将给定的交易指令发送到交易所。
 
         Parameters
         ----------
         command : TradingCommand
-            The command to send.
+            要发送的指令。
 
         """
         Condition.not_none(command, "command")
@@ -3131,7 +3098,7 @@ cdef class SimulatedExchange:
         elif isinstance(command, (CancelOrder, CancelAllOrders, BatchCancelOrders)):
             ts = command.ts_init + self.latency_model.cancel_latency_nanos
         else:
-            raise ValueError(f"invalid `TradingCommand`, was {command}")  # pragma: no cover (design-time error)
+            raise ValueError(f"无效的 `TradingCommand`，原为 {command}")  # pragma: no cover (设计时错误)
 
         if ts not in self._inflight_counter:
             self._inflight_counter[ts] = 0
@@ -3143,12 +3110,12 @@ cdef class SimulatedExchange:
 
     cpdef void process_order_book_delta(self, OrderBookDelta delta):
         """
-        Process the exchanges market for the given order book delta.
+        处理给定订单簿增量的交易所市场。
 
         Parameters
         ----------
         data : OrderBookDelta
-            The order book delta to process.
+            要处理的订单簿增量。
 
         """
         Condition.not_none(delta, "delta")
@@ -3161,8 +3128,8 @@ cdef class SimulatedExchange:
         if matching_engine is None:
             instrument = self.cache.instrument(delta.instrument_id)
             if instrument is None:
-                raise RuntimeError(f"No matching engine found for {delta.instrument_id}")
-
+                raise RuntimeError(f"未找到 {delta.instrument_id} 的撮合引擎")
+ 
             self.add_instrument(instrument)
             matching_engine = self._matching_engines[delta.instrument_id]
 
@@ -3170,12 +3137,12 @@ cdef class SimulatedExchange:
 
     cpdef void process_order_book_deltas(self, OrderBookDeltas deltas):
         """
-        Process the exchanges market for the given order book deltas.
+        处理给定订单簿增量的交易所市场。
 
         Parameters
         ----------
         data : OrderBookDeltas
-            The order book deltas to process.
+            要处理的订单簿增量。
 
         """
         Condition.not_none(deltas, "deltas")
@@ -3188,8 +3155,8 @@ cdef class SimulatedExchange:
         if matching_engine is None:
             instrument = self.cache.instrument(deltas.instrument_id)
             if instrument is None:
-                raise RuntimeError(f"No matching engine found for {deltas.instrument_id}")
-
+                raise RuntimeError(f"未找到 {deltas.instrument_id} 的撮合引擎")
+ 
             self.add_instrument(instrument)
             matching_engine = self._matching_engines[deltas.instrument_id]
 
@@ -3197,12 +3164,12 @@ cdef class SimulatedExchange:
 
     cpdef void process_order_book_depth10(self, OrderBookDepth10 depth):
         """
-        Process the exchanges market for the given order book depth.
+        处理给定订单簿深度的交易所市场。
 
         Parameters
         ----------
         depth : OrderBookDepth10
-            The order book depth to process.
+            要处理的订单簿深度。
 
         """
         Condition.not_none(depth, "depth")
@@ -3215,8 +3182,8 @@ cdef class SimulatedExchange:
         if matching_engine is None:
             instrument = self.cache.instrument(depth.instrument_id)
             if instrument is None:
-                raise RuntimeError(f"No matching engine found for {depth.instrument_id}")
-
+                raise RuntimeError(f"未找到 {depth.instrument_id} 的撮合引擎")
+ 
             self.add_instrument(instrument)
             matching_engine = self._matching_engines[depth.instrument_id]
 
@@ -3224,14 +3191,14 @@ cdef class SimulatedExchange:
 
     cpdef void process_quote_tick(self, QuoteTick tick):
         """
-        Process the exchanges market for the given quote tick.
+        处理给定报价 Tick 的交易所市场。
 
-        Market dynamics are simulated by auctioning open orders.
+        通过拍卖挂单来模拟市场动态。
 
         Parameters
         ----------
         tick : QuoteTick
-            The tick to process.
+            要处理的 Tick。
 
         """
         Condition.not_none(tick, "tick")
@@ -3244,23 +3211,23 @@ cdef class SimulatedExchange:
         if matching_engine is None:
             instrument = self.cache.instrument(tick.instrument_id)
             if instrument is None:
-                raise RuntimeError(f"No matching engine found for {tick.instrument_id}")
-
+                raise RuntimeError(f"未找到 {tick.instrument_id} 的撮合引擎")
+ 
             self.add_instrument(instrument)
             matching_engine = self._matching_engines[tick.instrument_id]
-
+ 
         matching_engine.process_quote_tick(tick)
 
     cpdef void process_trade_tick(self, TradeTick tick):
         """
-        Process the exchanges market for the given trade tick.
+        处理给定成交 Tick 的交易所市场。
 
-        Market dynamics are simulated by auctioning open orders.
+        通过拍卖挂单来模拟市场动态。
 
         Parameters
         ----------
         tick : TradeTick
-            The tick to process.
+            要处理的 Tick。
 
         """
         Condition.not_none(tick, "tick")
@@ -3273,8 +3240,8 @@ cdef class SimulatedExchange:
         if matching_engine is None:
             instrument = self.cache.instrument(tick.instrument_id)
             if instrument is None:
-                raise RuntimeError(f"No matching engine found for {tick.instrument_id}")
-
+                raise RuntimeError(f"未找到 {tick.instrument_id} 的撮合引擎")
+ 
             self.add_instrument(instrument)
             matching_engine = self._matching_engines[tick.instrument_id]
 
@@ -3282,14 +3249,14 @@ cdef class SimulatedExchange:
 
     cpdef void process_bar(self, Bar bar):
         """
-        Process the exchanges market for the given bar.
+        处理给定 Bar 的交易所市场。
 
-        Market dynamics are simulated by auctioning open orders.
+        通过拍卖挂单来模拟市场动态。
 
         Parameters
         ----------
         bar : Bar
-            The bar to process.
+            要处理的 Bar。
 
         """
         Condition.not_none(bar, "bar")
@@ -3302,8 +3269,8 @@ cdef class SimulatedExchange:
         if matching_engine is None:
             instrument = self.cache.instrument(bar.bar_type.instrument_id)
             if instrument is None:
-                raise RuntimeError(f"No matching engine found for {bar.bar_type.instrument_id}")
-
+                raise RuntimeError(f"未找到 {bar.bar_type.instrument_id} 的撮合引擎")
+ 
             self.add_instrument(instrument)
             matching_engine = self._matching_engines[bar.bar_type.instrument_id]
 
@@ -3311,12 +3278,12 @@ cdef class SimulatedExchange:
 
     cpdef void process_instrument_status(self, InstrumentStatus data):
         """
-        Process a specific instrument status.
+        处理特定工具状态。
 
         Parameters
         ----------
         data : InstrumentStatus
-            The instrument status update to process.
+            要处理的工具状态更新。
 
         """
         Condition.not_none(data, "data")
@@ -3329,8 +3296,8 @@ cdef class SimulatedExchange:
         if matching_engine is None:
             instrument = self.cache.instrument(data.instrument_id)
             if instrument is None:
-                raise RuntimeError(f"No matching engine found for {data.instrument_id}")
-
+                raise RuntimeError(f"未找到 {data.instrument_id} 的撮合引擎")
+ 
             self.add_instrument(instrument)
             matching_engine = self._matching_engines[data.instrument_id]
 
@@ -3338,12 +3305,12 @@ cdef class SimulatedExchange:
 
     cpdef void process_instrument_close(self, InstrumentClose close):
         """
-        Process the exchanges market for the given instrument close.
+        处理给定工具收盘的交易所市场。
 
         Parameters
         ----------
         close : InstrumentClose
-            The instrument close to process.
+            要处理的工具收盘。
 
         """
         Condition.not_none(close, "close")
@@ -3356,8 +3323,8 @@ cdef class SimulatedExchange:
         if matching_engine is None:
             instrument = self.cache.instrument(close.instrument_id)
             if instrument is None:
-                raise RuntimeError(f"No matching engine found for {close.instrument_id}")
-
+                raise RuntimeError(f"未找到 {close.instrument_id} 的撮合引擎")
+ 
             self.add_instrument(instrument)
             matching_engine = self._matching_engines[close.instrument_id]
 
@@ -3365,14 +3332,14 @@ cdef class SimulatedExchange:
 
     cpdef void process(self, uint64_t ts_now):
         """
-        Process the exchange to the given time.
+        处理交易所到给定时间。
 
-        All pending commands will be processed along with all simulation modules.
+        所有待处理的指令将与所有模拟模块一起处理。
 
         Parameters
         ----------
         ts_now : uint64_t
-            The current UNIX timestamp (nanoseconds).
+            当前 UNIX 时间戳（纳秒）。
 
         """
         self._clock.set_time(ts_now)
@@ -3380,10 +3347,10 @@ cdef class SimulatedExchange:
         cdef:
             uint64_t ts
         while self._inflight_queue:
-            # Peek at timestamp of next in-flight message
+            # 查看下一条在途消息的时间戳
             ts = self._inflight_queue[0][0][0]
             if ts <= ts_now:
-                # Place message on queue to be processed
+                # 将消息放入队列进行处理
                 self._message_queue.appendleft(self._inflight_queue.pop(0)[1])
                 self._inflight_counter.pop(ts, None)
             else:
@@ -3393,19 +3360,19 @@ cdef class SimulatedExchange:
         while self._message_queue:
             command = self._message_queue.pop()
             self._process_trading_command(command)
-
-        # Iterate over modules
+ 
+        # 遍历模块
         cdef SimulationModule module
         for module in self.modules:
             module.process(ts_now)
 
     cpdef void reset(self):
         """
-        Reset the simulated exchange.
-
-        All stateful fields are reset to their initial value.
+        重置模拟交易所。
+ 
+        所有有状态字段都将重置为其初始值。
         """
-        self._log.debug(f"Resetting")
+        self._log.debug(f"正在重置")
 
         for module in self.modules:
             module.reset()
@@ -3418,14 +3385,14 @@ cdef class SimulatedExchange:
         self._message_queue = deque()
         self._inflight_queue.clear()
         self._inflight_counter.clear()
-
-        self._log.info("Reset")
+ 
+        self._log.info("已重置")
 
     cdef void _process_trading_command(self, TradingCommand command):
-
+ 
         cdef OrderMatchingEngine matching_engine = self._matching_engines.get(command.instrument_id)
         if matching_engine is None:
-            raise RuntimeError(f"Cannot process command: no matching engine for {command.instrument_id}")
+            raise RuntimeError(f"无法处理指令：未找到 {command.instrument_id} 的撮合引擎")
 
         cdef:
             Order order
@@ -3436,13 +3403,13 @@ cdef class SimulatedExchange:
             for order in command.order_list.orders:
                 matching_engine.process_order(order, self.exec_client.account_id)
         elif isinstance(command, ModifyOrder):
-            # Check if order is in SUBMITTED status or PENDING_UPDATE with previous SUBMITTED status
-            # (bracket orders not yet at matching engine)
+            # 检查订单是否处于 SUBMITTED 状态或具有先前 SUBMITTED 状态的 PENDING_UPDATE 状态
+            # （挂单尚未到达撮合引擎）
             order = self.cache.order(command.client_order_id)
             if (order is not None and
                 (order.status_c() == OrderStatus.SUBMITTED or
                  (order.status_c() == OrderStatus.PENDING_UPDATE and order._previous_status == OrderStatus.SUBMITTED))):
-                # Handle modification locally for bracket orders not yet sent to matching engine
+                # 为尚未发送到撮合引擎的挂单在本地处理修改
                 self._process_modify_submitted_order(command)
             else:
                 matching_engine.process_modify(command, self.exec_client.account_id)
@@ -3462,18 +3429,18 @@ cdef class SimulatedExchange:
                 command.instrument_id,
                 command.client_order_id,
                 None,
-                f"{command.client_order_id!r} not found",
+                f"未找到 {command.client_order_id!r}",
                 self.exec_client.account_id,
             )
             return
-
-        # Apply the modification directly to the order
+ 
+        # 直接将修改应用于订单
         cdef:
             Quantity new_quantity = command.quantity if command.quantity is not None else order.quantity
             Price new_price = command.price if command.price is not None else (order.price if hasattr(order, 'price') else None)
             Price new_trigger_price = command.trigger_price if command.trigger_price is not None else (order.trigger_price if hasattr(order, 'trigger_price') else None)
-
-        # Generate OrderUpdated event
+ 
+        # 生成 OrderUpdated 事件
         self._generate_order_updated(
             order,
             new_quantity,
@@ -3548,77 +3515,75 @@ cdef class SimulatedExchange:
             reported=True,
             ts_event=self._clock.timestamp_ns(),
         )
-
-        # Set leverages and margin model
+ 
+        # 设置杠杆和保证金模型
         cdef Account account = self.get_account()
         if account.is_margin_account:
             account.set_default_leverage(self.default_leverage)
-
-            # Set instrument specific leverages
+ 
+            # 设置特定工具的杠杆
             for instrument_id, leverage in self.leverages.items():
                 account.set_leverage(instrument_id, leverage)
-
-            # Set margin model if provided
+ 
+            # 如果提供了保证金模型，则进行设置
             if self.margin_model is not None:
                 account.set_margin_model(self.margin_model)
 
 
 cdef class OrderMatchingEngine:
     """
-    Provides an order matching engine for a single market.
+    为单个市场提供订单撮合引擎。
 
     Parameters
     ----------
     instrument : Instrument
-        The market instrument for the matching engine.
+        撮合引擎的市场工具。
     raw_id : uint32_t
-        The raw integer ID for the instrument.
+        工具的原始整数 ID。
     fill_model : FillModel
-        The fill model for the matching engine.
+        撮合引擎的成交模型。
     fee_model : FeeModel
-        The fee model for the matching engine.
+        撮合引擎的费用模型。
     book_type : BookType
-        The order book type for the engine.
+        引擎的订单簿类型。
     oms_type : OmsType
-        The order management system type for the matching engine. Determines
-        the generation and handling of venue position IDs.
+        撮合引擎的订单管理系统类型。决定场所持仓 ID 的生成和处理。
     account_type : AccountType
-        The account type for the matching engine. Determines allowable
-        executions based on the instrument.
+        撮合引擎的账户类型。根据工具确定允许的执行方式。
     msgbus : MessageBus
-        The message bus for the matching engine.
+        撮合引擎的消息总线。
     cache : CacheFacade
-        The read-only cache for the matching engine.
+        撮合引擎的只读缓存。
     clock : TestClock
-        The clock for the matching engine.
+        撮合引擎的时钟。
     logger : Logger
-        The logger for the matching engine.
+        撮合引擎的日志记录器。
     bar_execution : bool, default True
-        If bars should be processed by the matching engine (and move the market).
+        是否应由撮合引擎处理 Bar 数据（并推动市场）。
     trade_execution : bool, default False
-        If trades should be processed by the matching engine (and move the market).
+        是否应由撮合引擎处理 Trade 数据（并推动市场）。
     liquidity_consumption : bool, default False
-        If liquidity consumption should be tracked per price level.
+        是否应按价格水平跟踪流动性消耗。
     reject_stop_orders : bool, default True
-        If stop orders are rejected if already in the market on submitting.
+        如果提交时止损单已在市场中，是否拒绝。
     support_gtd_orders : bool, default True
-        If orders with GTD time in force will be supported by the venue.
+        场所是否支持 GTD（Good Till Date）有效时间的订单。
     support_contingent_orders : bool, default True
-        If contingent orders will be supported/respected by the venue.
-        If False, then its expected the strategy will be managing any contingent orders.
+        场所是否支持/遵循条件订单。
+        如果为 False，则预期策略将管理任何条件订单。
     use_position_ids : bool, default True
-        If venue position IDs will be generated on order fills.
+        是否在订单成交时生成场所持仓 ID。
     use_random_ids : bool, default False
-        If all venue generated identifiers will be random UUID4's.
+        是否所有场所生成的标识符都是随机 UUID4。
     use_reduce_only : bool, default True
-        If the `reduce_only` execution instruction on orders will be honored.
+        是否遵循订单上的 `reduce_only` 执行指令。
     bar_adaptive_high_low_ordering : bool, default False
-        Determines whether the processing order of bar prices is adaptive based on a heuristic.
-        This setting is only relevant when `bar_execution` is True.
-        If False, bar prices are always processed in the fixed order: Open, High, Low, Close.
-        If True, the processing order adapts with the heuristic:
-        - If High is closer to Open than Low then the processing order is Open, High, Low, Close.
-        - If Low is closer to Open than High then the processing order is Open, Low, High, Close.
+        决定是否根据启发式算法自适应处理 Bar 价格顺序。
+        此设置仅在 `bar_execution` 为 True 时相关。
+        如果为 False，Bar 价格始终按固定顺序处理：Open, High, Low, Close。
+        如果为 True，处理顺序随启发式算法调整：
+        - 如果 High 比 Low 更接近 Open，则处理顺序为 Open, High, Low, Close。
+        - 如果 Low 比 High 更接近 Open，则处理顺序为 Open, Low, High, Close。
 
     """
 
@@ -3689,7 +3654,7 @@ cdef class OrderMatchingEngine:
         self._execution_bar_deltas: dict[BarType, timedelta]  =  {}
         self._cached_filled_qty: dict[ClientOrderId, Quantity] = {}
 
-        # Market
+        # 市场
         self._core = MatchingCore(
             instrument_id=instrument.id,
             price_increment=instrument.price_increment,
@@ -3707,7 +3672,7 @@ cdef class OrderMatchingEngine:
         self._last_bid_bar: Bar | None = None
         self._last_ask_bar: Bar | None = None
         self._last_trade_size: Quantity | None = None
-        self._fill_at_market = True  # Fill stop orders at market price vs trigger price
+        self._fill_at_market = True  # 以市价（而非触发价）成交止损单
         self._bid_consumption = {}
         self._ask_consumption = {}
         self._trade_consumption = 0
@@ -3723,10 +3688,10 @@ cdef class OrderMatchingEngine:
             f"instrument_id={self.instrument.id.value}, "
             f"raw_id={self.raw_id})"
         )
-
+ 
     cpdef void reset(self):
-        self._log.debug(f"Resetting OrderMatchingEngine {self.instrument.id}")
-
+        self._log.debug(f"正在重置撮合引擎 {self.instrument.id}")
+ 
         self._book.clear(0, 0)
         self._account_ids.clear()
         self._execution_bar_types.clear()
@@ -3743,37 +3708,37 @@ cdef class OrderMatchingEngine:
         self._bid_consumption.clear()
         self._ask_consumption.clear()
         self._trade_consumption = 0
-
+ 
         self._position_count = 0
         self._order_count = 0
         self._execution_count = 0
-
-        self._log.info(f"Reset OrderMatchingEngine {self.instrument.id}")
+ 
+        self._log.info(f"已重置撮合引擎 {self.instrument.id}")
 
     cpdef void set_fill_model(self, FillModel fill_model):
         """
-        Set the fill model to the given model.
+        将成交模型设置为给定模型。
 
         Parameters
         ----------
         fill_model : FillModel
-            The fill model to set.
+            要设置的成交模型。
 
         """
         Condition.not_none(fill_model, "fill_model")
-
+ 
         self._fill_model = fill_model
-
-        self._log.debug(f"Changed `FillModel` to {self._fill_model}")
+ 
+        self._log.debug(f"已将 `FillModel` 更改为 {self._fill_model}")
 
     cpdef void update_instrument(self, Instrument instrument):
         """
-        Update the matching engines current instrument definition with the given instrument.
+        使用给定的工具更新撮合引擎当前的工具定义。
 
         Parameters
         ----------
         instrument : Instrument
-            The instrument definition to update.
+            要更新的工具定义。
 
         """
         Condition.not_none(instrument, "instrument")
@@ -3782,14 +3747,14 @@ cdef class OrderMatchingEngine:
         self.instrument = instrument
         self._price_prec = instrument.price_precision
         self._size_prec = instrument.size_precision
-
-        self._log.debug(f"Updated instrument definition for {instrument.id}")
+ 
+        self._log.debug(f"已更新 {instrument.id} 的工具定义")
 
 # -- QUERIES --------------------------------------------------------------------------------------
 
     cpdef Price best_bid_price(self):
         """
-        Return the best bid price for the given instrument ID (if found).
+        返回给定工具 ID 的最佳买入价格（如果找到）。
 
         Returns
         -------
@@ -3800,7 +3765,7 @@ cdef class OrderMatchingEngine:
 
     cpdef Price best_ask_price(self):
         """
-        Return the best ask price for the given instrument ID (if found).
+        返回给定工具 ID 的最佳卖出价格（如果找到）。
 
         Returns
         -------
@@ -3811,7 +3776,7 @@ cdef class OrderMatchingEngine:
 
     cpdef OrderBook get_book(self):
         """
-        Return the internal order book.
+        返回内部订单簿。
 
         Returns
         -------
@@ -3822,7 +3787,7 @@ cdef class OrderMatchingEngine:
 
     cpdef list[Order] get_open_orders(self):
         """
-        Return the open orders in the matching engine.
+        返回撮合引擎中的挂单。
 
         Returns
         -------
@@ -3833,7 +3798,7 @@ cdef class OrderMatchingEngine:
 
     cpdef list[Order] get_open_bid_orders(self):
         """
-        Return the open bid orders in the matching engine.
+        返回撮合引擎中的买入挂单。
 
         Returns
         -------
@@ -3844,12 +3809,12 @@ cdef class OrderMatchingEngine:
 
     cpdef list[Order] get_open_ask_orders(self):
         """
-        Return the open ask orders at the exchange.
+        返回交易所的卖出挂单。
 
         Returns
         -------
         list[Order]
-
+ 
         """
         return self._core.get_orders_ask()
 
@@ -3860,47 +3825,47 @@ cdef class OrderMatchingEngine:
 
     cpdef void process_order_book_delta(self, OrderBookDelta delta):
         """
-        Process the exchanges market for the given order book delta.
+        处理给定订单簿增量的交易所市场。
 
         Parameters
         ----------
         delta : OrderBookDelta
-            The order book delta to process.
+            要处理的订单簿增量。
 
         Raises
         ------
         RuntimeError
-            If the delta price precision does not match the instrument for the matching engine.
+            如果增量价格精度与撮合引擎的工具不匹配。
         RuntimeError
-            If the delta size precision does not match the instrument for the matching engine.
+            如果增量大小精度与撮合引擎的工具不匹配。
 
         """
         Condition.not_none(delta, "delta")
 
         if is_logging_initialized():
-            self._log.debug(f"Processing {delta!r}")
+            self._log.debug(f"正在处理 {delta!r}")
 
-        # Validate precisions for ADD and UPDATE actions
+        # 验证 ADD 和 UPDATE 动作的精度
         if delta._mem.action == BookAction.ADD or delta._mem.action == BookAction.UPDATE:
             if delta._mem.order.price.precision != self._price_prec:
                 raise RuntimeError(
-                    f"invalid delta price precision={delta._mem.order.price.precision} "
-                    f"did not match instrument.price_precision={self._price_prec}",
+                    f"无效的增量价格精度={delta._mem.order.price.precision} "
+                    f"与 instrument.price_precision={self._price_prec} 不匹配",
                 )
             if delta._mem.order.size.precision != self._size_prec:
                 raise RuntimeError(
-                    f"invalid delta size precision={delta._mem.order.size.precision} "
-                    f"did not match instrument.size_precision={self._size_prec}",
+                    f"无效的增量数量精度={delta._mem.order.size.precision} "
+                    f"与 instrument.size_precision={self._size_prec} 不匹配",
                 )
 
-        # Reset consumption tracking on snapshot (F_SNAPSHOT = 32) or CLEAR action
+        # 发生快照 (F_SNAPSHOT = 32) 或 CLEAR 动作时重置消耗跟踪
         if self._liquidity_consumption and (
             (delta._mem.flags & 32) or delta._mem.action == BookAction.CLEAR
         ):
             self._bid_consumption.clear()
             self._ask_consumption.clear()
 
-        # Clear consumption tracking on UPDATE or DELETE (level changed or removed)
+        # 在 UPDATE 或 DELETE（价位更改或删除）时清除消耗跟踪
         if self._liquidity_consumption and (
             delta._mem.action == BookAction.UPDATE or delta._mem.action == BookAction.DELETE
         ):
@@ -3915,45 +3880,45 @@ cdef class OrderMatchingEngine:
 
     cpdef void process_order_book_deltas(self, OrderBookDeltas deltas):
         """
-        Process the exchanges market for the given order book deltas.
+        处理给定订单簿增量的交易所市场。
 
         Parameters
         ----------
-        delta : OrderBookDeltas
-            The order book deltas to process.
+        deltas : OrderBookDeltas
+            要处理的订单簿增量。
 
         Raises
         ------
         RuntimeError
-            If any delta price precision does not match the instrument for the matching engine.
+            如果任何增量价格精度与撮合引擎的工具不匹配。
         RuntimeError
-            If any delta size precision does not match the instrument for the matching engine.
+            如果任何增量大小精度与撮合引擎的工具不匹配。
 
         """
         Condition.not_none(deltas, "deltas")
 
         if is_logging_initialized():
-            self._log.debug(f"Processing {deltas!r}")
+            self._log.debug(f"正在处理 {deltas!r}")
 
-        # Validate precisions for ADD and UPDATE actions
+        # 验证 ADD 和 UPDATE 动作的精度
         cdef bint has_snapshot_or_clear = False
         cdef OrderBookDelta delta
         for delta in deltas.deltas:
             if delta._mem.action == BookAction.ADD or delta._mem.action == BookAction.UPDATE:
                 if delta._mem.order.price.precision != self._price_prec:
                     raise RuntimeError(
-                        f"invalid delta price precision={delta._mem.order.price.precision} "
-                        f"did not match instrument.price_precision={self._price_prec}",
+                        f"无效的增量价格精度={delta._mem.order.price.precision} "
+                        f"与 instrument.price_precision={self._price_prec} 不匹配",
                     )
                 if delta._mem.order.size.precision != self._size_prec:
                     raise RuntimeError(
-                        f"invalid delta size precision={delta._mem.order.size.precision} "
-                        f"did not match instrument.size_precision={self._size_prec}",
+                        f"无效的增量数量精度={delta._mem.order.size.precision} "
+                        f"与 instrument.size_precision={self._size_prec} 不匹配",
                     )
             if (delta._mem.flags & 32) or delta._mem.action == BookAction.CLEAR:
                 has_snapshot_or_clear = True
 
-            # Clear consumption tracking on UPDATE or DELETE (level changed or removed)
+            # 在 UPDATE 或 DELETE（价位更改或删除）时清除消耗跟踪
             if self._liquidity_consumption and (
                 delta._mem.action == BookAction.UPDATE or delta._mem.action == BookAction.DELETE
             ):
@@ -3962,7 +3927,7 @@ cdef class OrderMatchingEngine:
                 elif delta._mem.order.side == OrderSide.BUY:
                     self._bid_consumption.pop(delta._mem.order.price.raw, None)
 
-        # Reset consumption tracking on snapshot (F_SNAPSHOT = 32) or CLEAR action
+        # 发生快照 (F_SNAPSHOT = 32) 或 CLEAR 动作时重置消耗跟踪
         if self._liquidity_consumption and has_snapshot_or_clear:
             self._bid_consumption.clear()
             self._ask_consumption.clear()
@@ -3973,57 +3938,57 @@ cdef class OrderMatchingEngine:
 
     cpdef void process_order_book_depth10(self, OrderBookDepth10 depth):
         """
-        Process the exchanges market for the given order book depth.
+        处理给定订单簿深度的交易所市场。
 
         Parameters
         ----------
         depth : OrderBookDepth10
-            The order book depth to process.
+            要处理的订单簿深度。
 
         Raises
         ------
         RuntimeError
-            If any order price precision does not match the instrument for the matching engine.
+            如果任何订单价格精度与撮合引擎的工具不匹配。
         RuntimeError
-            If any order size precision does not match the instrument for the matching engine.
+            如果任何订单大小精度与撮合引擎的工具不匹配。
 
         """
         Condition.not_none(depth, "depth")
 
         if is_logging_initialized():
-            self._log.debug(f"Processing {depth!r}")
+            self._log.debug(f"正在处理 {depth!r}")
 
-        # Validate precisions for non-null orders
+        # 为非空订单验证精度
         cdef BookOrder order
         for order in depth.bids:
             if order._mem.side == OrderSide.NO_ORDER_SIDE:
-                continue  # Skip null orders
+                continue  # 跳过空订单
             if order._mem.price.precision != self._price_prec:
                 raise RuntimeError(
-                    f"invalid depth bid price precision={order._mem.price.precision} "
-                    f"did not match instrument.price_precision={self._price_prec}",
+                    f"无效的深度买入价格精度={order._mem.price.precision} "
+                    f"与 instrument.price_precision={self._price_prec} 不匹配",
                 )
             if order._mem.size.precision != self._size_prec:
                 raise RuntimeError(
-                    f"invalid depth bid size precision={order._mem.size.precision} "
-                    f"did not match instrument.size_precision={self._size_prec}",
+                    f"无效的深度买入数量精度={order._mem.size.precision} "
+                    f"与 instrument.size_precision={self._size_prec} 不匹配",
                 )
 
         for order in depth.asks:
             if order._mem.side == OrderSide.NO_ORDER_SIDE:
-                continue  # Skip null orders
+                continue  # 跳过空订单
             if order._mem.price.precision != self._price_prec:
                 raise RuntimeError(
-                    f"invalid depth ask price precision={order._mem.price.precision} "
-                    f"did not match instrument.price_precision={self._price_prec}",
+                    f"无效的深度卖出价格精度={order._mem.price.precision} "
+                    f"与 instrument.price_precision={self._price_prec} 不匹配",
                 )
             if order._mem.size.precision != self._size_prec:
                 raise RuntimeError(
-                    f"invalid depth ask size precision={order._mem.size.precision} "
-                    f"did not match instrument.size_precision={self._size_prec}",
+                    f"无效的深度卖出数量精度={order._mem.size.precision} "
+                    f"与 instrument.size_precision={self._size_prec} 不匹配",
                 )
 
-        # Reset consumption tracking on snapshot (F_SNAPSHOT = 32)
+        # 发生快照 (F_SNAPSHOT = 32) 时重置消耗跟踪
         if self._liquidity_consumption and (depth._mem.flags & 32):
             self._bid_consumption.clear()
             self._ask_consumption.clear()
@@ -4034,44 +3999,44 @@ cdef class OrderMatchingEngine:
 
     cpdef void process_quote_tick(self, QuoteTick tick):
         """
-        Process the exchanges market for the given quote tick.
+        处理给定报价 Tick 的交易所市场。
 
-        The internal order book will only be updated if the venue `book_type` is 'L1_MBP'.
+        仅当场所的 `book_type` 为 'L1_MBP' 时，内部订单簿才会更新。
 
         Parameters
         ----------
         tick : QuoteTick
-            The tick to process.
+            要处理的 Tick。
 
         Raises
         ------
         RuntimeError
-            If a price precision does not match the instrument for the matching engine.
+            如果价格精度与撮合引擎的工具不匹配。
         RuntimeError
-            If a size precision does not match the instrument for the matching engine.
+            如果大小精度与撮合引擎的工具不匹配。
 
         """
         Condition.not_none(tick, "tick")
 
         if is_logging_initialized():
-            self._log.debug(f"Processing {tick!r}")
-
-        # Validate precisions
+            self._log.debug(f"正在处理 {tick!r}")
+ 
+        # 验证精度
         if tick._mem.bid_price.precision != self._price_prec:
             raise RuntimeError(
-                f"invalid {tick.bid_price.precision=} did not match instrument.price_precision={self._price_prec}",
+                f"无效的 {tick.bid_price.precision=}，与 instrument.price_precision={self._price_prec} 不匹配",
             )
         if tick._mem.ask_price.precision != self._price_prec:
             raise RuntimeError(
-                f"invalid {tick.ask_price.precision=} did not match instrument.price_precision={self._price_prec}",
+                f"无效的 {tick.ask_price.precision=}，与 instrument.price_precision={self._price_prec} 不匹配",
             )
         if tick._mem.bid_size.precision != self._size_prec:
             raise RuntimeError(
-                f"invalid {tick.bid_size.precision=} did not match instrument.size_precision={self._size_prec}",
+                f"无效的 {tick.bid_size.precision=}，与 instrument.size_precision={self._size_prec} 不匹配",
             )
         if tick._mem.ask_size.precision != self._size_prec:
             raise RuntimeError(
-                f"invalid {tick.ask_size.precision=} did not match instrument.size_precision={self._size_prec}",
+                f"无效的 {tick.ask_size.precision=}，与 instrument.size_precision={self._size_prec} 不匹配",
             )
 
         if self.book_type == BookType.L1_MBP:
@@ -4081,36 +4046,36 @@ cdef class OrderMatchingEngine:
 
     cpdef void process_trade_tick(self, TradeTick tick):
         """
-        Process the exchanges market for the given trade tick.
+        处理给定成交 Tick 的交易所市场。
 
-        The internal order book will only be updated if the venue `book_type` is 'L1_MBP'.
+        仅当场所的 `book_type` 为 'L1_MBP' 时，内部订单簿才会更新。
 
         Parameters
         ----------
         tick : TradeTick
-            The tick to process.
+            要处理的 Tick。
 
         Raises
         ------
         RuntimeError
-            If the trades price precision does not match the instrument for the matching engine.
+            如果成交价格精度与撮合引擎的工具不匹配。
         RuntimeError
-            If the trades size precision does not match the instrument for the matching engine.
+            如果成交大小精度与撮合引擎的工具不匹配。
 
         """
         Condition.not_none(tick, "tick")
 
         if is_logging_initialized():
-            self._log.debug(f"Processing {tick!r}")
-
-        # Validate precisions
+            self._log.debug(f"正在处理 {tick!r}")
+ 
+        # 验证精度
         if tick._mem.price.precision != self._price_prec:
             raise RuntimeError(
-                f"invalid {tick.price.precision=} did not match instrument.price_precision={self._price_prec}",
+                f"无效的 {tick.price.precision=}，与 instrument.price_precision={self._price_prec} 不匹配",
             )
         if tick._mem.size.precision != self._size_prec:
             raise RuntimeError(
-                f"invalid {tick.size.precision=} did not match instrument.size_precision={self._size_prec}",
+                f"无效的 {tick.size.precision=}，与 instrument.size_precision={self._size_prec} 不匹配",
             )
 
         if self.book_type == BookType.L1_MBP:
@@ -4126,7 +4091,7 @@ cdef class OrderMatchingEngine:
         if self._trade_execution:
             aggressor_side = tick.aggressor_side
 
-            # Update the natural side based on trade
+            # 根据成交更新自然侧
             if aggressor_side == AggressorSide.BUYER:
                 if not self._core.is_ask_initialized or price_raw > self._core.ask_raw:
                     self._core.set_ask_raw(price_raw)
@@ -4144,11 +4109,11 @@ cdef class OrderMatchingEngine:
                     self._core.set_ask_raw(price_raw)
             else:
                 aggressor_side_str = aggressor_side_to_str(aggressor_side)
-                raise RuntimeError(  # pragma: no cover (design-time error)
-                    f"invalid `AggressorSide` for trade execution, was {aggressor_side_str}",  # pragma: no cover
+                raise RuntimeError(  # pragma: no cover (设计时错误)
+                    f"成交执行时 `AggressorSide` 无效，为 {aggressor_side_str}",  # pragma: no cover
                 )
 
-            # Transient override: temporarily drag the opposite side to the trade price
+            # 瞬时覆盖：暂时将对侧拖向成交价格
             original_bid = self._core.bid_raw
             original_ask = self._core.ask_raw
 
@@ -4173,21 +4138,21 @@ cdef class OrderMatchingEngine:
 
     cpdef void process_bar(self, Bar bar):
         """
-        Process the exchanges market for the given bar.
+        处理给定 Bar 的交易所市场。
 
-        Market dynamics are simulated by auctioning open orders.
+        通过拍卖挂单来模拟市场动态。
 
         Parameters
         ----------
         bar : Bar
-            The bar to process.
+            要处理的 Bar。
 
         Raises
         ------
         RuntimeError
-            If a price precision does not match the instrument for the matching engine.
+            如果价格精度与撮合引擎的工具不匹配。
         RuntimeError
-            If a size precision does not match the instrument for the matching engine.
+            如果大小精度与撮合引擎的工具不匹配。
 
         """
         Condition.not_none(bar, "bar")
@@ -4196,32 +4161,32 @@ cdef class OrderMatchingEngine:
             return
 
         if self.book_type != BookType.L1_MBP:
-            return  # Can only process an L1 book with bars
+            return  # 只能通过 Bar 处理 L1 订单簿
 
         cdef BarType bar_type = bar.bar_type
         if bar_type.aggregation_source == AggregationSource.INTERNAL:
-            return  # Do not process internally aggregated bars
+            return  # 不处理内部聚合的 Bar
 
-        # Validate precisions
+        # 验证精度
         if bar._mem.open.precision != self._price_prec:
             raise RuntimeError(
-                f"invalid {bar.open.precision=} did not match instrument.price_precision={self._price_prec}",
+                f"无效的 {bar.open.precision=}，与 instrument.price_precision={self._price_prec} 不匹配",
             )
         if bar._mem.high.precision != self._price_prec:
             raise RuntimeError(
-                f"invalid {bar.high.precision=} did not match instrument.price_precision={self._price_prec}",
+                f"无效的 {bar.high.precision=}，与 instrument.price_precision={self._price_prec} 不匹配",
             )
         if bar._mem.low.precision != self._price_prec:
             raise RuntimeError(
-                f"invalid {bar.low.precision=} did not match instrument.price_precision={self._price_prec}",
+                f"无效的 {bar.low.precision=}，与 instrument.price_precision={self._price_prec} 不匹配",
             )
         if bar._mem.close.precision != self._price_prec:
             raise RuntimeError(
-                f"invalid {bar.close.precision=} did not match instrument.price_precision={self._price_prec}",
+                f"无效的 {bar.close.precision=}，与 instrument.price_precision={self._price_prec} 不匹配",
             )
         if bar._mem.volume.precision != self._size_prec:
             raise RuntimeError(
-                f"invalid {bar.volume.precision=} did not match instrument.size_precision={self._size_prec}",
+                f"无效的 {bar.volume.precision=}，与 instrument.size_precision={self._size_prec} 不匹配",
             )
 
         cdef InstrumentId instrument_id = bar_type.instrument_id
@@ -4245,7 +4210,7 @@ cdef class OrderMatchingEngine:
                 return
 
         if is_logging_initialized():
-            self._log.debug(f"Processing {bar!r}")
+            self._log.debug(f"正在处理 {bar!r}")
 
         cdef PriceType price_type = bar_type.spec.price_type
         if price_type == PriceType.LAST or price_type == PriceType.MID:
@@ -4257,18 +4222,18 @@ cdef class OrderMatchingEngine:
             self._last_ask_bar = bar
             self._process_quote_ticks_from_bar()
         else:
-            raise RuntimeError(  # pragma: no cover (design-time error)
-                f"invalid `PriceType`, was {price_type}",  # pragma: no cover
+            raise RuntimeError(  # pragma: no cover (设计时错误)
+                f"无效的 `PriceType`，为 {price_type}",  # pragma: no cover
             )
 
     cpdef void process_status(self, MarketStatusAction status):
         """
-        Process the exchange status.
+        处理交易所状态。
 
         Parameters
         ----------
         status : MarketStatusAction
-            The status action to process.
+            要处理的状态动作。
 
         """
         if (self.market_status, status) == (MarketStatus.CLOSED, MarketStatusAction.TRADING):
@@ -4278,16 +4243,16 @@ cdef class OrderMatchingEngine:
 
     cpdef void process_instrument_close(self, InstrumentClose close):
         """
-        Process the instrument close.
+        处理工具收盘。
 
         Parameters
         ----------
         close : InstrumentClose
-            The close price to process.
+            要处理的收盘价格。
 
         """
         if close.instrument_id != self.instrument.id:
-            self._log.warning(f"Received instrument close for unknown instrument_id: {close.instrument_id}")
+            self._log.warning(f"接收到未知 instrument_id 的工具收盘： {close.instrument_id}")
             return
 
         if close.close_type == InstrumentCloseType.CONTRACT_EXPIRED:
@@ -4306,10 +4271,10 @@ cdef class OrderMatchingEngine:
         cdef Quantity size = Quantity.from_raw_c(quarter_raw, bar._mem.volume.precision)
         cdef Quantity close_size = Quantity.from_raw_c(close_raw, bar._mem.volume.precision)
 
-        # Create base tick template
+        # 创建基础成交 Tick 模板
         cdef TradeTick tick = self._create_base_trade_tick(bar, size)
 
-        # Process each price point
+        # 为每个价位进行处理
         cdef bint process_high_first = (
             not self._bar_adaptive_high_low_ordering
             or abs(bar._mem.high.raw - bar._mem.open.raw) < abs(bar._mem.low.raw - bar._mem.open.raw)
@@ -4325,7 +4290,7 @@ cdef class OrderMatchingEngine:
 
         self._process_trade_bar_close(bar, tick, close_size)
 
-        # Reset flag after bar processing for correct inter-bar behavior
+        # Bar 处理后重置标志，以确保 Bar 间的行为正确
         self._fill_at_market = True
 
     cdef TradeTick _create_base_trade_tick(self, Bar bar, Quantity size):
@@ -4342,9 +4307,9 @@ cdef class OrderMatchingEngine:
     cdef void _process_trade_bar_open(self, Bar bar, TradeTick tick):
         if not self._core.is_last_initialized or bar._mem.open.raw != self._core.last_raw:
             if is_logging_initialized():
-                self._log.debug(f"Updating with open {bar.open}")
+                self._log.debug(f"正在使用开盘价 {bar.open} 更新")
 
-            self._fill_at_market = True  # Gap from previous bar
+            self._fill_at_market = True  # 与上一根 Bar 之间存在缺口
             self._book.update_trade_tick(tick)
             self.iterate(tick.ts_init)
             self._core.set_last_raw(bar._mem.open.raw)
@@ -4352,9 +4317,9 @@ cdef class OrderMatchingEngine:
     cdef void _process_trade_bar_high(self, Bar bar, TradeTick tick):
         if bar._mem.high.raw > self._core.last_raw:
             if is_logging_initialized():
-                self._log.debug(f"Updating with high {bar.high}")
+                self._log.debug(f"正在使用最高价 {bar.high} 更新")
 
-            self._fill_at_market = False  # Market moving through prices
+            self._fill_at_market = False  # 市场价格移动穿过
             tick._mem.price = bar._mem.high
             tick._mem.aggressor_side = AggressorSide.BUYER
             tick._mem.trade_id = trade_id_new(pystr_to_cstr(self._generate_trade_id_str()))
@@ -4365,9 +4330,9 @@ cdef class OrderMatchingEngine:
     cdef void _process_trade_bar_low(self, Bar bar, TradeTick tick):
         if bar._mem.low.raw < self._core.last_raw:
             if is_logging_initialized():
-                self._log.debug(f"Updating with low {bar.low}")
+                self._log.debug(f"正在使用最低价 {bar.low} 更新")
 
-            self._fill_at_market = False  # Market moving through prices
+            self._fill_at_market = False  # 市场价格移动穿过
             tick._mem.price = bar._mem.low
             tick._mem.aggressor_side = AggressorSide.SELLER
             tick._mem.trade_id = trade_id_new(pystr_to_cstr(self._generate_trade_id_str()))
@@ -4378,9 +4343,9 @@ cdef class OrderMatchingEngine:
     cdef void _process_trade_bar_close(self, Bar bar, TradeTick tick, Quantity close_size = None):
         if bar._mem.close.raw != self._core.last_raw:
             if is_logging_initialized():
-                self._log.debug(f"Updating with close {bar.close}")
+                self._log.debug(f"正在使用收盘价 {bar.close} 更新")
 
-            self._fill_at_market = False  # Market moving through prices
+            self._fill_at_market = False  # 市场价格移动穿过
             tick._mem.price = bar._mem.close
             if close_size is not None:
                 tick._mem.size = close_size._mem
@@ -4395,10 +4360,10 @@ cdef class OrderMatchingEngine:
 
     cdef void _process_quote_ticks_from_bar(self):
         if self._last_bid_bar is None or self._last_ask_bar is None:
-            return  # Wait for next bar
-
+            return  # 等待下一根 Bar
+ 
         if self._last_bid_bar.ts_init != self._last_ask_bar.ts_init:
-            return  # Wait for next bar
+            return  # 等待下一根 Bar
 
         cdef QuantityRaw min_size_raw = self.instrument.size_increment._mem.raw
         cdef QuantityRaw bid_quarter
@@ -4420,10 +4385,10 @@ cdef class OrderMatchingEngine:
         cdef Quantity bid_close_size = Quantity.from_raw_c(bid_close_raw, self._last_bid_bar._mem.volume.precision)
         cdef Quantity ask_close_size = Quantity.from_raw_c(ask_close_raw, self._last_ask_bar._mem.volume.precision)
 
-        # Create base tick template
+        # 创建基础报价 Tick 模板
         cdef QuoteTick tick = self._create_base_quote_tick(bid_size, ask_size)
-
-        # Process each price point
+ 
+        # 处理每个价位
         cdef bint process_high_first = (
             not self._bar_adaptive_high_low_ordering
             or abs(self._last_bid_bar._mem.high.raw - self._last_bid_bar._mem.open.raw) < abs(self._last_bid_bar._mem.low.raw - self._last_bid_bar._mem.open.raw)
@@ -4438,11 +4403,11 @@ cdef class OrderMatchingEngine:
             self._process_quote_bar_high(tick)
 
         self._process_quote_bar_close(tick, bid_close_size, ask_close_size)
-
+ 
         self._last_bid_bar = None
         self._last_ask_bar = None
-
-        # Reset flag after bar processing for correct inter-bar behavior
+ 
+        # Bar 处理后重置标志，以确保 Bar 间的行为正确
         self._fill_at_market = True
 
     cdef QuoteTick _create_base_quote_tick(self, Quantity bid_size, Quantity ask_size):
@@ -4457,26 +4422,26 @@ cdef class OrderMatchingEngine:
         )
 
     cdef void _process_quote_bar_open(self, QuoteTick tick):
-        self._fill_at_market = True  # Gap from previous bar
+        self._fill_at_market = True  # 与上一根 Bar 之间存在缺口
         self._book.update_quote_tick(tick)
         self.iterate(tick.ts_init)
 
     cdef void _process_quote_bar_high(self, QuoteTick tick):
-        self._fill_at_market = False  # Market moving through prices
+        self._fill_at_market = False  # 市场价格移动穿过
         tick._mem.bid_price = self._last_bid_bar._mem.high
         tick._mem.ask_price = self._last_ask_bar._mem.high
         self._book.update_quote_tick(tick)
         self.iterate(tick.ts_init)
 
     cdef void _process_quote_bar_low(self, QuoteTick tick):
-        self._fill_at_market = False  # Market moving through prices
+        self._fill_at_market = False  # 市场价格移动穿过
         tick._mem.bid_price = self._last_bid_bar._mem.low
         tick._mem.ask_price = self._last_ask_bar._mem.low
         self._book.update_quote_tick(tick)
         self.iterate(tick.ts_init)
 
     cdef void _process_quote_bar_close(self, QuoteTick tick, Quantity bid_close_size = None, Quantity ask_close_size = None):
-        self._fill_at_market = False  # Market moving through prices
+        self._fill_at_market = False  # 市场价格移动穿过
         tick._mem.bid_price = self._last_bid_bar._mem.close
         tick._mem.ask_price = self._last_ask_bar._mem.close
         if bid_close_size is not None:
@@ -4490,9 +4455,9 @@ cdef class OrderMatchingEngine:
 
     cpdef void process_order(self, Order order, AccountId account_id):
         if self._core.order_exists(order.client_order_id):
-            return  # Already processed
-
-        # Index identifiers
+            return  # 已经处理过
+ 
+        # 索引标识符
         self._account_ids[order.trader_id] = account_id
 
         cdef uint64_t now_ns
@@ -4502,15 +4467,15 @@ cdef class OrderMatchingEngine:
             if now_ns < self.instrument.activation_ns:
                 self._generate_order_rejected(
                     order,
-                    f"Contract {self.instrument.id} not yet active, "
-                    f"activation {format_iso8601(unix_nanos_to_dt(self.instrument.activation_ns))}"
+                    f"合约 {self.instrument.id} 尚未激活，"
+                    f"激活时间为 {format_iso8601(unix_nanos_to_dt(self.instrument.activation_ns))}"
                 )
                 return
             elif now_ns > self.instrument.expiration_ns:
                 self._generate_order_rejected(
                     order,
-                    f"Contract {self.instrument.id} has expired, "
-                    f"expiration {format_iso8601(unix_nanos_to_dt(self.instrument.expiration_ns))}"
+                    f"合约 {self.instrument.id} 已过期，"
+                    f"过期时间为 {format_iso8601(unix_nanos_to_dt(self.instrument.expiration_ns))}"
                 )
                 return
 
@@ -4521,85 +4486,85 @@ cdef class OrderMatchingEngine:
             OrderStatus parent_status
         if self._support_contingent_orders and order.parent_order_id is not None:
             parent = self.cache.order(order.parent_order_id)
-            assert parent is not None and parent.contingency_type == ContingencyType.OTO, "OTO parent not found"
+            assert parent is not None and parent.contingency_type == ContingencyType.OTO, "未找到 OTO 父订单"
 
             parent_status = parent.status_c()
 
             if parent_status == OrderStatus.REJECTED and order.is_open_c():
-                self._generate_order_rejected(order, f"REJECT OTO from {parent.client_order_id}")
-                return  # Order rejected
+                self._generate_order_rejected(order, f"拒绝来自 {parent.client_order_id} 的 OTO")
+                return  # 订单被拒绝
             elif (
                 parent_status == OrderStatus.ACCEPTED
                 or parent_status == OrderStatus.TRIGGERED
                 or (self._oto_full_trigger and parent_status == OrderStatus.PARTIALLY_FILLED)
             ):
-                self._log.info(f"Pending OTO {order.client_order_id} triggers from {parent.client_order_id}")
-                return  # Pending trigger
-
+                self._log.info(f"等待来自 {parent.client_order_id} 触发的待定 OTO {order.client_order_id}")
+                return  # 等待触发
+ 
             if order.linked_order_ids is not None:
-                # Check contingent orders are still open
+                # 检查条件订单是否仍然打开
                 for client_order_id in order.linked_order_ids or []:
                     contingent_order = self.cache.order(client_order_id)
-
+ 
                     if contingent_order is None:
-                        raise RuntimeError(f"Cannot find contingent order for {client_order_id!r}")  # pragma: no cover
-
+                        raise RuntimeError(f"找不到 {client_order_id!r} 的条件订单")  # pragma: no cover
+ 
                     if order.contingency_type == ContingencyType.OCO or order.contingency_type == ContingencyType.OUO:
                         if not order.is_closed_c() and contingent_order.is_closed_c():
-                            self._generate_order_rejected(order, f"Contingent order {client_order_id} already closed")
-                            return  # Order rejected
+                            self._generate_order_rejected(order, f"条件订单 {client_order_id} 已经关闭")
+                            return  # 订单被拒绝
 
-        # Check order quantity precision (must be <= instrument precision)
+        # 检查订单数量精度（必须 <= 工具精度）
         if order.quantity._mem.precision > self._size_prec:
             self._generate_order_rejected(
                 order,
-                f"Invalid size precision for order {order.client_order_id}, "
-                f"was {order.quantity.precision} "
-                f"when {self.instrument.id} size precision is {self._size_prec}"
+                f"订单 {order.client_order_id} 的数量精度无效，"
+                f"精度为 {order.quantity.precision} "
+                f"而 {self.instrument.id} 的数量精度为 {self._size_prec}"
             )
-            return  # Invalid order
-
+            return  # 无效订单
+ 
         cdef Price price
         if order.has_price_c():
-            # Check order price precision (must be <= instrument precision)
+            # 检查订单价格精度（必须 <= 工具精度）
             price = order.price
-
+ 
             if price._mem.precision > self._price_prec:
                 self._generate_order_rejected(
                     order,
-                    f"Invalid price precision for order {order.client_order_id}, "
-                    f"was {price.precision} "
-                    f"when {self.instrument.id} price precision is {self._price_prec}"
+                    f"订单 {order.client_order_id} 的价格精度无效，"
+                    f"精度为 {price.precision} "
+                    f"而 {self.instrument.id} 的价格精度为 {self._price_prec}"
                 )
-                return  # Invalid order
+                return  # 无效订单
 
         cdef Price trigger_price
         if order.has_trigger_price_c():
-            # Check order trigger price precision (must be <= instrument precision)
+            # 检查订单触发价格精度（必须 <= 工具精度）
             trigger_price = order.trigger_price
-
+ 
             if trigger_price._mem.precision > self._price_prec:
                 self._generate_order_rejected(
                     order,
-                    f"Invalid trigger price precision for order {order.client_order_id}, "
-                    f"was {trigger_price.precision} "
-                    f"when {self.instrument.id} price precision is {self._price_prec}"
+                    f"订单 {order.client_order_id} 的触发价格精度无效，"
+                    f"精度为 {trigger_price.precision} "
+                    f"而 {self.instrument.id} 的价格精度为 {self._price_prec}"
                 )
-                return  # Invalid order
-
+                return  # 无效订单
+ 
         cdef Price activation_price
         if order.has_activation_price_c():
-            # Check order activation price precision (must be <= instrument precision)
+            # 检查订单激活价格精度（必须 <= 工具精度）
             activation_price = order.activation_price
-
+ 
             if activation_price._mem.precision > self._price_prec:
                 self._generate_order_rejected(
                     order,
-                    f"Invalid activation price precision for order {order.client_order_id}, "
-                    f"was {activation_price.precision} "
-                    f"when {self.instrument.id} price precision is {self._price_prec}"
+                    f"订单 {order.client_order_id} 的激活价格精度无效，"
+                    f"精度为 {activation_price.precision} "
+                    f"而 {self.instrument.id} 的价格精度为 {self._price_prec}"
                 )
-                return  # Invalid order
+                return  # 无效订单
 
         cdef Position position = self.cache.position_for_order(order.client_order_id)
 
@@ -4607,8 +4572,8 @@ cdef class OrderMatchingEngine:
         if position is None and self.oms_type == OmsType.NETTING:
             position_id = PositionId(f"{order.instrument_id}-{order.strategy_id}")
             position = self.cache.position(position_id)
-
-        # Check not shorting an equity without a MARGIN account
+ 
+        # 检查是否在非保证金账户中卖空股票
         if (
             order.side == OrderSide.SELL
             and self.account_type != AccountType.MARGIN
@@ -4617,11 +4582,11 @@ cdef class OrderMatchingEngine:
         ):
             self._generate_order_rejected(
                 order,
-                f"SHORT SELLING not permitted on a CASH account with position {position} and order {order!r}"
+                f"现金账户不允许卖空，持有头寸为 {position}，订单为 {order!r}"
             )
-            return  # Cannot short sell
-
-        # Check reduce-only instruction
+            return  # 无法卖空
+ 
+        # 检查只减仓指令
         if self._use_reduce_only and order.is_reduce_only and not order.is_closed_c():
             if (
                 not position
@@ -4631,10 +4596,10 @@ cdef class OrderMatchingEngine:
             ):
                 self._generate_order_rejected(
                     order,
-                    f"REDUCE_ONLY {order.type_string_c()} {order.side_string_c()} order "
-                    f"would have increased position",
+                    f"只减仓 (REDUCE_ONLY) {order.type_string_c()} {order.side_string_c()} 订单"
+                    f"会导致仓位增加",
                 )
-                return  # Reduce only
+                return  # 只减仓限制
 
         if order.order_type == OrderType.MARKET:
             self._process_market_order(order)
@@ -4656,9 +4621,9 @@ cdef class OrderMatchingEngine:
         ):
             self._process_trailing_stop_order(order)
         else:
-            raise RuntimeError(  # pragma: no cover (design-time error)
+            raise RuntimeError(  # pragma: no cover (设计时错误)
                 f"{order_type_to_str(order.order_type)} "  # pragma: no cover
-                f"orders are not supported for backtesting in this version",  # pragma: no cover
+                f"订单在当前版本的运行中不支持回测",  # pragma: no cover
             )
 
     cpdef void process_modify(self, ModifyOrder command, AccountId account_id):
@@ -4671,7 +4636,7 @@ cdef class OrderMatchingEngine:
                 instrument_id=command.instrument_id,
                 client_order_id=command.client_order_id,
                 venue_order_id=command.venue_order_id,
-                reason=f"{command.client_order_id!r} not found",
+                reason=f"找不到 {command.client_order_id!r}",
             )
         else:
             self.update_order(
@@ -4691,7 +4656,7 @@ cdef class OrderMatchingEngine:
                 instrument_id=command.instrument_id,
                 client_order_id=command.client_order_id,
                 venue_order_id=command.venue_order_id,
-                reason=f"{command.client_order_id!r} not found",
+                reason=f"找不到 {command.client_order_id!r}",
             )
         else:
             if order.is_inflight_c() or order.is_open_c():
@@ -4712,77 +4677,77 @@ cdef class OrderMatchingEngine:
                 self.cancel_order(order)
 
     cdef void _process_market_order(self, MarketOrder order):
-        # Check AT_THE_OPEN/AT_THE_CLOSE time in force
+        # 检查 AT_THE_OPEN/AT_THE_CLOSE 生效时间
         if order.time_in_force == TimeInForce.AT_THE_OPEN or order.time_in_force == TimeInForce.AT_THE_CLOSE:
             self._generate_order_rejected(
                 order,
-                f"time in force {time_in_force_to_str(order.time_in_force)} "
-                "is not currently supported",
+                f"生效时间 {time_in_force_to_str(order.time_in_force)} "
+                "目前不支持",
             )
             return
-
-        # Check market exists
+ 
+        # 检查市场是否存在
         if order.side == OrderSide.BUY and not self._core.is_ask_initialized:
-            self._generate_order_rejected(order, f"no market for {order.instrument_id}")
-            return  # Cannot accept order
+            self._generate_order_rejected(order, f"{order.instrument_id} 没有行情")
+            return  # 无法接受订单
         elif order.side == OrderSide.SELL and not self._core.is_bid_initialized:
-            self._generate_order_rejected(order, f"no market for {order.instrument_id}")
-            return  # Cannot accept order
-
+            self._generate_order_rejected(order, f"{order.instrument_id} 没有行情")
+            return  # 无法接受订单
+ 
         if self._use_market_order_acks:
             self._generate_order_accepted(order, venue_order_id=self._get_venue_order_id(order))
-
-        # Immediately fill marketable order
+ 
+        # 立即成交市价单
         self.fill_market_order(order)
 
     cdef void _process_market_to_limit_order(self, MarketToLimitOrder order):
-        # Check market exists
+        # 检查市场是否存在
         if order.side == OrderSide.BUY and not self._core.is_ask_initialized:
-            self._generate_order_rejected(order, f"no market for {order.instrument_id}")
-            return  # Cannot accept order
+            self._generate_order_rejected(order, f"{order.instrument_id} 没有行情")
+            return  # 无法接受订单
         elif order.side == OrderSide.SELL and not self._core.is_bid_initialized:
-            self._generate_order_rejected(order, f"no market for {order.instrument_id}")
-            return  # Cannot accept order
-
+            self._generate_order_rejected(order, f"{order.instrument_id} 没有行情")
+            return  # 无法接受订单
+ 
         if self._use_market_order_acks:
             self._generate_order_accepted(order, venue_order_id=self._get_venue_order_id(order))
-
-        # Immediately fill marketable order
+ 
+        # 立即成交市价单
         self.fill_market_order(order)
-
+ 
         if order.is_open_c():
             self.accept_order(order)
 
     cdef void _process_limit_order(self, LimitOrder order):
-        # Check AT_THE_OPEN/AT_THE_CLOSE time in force
+        # 检查 AT_THE_OPEN/AT_THE_CLOSE 生效时间
         if order.time_in_force == TimeInForce.AT_THE_OPEN or order.time_in_force == TimeInForce.AT_THE_CLOSE:
             self._generate_order_rejected(
                 order,
-                f"time in force {time_in_force_to_str(order.time_in_force)} "
-                "is not currently supported",
+                f"生效时间 {time_in_force_to_str(order.time_in_force)} "
+                "目前不支持",
             )
             return
-
+ 
         if order.is_post_only and self._core.is_limit_matched(order.side, order.price):
             self._generate_order_rejected(
                 order,
-                f"POST_ONLY {order.type_string_c()} {order.side_string_c()} order "
-                f"limit px of {order.price} would have been a TAKER: "
-                f"bid={self._core.bid}, "
-                f"ask={self._core.ask}",
-                True,  # due_post_only
+                f"被动委托 (POST_ONLY) {order.type_string_c()} {order.side_string_c()} 订单"
+                f"限制价格 {order.price} 会导致其成为 TAKER： "
+                f"买入价={self._core.bid}, "
+                f"卖出价={self._core.ask}",
+                True,  # 由于被动委托限制
             )
-            return  # Invalid price
-
-        # Order is valid and accepted
+            return  # 无效价格
+ 
+        # 订单有效并接受
         self.accept_order(order)
-
-        # Check for immediate fill
+ 
+        # 检查是否立即成交
         if self._core.is_limit_matched(order.side, order.price):
-            # Filling as liquidity taker
+            # 作为流动性提取者 (TAKER) 成交
             if order.liquidity_side == LiquiditySide.NO_LIQUIDITY_SIDE:
                 order.liquidity_side = LiquiditySide.TAKER
-
+ 
             self.fill_limit_order(order)
         elif order.time_in_force == TimeInForce.FOK or order.time_in_force == TimeInForce.IOC:
             self.cancel_order(order)
@@ -4792,17 +4757,17 @@ cdef class OrderMatchingEngine:
             if self._reject_stop_orders:
                 self._generate_order_rejected(
                     order,
-                    f"{order.type_string_c()} {order.side_string_c()} order "
-                    f"stop px of {order.trigger_price} was in the market: "
-                    f"bid={self._core.bid}, "
-                    f"ask={self._core.ask}",
+                    f"{order.type_string_c()} {order.side_string_c()} 订单"
+                    f"止损价 {order.trigger_price} 已处于市场中： "
+                    f"买入价={self._core.bid}, "
+                    f"卖出价={self._core.ask}",
                 )
-                return  # Invalid price
-
+                return  # 无效价格
+ 
             self.fill_market_order(order)
             return
-
-        # Order is valid and accepted
+ 
+        # 订单有效并接受
         self.accept_order(order)
 
     cdef void _process_stop_limit_order(self, StopLimitOrder order):
@@ -4810,24 +4775,24 @@ cdef class OrderMatchingEngine:
             if self._reject_stop_orders:
                 self._generate_order_rejected(
                     order,
-                    f"{order.type_string_c()} {order.side_string_c()} order "
-                    f"trigger stop px of {order.trigger_price} was in the market: "
-                    f"bid={self._core.bid}, "
-                    f"ask={self._core.ask}",
+                    f"{order.type_string_c()} {order.side_string_c()} 订单"
+                    f"触发止损价 {order.trigger_price} 已处于市场中： "
+                    f"买入价={self._core.bid}, "
+                    f"卖出价={self._core.ask}",
                 )
-                return  # Invalid price
-
+                return  # 无效价格
+ 
             self.accept_order(order)
             self._generate_order_triggered(order)
-
-            # Check if immediately marketable
+ 
+            # 检查是否立即符合成交条件
             if self._core.is_limit_matched(order.side, order.price):
                 order.liquidity_side = LiquiditySide.TAKER
                 self.fill_limit_order(order)
-
+ 
             return
-
-        # Order is valid and accepted
+ 
+        # 订单有效并接受
         self.accept_order(order)
 
     cdef void _process_market_if_touched_order(self, MarketIfTouchedOrder order):
@@ -4835,17 +4800,17 @@ cdef class OrderMatchingEngine:
             if self._reject_stop_orders:
                 self._generate_order_rejected(
                     order,
-                    f"{order.type_string_c()} {order.side_string_c()} order "
-                    f"stop px of {order.trigger_price} was in the market: "
-                    f"bid={self._core.bid}, "
-                    f"ask={self._core.ask}",
+                    f"{order.type_string_c()} {order.side_string_c()} 订单"
+                    f"止损价 {order.trigger_price} 已处于市场中： "
+                    f"买入价={self._core.bid}, "
+                    f"卖出价={self._core.ask}",
                 )
-                return  # Invalid price
-
+                return  # 无效价格
+ 
             self.fill_market_order(order)
             return
-
-        # Order is valid and accepted
+ 
+        # 订单有效并接受
         self.accept_order(order)
 
     cdef void _process_limit_if_touched_order(self, LimitIfTouchedOrder order):
@@ -4853,24 +4818,24 @@ cdef class OrderMatchingEngine:
             if self._reject_stop_orders:
                 self._generate_order_rejected(
                     order,
-                    f"{order.type_string_c()} {order.side_string_c()} order "
-                    f"trigger stop px of {order.trigger_price} was in the market: "
-                    f"bid={self._core.bid}, "
-                    f"ask={self._core.ask}",
+                    f"{order.type_string_c()} {order.side_string_c()} 订单"
+                    f"触发止损价 {order.trigger_price} 已处于市场中： "
+                    f"买入价={self._core.bid}, "
+                    f"卖出价={self._core.ask}",
                 )
-                return  # Invalid price
-
+                return  # 无效价格
+ 
             self.accept_order(order)
             self._generate_order_triggered(order)
-
-            # Check if immediately marketable
+ 
+            # 检查是否立即符合成交条件
             if self._core.is_limit_matched(order.side, order.price):
                 order.liquidity_side = LiquiditySide.TAKER
                 self.fill_limit_order(order)
-
+ 
             return
-
-        # Order is valid and accepted
+ 
+        # 订单有效并接受
         self.accept_order(order)
 
     cdef void _process_trailing_stop_order(self, Order order):
@@ -4879,49 +4844,49 @@ cdef class OrderMatchingEngine:
 
         cdef Price market_price = None
         if order.activation_price is None:
-            # If activation price is not given,
-            # set the activation price to the last price, and activate order
+            # 如果未给出激活价格，
+            # 将激活价格设置为最新价格，并激活订单
             market_price = self._core.ask if order.side == OrderSide.BUY else self._core.bid
-
+ 
             if market_price is None:
-                # If there is no market price, we cannot process the order
-                raise RuntimeError(  # pragma: no cover (design-time error)
-                    f"cannot process trailing stop, "
-                    f"no BID or ASK price for {order.instrument_id} "
-                    f"(add quotes or use bars)",
+                # 如果没有市场价格，我们无法处理订单
+                raise RuntimeError(  # pragma: no cover (设计时错误)
+                    f"无法处理追踪止损，"
+                    f"没有 {order.instrument_id} 的买入价或卖出价 "
+                    f"（请添加报价或使用 Bar）",
                 )
-
+ 
             order.set_activated_c(market_price)
         else:
-            # If activation price is given,
-            # the activation price should not be in the market, like if_touched orders.
+            # 如果给出了激活价格，
+            # 激活价格不应已经处于市场中，类似于触达触发订单。
             if self._core.is_touch_triggered(order.side, order.activation_price):
-                # NOTE: need to apply 'reject_stop_orders' to activation price?
+                # 注意：是否需要对激活价格应用 'reject_stop_orders'？
                 if self._reject_stop_orders:
                     self._generate_order_rejected(
                         order,
-                        f"{order.type_string_c()} {order.side_string_c()} order "
-                        f"activation px of {order.activation_price} was in the market: "
-                        f"bid={self._core.bid}, "
-                        f"ask={self._core.ask}",
+                        f"{order.type_string_c()} {order.side_string_c()} 订单"
+                        f"激活价 {order.activation_price} 已处于市场中： "
+                        f"买入价={self._core.bid}, "
+                        f"卖出价={self._core.ask}",
                     )
-                    return  # Invalid price
-
-                # if we cannot reject the order, we activate it
+                    return  # 无效价格
+ 
+                # 如果我们不能拒绝订单，就激活它
                 order.set_activated_c(None)
 
         if order.is_activated:
             if order.has_trigger_price_c() and self._core.is_stop_triggered(order.side, order.trigger_price):
                 self._generate_order_rejected(
                     order,
-                    f"{order.type_string_c()} {order.side_string_c()} order "
-                    f"trigger stop px of {order.trigger_price} was in the market: "
-                    f"bid={self._core.bid}, "
-                    f"ask={self._core.ask}",
+                    f"{order.type_string_c()} {order.side_string_c()} 订单"
+                    f"触发止损价 {order.trigger_price} 已处于市场中： "
+                    f"买入价={self._core.bid}, "
+                    f"卖出价={self._core.ask}",
                 )
-                return  # Invalid price
-
-        # Order is valid and accepted
+                return  # 无效价格
+ 
+        # 订单有效并接受
         self.accept_order(order)
 
     cdef void _update_limit_order(
@@ -4939,17 +4904,17 @@ cdef class OrderMatchingEngine:
                     instrument_id=order.instrument_id,
                     client_order_id=order.client_order_id,
                     venue_order_id=order.venue_order_id,
-                    reason=f"POST_ONLY {order.type_string_c()} {order.side_string_c()} order "
-                    f"new limit px of {price} would have been a TAKER: "
-                    f"bid={self._core.bid}, "
-                    f"ask={self._core.ask}",
+                    reason=f"被动委托 (POST_ONLY) {order.type_string_c()} {order.side_string_c()} 订单"
+                    f"新的限制价格 {price} 会导致其成为 TAKER： "
+                    f"买入价={self._core.bid}, "
+                    f"卖出价={self._core.ask}",
                 )
-                return  # Cannot update order
-
+                return  # 无法更新订单
+ 
             self._generate_order_updated(order, qty, price, None)
             order.liquidity_side = LiquiditySide.TAKER
-            self.fill_limit_order(order)  # Immediate fill as TAKER
-            return  # Filled
+            self.fill_limit_order(order)  # 立即作为 TAKER 成交
+            return  # 已成交
 
         self._generate_order_updated(order, qty, price, None)
 
@@ -4967,12 +4932,12 @@ cdef class OrderMatchingEngine:
                 instrument_id=order.instrument_id,
                 client_order_id=order.client_order_id,
                 venue_order_id=order.venue_order_id,
-                reason=f"{order.type_string_c()} {order.side_string_c()} order "
-                f"new stop px of {trigger_price} was in the market: "
-                f"bid={self._core.bid}, "
-                f"ask={self._core.ask}",
+                reason=f"{order.type_string_c()} {order.side_string_c()} 订单"
+                f"新的止损价 {trigger_price} 已处于市场中： "
+                f"买入价={self._core.bid}, "
+                f"卖出价={self._core.ask}",
             )
-            return  # Cannot update order
+            return  # 无法更新订单
 
         self._generate_order_updated(order, qty, None, trigger_price)
 
@@ -4984,7 +4949,7 @@ cdef class OrderMatchingEngine:
         Price trigger_price,
     ):
         if not order.is_triggered:
-            # Updating stop price
+            # 更新止损价
             if self._core.is_stop_triggered(order.side, trigger_price):
                 self._generate_order_modify_rejected(
                     trader_id=order.trader_id,
@@ -4993,14 +4958,14 @@ cdef class OrderMatchingEngine:
                     instrument_id=order.instrument_id,
                     client_order_id=order.client_order_id,
                     venue_order_id=order.venue_order_id,
-                    reason=f"{order.type_string_c()} {order.side_string_c()} order "
-                    f"new trigger stop px of {trigger_price} was in the market: "
-                    f"bid={self._core.bid}, "
-                    f"ask={self._core.ask}",
+                    reason=f"{order.type_string_c()} {order.side_string_c()} 订单"
+                    f"新的触发止损价 {trigger_price} 已处于市场中： "
+                    f"买入价={self._core.bid}, "
+                    f"卖出价={self._core.ask}",
                 )
-                return  # Cannot update order
+                return  # 无法更新订单
         else:
-            # Updating limit price
+            # 更新限制价格
             if self._core.is_limit_matched(order.side, price):
                 if order.is_post_only:
                     self._generate_order_modify_rejected(
@@ -5010,17 +4975,17 @@ cdef class OrderMatchingEngine:
                         instrument_id=order.instrument_id,
                         client_order_id=order.client_order_id,
                         venue_order_id=order.venue_order_id,
-                        reason=f"POST_ONLY {order.type_string_c()} {order.side_string_c()} order  "
-                        f"new limit px of {price} would have been a TAKER: "
-                        f"bid={self._core.bid}, "
-                        f"ask={self._core.ask}",
+                        reason=f"被动委托 (POST_ONLY) {order.type_string_c()} {order.side_string_c()} 订单  "
+                        f"新的限制价格 {price} 会导致其成为 TAKER： "
+                        f"买入价={self._core.bid}, "
+                        f"卖出价={self._core.ask}",
                     )
-                    return  # Cannot update order
+                    return  # 无法更新订单
                 else:
                     self._generate_order_updated(order, qty, price, trigger_price or order.trigger_price)
                     order.liquidity_side = LiquiditySide.TAKER
-                    self.fill_limit_order(order)  # Immediate fill as TAKER
-                    return  # Filled
+                    self.fill_limit_order(order)  # 立即作为 TAKER 成交
+                    return  # 已成交
 
         self._generate_order_updated(order, qty, price, trigger_price or order.trigger_price)
 
@@ -5038,12 +5003,12 @@ cdef class OrderMatchingEngine:
                 instrument_id=order.instrument_id,
                 client_order_id=order.client_order_id,
                 venue_order_id=order.venue_order_id,
-                reason=f"{order.type_string_c()} {order.side_string_c()} order "
-                       f"new stop px of {trigger_price} was in the market: "
-                       f"bid={self._core.bid}, "
-                       f"ask={self._core.ask}",
+                reason=f"{order.type_string_c()} {order.side_string_c()} 订单"
+                       f"新的止损价 {trigger_price} 已处于市场中： "
+                       f"买入价={self._core.bid}, "
+                       f"卖出价={self._core.ask}",
             )
-            return  # Cannot update order
+            return  # 无法更新订单
 
         self._generate_order_updated(order, qty, None, trigger_price)
 
@@ -5055,7 +5020,7 @@ cdef class OrderMatchingEngine:
         Price trigger_price,
     ):
         if not order.is_triggered:
-            # Updating stop price
+            # 更新止损价
             if self._core.is_touch_triggered(order.side, trigger_price):
                 self._generate_order_modify_rejected(
                     trader_id=order.trader_id,
@@ -5064,14 +5029,14 @@ cdef class OrderMatchingEngine:
                     instrument_id=order.instrument_id,
                     client_order_id=order.client_order_id,
                     venue_order_id=order.venue_order_id,
-                    reason=f"{order.type_string_c()} {order.side_string_c()} order "
-                           f"new trigger stop px of {trigger_price} was in the market: "
-                           f"bid={self._core.bid}, "
-                           f"ask={self._core.ask}",
+                    reason=f"{order.type_string_c()} {order.side_string_c()} 订单"
+                           f"新的触发止损价 {trigger_price} 已处于市场中： "
+                           f"买入价={self._core.bid}, "
+                           f"卖出价={self._core.ask}",
                 )
-                return  # Cannot update order
+                return  # 无法更新订单
         else:
-            # Updating limit price
+            # 更新限制价格
             if self._core.is_limit_matched(order.side, price):
                 if order.is_post_only:
                     self._generate_order_modify_rejected(
@@ -5081,17 +5046,17 @@ cdef class OrderMatchingEngine:
                         instrument_id=order.instrument_id,
                         client_order_id=order.client_order_id,
                         venue_order_id=order.venue_order_id,
-                        reason=f"POST_ONLY {order.type_string_c()} {order.side_string_c()} order  "
-                               f"new limit px of {price} would have been a TAKER: "
-                               f"bid={self._core.bid}, "
-                               f"ask={self._core.ask}",
+                        reason=f"被动委托 (POST_ONLY) {order.type_string_c()} {order.side_string_c()} 订单  "
+                               f"新的限制价格 {price} 会导致其成为 TAKER： "
+                               f"买入价={self._core.bid}, "
+                               f"卖出价={self._core.ask}",
                     )
-                    return  # Cannot update order
+                    return  # 无法更新订单
                 else:
                     self._generate_order_updated(order, qty, price, trigger_price or order.trigger_price)
                     order.liquidity_side = LiquiditySide.TAKER
-                    self.fill_limit_order(order)  # Immediate fill as TAKER
-                    return  # Filled
+                    self.fill_limit_order(order)  # 立即作为 TAKER 成交
+                    return  # 已成交
 
         self._generate_order_updated(order, qty, price, trigger_price or order.trigger_price)
 
@@ -5102,11 +5067,11 @@ cdef class OrderMatchingEngine:
         Price trigger_price,
     ):
         if order.is_activated:
-            # Activated trailing-stop may not yet have a trigger_price;
-            # await next market update to calculate it
+            # 已激活的追踪止损可能还没有 trigger_price；
+            # 等待下一次市场更新来计算它
             if trigger_price is None:
                 return
-
+ 
             self._update_stop_market_order(order, qty, trigger_price)
         elif qty or trigger_price:
             self._generate_order_updated(order, qty, None, trigger_price)
@@ -5119,11 +5084,11 @@ cdef class OrderMatchingEngine:
         Price trigger_price,
     ):
         if order.is_activated:
-            # Activated trailing-stop may not yet have a trigger_price;
-            # await next market update to calculate it
+            # 已激活的追踪止损可能还没有 trigger_price；
+            # 等待下一次市场更新来计算它
             if trigger_price is None:
                 return
-
+ 
             self._update_stop_limit_order(order, qty, price, trigger_price)
         elif qty or trigger_price:
             self._generate_order_updated(order, qty, price, trigger_price)
@@ -5133,24 +5098,24 @@ cdef class OrderMatchingEngine:
 
         if not order.is_activated:
             if order.activation_price is None:
-                # NOTE
-                # The activation price should have been set in OrderMatchingEngine._process_trailing_stop_order()
-                # However, the implementation of the emulator bypass this step, and directly call this method through match_order().
+                # 注意
+                # 激活价格本应在 OrderMatchingEngine._process_trailing_stop_order() 中设置
+                # 但是模拟器的实现绕过了这一步，而是在 match_order() 中直接调用此方法。
                 market_price = self._core.ask if order.side == OrderSide.BUY else self._core.bid
-
+ 
                 if market_price is None:
-                    # If there is no market price, we cannot process the order
-                    raise RuntimeError(  # pragma: no cover (design-time error)
-                        f"cannot process trailing stop, "
-                        f"no BID or ASK price for {order.instrument_id} "
-                        f"(add quotes or use bars)",
+                    # 如果没有市场价格，我们无法处理订单
+                    raise RuntimeError(  # pragma: no cover (设计时错误)
+                        f"无法处理追踪止损，"
+                        f"没有 {order.instrument_id} 的买入价或卖出价 "
+                        f"（请添加报价或使用 Bar）",
                     )
-
+ 
                 order.set_activated_c(market_price)
             elif self._core.is_touch_triggered(order.side, order.activation_price):
                 order.set_activated_c(None)
             else:
-                return  # Do nothing
+                return  # 不执行任何操作
 
         cdef tuple output = TrailingStopCalculator.calculate(
             price_increment=self.instrument.price_increment,
@@ -5163,7 +5128,7 @@ cdef class OrderMatchingEngine:
         cdef Price new_trigger_price = output[0]
         cdef Price new_price = output[1]
         if new_trigger_price is None and new_price is None:
-            return  # No updates
+            return  # 未更新
 
         self._generate_order_updated(
             order=order,
@@ -5176,15 +5141,14 @@ cdef class OrderMatchingEngine:
 
     cpdef void iterate(self, uint64_t timestamp_ns, AggressorSide aggressor_side = AggressorSide.NO_AGGRESSOR):
         """
-        Iterate the matching engine by processing the bid and ask order sides
-        and advancing time up to the given UNIX `timestamp_ns`.
+        通过处理买入和卖出订单侧并将时间推进到给定的 UNIX `timestamp_ns` 来迭代撮合引擎。
 
         Parameters
         ----------
         timestamp_ns : uint64_t
-            UNIX timestamp to advance the matching engine time to.
-        aggressor_side : AggressorSide, default 'NO_AGGRESSOR'
-            The aggressor side for trade execution processing.
+            撮合引擎时间要推进到的 UNIX 时间戳。
+        aggressor_side : AggressorSide, 默认 'NO_AGGRESSOR'
+            成交执行处理的主动侧。
 
         """
         self._clock.set_time(timestamp_ns)
@@ -5208,7 +5172,7 @@ cdef class OrderMatchingEngine:
                 self._cached_filled_qty.pop(order.client_order_id, None)
                 continue
 
-            # Check expiry
+            # 检查过期
             if self._support_gtd_orders:
                 if order.expire_time_ns > 0 and timestamp_ns >= order.expire_time_ns:
                     self._core.delete_order(order)
@@ -5216,32 +5180,32 @@ cdef class OrderMatchingEngine:
                     self.expire_order(order)
                     continue
 
-            # Manage trailing stop
+            # 管理追踪止损
             if order.order_type == OrderType.TRAILING_STOP_MARKET or order.order_type == OrderType.TRAILING_STOP_LIMIT:
                 self._trail_stop_order(order)
 
-            # Move market back to targets
+            # 将市场价格移动回目标
             if self._has_targets:
                 self._core.set_bid_raw(self._target_bid)
                 self._core.set_ask_raw(self._target_ask)
                 self._core.set_last_raw(self._target_last)
                 self._has_targets = False
 
-        # Reset any targets after iteration
+        # 迭代后重置所有目标
         self._target_bid = 0
         self._target_ask = 0
         self._target_last = 0
         self._has_targets = False
 
-        # Instrument expiration
+        # 工具到期
         if (self._instrument_has_expiration and timestamp_ns > self.instrument.expiration_ns) or self._instrument_close is not None:
-            self._log.info(f"{self.instrument.id} reached expiration")
+            self._log.info(f"{self.instrument.id} 已达到到期时间")
 
-            # Cancel all open orders
+            # 取消所有挂单
             for order in self.get_open_orders():
                 self.cancel_order(order)
 
-            # Close all open positions
+            # 关闭所有未平仓头寸
             for position in self.cache.positions_open(None, self.instrument.id):
                 order = MarketOrder(
                     trader_id=position.trader_id,
@@ -5260,34 +5224,34 @@ cdef class OrderMatchingEngine:
 
     cpdef void fill_market_order(self, Order order):
         """
-        Fill the given *marketable* order.
+        成交给定的 *可立即成交 (marketable)* 订单。
 
         Parameters
         ----------
         order : Order
-            The order to fill.
+            要成交的订单。
 
         """
         cdef Quantity cached_filled_qty = self._cached_filled_qty.get(order.client_order_id)
         if cached_filled_qty is not None and cached_filled_qty._mem.raw >= order.quantity._mem.raw:
             self._log.debug(
-                f"Ignoring fill as already filled pending application of events: "
+                f"忽略成交，因为在应用事件期间已完成填充： "
                 f"{cached_filled_qty=}, {order.quantity=}, {order.filled_qty=}, {order.leaves_qty=}",
             )
             return
-
+ 
         cdef PositionId venue_position_id = self._get_position_id(order)
         cdef Position position = None
         if venue_position_id is not None:
             position = self.cache.position(venue_position_id)
-
+ 
         if self._use_reduce_only and order.is_reduce_only and position is None:
             self._log.warning(
-                f"Canceling REDUCE_ONLY {order.type_string_c()} "
-                f"as would increase position",
+                f"正在取消只减仓 (REDUCE_ONLY) {order.type_string_c()}，"
+                f"因为其会导致仓位增加",
             )
             self.cancel_order(order)
-            return  # Order canceled
+            return  # 订单已取消
 
         order.liquidity_side = LiquiditySide.TAKER
         cdef list[tuple[Price, Quantity]] fills = self.determine_market_fills_with_simulation(order)
@@ -5302,42 +5266,41 @@ cdef class OrderMatchingEngine:
 
     cdef list[tuple[Price, Quantity]] determine_market_fills_with_simulation(self, Order order):
         """
-        Determine market order fills using FillModel simulation if available.
+        如果可用，使用 FillModel 模拟来确定市价单成交。
 
-        This method first checks if the FillModel provides a simulated OrderBook
-        for fill simulation. If so, it uses that for fill determination. Otherwise,
-        it falls back to the standard market fill logic.
+        此方法首先检查 FillModel 是否提供模拟 OrderBook 用于成交模拟。
+        如果是，则使用该模拟进行成交判定。否则，回退到标准的市价成交逻辑。
         """
         if self._fill_model is None:
             return self.determine_market_price_and_volume(order)
-
-        # Get current best bid/ask for simulation
+ 
+        # 获取当前最佳买入/卖出价格用于模拟
         cdef Price best_bid = self._core.bid
         cdef Price best_ask = self._core.ask
-
+ 
         if best_bid is None or best_ask is None:
-            return []  # No market available
-
-        # Try to get simulated OrderBook from FillModel
+            return []  # 市场不可用
+ 
+        # 尝试从 FillModel 获取模拟 OrderBook
         cdef OrderBook simulated_book = self._fill_model.get_orderbook_for_fill_simulation(
             self.instrument, order, best_bid, best_ask
         )
-
+ 
         if simulated_book is not None:
-            # Use simulated OrderBook for fill determination
+            # 使用模拟 OrderBook 进行成交判定
             fills = simulated_book.simulate_fills(
                 order,
                 price_prec=self._price_prec,
                 size_prec=self._size_prec,
                 is_aggressive=True,
             )
-            # If simulation produced no fills (e.g., custom model removed best levels),
-            # fall back to standard market logic to preserve expected behavior.
+            # 如果模拟未产生任何成交（例如，自定义模型移除了最佳档位），
+            # 则回退到标准市价逻辑以保持预期行为。
             if not fills:
                 return self.determine_market_price_and_volume(order)
             return fills
         else:
-            # Fall back to standard logic
+            # 回退到标准逻辑
             return self.determine_market_price_and_volume(order)
 
     cdef list[tuple[Price, Quantity]] _apply_liquidity_consumption(
@@ -5382,41 +5345,41 @@ cdef class OrderMatchingEngine:
             Quantity adjusted_qty
             int fill_idx
 
-        # Aggregated fill quantities per price (computed on-demand for missing levels)
+        # 每个价格的聚合成交数量（根据对缺失档位的需求计算）
         cdef dict[PriceRaw, QuantityRaw] fill_totals = None
-
+ 
         for fill_idx, fill in enumerate(fills):
             if max_qty_raw > 0 and remaining_qty == 0:
                 break
-
+ 
             price = fill[0]
             qty = fill[1]
             price_raw = price._mem.raw
-
-            # Use book_price for consumption tracking (original price before MAKER adjustment),
-            # but use price (potentially adjusted) for the output fill.
+ 
+            # 使用 book_price 进行消耗跟踪（MAKER 调整前的原始价格），
+            # 但使用 price（可能经过调整）用于输出成交。
             if book_prices is not None and fill_idx < len(book_prices):
                 book_price = book_prices[fill_idx]
                 book_price_raw = book_price._mem.raw
             else:
                 book_price = price
                 book_price_raw = price_raw
-
+ 
             level_size = self._book.get_quantity_at_level(book_price, order_side, self._size_prec)
             level_size_raw = level_size._mem.raw
-
+ 
             level_state = consumption.get(book_price_raw)
-
-            # Handle race condition where level no longer exists in book (returns 0)
+ 
+            # 处理档位在订单簿中不再存在的竞态条件（返回 0）
             if level_size_raw == 0:
-                # Level was deleted/modified between fill determination and consumption.
-                # Use aggregated fill total for this price (handles L3 books with multiple
-                # fills at same price). If prior state exists, use max of prior original_size
-                # and fill total to ensure all fills can be processed.
-
+                # 档位在成交确定和消耗之间被删除/修改。
+                # 对此价格使用聚合成交总额（处理具有相同价格多个成交的 L3 订单簿）。
+                # 如果存在先前的状态，则使用先前 original_size 和成交总额的最大值，
+                # 以确保所有成交都能得到处理。
+ 
                 if fill_totals is None:
                     fill_totals = {}
-
+ 
                     for idx, f in enumerate(fills):
                         if book_prices is not None and idx < len(book_prices):
                             p_raw = (<Price>book_prices[idx])._mem.raw
@@ -5427,75 +5390,74 @@ cdef class OrderMatchingEngine:
                             fill_totals[p_raw] += q_raw
                         else:
                             fill_totals[p_raw] = q_raw
-
+ 
                 fill_total = fill_totals.get(book_price_raw, qty._mem.raw)
-
+ 
                 if level_state is not None:
                     level_size_raw = max(level_state[0], fill_total)
                     self._log.debug(
-                        f"Liquidity consumption: level {book_price} not found in book, "
-                        f"using max of prior size {level_state[0]} and fill total {fill_total}",
+                        f"流动性消耗：在订单簿中未找到档位 {book_price}，"
+                        f"使用先前大小 {level_state[0]} 和成交总额 {fill_total} 的最大值",
                     )
                 else:
                     level_size_raw = fill_total
                     self._log.debug(
-                        f"Liquidity consumption: level {book_price} not found in book, "
-                        f"using aggregated fill total {fill_total} as fallback",
+                        f"流动性消耗：在订单簿中未找到档位 {book_price}，"
+                        f"使用聚合成交总额 {fill_total} 作为回退值",
                     )
-
+ 
             if level_state is None:
                 original_size = level_size_raw
                 consumed = 0
             else:
                 original_size = level_state[0]
                 consumed = level_state[1]
-
-            # Reset consumption when book size changes (fresh data)
+ 
+            # 当订单簿大小更改时重置消耗（新鲜数据）
             if original_size != level_size_raw:
                 original_size = level_size_raw
                 consumed = 0
-
+ 
             available = original_size - consumed if original_size > consumed else 0
             if available == 0:
                 self._log.debug(
-                    f"Liquidity consumed: skipping level {book_price} "
+                    f"流动性已耗尽：跳过档位 {book_price} "
                     f"(original_size={original_size}, consumed={consumed}, level_size_raw={level_size_raw})",
                 )
                 continue
 
             adjusted_qty_raw = min(qty._mem.raw, available)
-
+ 
             if max_qty_raw > 0:
                 adjusted_qty_raw = min(adjusted_qty_raw, remaining_qty)
                 remaining_qty -= adjusted_qty_raw
-
+ 
             if adjusted_qty_raw == 0:
                 continue
-
+ 
             consumed += adjusted_qty_raw
             consumption[book_price_raw] = (original_size, consumed)
-
+ 
             adjusted_qty = Quantity.from_raw_c(adjusted_qty_raw, qty._mem.precision)
             adjusted_fills.append((price, adjusted_qty))
-
+ 
         return adjusted_fills
-
+ 
     cpdef list[tuple[Price, Quantity]] determine_market_price_and_volume(self, Order order):
         """
-        Return the projected fills for the given *marketable* order filling
-        aggressively into the opposite order side.
-
-        The list may be empty if no fills.
-
+        返回给定的 *可立即成交 (marketable)* 订单在向反向订单侧主动填充时的预计成交情况。
+ 
+        如果没有成交，列表可能为空。
+ 
         Parameters
         ----------
         order : Order
-            The order to determine fills for.
-
+            要确定成交情况的订单。
+ 
         Returns
         -------
         list[tuple[Price, Quantity]]
-
+ 
         """
         cdef list[tuple[Price, Quantity]] fills = self._book.simulate_fills(
             order,
@@ -5503,9 +5465,9 @@ cdef class OrderMatchingEngine:
             size_prec=self._size_prec,
             is_aggressive=True,
         )
-
-        # For stop market and market-if-touched orders during bar H/L/C processing, fill at trigger price
-        # (market moved through the trigger). For gaps/immediate triggers, fill at market.
+ 
+        # 对于 Bar H/L/C 处理期间的止损市价单和触及市价单，按触发价成交
+        # （市场移动穿过了触发价）。对于缺口/立即触发，按市场价成交。
         cdef Price triggered_price
         if (
             not self._fill_at_market
@@ -5520,81 +5482,80 @@ cdef class OrderMatchingEngine:
             triggered_price = order.get_triggered_price_c()
             if triggered_price is not None:
                 fills[0] = (triggered_price, fills[0][1])
-                # Skip liquidity consumption for trigger price fills (may be at gap price with no book liquidity)
+                # 对于触发价成交，跳过流动性消耗（可能在具有无订单簿流动性的缺口价格处成交）
                 return fills
-
+ 
         return self._apply_liquidity_consumption(fills, order.side, order.leaves_qty._mem.raw)
 
     cpdef void fill_limit_order(self, Order order):
         """
-        Fill the given limit order.
+        成交给定的限价单。
 
         Parameters
         ----------
         order : Order
-            The order to fill.
+            要成交的订单。
 
         Raises
         ------
         ValueError
-            If the `order` does not have a LIMIT `price`.
+            如果 `order` 没有限价 `price`。
 
         """
-        Condition.is_true(order.has_price_c(), "order has no limit `price`")
-
+        Condition.is_true(order.has_price_c(), "订单没有限价 `price`")
+ 
         cdef Price price = order.price
         cdef Quantity cached_filled_qty = self._cached_filled_qty.get(order.client_order_id)
         cdef bint at_limit = False
-
+ 
         if cached_filled_qty is not None and cached_filled_qty._mem.raw >= order.quantity._mem.raw:
             self._log.debug(
-                f"Ignoring fill as already filled pending application of events: "
+                f"忽略成交，因为在应用事件期间已完成填充： "
                 f"{cached_filled_qty=}, {order.quantity=}, {order.filled_qty=}, {order.leaves_qty=}",
             )
             return
-
-        # Check fill model for MAKER orders at the limit price
+ 
+        # 检查成交模型中处于限价价格的挂单 (MAKER)
         if order.liquidity_side == LiquiditySide.MAKER and self._fill_model:
-            # For trade execution: check if trade price equals order price
-            # For quote updates: check if bid/ask equals order price
+            # 对于成交执行：检查成交价格是否等于订单价格
+            # 对于报价更新：检查买入价/卖出价是否等于订单价格
             if self._last_trade_size is not None and self._core.is_last_initialized:
                 at_limit = self._core.last_raw == price._mem.raw
             elif order.side == OrderSide.BUY:
                 at_limit = self._core.bid_raw == price._mem.raw
             elif order.side == OrderSide.SELL:
                 at_limit = self._core.ask_raw == price._mem.raw
-
+ 
             if at_limit and not self._fill_model.is_limit_filled():
-                return  # Not filled (simulates queue position)
-
+                return  # 未成交（模拟排队位置）
+ 
         cdef PositionId venue_position_id = self._get_position_id(order)
         cdef Position position = None
         if venue_position_id is not None:
             position = self.cache.position(venue_position_id)
-
+ 
         if self._use_reduce_only and order.is_reduce_only and position is None:
             self._log.warning(
-                f"Canceling REDUCE_ONLY {order.type_string_c()} "
-                f"as would increase position",
+                f"正在取消只减仓 (REDUCE_ONLY) {order.type_string_c()}，"
+                f"因为其会导致仓位增加",
             )
             self.cancel_order(order)
-            return  # Order canceled
+            return  # 订单已取消
 
         cdef list[tuple[Price, Quantity]] fills = self.determine_limit_fills_with_simulation(order)
-
-        # Skip apply_fills when consumed-liquidity adjustment produces no fills.
-        # This occurs for partially filled orders when an unrelated delta arrives
-        # and no new liquidity is available at the order's price level.
+ 
+        # 当流动性消耗调整后导致无成交时，跳过 apply_fills。
+        # 当不相关的增量到达且在该订单的价格水平上没有新流动性可用时，部分成交的订单会发生这种情况。
         if not fills and self._liquidity_consumption:
             self._log.debug(
-                f"Skipping fill for {order.client_order_id}: no liquidity available after consumption",
+                f"跳过 {order.client_order_id} 的成交：消耗后无可用流动性",
             )
-
+ 
             if order.time_in_force == TimeInForce.FOK or order.time_in_force == TimeInForce.IOC:
                 self.cancel_order(order)
-
+ 
             return
-
+ 
         self.apply_fills(
             order=order,
             fills=fills,
@@ -5602,32 +5563,31 @@ cdef class OrderMatchingEngine:
             venue_position_id=venue_position_id,
             position=position,
         )
-
+ 
     cdef list[tuple[Price, Quantity]] determine_limit_fills_with_simulation(self, Order order):
         """
-        Determine limit order fills using FillModel simulation if available.
-
-        This method first checks if the FillModel provides a simulated OrderBook
-        for fill simulation. If so, it uses that for fill determination. Otherwise,
-        it falls back to the standard limit fill logic.
+        如果可用，使用 FillModel 模拟来确定限价单成交。
+ 
+        此方法首先检查 FillModel 是否提供模拟 OrderBook 用于成交模拟。
+        如果是，则使用该模拟进行成交判定。否则，回退到标准的限价成交逻辑。
         """
         if self._fill_model is None:
             return self.determine_limit_price_and_volume(order)
-
-        # Get current best bid/ask for simulation
+ 
+        # 获取当前最佳买入/卖出价格用于模拟
         cdef Price best_bid = self._core.bid
         cdef Price best_ask = self._core.ask
-
+ 
         if best_bid is None or best_ask is None:
-            return []  # No market available
-
-        # Try to get simulated OrderBook from FillModel
+            return []  # 市场不可用
+ 
+        # 尝试从 FillModel 获取模拟 OrderBook
         cdef OrderBook simulated_book = self._fill_model.get_orderbook_for_fill_simulation(
             self.instrument, order, best_bid, best_ask
         )
-
+ 
         if simulated_book is not None:
-            # Use simulated OrderBook for fill determination
+            # 使用模拟 OrderBook 进行成交判定
             return simulated_book.simulate_fills(
                 order,
                 price_prec=self._price_prec,
@@ -5635,77 +5595,74 @@ cdef class OrderMatchingEngine:
                 is_aggressive=False,
             )
         else:
-            # Fall back to standard logic
+            # 回退到标准逻辑
             return self.determine_limit_price_and_volume(order)
 
     cdef Quantity determine_trade_fill_qty(self, Order order):
         """
-        Determine the fill quantity for trade execution mode.
+        确定成交执行模式下的成交数量。
 
-        When trade execution mode triggers a match via the transient price override,
-        this method calculates the fill quantity as the minimum of:
-        - The order's remaining quantity (leaves_qty)
-        - The remaining trade quantity (when consumption enabled) or trade tick size
+        当成交执行模式通过瞬时价格覆盖触发匹配时，此方法将成交数量计算为以下各项的最小值：
+        - 订单的剩余数量 (leaves_qty)
+        - 剩余成交数量（启用消耗时）或成交 tick 大小
 
-        Returns None if there is no quantity available to fill.
+        如果没有可用于成交的数量，则返回 None。
         """
         cdef QuantityRaw leaves_raw = order.quantity._mem.raw - order.filled_qty._mem.raw if order.quantity._mem.raw > order.filled_qty._mem.raw else 0
-
+ 
         if leaves_raw == 0:
             return None
-
+ 
         cdef QuantityRaw fill_raw = leaves_raw
         cdef QuantityRaw available_raw
         cdef QuantityRaw trade_size_raw
-
+ 
         if self._last_trade_size is not None:
             trade_size_raw = self._last_trade_size._mem.raw
-
-            # Calculate available quantity from trade (minus any consumption)
+ 
+            # 计算成交中的可用数量（减去任何消耗）
             if self._liquidity_consumption:
                 available_raw = trade_size_raw - self._trade_consumption
             else:
                 available_raw = trade_size_raw
-
+ 
             if available_raw == 0:
                 return None
-
+ 
             fill_raw = min(leaves_raw, available_raw)
-
+ 
             if self._liquidity_consumption:
                 self._trade_consumption += fill_raw
-
+ 
         return Quantity.from_raw_c(fill_raw, self._size_prec)
-
+ 
     cpdef list[tuple[Price, Quantity]] determine_limit_price_and_volume(self, Order order):
         """
-        Return the projected fills for the given *limit* order filling passively
-        from its limit price.
-
-        The list may be empty if no fills.
-
+        返回给定的 *限价* 订单在其限价价格处被动填充时的预计成交情况。
+ 
+        如果没有成交，列表可能为空。
+ 
         Parameters
         ----------
         order : Order
-            The order to determine fills for.
-
+            要确定成交情况的订单。
+ 
         Returns
         -------
         list[tuple[Price, Quantity]]
-
+ 
         Raises
         ------
         ValueError
-            If the `order` does not have a LIMIT `price`.
-
+            如果 `order` 没有限价 `price`。
+ 
         """
-        Condition.is_true(order.has_price_c(), "order has no limit `price`")
-
+        Condition.is_true(order.has_price_c(), "订单没有限价 `price`")
+ 
         cdef list[tuple[Price, Quantity]] fills
-
-        # When liquidity consumption is enabled, we need to consider ALL crossed
-        # price levels, not just enough to satisfy leaves_qty. This is because some
-        # levels may be consumed and we need to fill from subsequent levels.
+ 
+        # 当启用流动性消耗时，我们需要考虑所有交叉的价格水平，而不只是满足 leaves_qty 的部分。
+        # 这是因为某些档位可能已被消耗，我们需要从后续档位进行成交。
         if self._liquidity_consumption:
             fills = self._book.get_all_crossed_levels(order.side, order.price, self._size_prec)
         else:
@@ -5715,67 +5672,67 @@ cdef class OrderMatchingEngine:
                 size_prec=self._size_prec,
                 is_aggressive=False,
             )
-
+ 
         cdef Price triggered_price = order.get_triggered_price_c()
         cdef Price price = order.price
-
-        # Trade execution: use trade-driven fill when book doesn't reflect trade price
+ 
+        # 成交执行：当订单簿不反映成交价格时，使用成交驱动的填充
         cdef:
             Price trade_price
             bint fills_at_trade_price
             bint skip_trade_fill
             Quantity fill_qty
             Price fill_px
-
+ 
         if self._last_trade_size is not None and self._core.is_last_initialized:
             trade_price = Price.from_raw_c(self._core.last_raw, self._price_prec)
-
+ 
             fills_at_trade_price = False
             for fill in fills:
                 fill_px = fill[0]
                 if fill_px == trade_price:
                     fills_at_trade_price = True
                     break
-
+ 
             if (
                 not fills_at_trade_price
                 and self._core.is_limit_matched(order.side, order.price)
             ):
-                # Fill model check for MAKER at limit is already handled in fill_limit_order,
-                # don't re-check here to avoid calling is_limit_filled() twice (p² probability).
+                # 限价挂单 (MAKER) 的成交模型检查已在 fill_limit_order 中处理，
+                # 这里不再重复检查，以避免两次调用 is_limit_filled()（p² 概率）。
                 fill_qty = self.determine_trade_fill_qty(order)
                 if fill_qty is not None:
                     self._log.debug(
-                        f"Trade execution fill: {fill_qty} @ {order.price} "
+                        f"成交执行填充：{fill_qty} @ {order.price} "
                         f"(trade_price={trade_price}, trade_size={self._last_trade_size})",
                     )
-
-                    # Fill at the limit price (conservative) rather than the trade price.
-                    # Trade execution fills already account for consumption via _trade_consumption,
-                    # return early to bypass _apply_liquidity_consumption which would incorrectly
-                    # discard these fills when the trade price isn't in the order book.
+ 
+                    # 按照限价价格（保守）而不是成交价格进行成交。
+                    # 成交轨迹填充已经通过 _trade_consumption 考虑了消耗，
+                    # 提前返回以绕过 _apply_liquidity_consumption，
+                    # 否则当成交价格不在订单簿中时，它会错误地丢弃这些成交。
                     return [(order.price, fill_qty)]
 
-        # Save original book prices BEFORE any fill price modifications for consumption tracking,
-        # since the TAKER and MAKER loops below may adjust fill prices. Consumption should be
-        # tracked against the original book price levels where liquidity was sourced from.
-        # We must create new Price objects since the MAKER loop modifies prices in place.
+        # 在进行任何成交价格修改之前，保存原始订单簿价格，以便进行消耗跟踪，
+        # 因为下面的 TAKER 和 MAKER 循环可能会调整成交价格。目前，消耗应针对
+        # 流动性来源的原始订单簿价格水平进行跟踪。
+        # 我们必须创建新的 Price 对象，因为 MAKER 循环会原地修改价格。
         cdef list[Price] book_prices = None
         cdef Price orig_price
-
+ 
         if self._liquidity_consumption and fills:
             book_prices = []
             for fill in fills:
                 orig_price = fill[0]
                 book_prices.append(Price.from_raw_c(orig_price._mem.raw, orig_price._mem.precision))
-
+ 
         if (
             fills
             and triggered_price is not None
             and order.liquidity_side == LiquiditySide.TAKER
         ):
             ########################################################################
-            # Filling as TAKER from a trigger
+            # 作为触发产生的流动性提取者 (TAKER) 进行成交
             ########################################################################
             if order.side == OrderSide.BUY and price._mem.raw > triggered_price._mem.raw:
                 fills[0] = (triggered_price, fills[0][1])
@@ -5793,24 +5750,24 @@ cdef class OrderMatchingEngine:
                 self._target_last = self._core.last_raw
                 self._core.set_bid_raw(price._mem.raw)
                 self._core.set_last_raw(price._mem.raw)
-
+ 
         cdef Price last_px
-
+ 
         if fills and order.liquidity_side == LiquiditySide.MAKER:
             ########################################################################
-            # Filling as MAKER
+            # 作为流动性提供者 (MAKER) 进行成交
             ########################################################################
             price = order.price
-
+ 
             if order.side == OrderSide.BUY:
                 if triggered_price and price > triggered_price:
                     price = triggered_price
-
+ 
                 for fill in fills:
                     last_px = fill[0]
-
+ 
                     if last_px._mem.raw < price._mem.raw:
-                        # Marketable BUY would have filled at limit
+                        # 可立即成交的买入单本应以限价成交
                         self._has_targets = True
                         self._target_bid = self._core.bid_raw
                         self._target_ask = self._core.ask_raw
@@ -5821,12 +5778,12 @@ cdef class OrderMatchingEngine:
             elif order.side == OrderSide.SELL:
                 if triggered_price and price < triggered_price:
                     price = triggered_price
-
+ 
                 for fill in fills:
                     last_px = fill[0]
-
+ 
                     if last_px._mem.raw > price._mem.raw:
-                        # Marketable SELL would have filled at limit
+                        # 可立即成交的卖出单本应以限价成交
                         self._has_targets = True
                         self._target_bid = self._core.bid_raw
                         self._target_ask = self._core.ask_raw
@@ -5835,8 +5792,8 @@ cdef class OrderMatchingEngine:
                         self._core.set_last_raw(price._mem.raw)
                         last_px._mem.raw = price._mem.raw
             else:
-                raise RuntimeError(f"invalid `OrderSide`, was {order.side}")  # pragma: no cover (design-time error)
-
+                raise RuntimeError(f"无效的 `OrderSide`，为 {order.side}")  # pragma: no cover (设计时错误)
+ 
         return self._apply_liquidity_consumption(fills, order.side, order.leaves_qty._mem.raw, book_prices)
 
     cpdef void apply_fills(
@@ -5848,39 +5805,38 @@ cdef class OrderMatchingEngine:
         Position position: Position | None = None,
     ):
         """
-        Apply the given list of fills to the given order. Optionally provide
-        existing position details.
-
-        - If the `fills` list is empty, an error will be logged.
-        - Market orders will be rejected if no opposing orders are available to fulfill them.
-
+        将给定的成交列表应用到给定的订单。可选地提供现有的头寸详情。
+ 
+        - 如果 `fills` 列表为空，将记录错误。
+        - 如果没有可用于履约的反向订单，市价单将被拒绝。
+ 
         Parameters
         ----------
         order : Order
-            The order to fill.
+            要成交的订单。
         fills : list[tuple[Price, Quantity]]
-            The fills to apply to the order.
+            要应用到订单的成交。
         liquidity_side : LiquiditySide
-            The liquidity side for the fill(s).
-        venue_position_id :  PositionId, optional
-            The current venue position ID related to the order (if assigned).
-        position : Position, optional
-            The current position related to the order (if any).
-
+            成交的流动性侧。
+        venue_position_id : PositionId, 可选
+            与订单相关的当前场所头寸 ID（如果已分配）。
+        position : Position, 可选
+            与订单相关的当前头寸（如有）。
+ 
         Raises
         ------
         ValueError
-            If `liquidity_side` is ``NO_LIQUIDITY_SIDE``.
-
+            如果 `liquidity_side` 为 ``NO_LIQUIDITY_SIDE``。
+ 
         Warnings
         --------
-        The `liquidity_side` will override anything previously set on the order.
-
+        `liquidity_side` 将覆盖订单上之前设置的任何值。
+ 
         """
         Condition.not_none(order, "order")
         Condition.not_none(fills, "fills")
         Condition.not_equal(liquidity_side, LiquiditySide.NO_LIQUIDITY_SIDE, "liquidity_side", "NO_LIQUIDITY_SIDE")
-
+ 
         order.liquidity_side = liquidity_side
 
         cdef:
@@ -5888,84 +5844,84 @@ cdef class OrderMatchingEngine:
             Quantity fill_qty
             QuantityRaw total_size_raw = 0
         if order.time_in_force == TimeInForce.FOK:
-            # Check FOK requirement
+            # 检查 FOK 要求
             for fill in fills:
                 fill_px, fill_qty = fill
                 total_size_raw += fill_qty._mem.raw
-
+ 
             if order.leaves_qty._mem.raw > total_size_raw:
                 self.cancel_order(order)
-                return  # Cannot fill full size - so kill/cancel
-
+                return  # 无法全额成交 - 因此将其失效/取消
+ 
         cdef:
             bint initial_market_to_limit_fill = False
             Price last_fill_px = None
-
+ 
         if not fills:
-            # For L1 with consumption tracking, empty fills means liquidity was consumed
-            # Allow orders to slip to next level (preserves L1 exhausted book behavior)
+            # 对于具有消耗跟踪的 L1，成交列表为空意味着流动性已被消耗
+            # 允许订单滑向下一档（保持 L1 订单簿耗尽行为）
             if self._liquidity_consumption and self.book_type == BookType.L1_MBP:
                 if order.side == OrderSide.BUY:
                     if not self._core.is_ask_initialized:
                         if order.status_c() == OrderStatus.SUBMITTED:
-                            self._generate_order_rejected(order, f"no market for {order.instrument_id}")
+                            self._generate_order_rejected(order, f"{order.instrument_id} 没有行情")
                         return
                     last_fill_px = Price.from_raw_c(self._core.ask_raw, self._price_prec)
                 elif order.side == OrderSide.SELL:
                     if not self._core.is_bid_initialized:
                         if order.status_c() == OrderStatus.SUBMITTED:
-                            self._generate_order_rejected(order, f"no market for {order.instrument_id}")
+                            self._generate_order_rejected(order, f"{order.instrument_id} 没有行情")
                         return
                     last_fill_px = Price.from_raw_c(self._core.bid_raw, self._price_prec)
                 else:
-                    raise ValueError(f"invalid `OrderSide`, was {order.side}")
-                # Fall through to slip logic below (gated by order type)
+                    raise ValueError(f"无效的 `OrderSide`，为 {order.side}")
+                # 向下进入下面的滑差逻辑（由订单类型控制）
             else:
                 if order.status_c() == OrderStatus.SUBMITTED:
-                    self._generate_order_rejected(order, f"no market with no fills for {order.instrument_id}")
+                    self._generate_order_rejected(order, f"{order.instrument_id} 没有行情且无成交")
                 else:
                     self._log.error(
-                        "Cannot fill order: no fills from book when fills were expected (check data)",
+                        "无法成交订单：预期有成交时订单簿未提供（请检查数据）",
                     )
-                return  # No fills
-
+                return  # 无成交
+ 
         if self.oms_type == OmsType.NETTING:
-            venue_position_id = None  # No position IDs generated by the venue
-
+            venue_position_id = None  # 场所不生成头寸 ID
+ 
         if is_logging_initialized():
             self._log.debug(
-                "Market: "
-                f"bid={self._book.best_bid_size()} @ {self._book.best_bid_price()}, "
-                f"ask={self._book.best_ask_size()} @ {self._book.best_ask_price()}, "
-                f"last={self._core.last}",
+                "市场： "
+                f"买入价={self._book.best_bid_size()} @ {self._book.best_bid_price()}, "
+                f"卖出价={self._book.best_ask_size()} @ {self._book.best_ask_price()}, "
+                f"最新价={self._core.last}",
             )
             self._log.debug(
-                f"Applying fills to {order}, "
+                f"正在向 {order} 应用成交, "
                 f"venue_position_id={venue_position_id}, "
                 f"position={position}, "
                 f"fills={fills}",
             )
-
+ 
         for fill in fills:
             fill_px = fill[0]
             fill_qty = fill[1]
-
-            # Validate price precision
+ 
+            # 验证价格精度
             if fill_px._mem.precision != self._price_prec:
                 raise RuntimeError(
-                    f"Invalid price precision for fill {fill_px.precision} "
-                    f"when instrument price precision is {self._price_prec}. "
-                    f"Check that the data price precision matches the {self.instrument.id} instrument"
+                    f"成交价格精度无效 {fill_px.precision} "
+                    f"而工具价格精度为 {self._price_prec}。 "
+                    f"请检查数据价格精度是否与 {self.instrument.id} 工具匹配"
                 )
-
-            # Validate size precision
+ 
+            # 验证数量精度
             if fill_qty._mem.precision != self._size_prec:
                 raise RuntimeError(
-                    f"Invalid size precision for fill {fill_qty.precision} "
-                    f"when instrument size precision is {self._size_prec}. "
-                    f"Check that the data size precision matches the {self.instrument.id} instrument"
+                    f"成交数量精度无效 {fill_qty.precision} "
+                    f"而工具数量精度为 {self._size_prec}。 "
+                    f"请检查数据数量精度是否与 {self.instrument.id} 工具匹配"
                 )
-
+ 
             if order.filled_qty._mem.raw == 0:
                 if order.order_type == OrderType.MARKET_TO_LIMIT:
                     self._generate_order_updated(
@@ -5975,38 +5931,38 @@ cdef class OrderMatchingEngine:
                         trigger_price=None,
                     )
                     initial_market_to_limit_fill = True
-
+ 
             if self.book_type == BookType.L1_MBP and self._fill_model.is_slipped():
                 if order.side == OrderSide.BUY:
                     fill_px = fill_px.add(self.instrument.price_increment)
                 elif order.side == OrderSide.SELL:
                     fill_px = fill_px.sub(self.instrument.price_increment)
                 else:
-                    raise ValueError(  # pragma: no cover (design-time error)
-                        f"invalid `OrderSide`, was {order.side}",  # pragma: no cover (design-time error)
+                    raise ValueError(  # pragma: no cover (设计时错误)
+                        f"无效的 `OrderSide`，为 {order.side}",  # pragma: no cover (设计时错误)
                     )
-
-            # Check reduce only order
+ 
+            # 检查只减仓订单
             if self._use_reduce_only and order.is_reduce_only and fill_qty._mem.raw > position.quantity._mem.raw:
                 if position.quantity._mem.raw == 0:
-                    return  # Done
-
-                # Adjust fill to honor reduce only execution (fill remaining position size only)
+                    return  # 完成
+ 
+                # 调整成交以遵从只减仓执行（仅填充剩余头寸大小）
                 fill_qty = Quantity.from_raw_c(position.quantity._mem.raw, self._size_prec)
-
+ 
                 self._generate_order_updated(
                     order=order,
                     qty=fill_qty,
                     price=None,
                     trigger_price=None,
                 )
-
+ 
             if fill_qty._mem.raw == 0:
                 if len(fills) == 1 and order.status_c() == OrderStatus.SUBMITTED:
-                    self._generate_order_rejected(order, f"no market for {order.instrument_id}")
-
-                return  # Done
-
+                    self._generate_order_rejected(order, f"{order.instrument_id} 没有行情")
+ 
+                return  # 完成
+ 
             self.fill_order(
                 order=order,
                 last_px=fill_px,
@@ -6016,16 +5972,16 @@ cdef class OrderMatchingEngine:
                 position=position,
             )
             if order.order_type == OrderType.MARKET_TO_LIMIT and initial_market_to_limit_fill:
-                return  # Filled initial level
-
+                return  # 已成交初始档位
+ 
             last_fill_px = fill_px
-
+ 
         if order.time_in_force == TimeInForce.IOC and order.is_open_c():
-            # IOC order has filled all available size
+            # IOC 订单已填充所有可用大小
             self.cancel_order(order)
             return
-
-        # Check MARKET order on exhausted book volume
+ 
+        # 在耗尽订单簿成交量时检查市价单 (MARKET)
         if (
             order.is_open_c()
             and self.book_type == BookType.L1_MBP
@@ -6036,18 +5992,17 @@ cdef class OrderMatchingEngine:
             or order.order_type == OrderType.TRAILING_STOP_MARKET
         )
         ):
-            # Exhausted simulated book volume (continue aggressive filling into next level)
-            # This is a very basic implementation of slipping by a single tick, in the future
-            # we will implement more detailed fill modeling.
+            # 模拟订单簿成交量耗尽（继续主动填充到下一档）
+            # 这是一个非常基础的跳过一个 tick 的滑差实现，未来我们将实现更详细的成交建模。
             if order.side == OrderSide.BUY:
                 fill_px = last_fill_px.add(self.instrument.price_increment)
             elif order.side == OrderSide.SELL:
                 fill_px = last_fill_px.sub(self.instrument.price_increment)
             else:
-                raise ValueError(  # pragma: no cover (design-time error)
-                    f"invalid `OrderSide`, was {order.side}",  # pragma: no cover (design-time error)
+                raise ValueError(  # pragma: no cover (设计时错误)
+                    f"无效的 `OrderSide`，为 {order.side}",  # pragma: no cover (设计时错误)
                 )
-
+ 
             self.fill_order(
                 order=order,
                 last_px=fill_px,
@@ -6056,8 +6011,8 @@ cdef class OrderMatchingEngine:
                 venue_position_id=venue_position_id,
                 position=position,
             )
-
-        # Check LIMIT order on exhausted book volume
+ 
+        # 在耗尽订单簿成交量时检查限价单 (LIMIT)
         if (
             order.is_open_c()
             and self.book_type == BookType.L1_MBP
@@ -6070,24 +6025,23 @@ cdef class OrderMatchingEngine:
         )
         ):
             if not self._has_targets and ((order.side == OrderSide.BUY and order.price == self._core.ask) or (order.side == OrderSide.SELL and order.price == self._core.bid)):
-                return  # Limit price is equal to top-of-book, no further fills
-
+                return  # 限价等于盘口，不再继续成交
+ 
             if order.liquidity_side == LiquiditySide.MAKER:
-                # Market moved through limit price, assumption is there was enough liquidity to fill entire order
+                # 市场移动穿过了限价，假设有足够的流动性来填充整个订单
                 fill_px = order.price
-            else:  # Marketable limit order
-                # Exhausted simulated book volume (continue aggressive filling into next level)
-                # This is a very basic implementation of slipping by a single tick, in the future
-                # we will implement more detailed fill modeling.
+            else:  # 可立即成交的限价单
+                # 模拟订单簿成交量耗尽（继续主动填充到下一档）
+                # 这是一个非常基础的跳过一个 tick 的滑差实现，未来我们将实现更详细的成交建模。
                 if order.side == OrderSide.BUY:
                     fill_px = last_fill_px.add(self.instrument.price_increment)
                 elif order.side == OrderSide.SELL:
                     fill_px = last_fill_px.sub(self.instrument.price_increment)
                 else:
-                    raise ValueError(  # pragma: no cover (design-time error)
-                        f"invalid `OrderSide`, was {order.side}",  # pragma: no cover (design-time error)
+                    raise ValueError(  # pragma: no cover (设计时错误)
+                        f"无效的 `OrderSide`，为 {order.side}",  # pragma: no cover (设计时错误)
                     )
-
+ 
             self.fill_order(
                 order=order,
                 last_px=fill_px,
@@ -6112,102 +6066,101 @@ cdef class OrderMatchingEngine:
         LiquiditySide liquidity_side,
     ):
         """
-        Generate individual leg fills for position tracking after spread order is filled.
-
-        This method generates synthetic leg fills with "-LEG-" identifiers that will be
-        handled by the ExecutionEngine for position tracking, following the IB pattern.
+        在价差订单成交后，为头寸跟踪生成单独的成分股 (leg) 成交。
+ 
+        此方法生成具有 "-LEG-" 标识符的合成成分股成交，这些成交将由 ExecutionEngine 处理以进行头寸跟踪，遵循 IB 模式。
         """
         if not fills:
             return
-
-        # Get the spread instrument
+ 
+        # 获取价差工具
         cdef Instrument instrument = self.cache.instrument(order.instrument_id)
         if instrument is None:
-            self._log.error(f"Spread instrument not found in cache: {order.instrument_id}")
+            self._log.error(f"在缓存中找不到价差工具： {order.instrument_id}")
             return
-
-        # Parse spread legs from instrument
+ 
+        # 从工具中解析价差成分股
         leg_tuples = instrument.legs()
         spread_instrument_ids = [leg[0] for leg in leg_tuples]
-
+ 
         cdef Price spread_fill_px = fills[0][0]
         cdef Quantity spread_fill_qty = fills[0][1]
-
-        # Calculate leg execution prices
+ 
+        # 计算成分股执行价格
         leg_prices = self._calculate_leg_execution_prices(
             leg_tuples=leg_tuples,
             spread_execution_price=spread_fill_px,
             spread_quantity=spread_fill_qty,
         )
-
+ 
         if not leg_prices:
-            self._log.warning(f"Could not calculate leg prices for spread {order.instrument_id}")
+            self._log.warning(f"无法为价差 {order.instrument_id} 计算成分股价格")
             return
-
-        # Generate fills for each leg
+ 
+        # 为每个成分股生成成交
         for leg_instrument_id, ratio in leg_tuples:
             if leg_instrument_id not in leg_prices:
                 continue
-
+ 
             leg_price = leg_prices[leg_instrument_id]
-
-            # Calculate leg quantity: spread_quantity * abs(ratio)
+ 
+            # 计算成分股数量：spread_quantity * abs(ratio)
             leg_quantity = Quantity(
                 spread_fill_qty.as_double() * abs(ratio),
                 precision=spread_fill_qty._mem.precision,
             )
-
-            # Get leg instrument for precision validation
+ 
+            # 获取成分股工具用于精度验证
             leg_instrument = self.cache.instrument(leg_instrument_id)
-
+ 
             if leg_instrument is None:
-                self._log.warning(f"Leg instrument not found in cache: {leg_instrument_id}")
+                self._log.warning(f"在缓存中找不到成分股工具： {leg_instrument_id}")
                 continue
-
-            # Generate synthetic leg fill directly
+ 
+            # 直接生成合成成分股成交
             adjusted_leg_price = leg_price
-
-            # Use make_qty for proper size increment rounding
+ 
+            # 使用 make_qty 进行适当的数量增量舍入
             adjusted_leg_quantity = leg_instrument.make_qty(
                 leg_quantity.as_double(),
-                round_down=True,  # Round down to ensure valid size
+                round_down=True,  # 向下舍入以确保数量有效
             )
-
-            # Calculate commission for the leg
+ 
+            # 计算成分股的佣金
             commission = self._fee_model.get_commission(
-                order=order,  # Use spread order for fee calculation context
+                order=order,  # 使用价差订单作为费用计算背景
                 fill_qty=adjusted_leg_quantity,
                 fill_px=adjusted_leg_price,
                 instrument=leg_instrument,
             )
-
-            # Generate unique IDs for the leg fill (following IB adapter pattern)
-            # Get leg position in spread for unique identification
+ 
+            # 生成成分股成交的唯一 ID（遵循 IB 适配器模式）
+            # 获取成分股在价差中的位置以进行唯一识别
             leg_position = spread_instrument_ids.index(leg_instrument_id) if leg_instrument_id in spread_instrument_ids else 0
-
-            # Generate unique client order ID for leg fill (avoids order state conflicts)
+ 
+            # 为成分股成交生成唯一的客户端订单 ID（避免订单状态冲突）
             leg_client_order_id = ClientOrderId(f"{order.client_order_id.value}-LEG-{leg_instrument_id.symbol.value}")
-
-            # Generate unique venue order ID for leg fill
+ 
+            # 为成分股成交生成唯一的场所订单 ID
             leg_venue_order_id = VenueOrderId(f"{order.venue_order_id.value}-LEG-{leg_position}")
-
-            # Generate unique trade ID for the leg fill (matching IB pattern: {execution.execId}-{leg_position})
-            # Use the same base execution ID format as combo fills but append leg position
+ 
+            # 为成分股成交生成唯一的交易 ID（匹配 IB 模式：{execution.execId}-{leg_position}）
+            # 使用与组合成交相同的基础执行 ID 格式，但附加成分股位置
             leg_trade_id = TradeId(f"{self.venue.to_str()}-{self.raw_id}-{self._execution_count:03d}-{leg_position}")
-
-            # Leg side mapping based on spread order direction
-            # If spread BUY: positive ratio = BUY leg, negative = SELL leg
-            # If spread SELL: positive ratio = SELL leg, negative = BUY leg
+ 
+            # 根据价差订单方向映射成分股侧
+            # 如果价差买入 (BUY)：正比率 = 买入成分股，负比率 = 卖出成分股
+            # 如果价差卖出 (SELL)：正比率 = 卖出成分股，负比率 = 买入成分股
             order_side = order.side if ratio > 0 else (OrderSide.SELL if order.side == OrderSide.BUY else OrderSide.BUY)
-
-            # Create OrderFilled event for the leg
+ 
+            # 为成分股创建 OrderFilled 事件
             ts_now = self._clock.timestamp_ns()
             leg_fill = OrderFilled(
                 trader_id=order.trader_id,
                 strategy_id=order.strategy_id,
                 instrument_id=leg_instrument_id,
-                client_order_id=leg_client_order_id,  # Use unique leg client order ID
-                venue_order_id=leg_venue_order_id,  # Use unique leg venue order ID
+                client_order_id=leg_client_order_id,  # 使用唯一的成分股客户端订单 ID
+                venue_order_id=leg_venue_order_id,  # 使用唯一的成分股场所订单 ID
                 account_id=order.account_id,
                 trade_id=leg_trade_id,
                 order_side=order_side,
@@ -6223,10 +6176,10 @@ cdef class OrderMatchingEngine:
                 position_id=None,
                 commission=commission,
             )
-
-            # Publish the leg fill event (same as regular order fills)
+ 
+            # 发布成分股成交事件（与常规订单成交相同）
             self.msgbus.send(endpoint="ExecEngine.process", msg=leg_fill)
-
+ 
     cdef dict _calculate_leg_execution_prices(
         self,
         list leg_tuples,
@@ -6234,79 +6187,79 @@ cdef class OrderMatchingEngine:
         Quantity spread_quantity,
     ):
         """
-        Calculate leg execution prices using mid-prices with adjustment.
-
-        Uses mid-price for all legs except the highest-priced one, which is
-        adjusted to satisfy: Σ(leg_price × ratio) = spread_execution_price
+        使用中间价加调整来计算成分股执行价格。
+ 
+        对除了最高价格成分股之外的所有成分股使用中间价，
+        最高价格成分股会被调整以满足：Σ(leg_price × ratio) = spread_execution_price
         """
         cdef dict[InstrumentId, double] leg_mid_prices = {}
         cdef dict[InstrumentId, Price] leg_prices = {}
         cdef double highest_mid_price = 0.0
         cdef InstrumentId highest_price_leg_id = None
-
-        # Get mid-prices for all legs
+ 
+        # 获取所有成分股的中间价
         for leg_instrument_id, ratio in leg_tuples:
             leg_quote = self.cache.quote_tick(leg_instrument_id)
-
+ 
             if leg_quote is None:
-                self._log.warning(f"No quote available for leg {leg_instrument_id}")
+                self._log.warning(f"由于没有报价，导致成分股 {leg_instrument_id} 不可用")
                 return {}
-
+ 
             mid_price = (leg_quote.bid_price.as_double() + leg_quote.ask_price.as_double()) * 0.5
             leg_mid_prices[leg_instrument_id] = mid_price
-
-            # Track the leg with highest mid-price (this will be adjusted)
+ 
+            # 跟踪中间价最高的成分股（它将被调整）
             if mid_price > highest_mid_price:
                 highest_mid_price = mid_price
                 highest_price_leg_id = leg_instrument_id
-
+ 
         if highest_price_leg_id is None:
             return {}
-
-        # Calculate weighted sum using mid-prices for all legs except the highest
+ 
+        # 计算加权和，对除了最高价格成分股之外的所有价格使用中间价
         cdef double weighted_sum = 0.0
         cdef int highest_price_ratio = 1
-
+ 
         for leg_instrument_id, ratio in leg_tuples:
             if leg_instrument_id != highest_price_leg_id:
                 weighted_sum += leg_mid_prices[leg_instrument_id] * ratio
-
-                # Get actual instrument to use its make_price method for proper tick rounding
+ 
+                # 获取实际工具以使用其 make_price 方法进行适当的 tick 舍入
                 leg_instrument = self.cache.instrument(leg_instrument_id)
-
+ 
                 if leg_instrument is not None:
                     leg_prices[leg_instrument_id] = leg_instrument.make_price(
                         leg_mid_prices[leg_instrument_id]
                     )
                 else:
-                    # If instrument not found, log warning and abort
+                    # 如果找不到工具，记录警告并中止
                     self._log.warning(
-                        f"Cannot find leg instrument {leg_instrument_id} in cache, "
-                        f"aborting leg price calculation for spread"
+                        f"在缓存中找不到成分股工具 {leg_instrument_id}，"
+                        f"中止价差的成分股价格计算"
                     )
                     return {}
             else:
-                # Store the ratio for the highest-priced leg for adjustment calculation
+                # 存储最高面额成分股的比率以用于调整计算
                 highest_price_ratio = ratio
-
-        # Calculate adjusted price for the highest-priced leg
+ 
+        # 为最高价格成分股计算调整后的价格
         # spread_execution_price = Σ(leg_price × ratio)
         # adjusted_price = (spread_execution_price - weighted_sum) / highest_price_ratio
         cdef double adjusted_price = (spread_execution_price.as_double() - weighted_sum) / highest_price_ratio
-
-        # Get actual instrument for highest-priced leg to use its make_price method
+ 
+        # 获取最高价格成分股的实际工具以使用其 make_price 方法
         highest_leg_instrument = self.cache.instrument(highest_price_leg_id)
-
+ 
         if highest_leg_instrument is not None:
             leg_prices[highest_price_leg_id] = highest_leg_instrument.make_price(adjusted_price)
         else:
-            # If instrument not found, log warning and abort
+            # 如果找不到工具，记录警告并中止
             self._log.warning(
-                f"Cannot find highest-priced leg instrument {highest_price_leg_id} in cache, "
-                f"aborting leg price calculation for spread"
+                f"在缓存中找不到最高面额的成分股工具 {highest_price_leg_id}，"
+                f"中止价差的成分股价格计算"
             )
             return {}
-
+ 
         return leg_prices
 
     cpdef void fill_order(
@@ -6319,48 +6272,47 @@ cdef class OrderMatchingEngine:
         Position position: Position | None = None,
     ):
         """
-        Apply the given list of fills to the given order. Optionally provide
-        existing position details.
-
+        将给定的成交应用到给定的订单。可选地提供现有的头寸详情。
+ 
         Parameters
         ----------
         order : Order
-            The order to fill.
+            要成交的订单。
         last_px : Price
-            The fill price for the order.
+            订单的成交价格。
         last_qty : Quantity
-            The fill quantity for the order.
+            订单的成交数量。
         liquidity_side : LiquiditySide
-            The liquidity side for the fill.
-        venue_position_id :  PositionId, optional
-            The current venue position ID related to the order (if assigned).
-        position : Position, optional
-            The current position related to the order (if any).
-
+            成交的流动性侧。
+        venue_position_id : PositionId, 可选
+            与订单相关的当前场所头寸 ID（如果已分配）。
+        position : Position, 可选
+            与订单相关的当前头寸（如有）。
+ 
         Raises
         ------
         ValueError
-            If `liquidity_side` is ``NO_LIQUIDITY_SIDE``.
-
+            如果 `liquidity_side` 为 ``NO_LIQUIDITY_SIDE``。
+ 
         Warnings
         --------
-        The `liquidity_side` will override anything previously set on the order.
-
+        `liquidity_side` 将覆盖订单上之前设置的任何值。
+ 
         """
         Condition.not_none(order, "order")
         Condition.not_none(last_px, "last_px")
         Condition.not_none(last_qty, "last_qty")
         Condition.not_equal(liquidity_side, LiquiditySide.NO_LIQUIDITY_SIDE, "liquidity_side", "NO_LIQUIDITY_SIDE")
 
-        # Use instrument size precision as single source of truth
+        # 使用工具数量精度作为单一事实来源
         cdef uint8_t size_prec = self._size_prec
-
-        # Validate incoming fill precision matches instrument
+ 
+        # 验证传入的成交精度是否与工具匹配
         if last_qty._mem.precision != size_prec:
             raise RuntimeError(
-                f"Invalid size precision for fill {last_qty._mem.precision} "
-                f"when instrument size precision is {size_prec}; "
-                f"check that the data size precision matches the {self.instrument.id} instrument"
+                f"成交的数量精度无效 {last_qty._mem.precision} "
+                f"而工具数量精度为 {size_prec}；"
+                f"请检查数据数量精度是否与 {self.instrument.id} 工具匹配"
             )
 
         order.liquidity_side = liquidity_side
@@ -6368,7 +6320,7 @@ cdef class OrderMatchingEngine:
         cdef Quantity cached_filled_qty = self._cached_filled_qty.get(order.client_order_id)
         cdef Quantity leaves_qty = None
         if cached_filled_qty is None:
-            # Clamp the first fill to the order quantity to avoid over-filling
+            # 将首次成交限制在订单数量内，以避免超额成交
             last_qty = Quantity.from_raw_c(min(order.quantity._mem.raw, last_qty._mem.raw), size_prec)
             self._cached_filled_qty[order.client_order_id] = Quantity.from_raw_c(last_qty._mem.raw, size_prec)
         else:
@@ -6381,13 +6333,13 @@ cdef class OrderMatchingEngine:
             last_qty = Quantity.from_raw_c(min(leaves_qty._mem.raw, last_qty._mem.raw), size_prec)
             cached_filled_qty._mem.raw += last_qty._mem.raw
 
-        # Nothing to fill when adjusted last_qty <= 0.
-        # Update _cached_filled_qty first to absorb duplicate or out-of-order fills
-        # (seen in sandbox/async environments) and avoid emitting zero/negative fills.
+        # 当调整后的 last_qty <= 0 时，无需进行任何填充。
+        # 先更新 _cached_filled_qty 以吸收重复或乱序的成交
+        # （在沙盒/异步环境中可见），并避免发出零或负数成交。
         if last_qty <= 0:
             return
-
-        # Calculate commission
+ 
+        # 计算佣金
         cdef Money commission = self._fee_model.get_commission(
             order=order,
             fill_qty=last_qty,
@@ -6407,27 +6359,27 @@ cdef class OrderMatchingEngine:
         )
 
         if order.is_passive_c() and order.is_closed_c():
-            # Remove order from market
+            # 从市场中移除订单
             self._core.delete_order(order)
             self._cached_filled_qty.pop(order.client_order_id, None)
 
         if not self._support_contingent_orders:
             return
 
-        # Check contingent orders
+        # 检查关联订单
         cdef ClientOrderId client_order_id
         cdef Order child_order
         if order.contingency_type == ContingencyType.OTO:
             for client_order_id in order.linked_order_ids or []:
                 child_order = self.cache.order(client_order_id)
-                assert child_order is not None, "OTO child order not found"
-
+                assert child_order is not None, "未找到 OTO 子订单"
+ 
                 if child_order.is_closed_c():
                     continue
-
+ 
                 if child_order.is_active_local_c():
-                    continue  # Order is not on the exchange yet
-
+                    continue  # 订单尚未进入交易所
+ 
                 if child_order.position_id is None and order.position_id is not None:
                     self.cache.add_position_id(
                         position_id=order.position_id,
@@ -6436,8 +6388,8 @@ cdef class OrderMatchingEngine:
                         strategy_id=child_order.strategy_id,
                     )
                     self._log.debug(
-                        f"Indexed {order.position_id!r} "
-                        f"for {child_order.client_order_id!r}",
+                        f"已为 {child_order.client_order_id!r} "
+                        f"索引 {order.position_id!r}",
                     )
                 if not child_order.is_open_c() or (child_order.status_c() == OrderStatus.PENDING_UPDATE and child_order._previous_status == OrderStatus.SUBMITTED):
                     self.process_order(
@@ -6447,23 +6399,23 @@ cdef class OrderMatchingEngine:
         elif order.contingency_type == ContingencyType.OCO:
             for client_order_id in order.linked_order_ids or []:
                 oco_order = self.cache.order(client_order_id)
-                assert oco_order is not None, "OCO order not found"
-
+                assert oco_order is not None, "未找到 OCO 订单"
+ 
                 if oco_order.is_closed_c():
                     continue
-
+ 
                 if oco_order.is_active_local_c():
-                    continue  # Order is not on the exchange yet
-
+                    continue  # 订单尚未进入交易所
+ 
                 self.cancel_order(oco_order)
         elif order.contingency_type == ContingencyType.OUO:
             for client_order_id in order.linked_order_ids or []:
                 ouo_order = self.cache.order(client_order_id)
-                assert ouo_order is not None, "OUO order not found"
-
+                assert ouo_order is not None, "未找到 OUO 订单"
+ 
                 if ouo_order.is_active_local_c():
-                    continue  # Order is not on the exchange yet
-
+                    continue  # 订单尚未进入交易所
+ 
                 if order.is_closed_c() and ouo_order.is_open_c():
                     self.cancel_order(ouo_order)
                 elif order.leaves_qty._mem.raw != 0 and order.leaves_qty._mem.raw != ouo_order.leaves_qty._mem.raw:
@@ -6476,14 +6428,13 @@ cdef class OrderMatchingEngine:
                     )
 
         if position is None:
-            return  # Fill completed
-
-        # Check reduce only orders for position
-        # Previously all reduce-only orders were force-synced to the net position size,
-        # which incorrectly merged quantities across independent bracket orders.
-        # Instead, prefer syncing each reduce-only child (TP/SL) to its own parent
-        # entry order's filled quantity when available; fall back to position size
-        # only for standalone reduce-only orders without a parent.
+            return  # 成交完成
+ 
+        # 检查头寸的只减仓 (reduce only) 订单
+        # 以前，所有只减仓订单都被强制同步到净头寸大小，
+        # 这种方式错误地合并了独立挂单组 (bracket orders) 之间的数量。
+        # 现在，优先将每个只减仓子订单（止盈/止损）与其自身的父入口订单成交数量同步（如有可用）；
+        # 仅对没有父订单的独立只减仓订单回退到同步头寸大小。
         cdef:
             Order ro_order
             Order parent_order
@@ -6497,35 +6448,35 @@ cdef class OrderMatchingEngine:
                 and ro_order.is_open_c()
                 and ro_order.is_passive_c()
             ):
-                # Skip the order being filled - it's already being processed
+                # 跳过正在成交的订单 - 它已经在处理中
                 if ro_order.client_order_id == order.client_order_id:
                     continue
-
+ 
                 if position.quantity._mem.raw == 0:
                     self.cancel_order(ro_order)
                     continue
-
-                # Order object may not be updated yet with fills
+ 
+                # 订单对象可能尚未通过成交更新
                 cached_ro_filled = self._cached_filled_qty.get(ro_order.client_order_id, ro_order.filled_qty)
-
-                # Use Quantity objects for comparisons to handle precision correctly
+ 
+                # 使用 Quantity 对象进行比较，以正确处理精度
                 parent_order = None
                 if ro_order.parent_order_id is not None:
                     parent_order = self.cache.order(ro_order.parent_order_id)
-
+ 
                 target_qty = position.quantity
-
+ 
                 if parent_order is not None:
                     cached_parent_filled = self._cached_filled_qty.get(parent_order.client_order_id, parent_order.filled_qty)
-
-                    # Use minimum of parent's filled qty and position qty
+ 
+                    # 使用父订单填充数量和头寸数量的最小值
                     if cached_parent_filled < position.quantity:
                         target_qty = cached_parent_filled
-
-                # Safety clamp: never update total below what's already filled
+ 
+                # 安全钳位：更新后的总量绝不能低于已成交的数量
                 if cached_ro_filled > target_qty:
                     target_qty = cached_ro_filled
-
+ 
                 if ro_order.quantity != target_qty:
                     self.update_order(
                         ro_order,
@@ -6534,15 +6485,15 @@ cdef class OrderMatchingEngine:
                         trigger_price=ro_order.trigger_price if ro_order.has_trigger_price_c() else None,
                     )
 
-# -- IDENTIFIER GENERATORS ------------------------------------------------------------------------
+# -- 标识符生成器 ------------------------------------------------------------------------
 
     cdef VenueOrderId _get_venue_order_id(self, Order order):
-        # Check existing on order
+        # 检查订单上是否已存在
         cdef VenueOrderId venue_order_id = order.venue_order_id
         if venue_order_id is not None:
             return venue_order_id
 
-        # Check exiting in cache
+        # 检查缓存中是否已存在
         venue_order_id = self.cache.venue_order_id(order.client_order_id)
         if venue_order_id is not None:
             return venue_order_id
@@ -6561,14 +6512,14 @@ cdef class OrderMatchingEngine:
                 return position_id
 
             if generate:
-                # Generate a venue position ID
+                # 生成场所头寸 ID
                 return self._generate_venue_position_id()
 
         ####################################################################
-        # NETTING OMS (position ID will be `{instrument_id}-{strategy_id}`)
+        # 净头寸 (NETTING) OMS (头寸 ID 将为 `{instrument_id}-{strategy_id}`)
         ####################################################################
         cdef list[Position] positions_open = self.cache.positions_open(
-            venue=None,  # Faster query filtering
+            venue=None,  # 更快的查询过滤
             instrument_id=order.instrument_id,
         )
         if positions_open:
@@ -6605,13 +6556,13 @@ cdef class OrderMatchingEngine:
         else:
             return f"{self.venue.to_str()}-{self.raw_id}-{self._execution_count:03d}"
 
-# -- EVENT HANDLING -------------------------------------------------------------------------------
+# -- 事件处理 -------------------------------------------------------------------------------
 
     cpdef void accept_order(self, Order order):
         if order.is_closed_c():
-            return  # Temporary guard to prevent invalid processing
+            return  # 临时防护，防止无效处理
 
-        # Check if order already accepted (being added back into the matching engine)
+        # 检查订单是否已被接受（被添加回撮合引擎）
         if not order.status_c() == OrderStatus.ACCEPTED:
             self._generate_order_accepted(order, venue_order_id=self._get_venue_order_id(order))
 
@@ -6633,7 +6584,7 @@ cdef class OrderMatchingEngine:
     cpdef void cancel_order(self, Order order, bint cancel_contingencies=True):
         if order.is_active_local_c():
             self._log.error(
-                f"Cannot cancel an order with {order.status_string_c()} from the matching engine",
+                f"无法从撮合引擎取消状态为 {order.status_string_c()} 的订单",
             )
             return
 
@@ -6656,24 +6607,24 @@ cdef class OrderMatchingEngine:
         if qty is None:
             qty = order.quantity
 
-        # Validate precision of update parameters (must be <= instrument precision)
+        # 验证更新参数的精度（必须 <= 工具精度）
         if qty._mem.precision > self._size_prec:
             raise RuntimeError(
-                f"invalid update qty precision {qty._mem.precision} "
-                f"when {self.instrument.id} size precision is {self._size_prec}"
+                f"更新数量精度 {qty._mem.precision} 无效，"
+                f"而 {self.instrument.id} 的数量精度为 {self._size_prec}"
             )
         if price is not None and price._mem.precision > self._price_prec:
             raise RuntimeError(
-                f"invalid update price precision {price._mem.precision} "
-                f"when {self.instrument.id} price precision is {self._price_prec}"
+                f"更新价格精度 {price._mem.precision} 无效，"
+                f"而 {self.instrument.id} 的价格精度为 {self._price_prec}"
             )
         if trigger_price is not None and trigger_price._mem.precision > self._price_prec:
             raise RuntimeError(
-                f"invalid update trigger_price precision {trigger_price._mem.precision} "
-                f"when {self.instrument.id} price precision is {self._price_prec}"
+                f"更新触发价格精度 {trigger_price._mem.precision} 无效，"
+                f"而 {self.instrument.id} 的价格精度为 {self._price_prec}"
             )
 
-        # Use _cached_filled_qty since order object may not have updated filled_qty
+        # 使用 _cached_filled_qty，因为订单对象的 filled_qty 可能尚未更新
         cdef Quantity filled_qty = self._cached_filled_qty.get(order.client_order_id, order.filled_qty)
         if qty < filled_qty:
             self._generate_order_modify_rejected(
@@ -6683,7 +6634,7 @@ cdef class OrderMatchingEngine:
                 instrument_id=order.instrument_id,
                 client_order_id=order.client_order_id,
                 venue_order_id=order.venue_order_id,
-                reason=f"Cannot reduce order quantity {qty} below filled quantity {filled_qty}",
+                reason=f"无法将订单数量 {qty} 降低至已成交数量 {filled_qty} 以下",
             )
             return
 
@@ -6733,14 +6684,14 @@ cdef class OrderMatchingEngine:
             self._update_trailing_stop_limit_order(order, qty, price, trigger_price)
         else:
             raise ValueError(
-                f"invalid `OrderType` was {order.order_type}")  # pragma: no cover (design-time error)
+                f"无效的 `OrderType`，为 {order.order_type}")  # pragma: no cover (设计时错误)
 
-        # If order now has zero leaves after update, cancel it
+        # 如果更新后订单的剩余数量为零，则取消该订单
         cdef QuantityRaw new_leaves_raw = qty._mem.raw - filled_qty._mem.raw if qty._mem.raw > filled_qty._mem.raw else 0
         if new_leaves_raw == 0:
             if self._support_contingent_orders and order.contingency_type != ContingencyType.NO_CONTINGENCY and update_contingencies:
                 self._update_contingent_orders(order)
-            # Pass False since we already handled contingents above
+            # 传入 False，因为我们已经在上面处理了关联订单
             self.cancel_order(order, cancel_contingencies=False)
             return
 
@@ -6748,13 +6699,13 @@ cdef class OrderMatchingEngine:
             self._update_contingent_orders(order)
 
     cpdef void trigger_stop_order(self, Order order):
-        # Always STOP_LIMIT or LIMIT_IF_TOUCHED orders
+        # 始终为 STOP_LIMIT 或 LIMIT_IF_TOUCHED 订单
         cdef Price trigger_price = order.trigger_price
         cdef Price price = order.price
 
         self._generate_order_triggered(order)
 
-        # Check for immediate fill (which would fill passively as a maker)
+        # 检查是否立即成交（将作为挂单 (MAKER) 被动成交）
         if order.side == OrderSide.BUY and trigger_price._mem.raw > price._mem.raw > self._core.ask_raw:
             order.liquidity_side = LiquiditySide.MAKER
             self.fill_limit_order(order)
@@ -6766,16 +6717,16 @@ cdef class OrderMatchingEngine:
 
         if self._core.is_limit_matched(order.side, price):
             if order.is_post_only:
-                # Would be liquidity taker
+                # 将成为流动性提取者 (TAKER)
                 self._core.delete_order(order)
                 self._cached_filled_qty.pop(order.client_order_id, None)
                 self._generate_order_rejected(
                     order,
-                    f"POST_ONLY {order.type_string_c()} {order.side_string_c()} order "
-                    f"limit px of {order.price} would have been a TAKER: "
-                    f"bid={self._core.bid}, "
-                    f"ask={self._core.ask}",
-                    True,  # due_post_only
+                    f"只挂单 (POST_ONLY) {order.type_string_c()} {order.side_string_c()} 订单 "
+                    f"限价 {order.price} 会导致其成为提取者 (TAKER): "
+                    f"买入价={self._core.bid}, "
+                    f"卖出价={self._core.ask}",
+                    True,  # 由于只挂单原因 (due_post_only)
                 )
                 return
 
@@ -6783,7 +6734,7 @@ cdef class OrderMatchingEngine:
             self.fill_limit_order(order)
 
     cdef void _update_contingent_orders(self, Order order):
-        self._log.debug(f"Updating OUO orders from {order.client_order_id}", LogColor.MAGENTA)
+        self._log.debug(f"正在从 {order.client_order_id} 更新 OUO 订单", LogColor.MAGENTA)
 
         cdef Quantity parent_filled_qty = self._cached_filled_qty.get(order.client_order_id, order.filled_qty)
         cdef QuantityRaw parent_leaves_raw = order.quantity._mem.raw - parent_filled_qty._mem.raw if order.quantity._mem.raw > parent_filled_qty._mem.raw else 0
@@ -6794,10 +6745,10 @@ cdef class OrderMatchingEngine:
         cdef QuantityRaw child_leaves_raw
         for client_order_id in order.linked_order_ids or []:
             ouo_order = self.cache.order(client_order_id)
-            assert ouo_order is not None, "OUO order not found"
+            assert ouo_order is not None, "未找到 OUO 订单"
 
             if ouo_order.is_active_local_c():
-                continue  # Order is not on the exchange yet
+                continue  # 订单尚未进入交易所
 
             if ouo_order.order_type == OrderType.MARKET or ouo_order.is_closed_c():
                 continue
@@ -6807,7 +6758,7 @@ cdef class OrderMatchingEngine:
             if parent_leaves_raw == 0:
                 self.cancel_order(ouo_order, cancel_contingencies=False)
             elif child_filled_qty._mem.raw >= parent_leaves_raw:
-                # Child already filled beyond parent's remaining qty, cancel it
+                # 子订单成交已超过父订单剩余数量，将其取消
                 self.cancel_order(ouo_order, cancel_contingencies=False)
             else:
                 child_leaves_raw = ouo_order.quantity._mem.raw - child_filled_qty._mem.raw if ouo_order.quantity._mem.raw > child_filled_qty._mem.raw else 0
@@ -6821,15 +6772,15 @@ cdef class OrderMatchingEngine:
                     )
 
     cdef void _cancel_contingent_orders(self, Order order):
-        # Iterate all contingent orders and cancel if active
+        # 迭代所有关联订单，如果处于活跃状态则将其取消
         cdef ClientOrderId client_order_id
         cdef Order contingent_order
         for client_order_id in order.linked_order_ids or []:
             contingent_order = self.cache.order(client_order_id)
-            assert contingent_order is not None, "Contingency order not found"
+            assert contingent_order is not None, "未找到关联订单"
 
             if contingent_order.is_active_local_c():
-                continue  # Order is not on the exchange yet
+                continue  # 订单尚未进入交易所
 
             if not contingent_order.is_closed_c():
                 self.cancel_order(contingent_order, cancel_contingencies=False)
@@ -6837,7 +6788,7 @@ cdef class OrderMatchingEngine:
 # -- EVENT GENERATORS -----------------------------------------------------------------------------
 
     cdef void _generate_order_rejected(self, Order order, str reason, bint due_post_only=False):
-        # Generate event
+        # 生成事件
         cdef uint64_t ts_now = self._clock.timestamp_ns()
         cdef OrderRejected event = OrderRejected(
             trader_id=order.trader_id,
@@ -6854,7 +6805,7 @@ cdef class OrderMatchingEngine:
         self.msgbus.send(endpoint="ExecEngine.process", msg=event)
 
     cdef void _generate_order_accepted(self, Order order, VenueOrderId venue_order_id):
-        # Generate event
+        # 生成事件
         cdef uint64_t ts_now = self._clock.timestamp_ns()
         cdef OrderAccepted event = OrderAccepted(
             trader_id=order.trader_id,
@@ -6879,7 +6830,7 @@ cdef class OrderMatchingEngine:
         VenueOrderId venue_order_id,
         str reason,
     ):
-        # Generate event
+        # 生成事件
         cdef uint64_t ts_now = self._clock.timestamp_ns()
         cdef OrderModifyRejected event = OrderModifyRejected(
             trader_id=trader_id,
@@ -6905,7 +6856,7 @@ cdef class OrderMatchingEngine:
         VenueOrderId venue_order_id,
         str reason,
     ):
-        # Generate event
+        # 生成事件
         cdef uint64_t ts_now = self._clock.timestamp_ns()
         cdef OrderCancelRejected event = OrderCancelRejected(
             trader_id=trader_id,
@@ -6928,7 +6879,7 @@ cdef class OrderMatchingEngine:
         Price price,
         Price trigger_price,
     ):
-        # Generate event
+        # 生成事件
         cdef uint64_t ts_now = self._clock.timestamp_ns()
         cdef OrderUpdated event = OrderUpdated(
             trader_id=order.trader_id,
@@ -6948,7 +6899,7 @@ cdef class OrderMatchingEngine:
         self.msgbus.send(endpoint="ExecEngine.process", msg=event)
 
     cdef void _generate_order_canceled(self, Order order, VenueOrderId venue_order_id):
-        # Generate event
+        # 生成事件
         cdef uint64_t ts_now = self._clock.timestamp_ns()
         cdef OrderCanceled event = OrderCanceled(
             trader_id=order.trader_id,
@@ -6964,7 +6915,7 @@ cdef class OrderMatchingEngine:
         self.msgbus.send(endpoint="ExecEngine.process", msg=event)
 
     cdef void _generate_order_triggered(self, Order order):
-        # Generate event
+        # 生成事件
         cdef uint64_t ts_now = self._clock.timestamp_ns()
         cdef OrderTriggered event = OrderTriggered(
             trader_id=order.trader_id,
@@ -6980,7 +6931,7 @@ cdef class OrderMatchingEngine:
         self.msgbus.send(endpoint="ExecEngine.process", msg=event)
 
     cdef void _generate_order_expired(self, Order order):
-        # Generate event
+        # 生成事件
         cdef uint64_t ts_now = self._clock.timestamp_ns()
         cdef OrderExpired event = OrderExpired(
             trader_id=order.trader_id,
@@ -7006,7 +6957,7 @@ cdef class OrderMatchingEngine:
         Money commission,
         LiquiditySide liquidity_side
     ):
-        # Generate event
+        # 生成事件
         cdef uint64_t ts_now = self._clock.timestamp_ns()
         cdef OrderFilled event = OrderFilled(
             trader_id=order.trader_id,

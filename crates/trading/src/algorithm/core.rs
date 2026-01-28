@@ -1,19 +1,18 @@
 // -------------------------------------------------------------------------------------------------
-//  Copyright (C) 2015-2026 Nautech Systems Pty Ltd. All rights reserved.
+//  版权所有 (C) 2015-2026 Nautech Systems Pty Ltd。保留所有权利。
 //  https://nautechsystems.io
 //
-//  Licensed under the GNU Lesser General Public License Version 3.0 (the "License");
-//  You may not use this file except in compliance with the License.
-//  You may obtain a copy of the License at https://www.gnu.org/licenses/lgpl-3.0.en.html
+//  基于 GNU Lesser General Public License 3.0 版本（“许可证”）获得许可；
+//  除非符合许可证，否则您不得使用此文件。
+//  您可以在 https://www.gnu.org/licenses/lgpl-3.0.en.html 获取许可证副本。
 //
-//  Unless required by applicable law or agreed to in writing, software
-//  distributed under the License is distributed on an "AS IS" BASIS,
-//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-//  See the License for the specific language governing permissions and
-//  limitations under the License.
+//  除非适用法律要求或书面同意，
+//  否则根据许可证分发的软件是基于“按原样”基础分发的，
+//  不附带任何明示或暗示的保证或条件。
+//  请参阅许可证以了解管理许可证下的权限和限制的具体语言。
 // -------------------------------------------------------------------------------------------------
 
-//! Core component for execution algorithms.
+//! 执行算法的核心组件。
 
 use std::{
     cell::RefCell,
@@ -38,41 +37,41 @@ use nautilus_model::{
 
 use super::config::ExecutionAlgorithmConfig;
 
-/// Holds event handlers for strategy event subscriptions.
+/// 持有策略事件订阅的事件处理器。
 #[derive(Clone, Debug)]
 pub struct StrategyEventHandlers {
-    /// The topic string for order events.
+    /// 订单事件的主题字符串。
     pub order_topic: String,
-    /// The handler for order events.
+    /// 订单事件的处理器。
     pub order_handler: TypedHandler<OrderEventAny>,
-    /// The topic string for position events.
+    /// 持仓事件的主题字符串。
     pub position_topic: String,
-    /// The handler for position events.
+    /// 持仓事件的处理器。
     pub position_handler: TypedHandler<PositionEvent>,
 }
 
-/// The core component of an [`ExecutionAlgorithm`](super::ExecutionAlgorithm).
+/// [`ExecutionAlgorithm`](super::ExecutionAlgorithm) 的核心组件。
 ///
-/// This struct manages the internal state for execution algorithms including
-/// spawn ID tracking and strategy subscriptions. It wraps a [`DataActorCore`]
-/// to provide data actor capabilities.
+/// 该结构体管理执行算法的内部状态，包括
+/// 生成 ID 跟踪和策略订阅。它封装了 [`DataActorCore`]
+/// 以提供数据参与者（Actor）功能。
 ///
-/// User algorithms should hold this as a member and implement `Deref`/`DerefMut`
-/// to satisfy the trait bounds of [`ExecutionAlgorithm`](super::ExecutionAlgorithm).
+/// 用户算法应将其作为成员持有，并实现 `Deref`/`DerefMut`
+/// 以满足 [`ExecutionAlgorithm`](super::ExecutionAlgorithm) 的 trait 约束。
 pub struct ExecutionAlgorithmCore {
-    /// The underlying data actor core.
+    /// 底层数据参与者核心。
     pub actor: DataActorCore,
-    /// The execution algorithm configuration.
+    /// 执行算法配置。
     pub config: ExecutionAlgorithmConfig,
-    /// The execution algorithm ID.
+    /// 执行算法 ID。
     pub exec_algorithm_id: ExecAlgorithmId,
-    /// Maps primary order client IDs to their spawn sequence counter.
+    /// 将主订单客户 ID 映射到其生成的序列计数器。
     exec_spawn_ids: AHashMap<ClientOrderId, u32>,
-    /// Tracks strategies that have been subscribed to for events.
+    /// 跟踪已订阅事件的策略。
     subscribed_strategies: AHashSet<StrategyId>,
-    /// Tracks pending spawn reductions for quantity restoration on denial/rejection.
+    /// 跟踪待处理的生成削减，以便在被拒或驳回时恢复数量。
     pending_spawn_reductions: AHashMap<ClientOrderId, Quantity>,
-    /// Maps strategies to their event handlers for cleanup on reset.
+    /// 将策略映射到其事件处理器，以便在重置时进行清理。
     strategy_event_handlers: AHashMap<StrategyId, StrategyEventHandlers>,
 }
 
@@ -97,16 +96,16 @@ impl Debug for ExecutionAlgorithmCore {
 }
 
 impl ExecutionAlgorithmCore {
-    /// Creates a new [`ExecutionAlgorithmCore`] instance.
+    /// 创建一个新的 [`ExecutionAlgorithmCore`] 实例。
     ///
     /// # Panics
     ///
-    /// Panics if `config.exec_algorithm_id` is `None`.
+    /// 如果 `config.exec_algorithm_id` 为 `None` 则会触发 Panic。
     #[must_use]
     pub fn new(config: ExecutionAlgorithmConfig) -> Self {
         let exec_algorithm_id = config
             .exec_algorithm_id
-            .expect("ExecutionAlgorithmConfig must have exec_algorithm_id set");
+            .expect("ExecutionAlgorithmConfig 必须设置 exec_algorithm_id");
 
         let actor_config = DataActorConfig {
             actor_id: Some(ActorId::from(exec_algorithm_id.inner().as_str())),
@@ -125,11 +124,11 @@ impl ExecutionAlgorithmCore {
         }
     }
 
-    /// Registers the execution algorithm with the trading engine components.
+    /// 向交易引擎组件注册执行算法。
     ///
     /// # Errors
     ///
-    /// Returns an error if registration with the actor core fails.
+    /// 如果与参与者核心注册失败，则返回错误。
     pub fn register(
         &mut self,
         trader_id: TraderId,
@@ -139,15 +138,15 @@ impl ExecutionAlgorithmCore {
         self.actor.register(trader_id, clock, cache)
     }
 
-    /// Returns the execution algorithm ID.
+    /// 返回执行算法 ID。
     #[must_use]
     pub fn id(&self) -> ExecAlgorithmId {
         self.exec_algorithm_id
     }
 
-    /// Generates the next spawn client order ID for a primary order.
+    /// 为主订单生成下一个子订单（Spawn）客户订单 ID。
     ///
-    /// The generated ID follows the pattern: `{primary_id}-E{sequence}`.
+    /// 生成的 ID 遵循以下模式：`{primary_id}-E{sequence}`。
     #[must_use]
     pub fn spawn_client_order_id(&mut self, primary_id: &ClientOrderId) -> ClientOrderId {
         let sequence = self
@@ -159,24 +158,24 @@ impl ExecutionAlgorithmCore {
         ClientOrderId::new(format!("{primary_id}-E{sequence}"))
     }
 
-    /// Returns the current spawn sequence for a primary order, if any.
+    /// 返回主订单的当前生成序列（如果有）。
     #[must_use]
     pub fn spawn_sequence(&self, primary_id: &ClientOrderId) -> Option<u32> {
         self.exec_spawn_ids.get(primary_id).copied()
     }
 
-    /// Checks if a strategy has been subscribed to for events.
+    /// 检查策略是否已订阅事件。
     #[must_use]
     pub fn is_strategy_subscribed(&self, strategy_id: &StrategyId) -> bool {
         self.subscribed_strategies.contains(strategy_id)
     }
 
-    /// Marks a strategy as subscribed for events.
+    /// 将策略标记为已订阅事件。
     pub fn add_subscribed_strategy(&mut self, strategy_id: StrategyId) {
         self.subscribed_strategies.insert(strategy_id);
     }
 
-    /// Stores the event handlers for a strategy subscription.
+    /// 存储策略订阅的事件处理器。
     pub fn store_strategy_event_handlers(
         &mut self,
         strategy_id: StrategyId,
@@ -185,40 +184,40 @@ impl ExecutionAlgorithmCore {
         self.strategy_event_handlers.insert(strategy_id, handlers);
     }
 
-    /// Takes and returns all stored strategy event handlers, clearing the internal map.
+    /// 取出并返回所有存储的策略事件处理器，并清空内部映射。
     pub fn take_strategy_event_handlers(&mut self) -> AHashMap<StrategyId, StrategyEventHandlers> {
         std::mem::take(&mut self.strategy_event_handlers)
     }
 
-    /// Clears all spawn tracking state.
+    /// 清除所有生成 ID 跟踪状态。
     pub fn clear_spawn_ids(&mut self) {
         self.exec_spawn_ids.clear();
     }
 
-    /// Clears all strategy subscriptions.
+    /// 清除所有策略订阅。
     pub fn clear_subscribed_strategies(&mut self) {
         self.subscribed_strategies.clear();
     }
 
-    /// Tracks a pending spawn reduction for potential restoration.
+    /// 跟踪待处理的生成削减，以便进行潜在恢复。
     pub fn track_pending_spawn_reduction(&mut self, spawn_id: ClientOrderId, quantity: Quantity) {
         self.pending_spawn_reductions.insert(spawn_id, quantity);
     }
 
-    /// Removes and returns the pending spawn reduction for an order, if any.
+    /// 移除并返回订单的待处理生成削减（如果有）。
     pub fn take_pending_spawn_reduction(&mut self, spawn_id: &ClientOrderId) -> Option<Quantity> {
         self.pending_spawn_reductions.remove(spawn_id)
     }
 
-    /// Clears all pending spawn reductions.
+    /// 清开所有待处理的生成削减。
     pub fn clear_pending_spawn_reductions(&mut self) {
         self.pending_spawn_reductions.clear();
     }
 
-    /// Resets the core to its initial state.
+    /// 将核心重置为初始状态。
     ///
-    /// Note: This clears handler storage but does NOT unsubscribe from msgbus.
-    /// Call `unsubscribe_all_strategy_events` first to properly unsubscribe.
+    /// 注意：此操作会清除处理器存储，但不会取消订阅消息总线。
+    /// 请先调用 `unsubscribe_all_strategy_events` 以正确取消订阅。
     pub fn reset(&mut self) {
         self.exec_spawn_ids.clear();
         self.subscribed_strategies.clear();
@@ -226,16 +225,16 @@ impl ExecutionAlgorithmCore {
         self.strategy_event_handlers.clear();
     }
 
-    /// Returns the order for the given client order ID from the cache.
+    /// 从缓存中返回给定客户订单 ID 的订单。
     ///
     /// # Errors
     ///
-    /// Returns an error if the order is not found in the cache.
+    /// 如果在缓存中未找到订单，则返回错误。
     pub fn get_order(&self, client_order_id: &ClientOrderId) -> anyhow::Result<OrderAny> {
         self.cache()
             .order(client_order_id)
             .cloned()
-            .ok_or_else(|| anyhow::anyhow!("Order not found in cache for {client_order_id}"))
+            .ok_or_else(|| anyhow::anyhow!("缓存中未找到订单 {client_order_id}"))
     }
 }
 
@@ -375,7 +374,7 @@ mod tests {
         let config = create_test_config();
         let core = ExecutionAlgorithmCore::new(config);
 
-        // Should be able to access DataActorCore methods via Deref
+        // 应该能够通过 Deref 访问 DataActorCore 方法
         assert!(core.trader_id().is_none());
     }
 }

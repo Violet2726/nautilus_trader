@@ -203,70 +203,70 @@ cdef class SimulatedExchange:
     cdef Logger _log
 
     cdef readonly Venue id
-    """The exchange ID.\n\n:returns: `Venue`"""
+    """交易所 ID。\n\n:returns: `Venue`"""
     cdef readonly OmsType oms_type
-    """The exchange order management system type.\n\n:returns: `OmsType`"""
+    """交易所的订单管理系统类型。\n\n:returns: `OmsType`"""
     cdef readonly BookType book_type
-    """The exchange default order book type.\n\n:returns: `BookType`"""
+    """交易所的默认订单簿类型。\n\n:returns: `BookType`"""
     cdef readonly MessageBus msgbus
-    """The message bus wired to the exchange.\n\n:returns: `MessageBus`"""
+    """连接到交易所的消息总线。\n\n:returns: `MessageBus`"""
     cdef readonly Cache cache
-    """The cache wired to the exchange.\n\n:returns: `CacheFacade`"""
+    """连接到交易所的缓存。\n\n:returns: `CacheFacade`"""
     cdef readonly BacktestExecClient exec_client
-    """The execution client wired to the exchange.\n\n:returns: `BacktestExecClient`"""
+    """连接到交易所的执行客户端。\n\n:returns: `BacktestExecClient`"""
 
     cdef readonly AccountType account_type
-    """The account base currency.\n\n:returns: `AccountType`"""
+    """账户基础货币类型。\n\n:returns: `AccountType`"""
     cdef readonly Currency base_currency
-    """The account base currency (None for multi-currency accounts).\n\n:returns: `Currency` or ``None``"""
+    """账户基础货币（多币种账户为 None）。\n\n:returns: `Currency` 或 ``None``"""
     cdef readonly list starting_balances
-    """The account starting balances for each backtest run.\n\n:returns: `bool`"""
+    """每次回测运行的账户起始余额。\n\n:returns: `bool`"""
     cdef readonly default_leverage
-    """The accounts default leverage.\n\n:returns: `Decimal`"""
+    """账户默认杠杆。\n\n:returns: `Decimal`"""
     cdef readonly dict[InstrumentId, object] leverages
-    """The accounts instrument specific leverage configuration.\n\n:returns: `dict[InstrumentId, Decimal]`"""
+    """账户的特定合约杠杆配置。\n\n:returns: `dict[InstrumentId, Decimal]`"""
     cdef readonly MarginModel margin_model
-    """The margin calculation model for the exchange.\n\n:returns: `MarginModel`"""
+    """交易所的保证金计算模型。\n\n:returns: `MarginModel`"""
     cdef readonly bint is_frozen_account
-    """If the account for the exchange is frozen.\n\n:returns: `bool`"""
+    """该交易所的账户是否被冻结。\n\n:returns: `bool`"""
     cdef readonly LatencyModel latency_model
-    """The latency model for the exchange.\n\n:returns: `LatencyModel`"""
+    """交易所的延迟模型。\n\n:returns: `LatencyModel`"""
     cdef readonly FillModel fill_model
-    """The fill model for the exchange.\n\n:returns: `FillModel`"""
+    """交易所的成交模型。\n\n:returns: `FillModel`"""
     cdef readonly FeeModel fee_model
-    """The fee model for the exchange.\n\n:returns: `FeeModel`"""
+    """交易所的手续费模型。\n\n:returns: `FeeModel`"""
     cdef readonly bint reject_stop_orders
-    """If stop orders are rejected on submission if in the market.\n\n:returns: `bool`"""
+    """如果触发价格在市场内，止损订单是否在提交时被拒绝。\n\n:returns: `bool`"""
     cdef readonly bint support_gtd_orders
-    """If orders with GTD time in force will be supported by the venue.\n\n:returns: `bool`"""
+    """交易场所是否支持 GTD（Good-Till-Date）时效的订单。\n\n:returns: `bool`"""
     cdef readonly bint support_contingent_orders
-    """If contingent orders will be supported/respected by the venue.\n\n:returns: `bool`"""
+    """交易场所是否支持/遵守条件订单。\n\n:returns: `bool`"""
     cdef readonly bint oto_full_trigger
-    """If OTO child orders are released only on full parent fill.\n\n:returns: `bool`"""
+    """OTO 子订单是否仅在父订单完全成交后释放。\n\n:returns: `bool`"""
     cdef readonly bint use_position_ids
-    """If venue position IDs will be generated on order fills.\n\n:returns: `bool`"""
+    """是否在订单成交时生成交易场所持仓 ID。\n\n:returns: `bool`"""
     cdef readonly bint use_random_ids
-    """If venue order and position IDs will be randomly generated UUID4s.\n\n:returns: `bool`"""
+    """交易场所生成的订单和持仓 ID 是否为随机 UUID4。\n\n:returns: `bool`"""
     cdef readonly bint use_reduce_only
-    """If the `reduce_only` option on orders will be honored.\n\n:returns: `bool`"""
+    """是否遵守订单上的 `reduce_only` 选项。\n\n:returns: `bool`"""
     cdef readonly bint use_message_queue
-    """If an internal message queue is being used to sequentially process incoming trading commands.\n\n:returns: `bool`"""
+    """是否使用内部消息队列来顺序处理传入的交易命令。\n\n:returns: `bool`"""
     cdef readonly bint use_market_order_acks
-    """If OrderAccepted events will be generated for market orders.\n\n:returns: `bool`"""
+    """是否为市价单生成 OrderAccepted 事件。\n\n:returns: `bool`"""
     cdef readonly bint bar_execution
-    """If bars should be processed by the matching engine(s) (and move the market).\n\n:returns: `bool`"""
+    """K 线数据是否应由撮合引擎处理（并驱动市场）。\n\n:returns: `bool`"""
     cdef readonly bint bar_adaptive_high_low_ordering
-    """If the processing order of bar prices is adaptive based on a heuristic.\n\n:returns: `bool`"""
+    """K 线价格的处理顺序是否基于启发式自适应。\n\n:returns: `bool`"""
     cdef readonly bint trade_execution
-    """If trades should be processed by the matching engine(s) (and move the market).\n\n:returns: `bool`"""
+    """成交数据是否应由撮合引擎处理（并驱动市场）。\n\n:returns: `bool`"""
     cdef readonly bint liquidity_consumption
-    """If liquidity consumption is tracked per price level.\n\n:returns: `bool`"""
+    """是否跟踪每个价格档位的流动性消耗。\n\n:returns: `bool`"""
     cdef readonly uint32_t price_protection_points
-    """Defines an exchange-calculated price boundary (in points) to prevent marketable orders from executing at excessively aggressive prices.\n\n:returns: `int`"""
+    """定义交易所计算的价格边界（以点数为单位），防止可成交订单以过于激进的价格执行。\n\n:returns: `int`"""
     cdef readonly list modules
-    """The simulation modules registered with the exchange.\n\n:returns: `list[SimulationModule]`"""
+    """注册到交易所的模拟模块。\n\n:returns: `list[SimulationModule]`"""
     cdef readonly dict[InstrumentId, Instrument] instruments
-    """The exchange instruments.\n\n:returns: `dict[InstrumentId, Instrument]`"""
+    """交易所的合约。\n\n:returns: `dict[InstrumentId, Instrument]`"""
 
     cdef dict[InstrumentId, OrderMatchingEngine] _matching_engines
     cdef object _message_queue
@@ -364,23 +364,23 @@ cdef class OrderMatchingEngine:
     cdef dict[ClientOrderId, Quantity] _cached_filled_qty
 
     cdef readonly Venue venue
-    """The venue for the matching engine.\n\n:returns: `Venue`"""
+    """撮合引擎的交易场所。\n\n:returns: `Venue`"""
     cdef readonly Instrument instrument
-    """The instrument for the matching engine.\n\n:returns: `Instrument`"""
+    """撮合引擎的合约。\n\n:returns: `Instrument`"""
     cdef readonly uint32_t raw_id
-    """The instruments raw integer ID for the exchange.\n\n:returns: `int`"""
+    """交易所的合约原始整数 ID。\n\n:returns: `int`"""
     cdef readonly BookType book_type
-    """The order book type for the matching engine.\n\n:returns: `BookType`"""
+    """撮合引擎的订单簿类型。\n\n:returns: `BookType`"""
     cdef readonly OmsType oms_type
-    """The order management system type for the matching engine.\n\n:returns: `OmsType`"""
+    """撮合引擎的订单管理系统类型。\n\n:returns: `OmsType`"""
     cdef readonly AccountType account_type
-    """The account type for the matching engine.\n\n:returns: `AccountType`"""
+    """撮合引擎的账户类型。\n\n:returns: `AccountType`"""
     cdef readonly MarketStatus market_status
-    """The market status for the matching engine.\n\n:returns: `MarketStatus`"""
+    """撮合引擎的市场状态。\n\n:returns: `MarketStatus`"""
     cdef readonly CacheFacade cache
-    """The cache for the matching engine.\n\n:returns: `CacheFacade`"""
+    """撮合引擎的缓存。\n\n:returns: `CacheFacade`"""
     cdef readonly MessageBus msgbus
-    """The message bus for the matching engine.\n\n:returns: `MessageBus`"""
+    """撮合引擎的消息总线。\n\n:returns: `MessageBus`"""
 
     cdef MatchingCore _core
     cdef uint8_t _price_prec

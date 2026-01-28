@@ -14,14 +14,12 @@
 # -------------------------------------------------------------------------------------------------
 
 """
-The `Portfolio` facilitates the management of trading operations.
+`Portfolio` 促进交易操作的管理。
 
-The intended use case is for a single ``Portfolio`` instance per running system,
-a fleet of trading strategies will organize around a portfolio with the help
-of the `Trader`` class.
+预期的用例是每个运行系统有一个 ``Portfolio`` 实例，
+一队交易策略将协助 `Trader` 类围绕投资组合进行组织。
 
-The portfolio can satisfy queries for account information, margin balances,
-total risk exposures and total net positions.
+投资组合可以满足对账户信息、保证金余额、总风险敞口和总净头寸的查询。
 """
 
 import pickle
@@ -107,26 +105,25 @@ cdef tuple[OrderEvent] _UPDATE_ORDER_EVENTS = (
 
 cdef class Portfolio(PortfolioFacade):
     """
-    Provides a trading portfolio.
+提供交易组合。
 
-    Currently there is a limitation of one account per ``ExecutionClient``
-    instance.
+目前限制为每个 ``ExecutionClient`` 实例对应一个账户。
 
-    Parameters
-    ----------
-    msgbus : MessageBus
-        The message bus for the engine.
-    cache : CacheFacade
-        The read-only cache for the portfolio.
-    clock : Clock
-        The clock for the portfolio.
-    config : PortfolioConfig
-       The configuration for the instance.
+参数
+----------
+msgbus : MessageBus
+    引擎的消息总线。
+cache : CacheFacade
+    投资组合的只读缓存。
+clock : Clock
+    投资组合的时钟。
+config : PortfolioConfig, 可选
+    实例的配置。
 
-    Raises
-    ------
-    TypeError
-        If `config` is not of type `PortfolioConfig`.
+引发
+------
+TypeError
+    如果 `config` 不是 `PortfolioConfig` 类型。
     """
 
     def __init__(
@@ -151,14 +148,14 @@ cdef class Portfolio(PortfolioFacade):
             logger=self._log,
         )
 
-        # Configuration
+        # 配置
         self._config: PortfolioConfig = config
         self._debug: bool = config.debug
         self._use_mark_prices: bool = config.use_mark_prices
         self._use_mark_xrates: bool = config.use_mark_xrates
         self._convert_to_account_base_currency: bool = config.convert_to_account_base_currency
-        self._log_price: str = "mark price" if config.use_mark_prices else "quote, trade, or bar price"
-        self._log_xrate: str = "mark" if config.use_mark_xrates else "data to calculate"
+        self._log_price: str = "标记价格" if config.use_mark_prices else "报价、交易或 Bar 价格"
+        self._log_xrate: str = "标记" if config.use_mark_xrates else "计算所需数据"
 
         if config.min_account_state_logging_interval_ms:
             interval_ns = config.min_account_state_logging_interval_ms * NANOSECONDS_IN_MILLISECOND
@@ -179,7 +176,7 @@ cdef class Portfolio(PortfolioFacade):
 
         self.analyzer = PortfolioAnalyzer()
 
-        # Register default statistics
+        # 注册默认统计指标
         self.analyzer.register_statistic(MaxWinner())
         self.analyzer.register_statistic(AvgWinner())
         self.analyzer.register_statistic(MinWinner())
@@ -198,12 +195,12 @@ cdef class Portfolio(PortfolioFacade):
         self.analyzer.register_statistic(RiskReturnRatio())
         self.analyzer.register_statistic(LongRatio())
 
-        # Register endpoints
+        # 注册端点
         self._msgbus.register(endpoint="Portfolio.update_account", handler=self.update_account)
         self._msgbus.register(endpoint="Portfolio.update_order", handler=self.update_order)
         self._msgbus.register(endpoint="Portfolio.update_position", handler=self.update_position)
 
-        # Required subscriptions
+        # 必需的订阅
         self._msgbus.subscribe(topic="events.order.*", handler=self.on_order_event, priority=10)
         self._msgbus.subscribe(topic="events.position.*", handler=self.on_position_event, priority=10)
 
@@ -221,33 +218,33 @@ cdef class Portfolio(PortfolioFacade):
 
     cpdef void set_use_mark_prices(self, bint value):
         """
-        Set the `use_mark_prices` setting with the given `value`.
+        使用给定的 `value` 设置 `use_mark_prices` 设置。
 
-        Parameters
+        参数
         ----------
         value : bool
-            The value to set.
+            要设置的值。
 
         """
         self._use_mark_prices = value
 
     cpdef void set_use_mark_xrates(self, bint value):
         """
-        Set the `use_mark_xrates` setting with the given `value`.
+        使用给定的 `value` 设置 `use_mark_xrates` 设置。
 
-        Parameters
+        参数
         ----------
         value : bool
-            The value to set.
+            要设置的值。
 
         """
         self._use_mark_xrates = value
 
     cpdef void initialize_orders(self):
         """
-        Initialize the portfolios orders.
+        初始化投资组合订单。
 
-        Performs all account calculations for the current orders state.
+        对当前订单状态执行所有账户计算。
         """
         cdef list all_orders_open = self._cache.orders_open()
         cdef set instruments = set()
@@ -255,7 +252,7 @@ cdef class Portfolio(PortfolioFacade):
         for order in all_orders_open:
             instruments.add(order.instrument_id)
 
-        # Update initial (order) margins to initialize portfolio
+        # 更新初始（订单）保证金以初始化投资组合
         cdef bint initialized = True
         cdef:
             Order o
@@ -269,14 +266,14 @@ cdef class Portfolio(PortfolioFacade):
             instrument = self._cache.instrument(instrument_id)
             if instrument is None:
                 self._log.error(
-                    f"Cannot update initial (order) margin: "
-                    f"no instrument found for {instrument_id}",
+                    f"无法更新初始（订单）保证金： "
+                    f"在缓存中未找到工具 {instrument_id}",
                 )
                 initialized = False
                 break
 
             orders_open = self._cache.orders_open(
-                venue=None,  # Faster query filtering
+                venue=None,  # 更快的查询过滤
                 instrument_id=instrument.id,
             )
             orders_by_account = self._group_by_account_id(orders_open)
@@ -284,8 +281,8 @@ cdef class Portfolio(PortfolioFacade):
                 account = self._cache.account(account_id)
                 if account is None:
                     self._log.error(
-                        f"Cannot update initial (order) margin: "
-                        f"account {account_id} not found in cache",
+                        f"无法更新初始（订单）保证金： "
+                        f"在缓存中未找到账户 {account_id}",
                     )
                     initialized = False
                     break
@@ -304,18 +301,18 @@ cdef class Portfolio(PortfolioFacade):
 
         cdef int open_count = len(all_orders_open)
         self._log.info(
-            f"Initialized {open_count} open order{'' if open_count == 1 else 's'}",
+            f"已初始化 {open_count} 个未平仓订单",
             color=LogColor.BLUE if open_count else LogColor.NORMAL,
         )
         self.initialized = initialized
 
     cpdef void initialize_positions(self):
         """
-        Initialize the portfolios positions.
+        初始化投资组合头寸。
 
-        Performs all account calculations for the current position state.
+        针对当前持仓状态执行所有账户计算。
         """
-        # Clean slate
+        # 清空数据
         self._realized_pnls.clear()
         self._unrealized_pnls.clear()
 
@@ -327,7 +324,7 @@ cdef class Portfolio(PortfolioFacade):
 
         cdef bint initialized = True
 
-        # Update maintenance (position) margins to initialize portfolio
+        # 更新维持（持仓）保证金以初始化投资组合
         cdef:
             InstrumentId instrument_id
             Instrument instrument
@@ -343,14 +340,14 @@ cdef class Portfolio(PortfolioFacade):
             instrument = self._cache.instrument(instrument_id)
             if instrument is None:
                 self._log.error(
-                    f"Cannot update maintenance (position) margin: "
-                    f"no instrument found for {instrument_id}",
+                    f"无法更新维持（持仓）保证金： "
+                    f"在缓存中未找到工具 {instrument_id}",
                 )
                 initialized = False
                 break
 
             positions_open = self._cache.positions_open(
-                venue=None,  # Faster query filtering
+                venue=None,  # 更快的查询过滤
                 instrument_id=instrument_id,
             )
 
@@ -364,13 +361,13 @@ cdef class Portfolio(PortfolioFacade):
                 account = self._cache.account(account_id)
                 if account is None:
                     self._log.error(
-                        f"Cannot update maintenance (position) margin: "
-                        f"account {account_id} not found in cache",
+                        f"无法更新维持（持仓）保证金： "
+                        f"在缓存中未找到账户 {account_id}",
                     )
                     initialized = False
                     continue
 
-                # Calculate and cache PnL for this account
+                # 为该账户计算并缓存盈亏
                 realized_pnl = self.realized_pnl(instrument_id, account_id)
                 unrealized_pnl = self.unrealized_pnl(instrument_id, price=None, account_id=account_id)
 
@@ -388,23 +385,21 @@ cdef class Portfolio(PortfolioFacade):
 
         cdef int open_count = len(all_positions_open)
         self._log.info(
-            f"Initialized {open_count} open position{'' if open_count == 1 else 's'}",
+            f"已初始化 {open_count} 个未平仓头寸",
             color=LogColor.BLUE if open_count else LogColor.NORMAL,
         )
         self.initialized = initialized
 
     cpdef void update_quote_tick(self, QuoteTick tick):
         """
-        Update the portfolio with the given quote tick.
+        使用给定的报价 Tick 更新投资组合。
 
-        Clears the cached unrealized PnL for the associated instrument, and
-        performs any initialization calculations which may have been pending
-        an update.
+        清除关联该工具的缓存未实现盈亏，并执行任何可能挂起的初始化计算。
 
-        Parameters
+        参数
         ----------
         quote_tick : QuoteTick
-            The quote tick to update with.
+            要更新的报价 Tick。
 
         """
         Condition.not_none(tick, "tick")
@@ -423,7 +418,7 @@ cdef class Portfolio(PortfolioFacade):
 
     cpdef void update_mark_price(self, object mark_price):
         """
-        Update the portfolio with the given mark price.
+        使用给定的标记价格更新投资组合。
         """
         Condition.not_none(mark_price, "mark_price")
 
@@ -447,20 +442,18 @@ cdef class Portfolio(PortfolioFacade):
                 xrate=xrate,
             )
         else:
-            self._log.debug(f"Skipping mark xrate update for {instrument_id}: zero price")
+            self._log.debug(f"跳过 {instrument_id} 的标记汇率更新：价格为零")
 
     cpdef void update_bar(self, Bar bar):
         """
-        Update the portfolio with the given bar.
+        使用给定的 Bar 更新投资组合。
 
-        Clears the cached unrealized PnL for the associated instrument, and
-        performs any initialization calculations which may have been pending
-        an update.
+        清除该工具关联的缓存未实现盈亏，并执行任何可能挂起的初始化计算。
 
-        Parameters
+        参数
         ----------
         bar : Bar
-            The bar to update with.
+            要更新的 Bar。
 
         """
         Condition.not_none(bar, "bar")
@@ -471,12 +464,12 @@ cdef class Portfolio(PortfolioFacade):
 
     cpdef void update_account(self, AccountState event):
         """
-        Apply the given account state.
+        应用给定的账户状态。
 
-        Parameters
+        参数
         ----------
         event : AccountState
-            The account state to apply.
+            要应用的账户状态。
 
         """
         Condition.not_none(event, "event")
@@ -490,12 +483,12 @@ cdef class Portfolio(PortfolioFacade):
 
     cpdef void update_order(self, OrderEvent event):
         """
-        Update the portfolio with the given order.
+        使用给定的订单更新投资组合。
 
-        Parameters
+        参数
         ----------
         event : OrderEvent
-            The event to update with.
+            要更新的事件。
 
         """
         Condition.not_none(event, "event")
@@ -510,34 +503,33 @@ cdef class Portfolio(PortfolioFacade):
             return
 
         if not account.calculate_account_state:
-            return  # Nothing to calculate
+            return  # 无需计算
 
         if not isinstance(event, _UPDATE_ORDER_EVENTS):
-            return  # No change to account state
+            return  # 账户状态无变化
 
         cdef Order order = self._cache.order(event.client_order_id)
 
-        # Allow OrderFilled events to proceed even without order in cache
-        # (e.g., leg fills from spread orders or option exercise)
-        # Balance updates only need the fill and position, not the order
+        # 允许即使缓存中没有订单也继续执行 OrderFilled 事件
+        # （例如，来自价差订单的腿填充或期权行权）
+        # 余额更新只需要成交和持仓，而不需要订单
         if order is None and not isinstance(event, OrderFilled):
             self._log.error(
-                f"Cannot update order: "
-                f"{event.client_order_id!r} not found in the cache",
+                f"无法更新订单： "
+                f"{event.client_order_id!r} 在缓存中未找到",
             )
-            return  # No order found
+            return  # 未找到订单
 
         if isinstance(event, OrderRejected) and order.order_type != OrderType.STOP_LIMIT:
-            return  # No change to account state
+            return  # 账户状态无变化
 
         if self._debug:
-            self._log.debug(f"Updating with {order!r}", LogColor.MAGENTA)
+            self._log.debug(f"正在更新 {order!r}", LogColor.MAGENTA)
 
         cdef Money unrealized_pnl
         if isinstance(event, OrderFilled):
-            # Skip balance updates for spread instrument fills (combo fills)
-            # Spread instruments don't create positions, and only leg fills should update balances
-            # to avoid double-counting (combo fill + leg fills)
+            # 跳过组合合约工具成交的余额更新
+            # 组合合约工具不创建持仓，只有腿成交应该更新余额以避免重复计算（组合成交 + 腿成交）
             if not instrument.is_spread():
                 self._accounts.update_balances(
                     account=account,
@@ -559,18 +551,18 @@ cdef class Portfolio(PortfolioFacade):
                     side=order_side_to_bet_side(order_side=event.order_side),
                 )
                 if self._debug:
-                    self._log.debug(f"Applying {bet} to {bet_position}", LogColor.MAGENTA)
+                    self._log.debug(f"正在应用 {bet} 到 {bet_position}", LogColor.MAGENTA)
 
                 bet_position.add_bet(bet)
 
                 if self._debug:
                     self._log.debug(f"{bet_position}", LogColor.MAGENTA)
 
-            # Calculate and cache unrealized PnL for this account
+            # 计算并为此账户缓存未实现盈亏
             unrealized_pnl = self.unrealized_pnl(event.instrument_id, price=None, account_id=account.id)
 
         cdef list orders_open = self._cache.orders_open(
-            venue=None,  # Faster query filtering
+            venue=None,  # 更快的查询过滤
             instrument_id=event.instrument_id,
             strategy_id=None,
             side=OrderSide.NO_ORDER_SIDE,
@@ -586,79 +578,79 @@ cdef class Portfolio(PortfolioFacade):
             ts_event=event.ts_event,
         )
         if not result:
-            self._log.debug(f"Added pending calculation for {instrument.id}")
+            self._log.debug(f"已为 {instrument.id} 添加挂起计算")
             self._pending_calcs.add(instrument.id)
 
-        # Always update account state for cash accounts on non-fill events, or when update_orders succeeded
+        # 始终在非成交事件或 update_orders 成功时更新现货账户的账户状态
         if account.is_cash_account or not isinstance(event, OrderFilled):
-            # Only update account state for other than fill events (these will be updated on position update)
+            # 仅更新非成交事件的账户状态（成交事件将在持仓更新时更新）
             self._update_account(self._accounts.generate_account_state(account, event.ts_event))
 
-        self._log.debug(f"Updated from {event}")
+        self._log.debug(f"已从 {event} 更新")
 
     cpdef void update_position(self, PositionEvent event):
         """
-        Update the portfolio with the given position event.
+        使用给定的持仓事件更新投资组合。
 
-        Parameters
+        参数
         ----------
         event : PositionEvent
-            The event to update with.
+            要更新的事件。
 
         """
         Condition.not_none(event, "event")
 
-        # Fetch all positions for the instrument to calculate global net position
+        # 获取该工具的所有持仓以计算全局净头寸
         cdef list all_positions_open = self._cache.positions_open(
-            venue=None,  # Faster query filtering
+            venue=None,  # 更快的查询过滤
             instrument_id=event.instrument_id,
             strategy_id=None,
             side=PositionSide.NO_POSITION_SIDE,
-            account_id=None,  # Get all accounts for net position
+            account_id=None,  # 获取净头寸的所有账户
         )
         self._update_net_position(
             instrument_id=event.instrument_id,
             positions_open=all_positions_open,
         )
 
-        # Invalidate cached PnLs for this instrument and account
-        # For realized PnL, also check if this is a new position cycle (NETTING OMS)
-        # that would affect all accounts, not just this one
+        # 失效该工具和账户的缓存盈亏
+        # 对于已实现盈亏，还要检查这是否是新的持仓周期 (NETTING OMS)
+        # 这种情况下会影响所有账户，而不只是当前这一个
         cdef:
             bint invalidate_all_accounts = False
             Position updated_position
             set[PositionId] snapshot_ids
             Money last_snapshot_pnl
 
-        # Check if this position update represents a new cycle (closed position with realized_pnl)
-        # For NETTING OMS, if a position is closed and has snapshots, it might be a new cycle
+        # 检查此持仓更新是否代表新周期（已实现盈亏的已平仓持仓）
+        # 对于 NETTING OMS，如果持仓已关闭并具有快照，则它可能是新周期
         updated_position = self._cache.position(event.position_id)
         if updated_position is not None and updated_position.is_closed_c() and updated_position.realized_pnl is not None:
-            # Ensure snapshot data is cached so we can compare
+            # 确保快照数据已缓存，以便我们可以进行比较
             self._ensure_snapshot_pnls_cached_for(event.instrument_id)
 
-            # Check if this position_id has snapshots
+            # 检查此持仓 ID 是否具有快照
             snapshot_ids = self._cache.position_snapshot_ids(event.instrument_id)
             if event.position_id in snapshot_ids:
-                # Compare with last snapshot PnL - if different, it's a new cycle
+                # 与最后一个快照盈亏比较——如果不同，则是新周期
                 last_snapshot_pnl = self._snapshot_last_per_position.get(event.position_id)
                 if last_snapshot_pnl is not None and updated_position.realized_pnl is not None:
                     if (
                         updated_position.realized_pnl.currency != last_snapshot_pnl.currency
                         or updated_position.realized_pnl != last_snapshot_pnl
                     ):
-                        # New cycle detected - invalidate all accounts for this instrument
+                        # 检测到新周期——失效该工具的所有账户
                         invalidate_all_accounts = True
                 else:
-                    # Position has snapshots but we don't have last_pnl cached yet
-                    # This could be a new cycle - invalidate to be safe
+                    # 持仓有快照，但我们尚未缓存 last_pnl
+                    # 这可能是新周期——为保险起见进行失效
                     invalidate_all_accounts = True
 
         if invalidate_all_accounts:
-            # Invalidate all accounts for this instrument (new cycle affects all)
+            # 失效该工具的所有账户（新周期影响所有）
             self._realized_pnls.pop(event.instrument_id, None)
         else:
-            # Invalidate only this account
+            # 仅失效此账户
             if event.instrument_id in self._realized_pnls:
                 self._realized_pnls[event.instrument_id].pop(event.account_id, None)
 
@@ -673,15 +665,15 @@ cdef class Portfolio(PortfolioFacade):
             return
 
         if account.type != AccountType.MARGIN or not account.calculate_account_state:
-            return  # Nothing to calculate
+            return  # 无需计算
 
-        # Fetch positions filtered by account_id for account-specific update
+        # 获取按 account_id 过滤的持仓以便进行账户特定更新
         cdef list account_positions = self._cache.positions_open(
-            venue=None,  # Faster query filtering
+            venue=None,  # 更快的查询过滤
             instrument_id=event.instrument_id,
             strategy_id=None,
             side=PositionSide.NO_POSITION_SIDE,
-            account_id=event.account_id,  # Filter by account_id
+            account_id=event.account_id,  # 按 account_id 过滤
         )
 
         cdef AccountState account_state
@@ -697,28 +689,28 @@ cdef class Portfolio(PortfolioFacade):
 
     cpdef void on_order_event(self, OrderEvent event):
         """
-        Actions to be performed on receiving an order event.
+        接收到订单事件时执行的操作。
 
-        Parameters
+        参数
         ----------
         event : OrderEvent
-            The event received.
+            接收到的事件。
 
         """
         Condition.not_none(event, "event")
 
         if event.account_id is None:
-            return  # No account assigned for event
+            return  # 事件未分配账户
 
         if not isinstance(event, _UPDATE_ORDER_EVENTS):
-            return  # No change to account state
+            return  # 账户状态无变化
 
         if isinstance(event, OrderFilled):
-            return  # Will publish account event when position event is received
+            return  # 当接收到持仓事件时将发布账户事件
 
         cdef Account account = self._cache.account(event.account_id)
         if account is None:
-            return  # No account registered
+            return  # 未注册账户
 
         cdef AccountState account_state = account.last_event_c()
 
@@ -729,22 +721,22 @@ cdef class Portfolio(PortfolioFacade):
 
     cpdef void on_position_event(self, PositionEvent event):
         """
-        Actions to be performed on receiving a position event.
+        在接收到持仓事件时执行的操作。
 
-        Parameters
+        参数
         ----------
         event : PositionEvent
-            The event received.
+            接收到的事件。
 
         """
         Condition.not_none(event, "event")
 
         if event.account_id is None:
-            return  # No account assigned for event
+            return  # 事件未分配账户
 
         cdef Account account = self._cache.account(event.account_id)
         if account is None:
-            return  # No account registered
+            return  # 未注册账户
 
         cdef AccountState account_state = account.last_event_c()
 
@@ -770,9 +762,9 @@ cdef class Portfolio(PortfolioFacade):
 
     def reset(self) -> None:
         """
-        Reset the portfolio.
+        重置投资组合。
 
-        All stateful fields are reset to their initial value.
+        所有有状态字段都重置为初始值。
 
         """
         self._log.debug(f"RESETTING")
@@ -781,9 +773,9 @@ cdef class Portfolio(PortfolioFacade):
 
     def dispose(self) -> None:
         """
-        Dispose of the portfolio.
+        销毁投资组合。
 
-        All stateful fields are reset to their initial value.
+        所有有状态字段都重置为初始值。
 
         """
         self._log.debug(f"DISPOSING")
@@ -794,36 +786,36 @@ cdef class Portfolio(PortfolioFacade):
 
     cpdef Account account(self, Venue venue=None, AccountId account_id=None):
         """
-        Return the account for the given venue or account ID (if found).
+        返回给定场地或账户 ID 的账户（如果找到）。
 
-        Parameters
+        参数
         ----------
-        venue : Venue, optional
-            The venue for the account.
-        account_id : AccountId, optional
-            The account ID (takes priority if both venue and account_id are provided).
+        venue : Venue, 可选
+            账户的场地。
+        account_id : AccountId, 可选
+            账户 ID（如果同时提供了 venue 和 account_id，则优先考虑此项）。
 
-        Returns
+        返回
         -------
-        Account or ``None``
+        Account 或 ``None``
 
         """
         return self._get_account(venue, account_id, "account", "venue or account_id must be provided")
 
     cpdef dict balances_locked(self, Venue venue=None, AccountId account_id=None):
         """
-        Return the balances locked for the given venue or account ID (if found).
+        返回给定场地或账户 ID 的锁定余额（如果找到）。
 
-        Parameters
+        参数
         ----------
-        venue : Venue, optional
-            The venue for the account.
-        account_id : AccountId, optional
-            The account ID (takes priority if both venue and account_id are provided).
+        venue : Venue, 可选
+            账户的场地。
+        account_id : AccountId, 可选
+            账户 ID（如果同时提供了 venue 和 account_id，则优先考虑此项）。
 
-        Returns
+        返回
         -------
-        dict[Currency, Money] or ``None``
+        dict[Currency, Money] 或 ``None``
 
         """
         cdef Account account = self._get_account(venue, account_id, "balances locked", "'venue' or 'account_id' must be provided")
@@ -832,18 +824,18 @@ cdef class Portfolio(PortfolioFacade):
 
     cpdef dict margins_init(self, Venue venue=None, AccountId account_id=None):
         """
-        Return the initial (order) margins for the given venue or account ID (if found).
+        返回给定场地或账户 ID 的初始（订单）保证金（如果找到）。
 
-        Parameters
+        参数
         ----------
-        venue : Venue, optional
-            The venue for the account.
-        account_id : AccountId, optional
-            The account ID (takes priority if both venue and account_id are provided).
+        venue : Venue, 可选
+            账户的场地。
+        account_id : AccountId, 可选
+            账户 ID（如果同时提供了 venue 和 account_id，则优先考虑此项）。
 
-        Returns
+        返回
         -------
-        dict[Currency, Money] or ``None``
+        dict[Currency, Money] 或 ``None``
 
         """
         cdef Account account = self._get_account(venue, account_id, "initial (order) margins", "'venue' or 'account_id' must be provided")
@@ -854,18 +846,18 @@ cdef class Portfolio(PortfolioFacade):
 
     cpdef dict margins_maint(self, Venue venue=None, AccountId account_id=None):
         """
-        Return the maintenance (position) margins for the given venue or account ID (if found).
+        返回给定场地或账户 ID 的维持（持仓）保证金（如果找到）。
 
-        Parameters
+        参数
         ----------
-        venue : Venue, optional
-            The venue for the account.
-        account_id : AccountId, optional
-            The account ID (takes priority if both venue and account_id are provided).
+        venue : Venue, 可选
+            账户的场地。
+        account_id : AccountId, 可选
+            账户 ID（如果同时提供了 venue 和 account_id，则优先考虑此项）。
 
-        Returns
+        返回
         -------
-        dict[Currency, Money] or ``None``
+        dict[Currency, Money] 或 ``None``
 
         """
         cdef Account account = self._get_account(venue, account_id, "maintenance (position) margins", "'venue' or 'account_id' must be provided")
@@ -876,21 +868,20 @@ cdef class Portfolio(PortfolioFacade):
 
     cpdef dict realized_pnls(self, Venue venue=None, AccountId account_id=None, Currency target_currency=None):
         """
-        Return the realized PnLs for the given venue (if found).
+        返回给定场地的已实现盈亏（如果找到）。
 
-        If no positions exist for the venue or if any lookups fail internally,
-        an empty dictionary is returned.
+        如果场地不存在持仓或任何内部查找失败，则返回一个空字典。
 
-        Parameters
+        参数
         ----------
-        venue : Venue, optional
-            The venue for the realized PnLs.
-        account_id : AccountId, optional
-            The account ID for the realized PnLs.
-        target_currency : Currency, optional
-            The currency to convert the PnLs into.
+        venue : Venue, 可选
+            已实现盈亏的场地。
+        account_id : AccountId, 可选
+            已实现盈亏的账户 ID。
+        target_currency : Currency, 可选
+            转换盈亏的目标货币。
 
-        Returns
+        返回
         -------
         dict[Currency, Money]
 
@@ -907,18 +898,18 @@ cdef class Portfolio(PortfolioFacade):
 
     cpdef dict unrealized_pnls(self, Venue venue=None, AccountId account_id=None, Currency target_currency=None):
         """
-        Return the unrealized PnLs for the given venue (if found).
+        返回给定场地的未实现盈亏（如果找到）。
 
-        Parameters
+        参数
         ----------
-        venue : Venue, optional
-            The venue for the unrealized PnLs.
-        account_id : AccountId, optional
-            The account ID for the unrealized PnLs.
-        target_currency : Currency, optional
-            The currency to convert the PnLs into.
+        venue : Venue, 可选
+            未实现盈亏的场地。
+        account_id : AccountId, 可选
+            未实现盈亏的账户 ID。
+        target_currency : Currency, 可选
+            转换盈亏的目标货币。
 
-        Returns
+        返回
         -------
         dict[Currency, Money]
 
@@ -935,7 +926,7 @@ cdef class Portfolio(PortfolioFacade):
 
     cdef dict _aggregate_pnls_by_instrument(self, list positions, bint is_realized, AccountId account_id, Currency target_currency):
         if not positions:
-            return {}  # Nothing to calculate
+            return {}  # 无需计算
 
         cdef set[InstrumentId] instrument_ids = {p.instrument_id for p in positions}
         cdef dict[Currency, double] aggregated_pnls = {}
@@ -957,18 +948,18 @@ cdef class Portfolio(PortfolioFacade):
 
     cpdef dict total_pnls(self, Venue venue=None, AccountId account_id=None, Currency target_currency=None):
         """
-        Return the total PnLs for the given venue (if found).
+        返回给定场地的总盈亏（如果找到）。
 
-        Parameters
+        参数
         ----------
-        venue : Venue, optional
-            The venue for the total PnLs.
-        account_id : AccountId, optional
-            The account ID for the total PnLs.
-        target_currency : Currency, optional
-            The currency to convert the PnLs into.
+        venue : Venue, 可选
+            总盈亏的场地。
+        account_id : AccountId, 可选
+            总盈亏的账户 ID。
+        target_currency : Currency, 可选
+            转换盈亏的目标货币。
 
-        Returns
+        返回
         -------
         dict[Currency, Money]
 
@@ -982,24 +973,24 @@ cdef class Portfolio(PortfolioFacade):
             Currency currency
             Money amount
         if target_currency is not None:
-            # When target_currency is provided, both dicts should contain only that currency
-            # Sum them together. If neither dict contains target_currency (e.g., conversion failed
-            # for all instruments or no positions exist), total_amount remains 0.0, which is correct.
+            # 当提供了 target_currency 时，两个字典都应仅包含该货币
+            # 将它们相加。如果两个字典都不包含 target_currency（例如，所有工具的转换都失败
+            # 或不存在持仓），total_amount 仍为 0.0，这是正确的。
             if target_currency in realized:
                 total_amount += realized[target_currency].as_double()
 
             if target_currency in unrealized:
                 total_amount += unrealized[target_currency].as_double()
 
-            # Return dict with target_currency (0.0 if no PnL found, which represents zero total PnL)
+            # 返回带有 target_currency 的字典（如果未找到盈亏，则为 0.0，代表零总盈亏）
             return {target_currency: Money(total_amount, target_currency)}
 
-        # No target_currency: aggregate by currency
-        # Sum realized PnLs
+        # 无 target_currency：按货币汇总
+        # 汇总已实现盈亏
         for currency, amount in realized.items():
             total_pnls[currency] = amount.as_double()
 
-        # Add unrealized PnLs
+        # 添加未实现盈亏
         for currency, amount in unrealized.items():
             total_pnls[currency] = total_pnls.get(currency, 0.0) + amount.as_double()
 
@@ -1007,20 +998,20 @@ cdef class Portfolio(PortfolioFacade):
 
     cpdef dict net_exposures(self, Venue venue=None, AccountId account_id=None, Currency target_currency=None):
         """
-        Return the net exposures for the given venue (if found).
+        返回给定场地的净风险敞口（如果找到）。
 
-        Parameters
+        参数
         ----------
-        venue : Venue, optional
-            The venue for the market value.
-        account_id : AccountId, optional
-            The account ID for the net exposures.
-        target_currency : Currency, optional
-            The currency to convert the exposures into.
+        venue : Venue, 可选
+            市场价值的场地。
+        account_id : AccountId, 可选
+            净风险敞口的账户 ID。
+        target_currency : Currency, 可选
+            转换风险敞口的目标货币。
 
-        Returns
+        返回
         -------
-        dict[Currency, Money] or ``None``
+        dict[Currency, Money] 或 ``None``
 
         """
         cdef list positions_open = self._cache.positions_open(
@@ -1033,14 +1024,14 @@ cdef class Portfolio(PortfolioFacade):
 
         cdef Account account = None
         if not positions_open:
-            # When no positions, try to determine if account exists
-            # (account can be determined from account_id parameter or venue)
+            # 当没有持仓时，尝试确定账户是否存在
+            # （账户可以从 account_id 参数或场地确定）
             account = self._cache.account_for_venue(venue, account_id)
             if account is not None:
-                # Account exists but no positions, return empty dict
+                # 账户存在但无持仓，返回空字典
                 return {}
             else:
-                # No account can be determined, return None
+                # 无法确定账户，返回 None
                 return None
 
         cdef set[AccountId] involved_accounts = set()
@@ -1049,7 +1040,7 @@ cdef class Portfolio(PortfolioFacade):
             if not pos.is_closed_c():
                 involved_accounts.add(pos.account_id)
 
-        # Prevent silent currency mixing across accounts with different base currencies
+        # 防止分属不同基础货币账户的货币静默混合
         cdef:
             set[Currency] base_currencies = set()
             AccountId involved_account_id
@@ -1082,7 +1073,7 @@ cdef class Portfolio(PortfolioFacade):
             Money exposure
             set[InstrumentId] processed_instruments = set()
         for position in positions_open:
-            # Skip closed positions (they should not contribute to net_exposures)
+            # 跳过已平仓持仓（它们不应贡献净敞口）
             if position.is_closed_c():
                 continue
 
@@ -1108,111 +1099,105 @@ cdef class Portfolio(PortfolioFacade):
         if not net_exposures:
             return {}
 
-        # If target_currency is provided, all exposures should be in that currency
+        # 如果提供了 target_currency，所有风险敞口都应使用该货币
         if target_currency is not None:
             if target_currency in net_exposures:
                 return {target_currency: Money(net_exposures[target_currency], target_currency)}
             else:
-                # This shouldn't happen if conversion worked, but handle gracefully
+                # 如果转换成功，这不应该发生，但会优雅处理
                 return {}
 
         return {k: Money(v, k) for k, v in net_exposures.items()}
 
     cpdef Money realized_pnl(self, InstrumentId instrument_id, AccountId account_id=None, Currency target_currency=None):
         """
-        Return the realized PnL for the given instrument ID (if found).
+        返回给定工具 ID 的已实现盈亏（如果找到）。
 
-        Parameters
+        参数
         ----------
         instrument_id : InstrumentId
-            The instrument for the realized PnL.
-        account_id : AccountId, optional
-            The account ID for the realized PnL. If None, aggregates across all accounts.
-        target_currency : Currency, optional
-            The currency to convert the PnL into.
+            盈亏所属的工具。
+        account_id : AccountId, 可选
+            已实现盈亏的账户 ID。如果为 None，则汇总所有账户。
+        target_currency : Currency, 可选
+            转换盈亏的目标货币。
 
-        Returns
+        返回
         -------
-        Money or ``None``
+        Money 或 ``None``
 
         """
         Condition.not_none(instrument_id, "instrument_id")
 
         if account_id is not None:
-            # Single account: check cache and calculate if needed
+            # 单个账户：检查缓存并在需要时进行计算
             native_pnl = self._calculate_realized_pnl(instrument_id, account_id)
             if native_pnl is None:
                 return None
 
             return self._convert_money_if_needed(native_pnl, target_currency, venue=instrument_id.venue)
         else:
-            # Aggregate across all accounts using cache where possible
+            # 尽可能使用缓存汇总所有账户
             return self._aggregate_pnl_from_cache(instrument_id, is_realized=True, target_currency=target_currency)
 
     cpdef Money unrealized_pnl(self, InstrumentId instrument_id, Price price=None, AccountId account_id=None, Currency target_currency=None):
         """
-        Return the unrealized PnL for the given instrument ID (if found).
+        返回给定工具 ID 的未实现盈亏（如果找到）。
 
-        - If `price` is provided, a fresh calculation is performed without using or
-          updating the cache.
-        - If `price` is omitted, the method returns the cached PnL if available, or
-          computes and caches it if not.
+        - 如果提供了 `price`，则执行全新计算，而不使用或更新缓存。
+        - 如果省略 `price`，则该方法返回缓存的盈亏（如果有），如果没有则计算并缓存盈亏。
 
-        Returns `None` if the calculation fails (e.g., the account or instrument cannot
-        be found), or zero-valued `Money` if no positions are open. Otherwise, it returns
-        a `Money` object (usually in the account's base currency or the instrument's
-        settlement currency).
+        如果计算失败（例如找不到账户或工具），则返回 `None`；如果没有持仓，则返回零值的 `Money`。
+        否则，它返回一个 `Money` 对象（通常以账户的基础货币或工具的结算货币表示）。
 
-        Parameters
+        参数
         ----------
         instrument_id : InstrumentId
-            The instrument for the unrealized PnL.
-        price : Price, optional
-            The reference price for the calculation. This could be the last, mid, bid, ask,
-            a mark-to-market price, or any other suitably representative value.
-        account_id : AccountId, optional
-            The account ID for the unrealized PnL. If None, aggregates across all accounts.
-        target_currency : Currency, optional
-            The currency to convert the PnL into.
+            未实现盈亏所属的工具。
+        price : Price, 可选
+            计算的参考价格。这可以是最新价、中间价、买价、卖价、标记价格或任何其他具有代表性的值。
+        account_id : AccountId, 可选
+            未实现盈亏的账户 ID。如果为 None，则汇总所有账户。
+        target_currency : Currency, 可选
+            转换盈亏的目标货币。
 
-        Returns
+        返回
         -------
-        Money or ``None``
-            The unrealized PnL or None if the calculation cannot be performed.
+        Money 或 ``None``
+            未实现盈亏，如果无法计算则为 None。
 
         """
         Condition.not_none(instrument_id, "instrument_id")
 
         if price is not None or account_id is not None:
-            # Fresh calculation or single account
+            # 新鲜计算或单个账户
             native_pnl = self._calculate_unrealized_pnl(instrument_id, price, account_id)
             if native_pnl is None:
                 return None
 
             return self._convert_money_if_needed(native_pnl, target_currency, venue=instrument_id.venue)
         else:
-            # Aggregate across all accounts using cache where possible
+            # 尽可能使用缓存汇总所有账户
             return self._aggregate_pnl_from_cache(instrument_id, is_realized=False, target_currency=target_currency)
 
     cpdef Money total_pnl(self, InstrumentId instrument_id, Price price=None, AccountId account_id=None, Currency target_currency=None):
         """
-        Return the total PnL for the given instrument ID (if found).
+        返回给定工具 ID 的总盈亏（如果找到）。
 
-        Parameters
+        参数
         ----------
         instrument_id : InstrumentId
-            The instrument for the total PnL.
-        price : Price, optional
-            The reference price for the calculation. This could be the last, mid, bid, ask,
-            a mark-to-market price, or any other suitably representative value.
-        account_id : AccountId, optional
-            The account ID for the total PnL.
-        target_currency : Currency, optional
-            The currency to convert the PnL into.
+            总盈亏所属的工具。
+        price : Price, 可选
+            计算的参考价格。这可以是最新价、中间价、买价、卖价、标记价格或任何其他具有代表性的值。
+        account_id : AccountId, 可选
+            总盈亏的账户 ID。
+        target_currency : Currency, 可选
+            转换盈亏的目标货币。
 
-        Returns
+        返回
         -------
-        Money or ``None``
+        Money 或 ``None``
 
         """
         Condition.not_none(instrument_id, "instrument_id")
@@ -1228,15 +1213,15 @@ cdef class Portfolio(PortfolioFacade):
         if unrealized is None:
             return realized
 
-        # Both should be in the same currency when target_currency is provided
-        # If not provided, they should still match due to convert_to_account_base_currency logic
+        # 当提供 target_currency 时，两者应使用相同的货币
+        # 如果未提供，由于 convert_to_account_base_currency 逻辑，它们仍应匹配
         cdef:
             Money converted_realized
             Money converted_unrealized
         if realized.currency != unrealized.currency:
-            # This shouldn't happen with target_currency, but handle gracefully
+            # target_currency 存在时这种情况不应发生，但会优雅处理
             if target_currency is not None:
-                # Try to convert both to target_currency
+                # 尝试将两者都转换为 target_currency
                 converted_realized = self._convert_money(realized, target_currency, venue=instrument_id.venue)
                 converted_unrealized = self._convert_money(unrealized, target_currency, venue=instrument_id.venue)
                 if converted_realized is not None and converted_unrealized is not None:
@@ -1244,10 +1229,10 @@ cdef class Portfolio(PortfolioFacade):
 
                 return None
 
-            # Without target_currency, this is a currency mismatch error
+            # 不带 target_currency 时，这是货币不匹配错误
             self._log.warning(
-                f"Currency mismatch in total_pnl: {realized.currency} vs {unrealized.currency}. "
-                f"Provide target_currency to convert both to a common currency."
+                f"total_pnl 中的货币不匹配：{realized.currency} 与 {unrealized.currency}。 "
+                f"提供 target_currency 以将两者转换为通用货币。"
             )
             return None
 
@@ -1255,23 +1240,22 @@ cdef class Portfolio(PortfolioFacade):
 
     cpdef Money net_exposure(self, InstrumentId instrument_id, Price price=None, AccountId account_id=None, Currency target_currency=None):
         """
-        Return the net exposure for the given instrument (if found).
+        返回给定工具的净风险敞口（如果找到）。
 
-        Parameters
+        参数
         ----------
         instrument_id : InstrumentId
-            The instrument for the calculation.
-        price : Price, optional
-            The reference price for the calculation. This could be the last, mid, bid, ask,
-            a mark-to-market price, or any other suitably representative value.
-        account_id : AccountId, optional
-            The account ID for the net exposure.
-        target_currency : Currency, optional
-            The currency to convert the exposure into.
+            计算所属的工具。
+        price : Price, 可选
+            计算的参考价格。这可以是最新价、中间价、买价、卖价、标记价格或任何其他具有代表性的值。
+        account_id : AccountId, 可选
+            净风险敞口的账户 ID。
+        target_currency : Currency, 可选
+            转换敞口的目标货币。
 
-        Returns
+        返回
         -------
-        Money or ``None``
+        Money 或 ``None``
 
         """
         cdef list positions = self._cache.positions_open(
@@ -1282,8 +1266,8 @@ cdef class Portfolio(PortfolioFacade):
             account_id=account_id,
         )
 
-        # Validate consistent base currency across accounts when aggregating
-        # (only needed if no target_currency is provided, as we can convert to target_currency)
+        # 汇总时验证各账户的基础货币是否一致
+        # （仅在未提供 target_currency 时需要，因为我们可以转换为 target_currency）
         cdef:
             set[AccountId] account_ids
             Currency first_base_currency = None
@@ -1294,12 +1278,12 @@ cdef class Portfolio(PortfolioFacade):
         if account_id is None and target_currency is None and positions:
             account_ids = set()
 
-            # Collect unique account IDs from positions
+            # 从持仓中收集唯一账户 ID
             for position in positions:
                 if position.account_id is not None:
                     account_ids.add(position.account_id)
 
-            # Validate accounts from cache
+            # 从缓存验证账户
             for acc_id in account_ids:
                 account = self._cache.account(acc_id)
                 if account is not None:
@@ -1307,10 +1291,10 @@ cdef class Portfolio(PortfolioFacade):
                         first_base_currency = account.base_currency
                     elif account.base_currency is not None and account.base_currency != first_base_currency:
                         self._log.error(
-                            f"Cannot calculate net exposure: "
-                            f"accounts have different base currencies "
-                            f"({first_base_currency} vs {account.base_currency}); "
-                            f"multi-account aggregation requires consistent base currencies",
+                            f"无法计算净风险敞口： "
+                            f"账户具有不同的基础货币 "
+                            f"({first_base_currency} 与 {account.base_currency})； "
+                            f"多账户汇总需要一致的基础货币",
                         )
                         return None
 
@@ -1341,17 +1325,17 @@ cdef class Portfolio(PortfolioFacade):
             if total_notional is None:
                 return None
 
-        # Finalize the exposure result with currency conversion
+        # 最终完成具有货币转换的风险敞口结果
         if not is_betting:
             total_notional = abs(total_notional)
 
-        # If we used cross_notional_value, the result is already in target_currency
+        # 如果我们使用了 cross_notional_value，结果已经是 target_currency
         if used_cross_notional and target_currency is not None:
             return Money(total_notional, target_currency)
 
         cdef Money exposure = Money(total_notional, settlement_currency)
 
-        # Early return for zero exposure (always convertible)
+        # 零敞口提前返回（始终可转换）
         if target_currency is not None and total_notional == 0.0:
             return Money(0.0, target_currency)
 
@@ -1369,22 +1353,22 @@ cdef class Portfolio(PortfolioFacade):
         Currency target_currency,
         Currency settlement_currency,
     ):
-        # Handle exposure calculation for betting instruments
+        # 处理博彩工具的风险敞口计算
         cdef:
             double total_notional = 0.0
             Position position
             object bet_position
 
         if not positions:
-            # No open positions - return zero exposure
-            # (Closed positions should not contribute to net exposure)
+            # 无持仓 - 返回零敞口
+            # （已平仓持仓不应贡献净敞口）
             return 0.0
 
-        # Sum exposures from all bet positions for open positions
+        # 汇总所有未平仓持仓的博彩持仓敞口
         for position in positions:
             bet_position = self._get_bet_position(position, instrument_obj)
             if bet_position is not None:
-                # Use exposure directly (it's already signed correctly)
+                # 直接使用敞口（已具有正确正负号）
                 total_notional += float(bet_position.exposure)
 
         return total_notional
@@ -1435,16 +1419,16 @@ cdef class Portfolio(PortfolioFacade):
                 has_long = True
                 total_notional += val
 
-                if not price:  # Only override if we used _get_price
+                if not price:  # 仅当我们使用了 _get_price 时覆盖
                     price_type = PriceType.BID
             elif position.side == PositionSide.SHORT:
                 has_short = True
                 total_notional -= val
 
-                if not price:  # Only override if we used _get_price
+                if not price:  # 仅当我们使用了 _get_price 时覆盖
                     price_type = PriceType.ASK
 
-        # Use neutral pricing when positions are mixed (both long and short)
+        # 当多空持仓混合时使用中性定价
         if has_long and has_short and not price:
             price_type = PriceType.MARK if self._use_mark_xrates else PriceType.MID
 
@@ -1460,7 +1444,7 @@ cdef class Portfolio(PortfolioFacade):
         bint is_currency_pair,
         list positions,
     ):
-        # Calculate exposure value for a single position
+        # 计算单个持仓的风险敞口价值
         cdef:
             Price p = price or self._get_price(position)
             object val_result
@@ -1472,7 +1456,7 @@ cdef class Portfolio(PortfolioFacade):
             self._log.debug(f"Cannot calculate net exposure: no price for {position.instrument_id}")
             return (None, False)
 
-        # For CurrencyPair with target_currency, use cross_notional_value for accurate conversion
+        # 对于带有 target_currency 的 CurrencyPair，使用 cross_notional_value 进行精确转换
         if is_currency_pair and target_currency is not None:
             val_result = self._calculate_currency_pair_exposure(
                 position=position,
@@ -1487,11 +1471,11 @@ cdef class Portfolio(PortfolioFacade):
                 val = <double>val_result
                 used_cross = True
             else:
-                # Fall back to standard conversion if required rates are missing
+                # 如果缺少所需的汇率，则回退到标准转换
                 exposure_money = position.notional_value(p)
                 val = exposure_money.as_f64_c()
         else:
-            # Standard path: get notional value and convert if needed
+            # 标准路径：获取名义价值并在需要时进行转换
             exposure_money = position.notional_value(p)
             val = exposure_money.as_f64_c()
 
@@ -1507,7 +1491,7 @@ cdef class Portfolio(PortfolioFacade):
         list positions,
         Price price_param,
     ):
-        # Calculate exposure for currency pair using cross_notional_value when possible
+        # 尽可能使用 cross_notional_value 计算货币对的风险敞口
         cdef:
             PriceType conv_price_type = PriceType.MID
             CurrencyPair currency_pair = <CurrencyPair>instrument_obj
@@ -1516,23 +1500,23 @@ cdef class Portfolio(PortfolioFacade):
             bint can_use_cross = False
             Money exposure_money
 
-        # Determine price type for conversion lookups
-        if not price_param:  # Only override if we used _get_price
+        # 确定转换查询的价格类型
+        if not price_param:  # 仅当我们使用了 _get_price 时覆盖
             if position.side == PositionSide.LONG:
                 conv_price_type = PriceType.BID
             elif position.side == PositionSide.SHORT:
                 conv_price_type = PriceType.ASK
 
-        # If mixed positions, MARK is probably better for conversion
+        # 如果持仓混合，MARK 可能更适合转换
         if len(positions) > 1 and not price_param:
             conv_price_type = PriceType.MARK if self._use_mark_prices else conv_price_type
 
-        # Try mark xrates first if enabled
+        # 如果启用，先尝试标记汇率
         if self._use_mark_xrates:
             quote_xrate = self._cache.get_mark_xrate(currency_pair.quote_currency, target_currency)
             base_xrate = self._cache.get_mark_xrate(currency_pair.base_currency, target_currency)
 
-        # Fallback to standard xrate lookup
+        # 回退到标准汇率查询
         if quote_xrate is None:
             quote_xrate = self._cache.get_xrate(
                 venue=instrument_id.venue,
@@ -1549,28 +1533,28 @@ cdef class Portfolio(PortfolioFacade):
                 price_type=conv_price_type,
             )
 
-        # For non-inverse pairs, we only need quote_price (base_price is ignored)
-        # For inverse pairs, we only need base_price (quote_price is ignored)
-        # If we have the required rate, use cross_notional_value
+        # 对于非反向货币对，我们只需要 quote_price（base_price 被忽略）
+        # 对于反向货币对，我们只需要 base_price（quote_price 被忽略）
+        # 如果我们有所需的汇率，则使用 cross_notional_value
         if not position.is_inverse:
-            # Non-inverse: need quote_price
+            # 非反向：需要 quote_price
             if quote_xrate is not None and quote_xrate > 0.0:
                 can_use_cross = True
 
-                # Use dummy base_price since it won't be used
+                # 使用哑元 base_price，因为它不会被使用
                 if base_xrate is None or base_xrate <= 0.0:
                     base_xrate = 1.0
         else:
-            # Inverse: need base_price
+            # 反向：需要 base_price
             if base_xrate is not None and base_xrate > 0.0:
                 can_use_cross = True
 
-                # Use dummy quote_price since it won't be used
+                # 使用哑元 quote_price，因为它不会被使用
                 if quote_xrate is None or quote_xrate <= 0.0:
                     quote_xrate = 1.0
 
         if can_use_cross:
-            # Use cross_notional_value for accurate FX conversion
+            # 使用 cross_notional_value 进行精确的汇率转换
             exposure_money = position.cross_notional_value(
                 price=price,
                 quote_price=Price(<double>quote_xrate, FIXED_PRECISION),
@@ -1583,19 +1567,19 @@ cdef class Portfolio(PortfolioFacade):
 
     cpdef object net_position(self, InstrumentId instrument_id, AccountId account_id=None):
         """
-        Return the net position for the given instrument ID.
-        If account_id is provided, returns the net position for that account.
-        If account_id is None, aggregates across all accounts.
-        If no positions for instrument_id then will return `Decimal('0')`.
+        返回给定工具 ID 的净头寸。
+        如果提供了 account_id，则返回该账户的净头寸。
+        如果 account_id 为 None，则汇总所有账户。
+        如果 instrument_id 没有持仓，则返回 `Decimal('0')`。
 
-        Parameters
+        参数
         ----------
         instrument_id : InstrumentId
-            The instrument for the query.
-        account_id : AccountId, optional
-            The account ID. If None, aggregates across all accounts.
+            查询的工具。
+        account_id : AccountId, 可选
+            账户 ID。如果为 None，则汇总所有账户。
 
-        Returns
+        返回
         -------
         Decimal
 
@@ -1606,20 +1590,19 @@ cdef class Portfolio(PortfolioFacade):
 
     cpdef bint is_net_long(self, InstrumentId instrument_id, AccountId account_id=None):
         """
-        Return a value indicating whether the portfolio is net long the given
-        instrument ID.
+        返回一个值，指示投资组合是否净做多给定的工具 ID。
 
-        Parameters
+        参数
         ----------
         instrument_id : InstrumentId
-            The instrument for the query.
-        account_id : AccountId, optional
-            The account ID. If None, aggregates across all accounts.
+            查询的工具。
+        account_id : AccountId, 可选
+            账户 ID。如果为 None，则汇总所有账户。
 
-        Returns
+        返回
         -------
         bool
-            True if net long, else False.
+            如果净做多则为 True，否则为 False。
 
         """
         Condition.not_none(instrument_id, "instrument_id")
@@ -1628,20 +1611,19 @@ cdef class Portfolio(PortfolioFacade):
 
     cpdef bint is_net_short(self, InstrumentId instrument_id, AccountId account_id=None):
         """
-        Return a value indicating whether the portfolio is net short the given
-        instrument ID.
+        返回一个值，指示投资组合是否净做空给定的工具 ID。
 
-        Parameters
+        参数
         ----------
         instrument_id : InstrumentId
-            The instrument for the query.
-        account_id : AccountId, optional
-            The account ID. If None, aggregates across all accounts.
+            查询的工具。
+        account_id : AccountId, 可选
+            账户 ID。如果为 None，则汇总所有账户。
 
-        Returns
+        返回
         -------
         bool
-            True if net short, else False.
+            如果净做空则为 True，否则为 False。
 
         """
         Condition.not_none(instrument_id, "instrument_id")
@@ -1650,20 +1632,19 @@ cdef class Portfolio(PortfolioFacade):
 
     cpdef bint is_flat(self, InstrumentId instrument_id, AccountId account_id=None):
         """
-        Return a value indicating whether the portfolio is flat for the given
-        instrument ID.
+        返回一个值，指示投资组合对于给定的工具 ID 是否为空仓（持平）。
 
-        Parameters
+        参数
         ----------
         instrument_id : InstrumentId
-            The instrument query filter.
-        account_id : AccountId, optional
-            The account ID. If None, aggregates across all accounts.
+            工具查询过滤器。
+        account_id : AccountId, 可选
+            账户 ID。如果为 None，则汇总所有账户。
 
-        Returns
+        返回
         -------
         bool
-            True if net flat, else False.
+            如果净持平则为 True，否则为 False。
 
         """
         Condition.not_none(instrument_id, "instrument_id")
@@ -1671,7 +1652,7 @@ cdef class Portfolio(PortfolioFacade):
         return self._net_position(instrument_id, account_id) == 0.0
 
     cdef object _net_position(self, InstrumentId instrument_id, AccountId account_id=None):
-        # Get net position for instrument and account. If account_id is None, aggregate across all accounts.
+        # 获取工具和账户的净头寸。如果 account_id 为 None，则汇总所有账户。
         cdef dict account_positions = self._net_positions.get(instrument_id)
         if account_positions is None:
             return Decimal(0)
@@ -1679,22 +1660,22 @@ cdef class Portfolio(PortfolioFacade):
         if account_id is not None:
             return account_positions.get(account_id, Decimal(0))
 
-        # Aggregate across all accounts
+        # 汇总所有账户
         return sum(account_positions.values(), Decimal(0))
 
     cpdef bint is_completely_flat(self, AccountId account_id=None):
         """
-        Return a value indicating whether the portfolio is completely flat.
+        返回一个值，指示投资组合是否完全平仓。
 
-        Parameters
+        参数
         ----------
-        account_id : AccountId, optional
-            The account ID. If None, checks across all accounts.
+        account_id : AccountId, 可选
+            账户 ID。如果为 None，则检查所有账户。
 
-        Returns
+        返回
         -------
         bool
-            True if net flat across all instruments, else False.
+            如果所有工具都已结清则为 True，否则为 False。
 
         """
         cdef:
@@ -1704,7 +1685,7 @@ cdef class Portfolio(PortfolioFacade):
             object net_position
         for instrument_id, account_dict in self._net_positions.items():
             for acc_id, net_position in account_dict.items():
-                # Filter by account_id if provided
+                # 如果提供了 account_id，则按其过滤
                 if account_id is not None and acc_id != account_id:
                     continue
 
@@ -1722,16 +1703,16 @@ cdef class Portfolio(PortfolioFacade):
         cdef Account account = self._cache.account(event.account_id)
         if account is None:
             self._log.error(
-                f"Cannot update {caller_name}: "
-                f"no account registered for {event.account_id}",
+                f"无法更新 {caller_name}： "
+                f"没有为 {event.account_id} 注册账户",
             )
             return None, None
 
         cdef Instrument instrument = self._cache.instrument(event.instrument_id)
         if instrument is None:
             self._log.error(
-                f"Cannot update {caller_name}: "
-                f"no instrument found for {event.instrument_id}",
+                f"无法更新 {caller_name}： "
+                f"未找到 {event.instrument_id} 的工具",
             )
             return None, None
 
@@ -1740,7 +1721,7 @@ cdef class Portfolio(PortfolioFacade):
     cdef void _update_account(self, AccountState event):
         cdef Account account = self._cache.account(event.account_id)
         if account is None:
-            # Generate account
+            # 生成账户
             account = AccountFactory.create_c(event)
             self._cache.add_account(account)
         else:
@@ -1758,22 +1739,22 @@ cdef class Portfolio(PortfolioFacade):
                 should_log = False
 
         if should_log:
-            self._log.info(f"Updated {event}")
+            self._log.info(f"已更新 {event}")
 
     cdef Account _get_account(self, Venue venue, AccountId account_id, str caller_name, str message=None):
-        Condition.not_none(venue or account_id, message or "'venue' or 'account_id' must be provided")
+        Condition.not_none(venue or account_id, message or "必须提供 'venue' 或 'account_id'")
 
         cdef Account account = self._cache.account_for_venue(venue, account_id)
         if account is None:
             self._log.error(
-                f"Cannot get {caller_name}: "
-                f"no account registered for {venue=} and {account_id=}",
+                f"无法获取 {caller_name}： "
+                f"没有为 {venue=} 和 {account_id=} 注册账户",
             )
 
         return account
 
     cdef void _update_net_position(self, InstrumentId instrument_id, list positions_open):
-        # Update net positions per account for the given instrument.
+        # 更新给定工具按账户划分的净头寸。
         cdef:
             dict[AccountId, Decimal] net_positions_by_account = {}
             Position position
@@ -1782,7 +1763,7 @@ cdef class Portfolio(PortfolioFacade):
             set[AccountId] accounts_with_positions = set()
             list accounts_to_remove
 
-        # Calculate net position per account
+        # 计算每个账户的净头寸
         for position in positions_open:
             account_id = position.account_id
             accounts_with_positions.add(account_id)
@@ -1790,17 +1771,17 @@ cdef class Portfolio(PortfolioFacade):
                 net_positions_by_account.get(account_id, Decimal(0)) + position.signed_decimal_qty()
             )
 
-        # Ensure instrument entry exists
+        # 确保存在工具项
         self._net_positions.setdefault(instrument_id, {})
 
-        # Update cache for each account with positions
+        # 为每个有持仓的账户更新缓存
         for account_id, net_position in net_positions_by_account.items():
             existing_position = self._net_positions[instrument_id].get(account_id, Decimal(0))
             if existing_position != net_position:
                 self._net_positions[instrument_id][account_id] = net_position
                 self._log.info(f"{instrument_id} account={account_id} net_position={net_position}")
 
-        # Clear cache entries for accounts that no longer have open positions
+        # 清除不再有未平仓持仓的账户的缓存项
         if instrument_id in self._net_positions:
             accounts_to_remove = []
             for acc_id in self._net_positions[instrument_id].keys():
@@ -1810,12 +1791,12 @@ cdef class Portfolio(PortfolioFacade):
             for acc_id in accounts_to_remove:
                 self._net_positions[instrument_id].pop(acc_id, None)
 
-            # Remove instrument_id entry if empty
+            # 如果为空，则删除 instrument_id 项
             if not self._net_positions[instrument_id]:
                 self._net_positions.pop(instrument_id, None)
 
     cdef void _update_instrument_id(self, InstrumentId instrument_id):
-        # Invalidate cached PnLs for this instrument (all accounts)
+        # 失效此工具的缓存盈亏（所有账户）
         self._unrealized_pnls.pop(instrument_id, None)
 
         if self.initialized:
@@ -1825,7 +1806,7 @@ cdef class Portfolio(PortfolioFacade):
             return
 
         cdef list orders_open = self._cache.orders_open(
-            venue=None,  # Faster query filtering
+            venue=None,  # 更快的查询过滤
             instrument_id=instrument_id,
         )
         cdef dict orders_by_account = self._group_by_account_id(orders_open)
@@ -1846,18 +1827,18 @@ cdef class Portfolio(PortfolioFacade):
             account = self._cache.account(account_id)
             if account is None:
                 self._log.error(
-                    f"Cannot update: no account registered for {account_id=}",
+                    f"无法更新：未找到为 {account_id=} 注册的账户",
                 )
-                return  # No account registered
+                return  # 未注册账户
 
             instrument = self._cache.instrument(instrument_id)
             if instrument is None:
                 self._log.error(
-                    f"Cannot update: no instrument found for {instrument_id}",
+                    f"无法更新：未找到 {instrument_id} 的工具",
                 )
-                return  # No instrument found
+                return  # 未找到工具
 
-            # Initialize initial (order) margin
+            # 初始化初始（订单）保证金
             result_init = self._accounts.update_orders(
                 account=account,
                 instrument=instrument,
@@ -1868,14 +1849,14 @@ cdef class Portfolio(PortfolioFacade):
             result_maint = False
             if account.is_margin_account:
                 positions_open = self._cache.positions_open(
-                    venue=None,  # Faster query filtering
+                    venue=None,  # 更快的查询过滤
                     instrument_id=instrument_id,
                     strategy_id=None,
                     side=PositionSide.NO_POSITION_SIDE,
                     account_id=account_id,
                 )
 
-                # Initialize maintenance (position) margin
+                # 初始化维持（持仓）保证金
                 result_maint = self._accounts.update_positions(
                     account=account,
                     instrument=instrument,
@@ -1883,14 +1864,14 @@ cdef class Portfolio(PortfolioFacade):
                     ts_event=account.last_event_c().ts_event,
                 )
 
-            # Calculate unrealized PnL
+            # 计算未实现盈亏
             result_unrealized_pnl = self._calculate_unrealized_pnl(
                 instrument_id=instrument_id,
                 price=None,
                 account_id=account_id
             )
 
-            # Check portfolio initialization
+            # 检查投资组合初始化
             account_initialized = result_init and (account.is_cash_account or (result_maint and result_unrealized_pnl is not None))
             accounts_initialized.append(account_initialized)
 
@@ -1900,7 +1881,7 @@ cdef class Portfolio(PortfolioFacade):
                 self.initialized = True
 
     cdef dict _group_by_account_id(self, list items):
-        # Note: could be a generic function in rust
+        # 注意：可以是在 rust 中的通用函数
         cdef:
             dict result = {}
             object item  # Order or Position
@@ -1913,8 +1894,8 @@ cdef class Portfolio(PortfolioFacade):
         return result
 
     cdef Money _aggregate_pnl_from_cache(self, InstrumentId instrument_id, bint is_realized, Currency target_currency=None):
-        # Aggregate PnL from cache for the given instrument across all accounts.
-        # If cache is empty, calculates PnL for all accounts with positions.
+        # 从缓存汇总给定工具在所有账户中的盈亏。
+        # 如果缓存为空，则计算所有持仓账户的盈亏。
         cdef:
             dict pnl_cache = self._realized_pnls if is_realized else self._unrealized_pnls
             str pnl_type = "realized" if is_realized else "unrealized"
@@ -1922,13 +1903,13 @@ cdef class Portfolio(PortfolioFacade):
             Money pnl
             dict account_pnls
 
-        # For realized PnL, ensure snapshots are processed (which also invalidates PnL cache if needed)
+        # 对于已实现盈亏，确保已处理快照（这也会在需要时使盈亏缓存失效）
         if is_realized:
             self._ensure_snapshot_pnls_cached_for(instrument_id)
 
         account_pnls = pnl_cache.get(instrument_id)
 
-        # If nothing in cache for this instrument, calculate PnL
+        # 如果此工具在缓存中没有任何内容，则计算盈亏
         if account_pnls is None or len(account_pnls) == 0:
             return self._aggregate_pnl_by_calculation(instrument_id, price=None, is_realized=is_realized, target_currency=target_currency)
 
@@ -1936,17 +1917,17 @@ cdef class Portfolio(PortfolioFacade):
             if pnl is not None:
                 total_pnl = self._add_pnl_to_total(total_pnl, pnl, pnl_type, venue=instrument_id.venue, target_currency=target_currency)
                 if total_pnl is None:
-                    return None  # Currency mismatch
+                    return None  # 货币不匹配
 
-        # If cache has entries but total_pnl is None, check if instrument exists and return zero
+        # 如果缓存有条目但 total_pnl 为 None，检查工具是否存在并返回零
         if total_pnl is None:
             return self._get_zero_or_none_for_instrument(instrument_id, target_currency=target_currency)
 
         return total_pnl
 
     cdef Money _aggregate_pnl_by_calculation(self, InstrumentId instrument_id, Price price, bint is_realized, Currency target_currency=None):
-        # Aggregate PnL by finding all accounts with positions and calculating for each.
-        # Used when price is provided (fresh calculation) or when aggregating across accounts.
+        # 通过查找所有持有头寸的账户并逐个计算来汇总盈亏。
+        # 当提供价格（新鲜计算）或跨账户汇总时使用。
         cdef:
             set[AccountId] account_ids = set()
             list all_positions
@@ -1960,12 +1941,12 @@ cdef class Portfolio(PortfolioFacade):
             PositionId position_id
 
         if is_realized:
-            # For realized PnL, check all positions (open and closed) and snapshots
-            # Ensure snapshots are cached first so account_ids are available
+            # 对于已实现盈亏，检查所有持仓（开仓和闭仓）和快照
+            # 首先确保缓存了快照，以便可用 account_id
             self._ensure_snapshot_pnls_cached_for(instrument_id)
 
             all_positions = self._cache.positions(
-                venue=None,
+                venue=None,  # 更快的查询过滤
                 instrument_id=instrument_id,
                 strategy_id=None,
                 side=PositionSide.NO_POSITION_SIDE,
@@ -1974,16 +1955,16 @@ cdef class Portfolio(PortfolioFacade):
             for position in all_positions:
                 account_ids.add(position.account_id)
 
-            # Also check snapshots for account_ids
+            # 同样检查快照以获取 account_id
             snapshot_ids = self._cache.position_snapshot_ids(instrument_id)
             for position_id in snapshot_ids:
                 snapshot_account_id = self._snapshot_account_ids.get(position_id)
                 if snapshot_account_id is not None:
                     account_ids.add(snapshot_account_id)
         else:
-            # For unrealized PnL, only check open positions
+            # 对于未实现盈亏，仅检查开仓持仓
             all_positions_open = self._cache.positions_open(
-                venue=None,
+                venue=None,  # 更快的查询过滤
                 instrument_id=instrument_id,
                 strategy_id=None,
                 side=PositionSide.NO_POSITION_SIDE,
@@ -1995,20 +1976,20 @@ cdef class Portfolio(PortfolioFacade):
         if not account_ids:
             return self._get_zero_or_none_for_instrument(instrument_id, target_currency=target_currency)
 
-        # Get the appropriate cache dictionary
+        # 获取相应的缓存字典
         cdef dict pnl_cache = self._realized_pnls if is_realized else self._unrealized_pnls
 
-        # Determine if we should cache: only cache when price is None (use current market price)
-        # If price is provided, it's a fresh calculation with a specific price, so don't cache
+        # 确定我们是否应该进行缓存：仅在价格为 None（使用当前市场价格）时进行缓存
+        # 如果提供了价格，则是使用特定价格进行的新鲜计算，因此不进行缓存
         cdef bint should_cache = (price is None)
 
-        # Calculate for each account and sum
-        # Always calculate in native currency first for caching, then convert if needed
+        # 为每个账户计算并求和
+        # 始终先计算本位币以用于缓存，然后根据需要进行转换
         cdef bint attempted_calculation = False
         cdef bint any_conversion_failed = False
         cdef Money native_pnl
         for account_id in account_ids:
-            # Calculate in native currency for caching
+            # 以本位币计算以用于缓存
             if is_realized:
                 native_pnl = self._calculate_realized_pnl(instrument_id, account_id)
             else:
@@ -2016,19 +1997,18 @@ cdef class Portfolio(PortfolioFacade):
 
             attempted_calculation = True
 
-            # Cache the native currency PnL (only if using current market price, not a specific price)
+            # 缓存本位币盈亏（仅当使用当前市场价，而非特定价时）
             if native_pnl is not None:
                 if should_cache:
                     pnl_cache.setdefault(instrument_id, {})[account_id] = native_pnl
 
-                # Convert to target_currency if needed for aggregation
+                # 如果需要汇总，则转换为 target_currency
                 if target_currency is not None:
                     account_pnl = self._convert_money_if_needed(native_pnl, target_currency, venue=instrument_id.venue)
                     if account_pnl is None:
                         any_conversion_failed = True
                         self._log.error(
-                            f"Cannot aggregate PnL: conversion failed for account {account_id} "
-                            f"from {native_pnl.currency} to {target_currency}"
+                            f"无法汇总盈亏：账户 {account_id} 从 {native_pnl.currency} 到 {target_currency} 的转换失败"
                         )
                 else:
                     account_pnl = native_pnl
@@ -2036,14 +2016,13 @@ cdef class Portfolio(PortfolioFacade):
                 if account_pnl is not None:
                     total_pnl = self._add_pnl_to_total(total_pnl, account_pnl, "unrealized" if not is_realized else "realized", venue=instrument_id.venue, target_currency=target_currency)
 
-        # Return None if any conversion failed (prevents partial totals)
+        # 如果任何转换失败，则返回 None（防止部分总额）
         if any_conversion_failed:
             return None
 
         if total_pnl is None:
-            # If we attempted calculations and all returned None (e.g., conversion failed),
-            # and target_currency was provided, return None to indicate conversion failure.
-            # Otherwise, return zero (no positions or no PnL).
+            # 如果我们尝试了计算但全部返回 None（例如转换失败），且提供了 target_currency，则返回 None 以指示转换失败。
+            # 否则，返回零（无持仓或无盈亏）。
             if attempted_calculation and target_currency is not None:
                 return None
 
@@ -2052,15 +2031,15 @@ cdef class Portfolio(PortfolioFacade):
         return total_pnl
 
     cdef Money _add_pnl_to_total(self, Money total_pnl, Money pnl, str pnl_type, Venue venue=None, Currency target_currency=None):
-        # Add a PnL to a running total, handling currency mismatches.
-        # Returns the new total, or None if currency mismatch occurs.
+        # 将盈亏添加到运行总额中，处理货币不匹配。
+        # 返回新的总额，如果发生货币不匹配则返回 None。
         if total_pnl is None:
             return self._convert_money_if_needed(pnl, target_currency, venue=venue)
         elif total_pnl.currency == pnl.currency:
             return Money(total_pnl.as_double() + pnl.as_double(), total_pnl.currency)
         else:
             if target_currency is not None:
-                # This should not happen if pnl was already converted, but just in case
+                # 如果盈亏已经转换，这种情况不应该发生，但预防万一
                 if pnl.currency != target_currency:
                     pnl = self._convert_money(pnl, target_currency, venue=venue)
 
@@ -2069,30 +2048,30 @@ cdef class Portfolio(PortfolioFacade):
 
                 return Money(total_pnl.as_double() + pnl.as_double(), target_currency)
 
-            # Currency mismatch - would need conversion, but for now return None
+            # 货币不匹配 - 需要转换，但目前返回 None
             self._log.warning(
-                f"Currency mismatch in aggregated {pnl_type} PnL: "
-                f"{total_pnl.currency} vs {pnl.currency}. "
-                f"Compute pnl {pnl_type} by account_id instead"
+                f"在汇总的 {pnl_type} 盈亏中存在货币不匹配： "
+                f"{total_pnl.currency} 与 {pnl.currency}。 "
+                f"改为按 account_id 计算盈亏 {pnl_type}"
             )
             return None
 
     cdef Money _get_zero_or_none_for_instrument(self, InstrumentId instrument_id, Currency target_currency=None):
-        # Helper method to return appropriate zero or None for missing instruments
+        # 为缺失的工具返回适当的零或 None 的辅助方法
         cdef Instrument inst = self._cache.instrument(instrument_id)
         if inst is not None:
-            # If target_currency is provided, we can always return a zero Money object
-            # in that currency, as 0 value is independent of exchange rates.
+            # 如果提供了 target_currency，我们总能返回该货币的零值 Money 对象，
+            # 因为 0 值与汇率无关。
             if target_currency is not None:
                 return Money(0, target_currency)
 
             return Money(0, inst.get_cost_currency())
         else:
-            self._log.warning(f"Returning None for {instrument_id} because instrument not found in cache")
+            self._log.warning(f"返回 None，因为在缓存中未找到工具 {instrument_id}")
             return None
 
     cdef Money _calculate_realized_pnl(self, InstrumentId instrument_id, AccountId account_id):
-        # account_id is mandatory here; aggregation is handled by _aggregate_pnl_by_calculation
+        # account_id 在这里是强制性的；汇总由 _aggregate_pnl_by_calculation 处理
         cdef:
             Account account
             Instrument instrument
@@ -2103,7 +2082,7 @@ cdef class Portfolio(PortfolioFacade):
 
         self._ensure_snapshot_pnls_cached_for(instrument_id)
         cdef list[Position] positions = self._cache.positions(
-            venue=None,  # Faster query filtering
+            venue=None,  # 更快的查询过滤
             instrument_id=instrument_id,
             strategy_id=None,
             side=PositionSide.NO_POSITION_SIDE,
@@ -2112,7 +2091,7 @@ cdef class Portfolio(PortfolioFacade):
         cdef Currency currency = self._determine_pnl_currency(account, instrument)
 
         if self._debug:
-            self._log.debug(f"Found {len(positions)} positions for {instrument_id}")
+            self._log.debug(f"已找到 {instrument_id} 的 {len(positions)} 个持仓")
 
         cdef tuple snapshot_result = self._process_snapshot_pnl_contributions(
             instrument_id=instrument_id,
@@ -2147,14 +2126,14 @@ cdef class Portfolio(PortfolioFacade):
         return result
 
     cdef void _ensure_snapshot_pnls_cached_for(self, InstrumentId instrument_id):  # noqa: C901
-        # Performance: This method maintains an incremental cache of snapshot PnLs
-        # It only unpickles new snapshots that haven't been processed yet
-        # Tracks sum and last PnL per position for efficient NETTING OMS support
+        # 性能：此方法维护快照盈亏的增量缓存
+        # 它仅反序列化尚未处理的新快照
+        # 跟踪每个持仓的总和及最后盈亏，以实现高效的 NETTING OMS 支持
 
-        # Get all position IDs that have snapshots for this instrument
+        # 获取该工具所有具有快照的持仓 ID
         cdef set[PositionId] snapshot_position_ids = self._cache.position_snapshot_ids(instrument_id)
         if not snapshot_position_ids:
-            return  # Nothing to process
+            return  # 无需处理
 
         cdef bint rebuild = False
         cdef bint has_new_snapshots = False
@@ -2167,7 +2146,7 @@ cdef class Portfolio(PortfolioFacade):
             int curr_count
             dict[PositionId, list] snapshot_data = {}
 
-        # Pre-fetch and detect changes
+        # 预取并检测变化
         for position_id in snapshot_position_ids:
             position_id_snapshots = self._cache.position_snapshot_bytes(position_id)
             curr_count = len(position_id_snapshots)
@@ -2186,7 +2165,7 @@ cdef class Portfolio(PortfolioFacade):
             Money last_pnl
 
         if rebuild:
-            # Full rebuild: process all snapshots from scratch
+            # 全量重建：从头处理所有快照
             for position_id in snapshot_position_ids:
                 sum_pnl = None
                 last_pnl = None
@@ -2197,7 +2176,7 @@ cdef class Portfolio(PortfolioFacade):
                     for s in position_id_snapshots:
                         snapshot = pickle.loads(s)
 
-                        # Track account_id for this position snapshot
+                        # 跟踪此持仓快照的 account_id
                         if snapshot.account_id is not None:
                             self._snapshot_account_ids[position_id] = snapshot.account_id
 
@@ -2205,16 +2184,16 @@ cdef class Portfolio(PortfolioFacade):
                             if sum_pnl is None:
                                 sum_pnl = snapshot.realized_pnl
                             elif sum_pnl.currency == snapshot.realized_pnl.currency:
-                                # Accumulate all snapshot PnLs
+                                # 累加所有快照盈亏
                                 sum_pnl = Money(
                                     sum_pnl.as_double() + snapshot.realized_pnl.as_double(),
                                     sum_pnl.currency
                                 )
 
-                            # Always update last to the most recent snapshot
+                            # 始终将最后一次更新为最新快照
                             last_pnl = snapshot.realized_pnl
 
-                # Update tracking structures
+                # 更新跟踪结构
                 if sum_pnl is not None:
                     self._snapshot_sum_per_position[position_id] = sum_pnl
                     self._snapshot_last_per_position[position_id] = last_pnl
@@ -2224,7 +2203,7 @@ cdef class Portfolio(PortfolioFacade):
 
                 self._snapshot_processed_counts[position_id] = curr_count
         else:
-            # Incremental path: only process new snapshots
+            # 增量路径：仅处理新快照
             for position_id in snapshot_position_ids:
                 position_id_snapshots = snapshot_data[position_id]
                 curr_count = len(position_id_snapshots)
@@ -2238,11 +2217,11 @@ cdef class Portfolio(PortfolioFacade):
                 sum_pnl = self._snapshot_sum_per_position.get(position_id)
                 last_pnl = self._snapshot_last_per_position.get(position_id)
 
-                # Process only new snapshots
+                # 仅处理新快照
                 for idx in range(prev_count, curr_count):
                     snapshot = pickle.loads(position_id_snapshots[idx])
 
-                    # Track account_id for this position snapshot
+                    # 跟踪此持仓快照的 account_id
                     if snapshot.account_id is not None:
                         self._snapshot_account_ids[position_id] = snapshot.account_id
 
@@ -2250,16 +2229,16 @@ cdef class Portfolio(PortfolioFacade):
                         if sum_pnl is None:
                             sum_pnl = snapshot.realized_pnl
                         elif sum_pnl.currency == snapshot.realized_pnl.currency:
-                            # Add to running sum
+                            # 累加到运行总和
                             sum_pnl = Money(
                                 sum_pnl.as_double() + snapshot.realized_pnl.as_double(),
                                 sum_pnl.currency
                             )
 
-                        # Update last to most recent
+                        # 更新最后一次为最新
                         last_pnl = snapshot.realized_pnl
 
-                # Update tracking structures
+                # 更新跟踪结构
                 if sum_pnl is not None:
                     self._snapshot_sum_per_position[position_id] = sum_pnl
                     self._snapshot_last_per_position[position_id] = last_pnl
@@ -2269,14 +2248,14 @@ cdef class Portfolio(PortfolioFacade):
 
                 self._snapshot_processed_counts[position_id] = curr_count
 
-        # Prune stale entries (positions that no longer have snapshots)
+        # 清除过时条目（不再有快照的持仓）
         cdef list[PositionId] stale_ids = []
         cdef PositionId stale_position_id
         for stale_position_id in self._snapshot_processed_counts:
             if stale_position_id not in snapshot_position_ids:
                 stale_ids.append(stale_position_id)
 
-        # If positions were purged, invalidate PnL cache
+        # 如果持仓被清除，则使盈亏缓存失效
         if stale_ids:
             has_purge = True
 
@@ -2286,7 +2265,7 @@ cdef class Portfolio(PortfolioFacade):
             self._snapshot_last_per_position.pop(stale_position_id, None)
             self._snapshot_account_ids.pop(stale_position_id, None)
 
-        # Invalidate PnL cache when snapshots change (new snapshots or purges)
+        # 当快照发生变化（新快照或降级/清除）时，使盈亏缓存失效
         if has_new_snapshots or has_purge:
             self._realized_pnls.pop(instrument_id, None)
 
@@ -2298,7 +2277,7 @@ cdef class Portfolio(PortfolioFacade):
         Currency currency,
         Account account,
     ):
-        # Process snapshot PnL contributions using the 3-case combination rule
+        # 使用 3 种情况的组合规则处理快照盈亏贡献
         cdef:
             set[PositionId] active_position_ids = {p.id for p in positions}
             set[PositionId] snapshot_ids = self._cache.position_snapshot_ids(instrument_id)
@@ -2316,14 +2295,14 @@ cdef class Portfolio(PortfolioFacade):
             Instrument instrument
 
         for position_id in snapshot_ids:
-            # Only process snapshots for the requested account
+            # 仅处理所请求账户的快照
             snapshot_account_id = self._snapshot_account_ids.get(position_id)
             if snapshot_account_id != account_id:
-                continue  # Skip snapshots from other accounts
+                continue  # 跳过其他账户的快照
 
             sum_pnl = self._snapshot_sum_per_position.get(position_id)
             if sum_pnl is None:
-                continue  # No PnL for this position
+                continue  # 该持仓无盈亏
 
             contribution_result = self._calculate_snapshot_contribution(
                 position_id=position_id,
@@ -2337,11 +2316,11 @@ cdef class Portfolio(PortfolioFacade):
 
             contribution = <double>contribution_result
 
-            # Add contribution with currency conversion if needed
+            # 根据需要进行货币转换并添加贡献
             if sum_pnl.currency == currency:
                 total_pnl += contribution
             else:
-                # Respect use_mark_xrates config for snapshot conversions
+                # 在快照转换中尊重 use_mark_xrates 配置
                 instrument = self._cache.instrument(instrument_id)
                 conv_price_type = PriceType.MARK if self._use_mark_xrates else PriceType.MID
                 xrate = self._cache.get_xrate(
@@ -2351,7 +2330,7 @@ cdef class Portfolio(PortfolioFacade):
                     price_type=conv_price_type,
                 )
 
-                # Fallback to MID if MARK not available
+                # 如果标记汇率不可用，则回退到中间价
                 if xrate is None and conv_price_type == PriceType.MARK:
                     xrate = self._cache.get_xrate(
                         venue=instrument.id.venue,
@@ -2361,7 +2340,7 @@ cdef class Portfolio(PortfolioFacade):
                     )
 
                 if xrate is None or xrate <= 0.0:
-                    return None  # Cannot convert currency
+                    return None  # 无法转换货币
 
                 total_pnl += contribution * xrate
 
@@ -2375,19 +2354,19 @@ cdef class Portfolio(PortfolioFacade):
         Money sum_pnl,
         set processed_ids,
     ):
-        # Calculate the contribution from a snapshot using the 3-case combination rule
+        # 使用 3 种情况组合规则计算来自快照的贡献
         cdef:
             double contribution = 0.0
             Position position
             Money last_pnl
         if position_id not in active_position_ids:
-            # Case 1: Position NOT in cache - add sum of all snapshots
+            # 情况 1: 持仓不在缓存中 - 添加所有快照的总和
             contribution = sum_pnl.as_double()
 
-            # Mark as fully processed since position doesn't exist
+            # 因为持仓不存在，标记为已完全处理
             processed_ids.add(position_id)
         else:
-            # Position is in cache - find it
+            # 持仓在缓存中 - 找到它
             position = None
             for p in positions:
                 if p.id == position_id:
@@ -2395,20 +2374,20 @@ cdef class Portfolio(PortfolioFacade):
                     break
 
             if position is None:
-                return None  # Should not happen
+                return None  # 不应该发生
 
             if position.is_open_c():
-                # Case 2: Position OPEN - add sum (prior cycles) + position's realized PnL
+                # 情况 2: 持仓开启 - 添加总和（先前周期）+ 持仓的已实现盈亏
                 contribution = sum_pnl.as_double()
 
-                # Position's PnL will be added in the positions loop below
-                # Do NOT mark as processed - we still need to add current PnL
+                # 持仓的盈亏将在下面的持仓循环中添加
+                # 不要标记为已处理 - 我们仍然需要添加当前盈亏
             else:
-                # Case 3: Position CLOSED
-                # If last snapshot equals current position realized PnL, subtract it here;
-                # when we add the position realized below, net effect is `sum`.
-                # If not equal (new closed cycle not snapshotted), include full `sum` here
-                # and add the position realized below (net `sum + realized`).
+                # 情况 3: 持仓关闭
+                # 如果最后一个快照等于当前持仓已实现盈亏，在这里减去它；
+                # 当我们在下面添加持仓已实现盈亏时，净效果是 `sum`。
+                # 如果不相等（新关闭的周期尚未快照），则在这里包含完整的 `sum`
+                # 并在下面添加持仓已实现盈亏（净额为 `sum + realized`）。
                 last_pnl = self._snapshot_last_per_position.get(position_id)
                 if (
                     last_pnl is not None
@@ -2420,8 +2399,8 @@ cdef class Portfolio(PortfolioFacade):
                 else:
                     contribution = sum_pnl.as_double()
 
-                # Position's PnL will be added in the positions loop below
-                # Do NOT mark as processed - we still need to add current PnL
+                # 持仓的盈亏将在下面的持仓循环中添加
+                # 不要标记为已处理 - 我们仍然需要添加当前盈亏
 
         return contribution
 
@@ -2434,7 +2413,7 @@ cdef class Portfolio(PortfolioFacade):
         Currency currency,
         set processed_ids,
     ):
-        # Process realized PnL from active positions
+        # 处理来自活跃持仓的已实现盈亏
         cdef:
             double total_pnl = 0.0
             Position position
@@ -2444,26 +2423,26 @@ cdef class Portfolio(PortfolioFacade):
             object bet_position
         for position in positions:
             if position.instrument_id != instrument_id:
-                continue  # Nothing to calculate
+                continue  # 无需计算
 
-            # Skip positions that were already processed via snapshots
+            # 跳过已通过快照处理的持仓
             if position.id in processed_ids:
-                continue  # Already handled in snapshot logic
+                continue  # 已在快照逻辑中处理
 
             if position.realized_pnl is None:
-                continue  # No PnL to add
+                continue  # 无需添加盈亏
 
             if self._debug:
-                self._log.debug(f"Adding realized PnL for {position}")
+                self._log.debug(f"正在为 {position} 添加已实现盈亏")
 
-            # Add position's realized PnL
+            # 添加持仓的已实现盈亏
             if isinstance(instrument, BettingInstrument):
                 bet_position = self._get_bet_position(position, instrument)
                 if bet_position is None:
                     self._log.debug(
-                        f"Cannot calculate realized PnL: no `BetPosition` for {position.id}",
+                        f"无法计算已实现盈亏：没有 {position.id} 的 `BetPosition`",
                     )
-                    return None  # Cannot calculate
+                    return None  # 无法计算
 
                 pnl = float(bet_position.realized_pnl)
             else:
@@ -2477,11 +2456,11 @@ cdef class Portfolio(PortfolioFacade):
                 )
                 if xrate_result is None or xrate_result == 0:
                     self._log.debug(
-                        f"Cannot calculate realized PnL: "
-                        f"no {self._log_xrate} exchange rate yet for {instrument.get_cost_currency()}/{account.base_currency}",
+                        f"无法计算已实现盈亏： "
+                        f"尚未有 {instrument.get_cost_currency()}/{account.base_currency} 的 {self._log_xrate} 汇率",
                     )
                     self._pending_calcs.add(instrument.id)
-                    return None  # Cannot calculate
+                    return None  # 无法计算
 
                 xrate = <double>xrate_result
                 pnl = pnl * xrate
@@ -2491,7 +2470,7 @@ cdef class Portfolio(PortfolioFacade):
         return round(total_pnl, currency.get_precision())
 
     cdef Money _calculate_unrealized_pnl(self, InstrumentId instrument_id, Price price=None, AccountId account_id=None):
-        # account_id can be None when aggregating in _aggregate_pnl_by_calculation (which calculates fresh with price)
+        # 在 _aggregate_pnl_by_calculation 中进行汇总时，account_id 可以为 None（该方法使用价格进行刷新计算）
         cdef:
             Account account
             Instrument instrument
@@ -2502,7 +2481,7 @@ cdef class Portfolio(PortfolioFacade):
 
         cdef Currency currency = self._determine_pnl_currency(account, instrument)
         cdef list positions_open = self._cache.positions_open(
-            venue=None,  # Faster query filtering
+            venue=None,  # 更快的查询过滤
             instrument_id=instrument_id,
             strategy_id=None,
             side=PositionSide.NO_POSITION_SIDE,
@@ -2530,7 +2509,7 @@ cdef class Portfolio(PortfolioFacade):
     cdef tuple _validate_account_and_instrument(self, InstrumentId instrument_id, AccountId account_id, str caller_name, bint is_error):
         cdef Account account = self._cache.account_for_venue(instrument_id.venue, account_id)
         if account is None:
-            msg = f"Cannot calculate {caller_name} PnL: no account registered for {instrument_id.venue} and {account_id}"
+            msg = f"无法计算 {caller_name} 盈亏：没有为 {instrument_id.venue} 和 {account_id} 注册账号"
             if is_error:
                 self._log.error(msg)
             else:
@@ -2539,7 +2518,7 @@ cdef class Portfolio(PortfolioFacade):
 
         cdef Instrument instrument = self._cache.instrument(instrument_id)
         if instrument is None:
-            msg = f"Cannot calculate {caller_name} PnL: no instrument for {instrument_id}"
+            msg = f"无法计算 {caller_name} 盈亏：找不到 {instrument_id} 的工具"
             if is_error:
                 self._log.error(msg)
             else:
@@ -2548,7 +2527,7 @@ cdef class Portfolio(PortfolioFacade):
 
         if self._debug:
             self._log.debug(
-                f"Calculating {caller_name} PnL for instrument {instrument_id} with {account}", LogColor.MAGENTA,
+                f"正在计算工具 {instrument_id} 在账户 {account} 中的 {caller_name} 盈亏", LogColor.MAGENTA,
             )
 
         return account, instrument
@@ -2568,7 +2547,7 @@ cdef class Portfolio(PortfolioFacade):
         Currency currency,
         Price price,
     ):
-        # Calculate total unrealized PnL from all open positions
+        # 计算所有未平仓持仓的总未实现盈亏
         cdef:
             double total_pnl = 0.0
             Position position
@@ -2578,10 +2557,10 @@ cdef class Portfolio(PortfolioFacade):
             double xrate
         for position in positions_open:
             if position.instrument_id != instrument_id:
-                continue  # Nothing to calculate
+                continue  # 无需计算
 
             if position.side == PositionSide.FLAT:
-                continue  # Nothing to calculate
+                continue  # 无需计算
 
             pnl_result = self._calculate_position_unrealized_pnl(
                 position=position,
@@ -2592,7 +2571,7 @@ cdef class Portfolio(PortfolioFacade):
                 price=price,
             )
             if pnl_result is None:
-                return None  # Cannot calculate
+                return None  # 无法计算
 
             pnl = <double>pnl_result
             total_pnl += pnl
@@ -2608,7 +2587,7 @@ cdef class Portfolio(PortfolioFacade):
         InstrumentId instrument_id,
         Price price,
     ):
-        # Calculate unrealized PnL for a single position
+        # 计算单个持仓的未实现盈亏
         cdef:
             Price p
             double pnl
@@ -2619,21 +2598,21 @@ cdef class Portfolio(PortfolioFacade):
         p = price or self._get_price(position)
         if p is None:
             self._log.debug(
-                f"Cannot calculate unrealized PnL: no {self._log_price} for {instrument_id}",
+                f"无法计算未实现盈亏：没有 {instrument_id} 的 {self._log_price}",
             )
             self._pending_calcs.add(instrument.id)
-            return None  # Cannot calculate
+            return None  # 无法计算
 
         if self._debug:
-            self._log.debug(f"Calculating unrealized PnL for {position}")
+            self._log.debug(f"正在计算 {position} 的未实现盈亏")
 
         if isinstance(instrument, BettingInstrument):
             bet_position = self._get_bet_position(position, instrument)
             if bet_position is None:
                 self._log.debug(
-                    f"Cannot calculate unrealized PnL: no `BetPosition` for {position.id}",
+                    f"无法计算未实现盈亏：没有为 {position.id} 找到 `BetPosition`",
                 )
-                return None  # Cannot calculate
+                return None  # 无法计算
 
             pnl = float(bet_position.unrealized_pnl(p.as_decimal()))
         else:
@@ -2641,7 +2620,7 @@ cdef class Portfolio(PortfolioFacade):
 
         if self._debug:
             self._log.debug(
-                f"Unrealized PnL for {instrument.id}: {pnl} {currency}", LogColor.MAGENTA,
+                f"{instrument.id} 的未实现盈亏：{pnl} {currency}", LogColor.MAGENTA,
             )
 
         if self._convert_to_account_base_currency and account.base_currency is not None:
@@ -2652,11 +2631,11 @@ cdef class Portfolio(PortfolioFacade):
             )
             if xrate_result is None or xrate_result == 0:
                 self._log.debug(
-                    f"Cannot calculate unrealized PnL: "
-                    f"no {self._log_xrate} exchange rate for {instrument.get_cost_currency()}/{account.base_currency}",
+                    f"无法计算未实现盈亏： "
+                    f"没有 {instrument.get_cost_currency()}/{account.base_currency} 的 {self._log_xrate} 汇率",
                 )
                 self._pending_calcs.add(instrument.id)
-                return None  # Cannot calculate
+                return None  # 无法计算
 
             xrate = <double>xrate_result
             pnl = pnl * xrate
@@ -2664,10 +2643,10 @@ cdef class Portfolio(PortfolioFacade):
         return pnl
 
     cdef object _get_bet_position(self, Position position, Instrument instrument):
-        # Helper method to get bet_position with fallback to instrument ID for netting positions
+        # 获取博彩持仓的辅助方法，对于净额结算持仓可回退至工具 ID
         cdef object bet_position = self._bet_positions.get(position.id)
         if bet_position is None:
-            # Try fallback to instrument ID for netting positions
+            # 对于净额结算持仓尝试回退至工具 ID
             bet_position = self._bet_positions.get(PositionId(instrument.id.value))
 
         return bet_position
@@ -2678,13 +2657,13 @@ cdef class Portfolio(PortfolioFacade):
         Account account,
         InstrumentId instrument_id,
     ):
-        # Get the exchange rate from instrument cost currency to account base currency.
-        # Uses mark xrates if enabled, falling back to MID xrate.
+        # 获取从工具结算货币到账户基础货币的汇率。
+        # 如果启用，则使用标记汇率，否则回退至中间价汇率。
         if account.base_currency is None:
             return None
 
         cdef PriceType price_type = PriceType.MARK if self._use_mark_xrates else PriceType.MID
-        # Use the instrument's venue for xrate lookup, not the account venue
+        # 使用工具的场地进行汇率查询，而不是账户所在的场地
         cdef Venue venue = instrument_id.venue
 
         cdef object xrate = self._cache.get_xrate(
@@ -2694,7 +2673,7 @@ cdef class Portfolio(PortfolioFacade):
             price_type=price_type,
         )
 
-        # Fallback to MID if MARK not available
+        # 如果标记价格不可用，则回退到中间价
         if xrate is None and price_type == PriceType.MARK:
             xrate = self._cache.get_xrate(
                 venue=venue,
@@ -2737,7 +2716,7 @@ cdef class Portfolio(PortfolioFacade):
         Venue venue=None,
         PriceType price_type=PriceType.MID,
     ):
-        # Helper method to convert money if target_currency is provided and different from money's currency
+        # 如果提供了 target_currency 且与金额的货币不同，则转换金额的辅助方法
         if target_currency is not None and money.currency != target_currency:
             return self._convert_money(money, target_currency, venue=venue, price_type=price_type)
 
@@ -2753,7 +2732,7 @@ cdef class Portfolio(PortfolioFacade):
         if money.currency == target_currency:
             return money
 
-        # Use mark xrates if enabled and price_type is not explicitly set to something else
+        # 如果启用且 price_type 未明确设置为其他值，则使用标记汇率
         cdef PriceType effective_price_type = price_type
         if self._use_mark_xrates and price_type == PriceType.MID:
             effective_price_type = PriceType.MARK
@@ -2766,7 +2745,7 @@ cdef class Portfolio(PortfolioFacade):
         )
 
         if xrate is None and effective_price_type == PriceType.MARK:
-            # Fallback to standard xrate lookup (using venue if provided)
+            # 回退到标准汇率查询（如果提供，则使用场地）
             xrate = self._cache.get_xrate(
                 venue=venue,
                 from_currency=money.currency,
@@ -2775,7 +2754,7 @@ cdef class Portfolio(PortfolioFacade):
             )
 
         if xrate is None or xrate <= 0.0:
-            self._log.error(f"Cannot convert {money} to {target_currency}: {'no' if xrate is None else 'invalid'} exchange rate for {money.currency} using {price_type_to_str(effective_price_type)}")
+            self._log.error(f"无法将 {money} 转换为 {target_currency}：{'无' if xrate is None else '无效'} 汇率（使用 {price_type_to_str(effective_price_type)} 转换 {money.currency} 时）")
             return None
 
         return Money(round(money.as_f64_c() * (<double>xrate), target_currency.get_precision()), target_currency)

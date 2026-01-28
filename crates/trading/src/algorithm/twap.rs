@@ -13,22 +13,21 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! Time-Weighted Average Price (TWAP) execution algorithm.
+//! 时间加权平均价格 (TWAP) 执行算法。
 //!
-//! The TWAP algorithm executes orders by evenly spreading them over a specified
-//! time horizon at regular intervals. This helps reduce market impact by avoiding
-//! concentration of trade size at any given time.
+//! TWAP 算法通过在指定的时间范围内定期均匀地分散执行订单。
+//! 这有助于通过避免在任何给定时间点集中成交来减少市场冲击。
 //!
-//! # Parameters
+//! # 参数
 //!
-//! Orders submitted to this algorithm must include `exec_algorithm_params` with:
-//! - `horizon_secs`: Total execution horizon in seconds.
-//! - `interval_secs`: Interval between child orders in seconds.
+//! 提交给此算法的订单必须包含 `exec_algorithm_params`，其中包含：
+//! - `horizon_secs`: 总执行时间范围（秒）。
+//! - `interval_secs`: 子订单之间的时间间隔（秒）。
 //!
-//! # Example
+//! # 示例
 //!
-//! An order with `horizon_secs=60` and `interval_secs=10` will spawn 6 child
-//! orders over 60 seconds, one every 10 seconds.
+//! 一个设置了 `horizon_secs=60` 和 `interval_secs=10` 的订单将在 60 秒内
+//! 生成 6 个子订单，每 10 秒生成一个。
 
 use std::{
     ops::{Deref, DerefMut},
@@ -51,24 +50,23 @@ use ustr::Ustr;
 
 use super::{ExecutionAlgorithm, ExecutionAlgorithmConfig, ExecutionAlgorithmCore};
 
-/// Configuration for [`TwapAlgorithm`].
+/// [`TwapAlgorithm`] 的配置。
 pub type TwapAlgorithmConfig = ExecutionAlgorithmConfig;
 
-/// Time-Weighted Average Price (TWAP) execution algorithm.
+/// 时间加权平均价格 (TWAP) 执行算法。
 ///
-/// Executes orders by evenly spreading them over a specified time horizon,
-/// at regular intervals. The algorithm receives a primary order and spawns
-/// smaller child orders that are executed at regular intervals.
+/// 通过在指定的时间范围内定期均匀地分散执行订单。
+/// 该算法接收一个主订单并生成定期执行的较小子订单。
 #[derive(Debug)]
 pub struct TwapAlgorithm {
-    /// The algorithm core.
+    /// 算法核心。
     pub core: ExecutionAlgorithmCore,
-    /// Scheduled sizes for each primary order.
+    /// 每个主订单的计划执行大小。
     scheduled_sizes: AHashMap<ClientOrderId, Vec<Quantity>>,
 }
 
 impl TwapAlgorithm {
-    /// Creates a new [`TwapAlgorithm`] instance.
+    /// 创建一个新的 [`TwapAlgorithm`] 实例。
     #[must_use]
     pub fn new(config: TwapAlgorithmConfig) -> Self {
         Self {
@@ -77,14 +75,14 @@ impl TwapAlgorithm {
         }
     }
 
-    /// Completes the execution sequence for a primary order.
+    /// 完成主订单的执行序列。
     fn complete_sequence(&mut self, primary_id: &ClientOrderId) {
         let timer_name = primary_id.as_str();
         if self.core.clock().timer_names().contains(&timer_name) {
             self.core.clock().cancel_timer(timer_name);
         }
         self.scheduled_sizes.remove(primary_id);
-        log::info!("Completed TWAP execution for {primary_id}");
+        log::info!("完成 {primary_id} 的 TWAP 执行");
     }
 }
 
@@ -112,15 +110,15 @@ impl ExecutionAlgorithm for TwapAlgorithm {
         let primary_id = order.client_order_id();
 
         if self.scheduled_sizes.contains_key(&primary_id) {
-            anyhow::bail!("Order {primary_id} already being executed");
+            anyhow::bail!("订单 {primary_id} 已经在执行中");
         }
 
-        log::info!("Received order for TWAP execution: {order:?}");
+        log::info!("收到 TWAP 执行订单: {order:?}");
 
-        // Only market orders supported
+        // 仅支持市价单
         if order.order_type() != OrderType::Market {
             log::error!(
-                "Cannot execute order: only implemented for market orders, order_type={:?}",
+                "无法执行订单：仅实现了市价单支持，当前订单类型={:?}",
                 order.order_type()
             );
             return Ok(());
@@ -132,64 +130,55 @@ impl ExecutionAlgorithm for TwapAlgorithm {
         };
 
         let Some(instrument) = instrument else {
-            log::error!(
-                "Cannot execute order: instrument {} not found",
-                order.instrument_id()
-            );
+            log::error!("无法执行订单：找不到交易工具 {}", order.instrument_id());
             return Ok(());
         };
 
         let Some(exec_params) = order.exec_algorithm_params() else {
-            log::error!(
-                "Cannot execute order: exec_algorithm_params not found for primary order {primary_id}"
-            );
+            log::error!("无法执行订单：找不到主订单 {primary_id} 的 exec_algorithm_params");
             return Ok(());
         };
 
         let Some(horizon_secs_str) = exec_params.get(&Ustr::from("horizon_secs")) else {
-            log::error!("Cannot execute order: horizon_secs not found in exec_algorithm_params");
+            log::error!("无法执行订单：在 exec_algorithm_params 中找不到 horizon_secs");
             return Ok(());
         };
 
         let horizon_secs: f64 = horizon_secs_str.parse().map_err(|e| {
-            log::error!("Cannot parse horizon_secs: {e}");
-            anyhow::anyhow!("Invalid horizon_secs")
+            log::error!("无法解析 horizon_secs: {e}");
+            anyhow::anyhow!("无效的 horizon_secs")
         })?;
 
         let Some(interval_secs_str) = exec_params.get(&Ustr::from("interval_secs")) else {
-            log::error!("Cannot execute order: interval_secs not found in exec_algorithm_params");
+            log::error!("无法执行订单：在 exec_algorithm_params 中找不到 interval_secs");
             return Ok(());
         };
 
         let interval_secs: f64 = interval_secs_str.parse().map_err(|e| {
-            log::error!("Cannot parse interval_secs: {e}");
-            anyhow::anyhow!("Invalid interval_secs")
+            log::error!("无法解析 interval_secs: {e}");
+            anyhow::anyhow!("无效的 interval_secs")
         })?;
 
         if !horizon_secs.is_finite() || horizon_secs <= 0.0 {
-            log::error!(
-                "Cannot execute order: horizon_secs={horizon_secs} must be finite and positive"
-            );
+            log::error!("无法执行订单：horizon_secs={horizon_secs} 必须是有限且正数");
             return Ok(());
         }
 
         if !interval_secs.is_finite() || interval_secs <= 0.0 {
-            log::error!(
-                "Cannot execute order: interval_secs={interval_secs} must be finite and positive"
-            );
+            log::error!("无法执行订单：interval_secs={interval_secs} 必须是有限且正数");
             return Ok(());
         }
 
         if horizon_secs < interval_secs {
             log::error!(
-                "Cannot execute order: horizon_secs={horizon_secs} was less than interval_secs={interval_secs}"
+                "无法执行订单：horizon_secs={horizon_secs} 小于 interval_secs={interval_secs}"
             );
             return Ok(());
         }
 
         let num_intervals = (horizon_secs / interval_secs).floor() as u64;
         if num_intervals == 0 {
-            log::error!("Cannot execute order: num_intervals is 0");
+            log::error!("无法执行订单：间隔数量 (num_intervals) 为 0");
             return Ok(());
         }
 
@@ -202,7 +191,7 @@ impl ExecutionAlgorithm for TwapAlgorithm {
 
         if qty_per_interval == total_qty || qty_per_interval < instrument.size_increment() {
             log::warn!(
-                "Submitting for entire size: qty_per_interval={qty_per_interval}, order_quantity={total_qty}"
+                "以全额提交：每个间隔的数量 qty_per_interval={qty_per_interval}, 订单总数量={total_qty}"
             );
             self.submit_order(order, None, None)?;
             return Ok(());
@@ -212,7 +201,7 @@ impl ExecutionAlgorithm for TwapAlgorithm {
             && qty_per_interval < min_qty
         {
             log::warn!(
-                "Submitting for entire size: qty_per_interval={qty_per_interval} < min_quantity={min_qty}"
+                "以全额提交：每个间隔的数量 qty_per_interval={qty_per_interval} < 最小订单数量 min_quantity={min_qty}"
             );
             self.submit_order(order, None, None)?;
             return Ok(());
@@ -220,7 +209,7 @@ impl ExecutionAlgorithm for TwapAlgorithm {
 
         let mut scheduled_sizes: Vec<Quantity> = vec![qty_per_interval; num_intervals as usize];
 
-        // Remainder goes in the last slice
+        // 余数部分放在最后一切片中
         let scheduled_total = qty_per_interval_raw * (num_intervals as QuantityRaw);
         let remainder_raw = total_raw - scheduled_total;
         if remainder_raw > 0 {
@@ -228,9 +217,9 @@ impl ExecutionAlgorithm for TwapAlgorithm {
             scheduled_sizes.push(remainder);
         }
 
-        log::info!("Order execution size schedule: {scheduled_sizes:?}");
+        log::info!("订单执行大小计划表: {scheduled_sizes:?}");
 
-        // Add primary order to cache so on_time_event can retrieve it
+        // 将主订单添加到缓存，以便 on_time_event 之后可以检索它
         {
             let cache_rc = self.core.cache_rc();
             let mut cache = cache_rc.borrow_mut();
@@ -246,14 +235,14 @@ impl ExecutionAlgorithm for TwapAlgorithm {
             .get(&primary_id)
             .is_some_and(|s| s.is_empty());
 
-        // Single slice: submit the primary order directly
+        // 单一切片：直接提交主订单
         if is_single_slice {
             self.submit_order(order, None, None)?;
             self.complete_sequence(&primary_id);
             return Ok(());
         }
 
-        // Multiple slices: spawn first child order and reduce primary
+        // 多个切片：生成第一个子订单并减少主订单数量
         let tags = order.tags().map(|t| t.to_vec());
         let time_in_force = order.time_in_force();
         let reduce_only = order.is_reduce_only();
@@ -285,14 +274,14 @@ impl ExecutionAlgorithm for TwapAlgorithm {
         )?;
 
         log::info!(
-            "Started TWAP execution for {primary_id}: horizon_secs={horizon_secs}, interval_secs={interval_secs}"
+            "开始执行 {primary_id} 的 TWAP：horizon_secs={horizon_secs}, interval_secs={interval_secs}"
         );
 
         Ok(())
     }
 
     fn on_time_event(&mut self, event: &TimeEvent) -> anyhow::Result<()> {
-        log::info!("Received time event: {event:?}");
+        log::info!("收到时间事件: {event:?}");
 
         let primary_id = ClientOrderId::new(event.name.as_str());
 
@@ -302,7 +291,7 @@ impl ExecutionAlgorithm for TwapAlgorithm {
         };
 
         let Some(primary) = primary else {
-            log::error!("Cannot find primary order for exec_spawn_id={primary_id}");
+            log::error!("找不到 exec_spawn_id={primary_id} 的主订单");
             return Ok(());
         };
 
@@ -312,26 +301,26 @@ impl ExecutionAlgorithm for TwapAlgorithm {
         }
 
         let Some(scheduled_sizes) = self.scheduled_sizes.get_mut(&primary_id) else {
-            log::error!("Cannot find scheduled sizes for exec_spawn_id={primary_id}");
+            log::error!("找不到 exec_spawn_id={primary_id} 的计划大小");
             return Ok(());
         };
 
         if scheduled_sizes.is_empty() {
-            log::warn!("No more size to execute for exec_spawn_id={primary_id}");
+            log::warn!("exec_spawn_id={primary_id} 没有更多可执行的数量");
             return Ok(());
         }
 
         let quantity = scheduled_sizes.remove(0);
         let is_final_slice = scheduled_sizes.is_empty();
 
-        // Final slice: submit the primary order (already reduced to remaining quantity)
+        // 最后一片：提交主订单（已减少为剩余数量）
         if is_final_slice {
             self.submit_order(primary, None, None)?;
             self.complete_sequence(&primary_id);
             return Ok(());
         }
 
-        // Intermediate slice: spawn child order and reduce primary
+        // 中间切片：生成子订单并减少主订单数量
         let tags = primary.tags().map(|t| t.to_vec());
         let time_in_force = primary.time_in_force();
         let reduce_only = primary.is_reduce_only();
@@ -393,7 +382,7 @@ mod tests {
     use super::*;
 
     fn create_twap_algorithm() -> TwapAlgorithm {
-        // Use unique ID to avoid thread-local registry/msgbus conflicts in parallel tests
+        // 使用唯一 ID 以避免在并行测试中出现线程局部注册表/消息总线冲突
         let unique_id = format!("TWAP-{}", UUID4::new());
         let config = TwapAlgorithmConfig {
             exec_algorithm_id: Some(ExecAlgorithmId::new(&unique_id)),
@@ -409,14 +398,14 @@ mod tests {
         let clock = Rc::new(RefCell::new(TestClock::new()));
         let cache = Rc::new(RefCell::new(Cache::default()));
 
-        // Register a no-op default handler for timer callbacks
+        // 为定时器回调注册一个默认的空处理器
         clock
             .borrow_mut()
             .register_default_handler(TimeEventCallback::Rust(std::sync::Arc::new(|_| {})));
 
         algo.core.register(trader_id, clock, cache).unwrap();
 
-        // Transition to Running state for tests
+        // 为测试切换到 Running 状态
         algo.transition_state(ComponentTrigger::Initialize).unwrap();
         algo.transition_state(ComponentTrigger::Start).unwrap();
         algo.transition_state(ComponentTrigger::StartCompleted)
@@ -528,7 +517,7 @@ mod tests {
             0.into(),
         ));
 
-        // Should not error, just log and return
+        // 不应报错，只需记录日志并返回即可
         let result = algo.on_order(order);
         assert!(result.is_ok());
     }
@@ -555,12 +544,12 @@ mod tests {
             None,
             None,
             None,
-            None, // No exec_algorithm_params
+            None, // 没有 exec_algorithm_params
             None,
             None,
         ));
 
-        // Should not error, just log and return
+        // 不应报错，只需记录日志并返回即可
         let result = algo.on_order(order);
         assert!(result.is_ok());
     }
@@ -601,12 +590,7 @@ mod tests {
         let result = algo.on_order(order2);
 
         assert!(result.is_err());
-        assert!(
-            result
-                .unwrap_err()
-                .to_string()
-                .contains("already being executed")
-        );
+        assert!(result.unwrap_err().to_string().contains("已经在执行中"));
     }
 
     #[rstest]
@@ -616,7 +600,7 @@ mod tests {
 
         add_instrument_to_cache(&mut algo);
 
-        // 1.2 qty over 60s with 20s intervals = 3 intervals of 0.4 each (divides evenly)
+        // 1.2 数量在 60 秒内，20 秒间隔 = 3 个间隔，每个 0.4 (整除)
         let mut params = IndexMap::new();
         params.insert(Ustr::from("horizon_secs"), Ustr::from("60"));
         params.insert(Ustr::from("interval_secs"), Ustr::from("20"));
@@ -626,7 +610,7 @@ mod tests {
 
         algo.on_order(order).unwrap();
 
-        // First slice spawned immediately, remaining 2 slices scheduled (no remainder)
+        // 第一个切片立即生成，剩余 2 个切片已排队（无余数）
         let remaining = algo.scheduled_sizes.get(&primary_id).unwrap();
         assert_eq!(remaining.len(), 2);
 
@@ -642,8 +626,8 @@ mod tests {
 
         add_instrument_to_cache(&mut algo);
 
-        // 1.0 qty over 60s with 20s intervals = 3 intervals
-        // Raw is scaled to FIXED_PRECISION: 9 (standard) or 16 (high-precision)
+        // 1.0 数量在 60 秒内，20 秒间隔 = 3 个间隔
+        // Raw 值缩放到 FIXED_PRECISION: 9 (标准) 或 16 (高精度)
         let mut params = IndexMap::new();
         params.insert(Ustr::from("horizon_secs"), Ustr::from("60"));
         params.insert(Ustr::from("interval_secs"), Ustr::from("20"));
@@ -653,13 +637,13 @@ mod tests {
 
         algo.on_order(order).unwrap();
 
-        // First slice spawned, 3 remaining (2 regular + 1 remainder)
+        // 第一个切片已生成，排队中剩余 3 个（2 个常规 + 1 个余数）
         let remaining = algo.scheduled_sizes.get(&primary_id).unwrap();
         assert_eq!(remaining.len(), 3);
 
-        // Expected raw values depend on FIXED_PRECISION
-        // Standard (9):  1_000_000_000 / 3 = 333_333_333, remainder = 1
-        // High (16): 10_000_000_000_000_000 / 3 = 3_333_333_333_333_333, remainder = 1
+        // 预期的 raw 值取决于 FIXED_PRECISION
+        // 标准 (9):  1_000_000_000 / 3 = 333_333_333, 余数 = 1
+        // 高精度 (16): 10_000_000_000_000_000 / 3 = 3_333_333_333_333_333, 余数 = 1
         #[cfg(feature = "high-precision")]
         {
             assert_eq!(remaining[0].raw, 3_333_333_333_333_333);
@@ -681,7 +665,7 @@ mod tests {
 
         add_instrument_to_cache(&mut algo);
 
-        // Use qty that divides evenly: 1.2 / 3 = 0.4 each
+        // 使用整出的数量: 1.2 / 3 = 0.4 每个
         let mut params = IndexMap::new();
         params.insert(Ustr::from("horizon_secs"), Ustr::from("60"));
         params.insert(Ustr::from("interval_secs"), Ustr::from("20"));
@@ -691,14 +675,14 @@ mod tests {
 
         algo.on_order(order).unwrap();
 
-        // Verify 2 slices remain after first spawn (no remainder)
+        // 验证在第一次生成后剩余 2 个切片（无余数）
         assert_eq!(algo.scheduled_sizes.get(&primary_id).unwrap().len(), 2);
 
-        // Simulate timer firing
+        // 模拟定时器触发
         let event = TimeEvent::new(primary_id.inner(), UUID4::new(), 0.into(), 0.into());
         ExecutionAlgorithm::on_time_event(&mut algo, &event).unwrap();
 
-        // One slice consumed
+        // 消耗掉一个切片
         assert_eq!(algo.scheduled_sizes.get(&primary_id).unwrap().len(), 1);
     }
 
@@ -709,7 +693,7 @@ mod tests {
 
         add_instrument_to_cache(&mut algo);
 
-        // 2 intervals: first spawned immediately, one in scheduled_sizes
+        // 2 个间隔：第一个立即生成，一个在 scheduled_sizes 中
         let mut params = IndexMap::new();
         params.insert(Ustr::from("horizon_secs"), Ustr::from("60"));
         params.insert(Ustr::from("interval_secs"), Ustr::from("30"));
@@ -720,11 +704,11 @@ mod tests {
         algo.on_order(order).unwrap();
         assert_eq!(algo.scheduled_sizes.get(&primary_id).unwrap().len(), 1);
 
-        // Simulate timer firing for final slice
+        // 为最后一个切片模拟定时器触发
         let event = TimeEvent::new(primary_id.inner(), UUID4::new(), 0.into(), 0.into());
         ExecutionAlgorithm::on_time_event(&mut algo, &event).unwrap();
 
-        // Sequence completed, scheduled_sizes removed
+        // 序列完成，scheduled_sizes 已移除
         assert!(algo.scheduled_sizes.get(&primary_id).is_none());
     }
 
@@ -747,7 +731,7 @@ mod tests {
         algo.on_order(order).unwrap();
         assert_eq!(algo.scheduled_sizes.get(&primary_id).unwrap().len(), 2);
 
-        // Mark primary order as closed (canceled)
+        // 将主订单标记为已关闭 (取消)
         {
             let cache_rc = algo.core.cache_rc();
             let mut cache = cache_rc.borrow_mut();
@@ -769,11 +753,11 @@ mod tests {
             cache.update_order(&primary).unwrap();
         }
 
-        // Timer fires but primary is closed
+        // 定时器触发但主订单已关闭
         let event = TimeEvent::new(primary_id.inner(), UUID4::new(), 0.into(), 0.into());
         ExecutionAlgorithm::on_time_event(&mut algo, &event).unwrap();
 
-        // Sequence should complete early since primary is closed
+        // 由于主订单已关闭，序列应提前完成
         assert!(algo.scheduled_sizes.get(&primary_id).is_none());
     }
 
@@ -793,7 +777,7 @@ mod tests {
 
         algo.on_order(order).unwrap();
 
-        // Verify timer is set
+        // 验证定时器已设置
         assert!(
             algo.core
                 .clock()
@@ -801,10 +785,10 @@ mod tests {
                 .contains(&primary_id.as_str())
         );
 
-        // Stop the algorithm
+        // 停止算法
         ExecutionAlgorithm::on_stop(&mut algo).unwrap();
 
-        // Timer should be canceled
+        // 定时器应当已被取消
         assert!(algo.core.clock().timer_names().is_empty());
     }
 
@@ -815,7 +799,7 @@ mod tests {
 
         add_instrument_to_cache(&mut algo);
 
-        // Use fractional interval like Python tests: 3 second horizon, 0.5 second interval
+        // 使用像 Python 测试中那样的分数间隔：3 秒 horizon，0.5 秒间隔
         let mut params = IndexMap::new();
         params.insert(Ustr::from("horizon_secs"), Ustr::from("3"));
         params.insert(Ustr::from("interval_secs"), Ustr::from("0.5"));
@@ -823,10 +807,10 @@ mod tests {
         let order = create_market_order_with_params(params);
         let primary_id = order.client_order_id();
 
-        // Should not error - fractional seconds should parse correctly
+        // 不应报错 - 小数秒应当能正确解析
         algo.on_order(order).unwrap();
 
-        // 3 / 0.5 = 6 intervals, first spawned immediately, 5 remaining (plus possible remainder)
+        // 3 / 0.5 = 6 个间隔，第一个立即生成，剩余 5 个（加上可能的余数）
         let remaining = algo.scheduled_sizes.get(&primary_id).unwrap();
         assert!(remaining.len() >= 5);
     }
@@ -838,7 +822,7 @@ mod tests {
         let mut algo = create_twap_algorithm();
         register_algorithm(&mut algo);
 
-        // Use equity with size_increment of 1 (whole shares only)
+        // 使用 size_increment 为 1 的股票（仅限整股）
         let instrument = equity_aapl();
         let instrument_id = instrument.id();
         {
@@ -849,8 +833,8 @@ mod tests {
                 .unwrap();
         }
 
-        // 2 shares over 60s with 10s intervals = 6 intervals
-        // 2 / 6 = 0.333... which is less than size_increment of 1
+        // 60 秒内 2 股，10 秒间隔 = 6 个间隔
+        // 2 / 6 = 0.333... 小于 size_increment 的 1
         let mut params = IndexMap::new();
         params.insert(Ustr::from("horizon_secs"), Ustr::from("60"));
         params.insert(Ustr::from("interval_secs"), Ustr::from("10"));
@@ -880,7 +864,7 @@ mod tests {
         let primary_id = order.client_order_id();
         algo.on_order(order).unwrap();
 
-        // Should submit entire size directly (no scheduling)
+        // 应当直接提交全额数量（不排程）
         assert!(algo.scheduled_sizes.get(&primary_id).is_none());
     }
 
@@ -897,7 +881,7 @@ mod tests {
 
         let order = create_market_order_with_params(params);
 
-        // Should not error but should reject the order (no scheduling)
+        // 不应报错但应拒绝订单（不排程）
         let result = algo.on_order(order);
         assert!(result.is_ok());
         assert!(algo.scheduled_sizes.is_empty());
@@ -916,7 +900,7 @@ mod tests {
 
         let order = create_market_order_with_params(params);
 
-        // Should not error but should reject the order (no scheduling)
+        // 不应报错但应拒绝订单（不排程）
         let result = algo.on_order(order);
         assert!(result.is_ok());
         assert!(algo.scheduled_sizes.is_empty());
@@ -935,7 +919,7 @@ mod tests {
 
         let order = create_market_order_with_params(params);
 
-        // Should not error but should reject the order (no scheduling)
+        // 不应报错但应拒绝订单（不排程）
         let result = algo.on_order(order);
         assert!(result.is_ok());
         assert!(algo.scheduled_sizes.is_empty());
