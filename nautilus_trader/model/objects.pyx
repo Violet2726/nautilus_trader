@@ -13,7 +13,7 @@
 #  limitations under the License.
 # -------------------------------------------------------------------------------------------------
 
-"""Defines fundamental value objects for the trading domain."""
+"""定义交易领域的基础数值对象。"""
 
 import decimal
 
@@ -90,37 +90,35 @@ FIXED_DECIMAL_SCALE = decimal.Decimal(10) ** FIXED_PRECISION
 @cython.auto_pickle(True)
 cdef class Quantity:
     """
-    Represents a quantity with a non-negative value.
+    表示一个非负数值的数量。
 
-    Capable of storing either a whole number (no decimal places) of 'contracts'
-    or 'shares' (instruments denominated in whole units) or a decimal value
-    containing decimal places for instruments denominated in fractional units.
+    能够存储整数（无小数位）的“合约”或“股份”（以整单位计价的标的），
+    或者包含小数位的十进制数值（以分数单位计价的标的）。
 
-    Handles up to 16 decimals of precision (in high-precision mode).
+    （在高精度模式下）支持高达 16 位的小数精度。
 
     - ``QUANTITY_MAX`` = 34_028_236_692_093
     - ``QUANTITY_MIN`` = 0
 
-    Parameters
+    参数
     ----------
-    value : integer, float, string, Decimal
-        The value of the quantity.
+    value : 整数, 浮点数, 字符串, Decimal
+        数量的值。
     precision : uint8_t
-        The precision for the quantity. Use a precision of 0 for whole numbers
-        (no fractional units).
+        数量的精度。对于整数（无分数单位），请使用精度 0。
 
-    Raises
+    引发
     ------
     ValueError
-        If `value` is greater than 34_028_236_692_093.
+        如果 `value` 大于 34_028_236_692_093。
     ValueError
-        If `value` is negative (< 0).
+        如果 `value` 为负数 (< 0)。
     ValueError
-        If `precision` is greater than 16.
+        如果 `precision` 大于 16。
     OverflowError
-        If `precision` is negative (< 0).
+        如果 `precision` 为负数 (< 0)。
 
-    References
+    参考
     ----------
     https://www.onixs.biz/fix-dictionary/5.0.SP2/index.html#Qty
     """
@@ -628,37 +626,35 @@ cdef class Quantity:
 @cython.auto_pickle(True)
 cdef class Price:
     """
-    Represents a price in a market.
+    表示市场中的价格。
 
-    The number of decimal places may vary. For certain asset classes, prices may
-    have negative values. For example, prices for options instruments can be
-    negative under certain conditions.
+    小数位数可能各不相同。对于某些资产类别，价格可能为负值。
+    例如，在某些条件下，期权标的价格可以为负。
 
-    Handles up to 16 decimals of precision (in high-precision mode).
+    （在高精度模式下）支持高达 16 位的小数精度。
 
     - ``PRICE_MAX`` = 17_014_118_346_046
     - ``PRICE_MIN`` = -17_014_118_346_046
 
-    Parameters
+    参数
     ----------
-    value : integer, float, string or Decimal
-        The value of the price.
+    value : 整数, 浮点数, 字符串 或 Decimal
+        价格的值。
     precision : uint8_t
-        The precision for the price. Use a precision of 0 for whole numbers
-        (no fractional units).
+        价格的精度。对于整数（无分数单位），请使用精度 0。
 
-    Raises
+    引发
     ------
     ValueError
-        If `value` is greater than 17_014_118_346_046.
+        如果 `value` 大于 17_014_118_346_046。
     ValueError
-        If `value` is less than -17_014_118_346_046.
+        如果 `value` 小于 -17_014_118_346_046。
     ValueError
-        If `precision` is greater than 16.
+        如果 `precision` 大于 16。
     OverflowError
-        If `precision` is negative (< 0).
+        如果 `precision` 为负数 (< 0)。
 
-    References
+    参考
     ----------
     https://www.onixs.biz/fix-dictionary/5.0.SP2/index.html#Price
     """
@@ -1113,24 +1109,24 @@ cdef class Price:
 
 cdef class Money:
     """
-    Represents an amount of money in a specified currency denomination.
+    表示以指定货币计价的金额。
 
     - ``MONEY_MAX`` = 17_014_118_346_046
     - ``MONEY_MIN`` = -17_014_118_346_046
 
-    Parameters
+    参数
     ----------
-    value : integer, float, string or Decimal
-        The amount of money in the currency denomination.
+    value : 整数, 浮点数, 字符串 或 Decimal
+        以该货币计价的金额。
     currency : Currency
-        The currency of the money.
+        货币。
 
-    Raises
+    引发
     ------
     ValueError
-        If `value` is greater than 17_014_118_346_046.
+        如果 `value` 大于 17_014_118_346_046。
     ValueError
-        If `value` is less than -17_014_118_346_046.
+        如果 `value` 小于 -17_014_118_346_046。
     """
 
     def __init__(self, value, Currency currency not None) -> None:
@@ -1515,34 +1511,33 @@ cdef class Money:
 
 cdef class Currency:
     """
-    Represents a medium of exchange in a specified denomination with a fixed
-    decimal precision.
+    表示一种具有固定小数精度的指定面值的交换媒介。
 
-    Handles up to 16 decimals of precision (in high-precision mode).
+    （在高精度模式下）支持高达 16 位的小数精度。
 
-    Parameters
+    参数
     ----------
     code : str
-        The currency code.
+        货币代码。
     precision : uint8_t
-        The currency decimal precision.
+        货币小数精度。
     iso4217 : uint16
-        The currency ISO 4217 code.
+        货币 ISO 4217 代码。
     name : str
-        The currency name.
+        货币名称。
     currency_type : CurrencyType
-        The currency type.
+        货币类型。
 
-    Raises
+    引发
     ------
     ValueError
-        If `code` is not a valid string.
+        如果 `code` 不是有效的字符串。
     OverflowError
-        If `precision` is negative (< 0).
+        如果 `precision` 为负数 (< 0)。
     ValueError
-        If `precision` greater than 16.
+        如果 `precision` 大于 16。
     ValueError
-        If `name` is not a valid string.
+        如果 `name` 不是有效的字符串。
     """
 
     def __init__(
@@ -1827,23 +1822,23 @@ cdef class Currency:
 
 cdef class AccountBalance:
     """
-    Represents an account balance denominated in a particular currency.
+    表示以特定货币计价的账户余额。
 
-    Parameters
+    参数
     ----------
     total : Money
-        The total account balance.
+        账户总余额。
     locked : Money
-        The account balance locked (assigned to pending orders).
+        锁定的账户余额（分配给待成交订单）。
     free : Money
-        The account balance free for trading.
+        可用于交易的空闲账户余额。
 
-    Raises
+    引发
     ------
     ValueError
-        If money currencies are not equal.
+        如果金额币种不相等。
     ValueError
-        If `total` - `locked` != `free`.
+        如果 `total` - `locked` != `free`。
     """
 
     def __init__(
@@ -1943,25 +1938,25 @@ cdef class AccountBalance:
 
 cdef class MarginBalance:
     """
-    Represents a margin balance optionally associated with a particular instrument.
+    表示可选与特定标的关联的保证金余额。
 
-    Parameters
+    参数
     ----------
     initial : Money
-        The initial (order) margin requirement for the instrument.
+        该标的的初始（订单）保证金要求。
     maintenance : Money
-        The maintenance (position) margin requirement for the instrument.
-    instrument_id : InstrumentId, optional
-        The instrument ID associated with the margin.
+        该标的的维持（持仓）保证金要求。
+    instrument_id : InstrumentId, 可选
+        与保证金关联的标的 ID。
 
-    Raises
+    引发
     ------
     ValueError
-        If `margin_init` currency does not equal `currency`.
+        如果 `margin_init` 币种不等于 `currency`。
     ValueError
-        If `margin_maint` currency does not equal `currency`.
+        如果 `margin_maint` 币种不等于 `currency`。
     ValueError
-        If any margin is negative (< 0).
+        如果任何保证金为负数 (< 0)。
     """
 
     def __init__(

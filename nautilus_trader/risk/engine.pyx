@@ -76,34 +76,33 @@ from nautilus_trader.portfolio.base cimport PortfolioFacade
 
 cdef class RiskEngine(Component):
     """
-    Provides a high-performance risk engine.
+    提供高性能的风控引擎。
 
-    The `RiskEngine` is responsible for global strategy and portfolio risk
-    within the platform. This includes both pre-trade risk checks and post-trade
-    risk monitoring.
+    `RiskEngine` 负责平台内的全局策略和投资组合风险。
+    这包括盘前风控检查和盘后风险控制。
 
-    Possible trading states:
-     - ``ACTIVE`` (trading is enabled).
-     - ``REDUCING`` (only new orders or updates which reduce an open position are allowed).
-     - ``HALTED`` (all trading commands except cancels are denied).
+    可能的交易状态：
+     - ``ACTIVE`` (交易已启用)。
+     - ``REDUCING`` (仅允许执行减少现有头寸的新订单或更新)。
+     - ``HALTED`` (除取消订单外的所有交易命令都将被拒绝)。
 
-    Parameters
+    参数
     ----------
     portfolio : PortfolioFacade
-        The portfolio for the engine.
+        引擎的投资组合。
     msgbus : MessageBus
-        The message bus for the engine.
+        引擎的消息总线。
     cache : Cache
-        The cache for the engine.
+        引擎的缓存。
     clock : Clock
-        The clock for the engine.
-    config : RiskEngineConfig, optional
-        The configuration for the instance.
+        引擎的时钟。
+    config : RiskEngineConfig, 可选
+        实例的配置。
 
-    Raises
+    引发
     ------
     TypeError
-        If `config` is not of type `RiskEngineConfig`.
+        如果 `config` 不是 `RiskEngineConfig` 类型。
     """
 
     def __init__(
@@ -129,17 +128,17 @@ cdef class RiskEngine(Component):
         self._portfolio = portfolio
         self._cache = cache
 
-        # Configuration
-        self.trading_state = TradingState.ACTIVE  # Start active by default
+        # 配置
+        self.trading_state = TradingState.ACTIVE  # 默认以活跃状态开始
         self.is_bypassed = config.bypass
         self.debug = config.debug
         self._log_state()
 
-        # Counters
+        # 计数器
         self.command_count = 0
         self.event_count = 0
 
-        # Throttlers
+        # 限流器
         pieces = config.max_order_submit_rate.split("/")
         order_submit_rate_limit = int(pieces[0])
         order_submit_rate_interval = pd.to_timedelta(pieces[1])
@@ -153,7 +152,7 @@ cdef class RiskEngine(Component):
         )
 
         self._log.info(
-            f"Set MAX_ORDER_SUBMIT_RATE: "
+            f"已设置最大订单提交速率: "
             f"{order_submit_rate_limit}/{str(order_submit_rate_interval).replace('0 days ', '')}",
             color=LogColor.BLUE,
         )
@@ -171,22 +170,22 @@ cdef class RiskEngine(Component):
         )
 
         self._log.info(
-            f"Set MAX_ORDER_MODIFY_RATE: "
+            f"已设置最大订单修改速率: "
             f"{order_modify_rate_limit}/{str(order_modify_rate_interval).replace('0 days ', '')}",
             color=LogColor.BLUE,
         )
 
-        # Risk settings
+        # 风险设置
         self._max_notional_per_order: dict[InstrumentId, Decimal] = {}
 
-        # Configure
+        # 配置
         self._initialize_risk_checks(config)
 
-        # Register endpoints
+        # 注册端点
         self._msgbus.register(endpoint="RiskEngine.execute", handler=self.execute)
         self._msgbus.register(endpoint="RiskEngine.process", handler=self.process)
 
-        # Required subscriptions
+        # 必要订阅
         self._msgbus.subscribe(topic="events.order.*", handler=self._handle_event, priority=10)
         self._msgbus.subscribe(topic="events.position.*", handler=self._handle_event, priority=10)
 
@@ -196,16 +195,16 @@ cdef class RiskEngine(Component):
         for instrument_id, value in max_notional_config.items():
             self.set_max_notional_per_order(InstrumentId.from_str_c(instrument_id), Decimal(value))
 
-# -- COMMANDS -------------------------------------------------------------------------------------
+# -- 命令 -----------------------------------------------------------------------------------------
 
     cpdef void execute(self, Command command):
         """
-        Execute the given command.
+        执行给定的命令。
 
-        Parameters
+        参数
         ----------
         command : Command
-            The command to execute.
+            要执行的命令。
 
         """
         Condition.not_none(command, "command")
@@ -214,12 +213,12 @@ cdef class RiskEngine(Component):
 
     cpdef void process(self, Event event):
         """
-        Process the given event.
+        处理给定的事件。
 
-        Parameters
+        参数
         ----------
         event : Event
-            The event to process.
+            要处理的事件。
 
         """
         Condition.not_none(event, "event")
@@ -228,18 +227,17 @@ cdef class RiskEngine(Component):
 
     cpdef void set_trading_state(self, TradingState state):
         """
-        Set the trading state for the engine.
+        为引擎设置交易状态。
 
-        Parameters
+        参数
         ----------
         state : TradingState
-            The state to set.
+            要设置的状态。
 
         """
         if state == self.trading_state:
             self._log.warning(
-                f"No change to trading state: "
-                f"already set to {trading_state_to_str(self.trading_state)}",
+                f"交易状态未改变：已设置为 {trading_state_to_str(self.trading_state)}",
             )
             return
 
@@ -267,36 +265,35 @@ cdef class RiskEngine(Component):
             color = LogColor.RED
 
         self._log.info(
-            f"TradingState is {trading_state_to_str(self.trading_state)}",
+            f"交易状态为 {trading_state_to_str(self.trading_state)}",
             color=color,
         )
 
         if self.is_bypassed:
             self._log.info(
-                "PRE-TRADE RISK CHECKS BYPASSED. This is not recommended for live trading",
+                "盘前风控检查已跳过。实盘交易不建议这样做。",
                 color=LogColor.RED,
             )
 
     cpdef void set_max_notional_per_order(self, InstrumentId instrument_id, new_value):
         """
-        Set the maximum notional value per order for the given instrument ID.
+        为给定的标的 ID 设置每笔订单的最大名义价值。
 
-        Passing a new_value of ``None`` will disable the pre-trade risk max
-        notional check.
+        将 `new_value` 设置为 `None` 将禁用盘前最大名义价值检查。
 
-        Parameters
+        参数
         ----------
         instrument_id : InstrumentId
-            The instrument ID for the max notional.
-        new_value : integer, float, string or Decimal
-            The max notional value to set.
+            最大名义价值对应的标的 ID。
+        new_value : 整数, 浮点数, 字符串 或 Decimal
+            要设置的最大名义价值。
 
-        Raises
+        引发
         ------
         decimal.InvalidOperation
-            If `new_value` not a valid input for `decimal.Decimal`.
+            如果 `new_value` 不是 `decimal.Decimal` 的有效输入。
         ValueError
-            If `new_value` is not ``None`` and not positive.
+            如果 `new_value` 不是 `None` 且不为正数。
 
         """
         if new_value is not None:
@@ -309,20 +306,20 @@ cdef class RiskEngine(Component):
 
         cdef str new_value_str = f"{new_value:,}" if new_value is not None else str(None)
         self._log.info(
-            f"Set MAX_NOTIONAL_PER_ORDER: {instrument_id} {new_value_str}",
+            f"已设置最大订单名义价值: {instrument_id} {new_value_str}",
             color=LogColor.BLUE,
         )
 
-# -- RISK SETTINGS --------------------------------------------------------------------------------
+# -- 风险设置 --------------------------------------------------------------------------------------
 
     cpdef tuple max_order_submit_rate(self):
         """
-        Return the current maximum order submit rate limit setting.
+        返回当前最大订单提交速率限制设置。
 
-        Returns
+        返回
         -------
         (int, timedelta)
-            The limit per timedelta interval.
+            每个时间间隔内的限制数量。
 
         """
         return (
@@ -332,12 +329,12 @@ cdef class RiskEngine(Component):
 
     cpdef tuple max_order_modify_rate(self):
         """
-        Return the current maximum order modify rate limit setting.
+        返回当前最大订单修改速率限制设置。
 
-        Returns
+        返回
         -------
         (int, timedelta)
-            The limit per timedelta interval.
+            每个时间间隔内的限制数量。
 
         """
         return (
@@ -347,9 +344,9 @@ cdef class RiskEngine(Component):
 
     cpdef dict max_notionals_per_order(self):
         """
-        Return the current maximum notionals per order settings.
+        返回当前每笔订单最大名义价值设置。
 
-        Returns
+        返回
         -------
         dict[InstrumentId, Decimal]
 
@@ -358,31 +355,31 @@ cdef class RiskEngine(Component):
 
     cpdef object max_notional_per_order(self, InstrumentId instrument_id):
         """
-        Return the current maximum notional per order for the given instrument ID.
+        返回给定标的 ID 当前的每笔订单最大名义价值。
 
-        Returns
+        返回
         -------
-        Decimal or ``None``
+        Decimal 或 ``None``
 
         """
         return self._max_notional_per_order.get(instrument_id)
 
-# -- ABSTRACT METHODS -----------------------------------------------------------------------------
+# -- 抽象方法 --------------------------------------------------------------------------------------
 
     cpdef void _on_start(self):
-        pass  # Optionally override in subclass
+        pass  # 可在子类中重写
 
     cpdef void _on_stop(self):
-        pass  # Optionally override in subclass
+        pass  # 可在子类中重写
 
-# -- ACTION IMPLEMENTATIONS -----------------------------------------------------------------------
+# -- 动作实现 --------------------------------------------------------------------------------------
 
     cpdef void _start(self):
-        # Do nothing else for now
+        # 暂时不进行其他操作
         self._on_start()
 
     cpdef void _stop(self):
-        # Do nothing else for now
+        # 暂时不进行其他操作
         self._on_stop()
 
     cpdef void _reset(self):
@@ -393,9 +390,9 @@ cdef class RiskEngine(Component):
 
     cpdef void _dispose(self):
         pass
-        # Nothing to dispose for now
+        # 暂时没有可销毁的内容
 
-# -- COMMAND HANDLERS -----------------------------------------------------------------------------
+# -- 命令处理器 --------------------------------------------------------------------------------------
 
     cpdef void _execute_command(self, Command command):
         if self.debug:
@@ -410,17 +407,17 @@ cdef class RiskEngine(Component):
         elif isinstance(command, ModifyOrder):
             self._handle_modify_order(command)
         else:
-            self._log.error(f"Cannot handle command: {command}")
+            self._log.error(f"无法处理命令：{command}")
 
     cpdef void _handle_submit_order(self, SubmitOrder command):
         if self.is_bypassed:
-            # Perform no further risk checks or throttling
+            # 不再进行进一步的风控检查或限流
             self._send_to_execution(command)
             return
 
         cdef Order order = command.order
 
-        # Check reduce only
+        # 检查只减仓 (reduce only)
         cdef Position position
 
         if command.position_id is not None:
@@ -430,171 +427,171 @@ cdef class RiskEngine(Component):
                 if position is None or not order.would_reduce_only(position.side, position.quantity):
                     self._deny_command(
                         command=command,
-                        reason=f"Reduce only order would increase position {command.position_id!r}",
+                        reason=f"只减仓订单将增加仓位规模 {command.position_id!r}",
                     )
-                    return  # Denied
+                    return  # 拒绝
 
-        # Get instrument for order
+        # 获取订单的标的定义
         cdef Instrument instrument = self._cache.instrument(order.instrument_id)
 
         if instrument is None:
             self._deny_command(
                 command=command,
-                reason=f"Instrument for {order.instrument_id} not found",
+                reason=f"未找到 {order.instrument_id} 的标的定义",
             )
-            return  # Denied
+            return  # 拒绝
 
         ########################################################################
-        # PRE-TRADE ORDER(S) CHECKS
+        # 盘前订单检查
         ########################################################################
         if not self._check_order(instrument, order):
-            return  # Denied
+            return  # 拒绝
 
         if not self._check_orders_risk(instrument, [order]):
-            return # Denied
+            return  # 拒绝
 
         self._execution_gateway(instrument, command)
 
     cpdef void _handle_submit_order_list(self, SubmitOrderList command):
         if self.is_bypassed:
-            # Perform no further risk checks or throttling
+            # 不进行进一步的风控检查或限流
             self._send_to_execution(command)
             return
 
-        # Get instrument for orders
+        # 获取订单的标的定义
         cdef Instrument instrument = self._cache.instrument(command.instrument_id)
 
         if instrument is None:
             self._deny_command(
                 command=command,
-                reason=f"no instrument found for {command.instrument_id}",
+                reason=f"未找到 {command.instrument_id} 的标的定义",
             )
-            return  # Denied
+            return  # 拒绝
 
         ########################################################################
-        # PRE-TRADE ORDER(S) CHECKS
+        # 盘前订单检查
         ########################################################################
         for order in command.order_list.orders:
             if not self._check_order(instrument, order):
-                return  # Denied
+                return  # 拒绝
 
         if not self._check_orders_risk(instrument, command.order_list.orders):
-            # Deny all orders in list
-            self._deny_order_list(command.order_list, "OrderList {command.order_list.id.to_str()} DENIED")
-            return # Denied
+            # 拒绝列表中的所有订单
+            self._deny_order_list(command.order_list, f"订单列表 {command.order_list.id.to_str()} 已拒绝")
+            return # 拒绝
 
         self._execution_gateway(instrument, command)
 
     cpdef void _handle_modify_order(self, ModifyOrder command):
         ########################################################################
-        # VALIDATE COMMAND
+        # 验证命令
         ########################################################################
         cdef Order order = self._cache.order(command.client_order_id)
 
         if order is None:
             self._log.error(
-                f"ModifyOrder DENIED: Order with {command.client_order_id!r} not found",
+                f"ModifyOrder 已拒绝: 未找到 ID 为 {command.client_order_id!r} 的订单",
             )
-            return  # Denied
+            return  # 拒绝
         elif order.is_closed_c():
             self._reject_modify_order(
                 order=order,
-                reason=f"Order with {command.client_order_id!r} already closed",
+                reason=f"ID 为 {command.client_order_id!r} 的订单已收盘",
             )
-            return  # Denied
+            return  # 拒绝
         elif order.is_pending_cancel_c():
             self._reject_modify_order(
                 order=order,
-                reason=f"Order with {command.client_order_id!r} already pending cancel",
+                reason=f"ID 为 {command.client_order_id!r} 的订单已在申请撤单中",
             )
-            return  # Denied
+            return  # 拒绝
 
-        # Get instrument for orders
+        # 获取订单的标的定义
         cdef Instrument instrument = self._cache.instrument(command.instrument_id)
 
         if instrument is None:
             self._reject_modify_order(
                 order=order,
-                reason=f"no instrument found for {command.instrument_id}",
+                reason=f"未找到 {command.instrument_id} 的标的定义",
             )
-            return  # Denied
+            return  # 拒绝
 
         cdef str risk_msg = None
 
-        # Check price
+        # 检查价格
         risk_msg = self._check_price(instrument, command.price)
 
         if risk_msg:
             self._reject_modify_order(order=order, reason=risk_msg)
-            return  # Denied
+            return  # 拒绝
 
-        # Check trigger
+        # 检查触发价
         risk_msg = self._check_price(instrument, command.trigger_price)
 
         if risk_msg:
             self._reject_modify_order(order=order, reason=risk_msg)
-            return  # Denied
+            return  # 拒绝
 
-        # Check quantity
+        # 检查数量
         risk_msg = self._check_quantity(instrument, command.quantity, order.is_quote_quantity)
 
         if risk_msg:
             self._reject_modify_order(order=order, reason=risk_msg)
-            return  # Denied
+            return  # 拒绝
 
-        # Check TradingState
+        # 检查交易状态 (TradingState)
         if self.trading_state == TradingState.HALTED:
             self._reject_modify_order(
                 order=order,
-                reason="TradingState is HALTED",
+                reason="交易状态已熔断 (HALTED)",
             )
-            return  # Denied
+            return  # 拒绝
         elif self.trading_state == TradingState.REDUCING:
             if command.quantity and command.quantity > order.quantity:
                 if order.is_buy_c() and self._portfolio.is_net_long(instrument.id):
                     self._reject_modify_order(
                         order=order,
-                        reason="TradingState is REDUCING and update will increase exposure",
+                        reason="交易状态为 REDUCING，且更新将增加风险敞口",
                     )
-                    return  # Denied
+                    return  # 拒绝
                 elif order.is_sell_c() and self._portfolio.is_net_short(instrument.id):
                     self._reject_modify_order(
                         order=order,
-                        reason="TradingState is REDUCING and update will increase exposure",
+                        reason="交易状态为 REDUCING，且更新将增加风险敞口",
                     )
-                    return  # Denied
+                    return  # 拒绝
 
         self._order_modify_throttler.send(command)
 
-# -- PRE-TRADE CHECKS -----------------------------------------------------------------------------
+# -- 盘前检查 -----------------------------------------------------------------------------
 
     cpdef bint _check_order(self, Instrument instrument, Order order):
         ########################################################################
-        # VALIDATION CHECKS
+        # 验证检查
         ########################################################################
 
         if self.debug:
-            self._log.debug(f"Validating {order}", LogColor.MAGENTA)
+            self._log.debug(f"正在验证 {order}", LogColor.MAGENTA)
 
         if not self._check_order_price(instrument, order):
-            return False  # Denied
+            return False  # 拒绝
 
         if not self._check_order_quantity(instrument, order):
-            return False  # Denied
+            return False  # 拒绝
 
         if order.time_in_force == TimeInForce.GTD:
             if order.expire_time_ns <= self._clock.timestamp_ns():
                 self._deny_order(
                     order=order,
-                    reason=f"GTD {unix_nanos_to_dt(order.expire_time_ns)} already passed",
+                    reason=f"GTD 过期时间 {unix_nanos_to_dt(order.expire_time_ns)} 已过",
                 )
-                return False  # Denied
+                return False  # 拒绝
 
-        return True  # Check passed
+        return True  # 检查通过
 
     cpdef bint _check_order_price(self, Instrument instrument, Order order):
         ########################################################################
-        # CHECK PRICE
+        # 检查价格
         ########################################################################
         cdef str risk_msg = None
 
@@ -603,35 +600,35 @@ cdef class RiskEngine(Component):
 
             if risk_msg:
                 self._deny_order(order=order, reason=risk_msg)
-                return False  # Denied
+                return False  # 拒绝
 
         ########################################################################
-        # CHECK TRIGGER
+        # 检查触发价
         ########################################################################
         if order.has_trigger_price_c():
             risk_msg = self._check_price(instrument, order.trigger_price)
 
             if risk_msg:
-                self._deny_order(order=order, reason=f"trigger {risk_msg}")
-                return False  # Denied
+                self._deny_order(order=order, reason=f"触发价 {risk_msg}")
+                return False  # 拒绝
 
-        return True  # Passed
+        return True  # 通过
 
     cpdef bint _check_order_quantity(self, Instrument instrument, Order order):
         cdef str risk_msg = self._check_quantity(instrument, order.quantity, order.is_quote_quantity)
 
         if risk_msg:
             self._deny_order(order=order, reason=risk_msg)
-            return False  # Denied
+            return False  # 拒绝
 
-        return True  # Passed
+        return True  # 通过
 
     cpdef bint _check_orders_risk(self, Instrument instrument, list orders):
         ########################################################################
-        # RISK CHECKS
+        # 风控检查
         ########################################################################
 
-        # Group orders by account_id to handle multiple accounts per instrument
+        # 按 account_id 对订单进行分组，以处理每个标的多个账户的情况
         cdef dict orders_by_account = {}  # type: dict[AccountId, list]
         cdef:
             Order order
@@ -642,51 +639,51 @@ cdef class RiskEngine(Component):
 
             orders_by_account[order.account_id].append(order)
 
-        # Check each account group separately
+        # 分别检查每个账户组
         cdef list account_orders
         for account_id, account_orders in orders_by_account.items():
             if not self._check_orders_risk_for_account(instrument, account_orders, account_id):
-                return False  # Denied
+                return False  # 拒绝
 
-        return True  # All checks passed
+        return True  # 所有检查通过
 
     cpdef bint _check_orders_risk_for_account(self, Instrument instrument, list orders, AccountId account_id):
-        # Check orders for a specific account (or venue-based lookup if account_id is None)
+        # 检查特定账户的订单（如果 account_id 为 None，则基于场地进行查找）
         cdef QuoteTick last_quote = None
         cdef TradeTick last_trade = None
         cdef Price last_px = None
         cdef Money free
 
-        # Determine max notional
+        # 确定最大名义价值
         cdef Money max_notional = None
         max_notional_setting: Decimal | None = self._max_notional_per_order.get(instrument.id)
 
         if max_notional_setting:
-            # TODO: Improve efficiency of this
+            # TODO: 优化此处的效率
             max_notional = Money(float(max_notional_setting), instrument.quote_currency)
 
-        # Get account for risk checks
+        # 获取风控检查所需的账户
         cdef Account account = self._cache.account_for_venue(instrument.id.venue, account_id)
 
         if account is None:
             self._log.debug(
-                f"Cannot find account for venue {instrument.id.venue} "
+                f"无法找到场地 {instrument.id.venue} 的账户 "
                 f"(account_id={account_id.get_issuer() if account_id is not None else None})"
             )
-            return True  # TODO: Temporary early return until handling routing/multiple venues
-
+            return True  # TODO: 暂时提前返回，直到处理完路由/多场地情况
+        
         if account.is_margin_account:
-            return True  # TODO: Determine risk controls for margin
+            return True  # TODO: 确定保证金账户的风控策略
 
         cdef bint allow_borrowing = isinstance(account, CashAccount) and account.allow_borrowing
 
         free = account.balance_free(instrument.quote_currency)
 
         if self.debug:
-            self._log.debug(f"Free: {free!r}", LogColor.MAGENTA)
+            self._log.debug(f"可用余额: {free!r}", LogColor.MAGENTA)
 
-        # Get net LONG position quantity for this instrument (for position-reducing sell checks),
-        # accounting for already submitted (but unfilled) SELL orders to prevent overselling.
+        # 获取该标的的净多头持仓数量（用于只减仓卖单检查），
+        # 同时考虑已提交（但未成交）的卖单，以防止超卖。
         cdef list[Position] open_longs = self._cache.positions_open(
             None,
             instrument.id,
@@ -701,7 +698,7 @@ cdef class RiskEngine(Component):
                 instrument.size_precision,
             )
 
-        # Get pending (open) SELL orders for this instrument
+        # 获取该标的的待处理（未平仓）卖单
         cdef list open_sell_orders = self._cache.orders_open(
             None,
             instrument.id,
@@ -716,7 +713,7 @@ cdef class RiskEngine(Component):
                 instrument.size_precision,
             )
 
-        # Available quantity is long position minus already submitted sells
+        # 可用数量为多头持仓减去已提交的卖单
         cdef Quantity available_long_qty
         if submitted_sell_qty._mem.raw >= net_long_qty._mem.raw:
             available_long_qty = Quantity.zero_c(instrument.size_precision)
@@ -728,11 +725,11 @@ cdef class RiskEngine(Component):
 
         if self.debug and net_long_qty._mem.raw > 0:
             self._log.debug(
-                f"Net LONG qty: {net_long_qty}, submitted sells: {submitted_sell_qty}, available: {available_long_qty}",
+                f"净多头数量: {net_long_qty}, 已提交卖单数量: {submitted_sell_qty}, 可用数量: {available_long_qty}",
                 LogColor.MAGENTA,
             )
 
-        # Track cumulative sell quantity to determine position-reducing vs position-opening sells
+        # 跟踪累计卖出数量，以确定是平仓卖出还是开仓卖出
         cdef Quantity cum_sell_qty = Quantity.zero_c(instrument.size_precision)
 
         cdef:
@@ -750,11 +747,11 @@ cdef class RiskEngine(Component):
             Quantity pending_sell_qty
         for order in orders:
             if self.debug:
-                self._log.debug(f"Pre-trade risk check: {order}", LogColor.MAGENTA)
+                self._log.debug(f"盘前风控检查: {order}", LogColor.MAGENTA)
 
             if order.order_type == OrderType.MARKET or order.order_type == OrderType.MARKET_TO_LIMIT:
                 if last_px is None:
-                    # Determine entry price
+                    # 确定入场价格
                     last_quote = self._cache.quote_tick(instrument.id)
 
                     if last_quote is not None:
@@ -762,8 +759,8 @@ cdef class RiskEngine(Component):
                             last_px = last_quote.ask_price
                         elif order.side == OrderSide.SELL:
                             last_px = last_quote.bid_price
-                        else:  # pragma: no cover (design-time error)
-                            raise RuntimeError(f"invalid `OrderSide`")
+                        else:  # pragma: no cover (设计时错误)
+                            raise RuntimeError(f"无效的 `OrderSide`")
                     else:
                         last_trade = self._cache.trade_tick(instrument.id)
 
@@ -771,18 +768,18 @@ cdef class RiskEngine(Component):
                             last_px = last_trade.price
                         else:
                             self._log.warning(
-                                f"Cannot check MARKET order risk: no prices for {instrument.id}",
+                                f"无法检查市价单风险：没有 {instrument.id} 的价格数据",
                             )
-                            continue  # Cannot check order risk
+                            continue  # 无法检查订单风险
             elif order.order_type == OrderType.STOP_MARKET or order.order_type == OrderType.MARKET_IF_TOUCHED:
                 last_px = order.trigger_price
             elif order.order_type == OrderType.TRAILING_STOP_MARKET or order.order_type == OrderType.TRAILING_STOP_LIMIT:
                 if order.trigger_price is None:
-                    # Validate trailing offset type is supported
+                    # 验证追踪偏移类型是否受支持
                     if order.trailing_offset_type not in (TrailingOffsetType.PRICE, TrailingOffsetType.BASIS_POINTS, TrailingOffsetType.TICKS):
                         self._deny_order(
                             order=order,
-                            reason=f"UNSUPPORTED_TRAILING_OFFSET_TYPE: {trailing_offset_type_to_str(order.trailing_offset_type)}",
+                            reason=f"不支持的追踪偏移类型 (UNSUPPORTED_TRAILING_OFFSET_TYPE): {trailing_offset_type_to_str(order.trailing_offset_type)}",
                         )
                         return False
 
@@ -793,7 +790,7 @@ cdef class RiskEngine(Component):
                         last_quote = self._cache.quote_tick(instrument.id)
                         if last_quote is None:
                             self._log.warning(
-                                f"Cannot check {order_type_to_str(order.order_type)} order risk: no trigger price set and no bid/ask quotes available for {instrument.id}",
+                                f"无法检查 {order_type_to_str(order.order_type)} 订单风险：未设置触发价且没有 {instrument.id} 的买卖报价数据",
                             )
                             continue
                         last_px = TrailingStopCalculator.calculate_with_bid_ask(
@@ -815,11 +812,11 @@ cdef class RiskEngine(Component):
                                 last=last_trade.price,
                             )
                         elif order.trigger_type == TriggerType.LAST_OR_BID_ASK:
-                            # Fallback to bid/ask when no trade data available
+                            # 如果没有成交数据，则回退到买卖报价
                             last_quote = self._cache.quote_tick(instrument.id)
                             if last_quote is None:
                                 self._log.warning(
-                                    f"Cannot check {order_type_to_str(order.order_type)} order risk: no trigger price set and no market data available for {instrument.id}",
+                                    f"无法检查 {order_type_to_str(order.order_type)} 订单风险：未设置触发价且没有 {instrument.id} 的市场数据",
                                 )
                                 continue
                             last_px = TrailingStopCalculator.calculate_with_bid_ask(
@@ -832,7 +829,7 @@ cdef class RiskEngine(Component):
                             )
                         else:
                             self._log.warning(
-                                f"Cannot check {order_type_to_str(order.order_type)} order risk: no trigger price set and no market data available for {instrument.id}",
+                                f"无法检查 {order_type_to_str(order.order_type)} 订单风险：未设置触发价且没有 {instrument.id} 的市场数据",
                             )
                             continue
                 else:
@@ -840,65 +837,65 @@ cdef class RiskEngine(Component):
             else:
                 last_px = order.price
 
-            # For quote quantity limit orders, use worst-case execution price
+            # 对于以报价币种计算数量的限价单，使用最坏情况的执行价格
             if (
                 order.is_quote_quantity
                 and not instrument.is_inverse
                 and (order.order_type == OrderType.LIMIT or order.order_type == OrderType.STOP_LIMIT)
             ):
-                # Get current market price for worst-case execution
+                # 获取当前市场价格进行最坏情况执行评估
                 last_quote = self._cache.quote_tick(instrument.id)
                 if last_quote is not None:
                     if order.side == OrderSide.BUY:
-                        # BUY: could execute at best ask if below limit (more quantity)
+                        # 买入：如果限价低于卖一价，则可能在卖一价执行（需更多数量）
                         effective_price = last_px if last_px < last_quote.ask_price else last_quote.ask_price
                     elif order.side == OrderSide.SELL:
-                        # SELL: could execute at best bid if above limit (but less quantity, so use limit)
+                        # 卖出：如果限价高于买一价，则可能在买一价执行（但数量较少，因此使用限价）
                         effective_price = last_px if last_px > last_quote.bid_price else last_quote.bid_price
                     else:
                         effective_price = last_px
                 else:
-                    effective_price = last_px  # No market data, use limit price
+                    effective_price = last_px  # 无市场数据，使用限价
             else:
                 effective_price = last_px
 
-            # Convert quote quantity to base quantity if needed for balance calculations
+            # 如果需要计算余额影响，将报价币种数量转换为基础币种数量
             if order.is_quote_quantity and not instrument.is_inverse:
                 effective_quantity = instrument.calculate_base_quantity(order.quantity, effective_price)
 
                 if self.debug:
-                    self._log.debug(f"Converted quote quantity {order.quantity} to base quantity {effective_quantity}", LogColor.MAGENTA)
+                    self._log.debug(f"已将报价币种数量 {order.quantity} 转换为基础币种数量 {effective_quantity}", LogColor.MAGENTA)
             else:
                 effective_quantity = order.quantity
 
-            # Check min/max quantity against effective quantity
+            # 根据有效数量检查最小/最大数量限制
             if instrument.max_quantity and effective_quantity > instrument.max_quantity:
                 self._deny_order(
                     order=order,
-                    reason=f"QUANTITY_EXCEEDS_MAXIMUM: effective_quantity={effective_quantity}, max_quantity={instrument.max_quantity}",
+                    reason=f"数量超过最大限制 (QUANTITY_EXCEEDS_MAXIMUM): 有效数量={effective_quantity}, 最大数量={instrument.max_quantity}",
                 )
-                return False  # Denied
+                return False  # 拒绝
 
             if instrument.min_quantity and effective_quantity < instrument.min_quantity:
                 self._deny_order(
                     order=order,
-                    reason=f"QUANTITY_BELOW_MINIMUM: effective_quantity={effective_quantity}, min_quantity={instrument.min_quantity}",
+                    reason=f"数量低于最小限制 (QUANTITY_BELOW_MINIMUM): 有效数量={effective_quantity}, 最小数量={instrument.min_quantity}",
                 )
-                return False  # Denied
+                return False  # 拒绝
 
             notional = instrument.notional_value(effective_quantity, last_px, use_quote_for_inverse=True)
 
             if self.debug:
-                self._log.debug(f"Notional: {notional!r}", LogColor.MAGENTA)
+                self._log.debug(f"名义价值: {notional!r}", LogColor.MAGENTA)
 
             if max_notional and notional._mem.raw > max_notional._mem.raw:
                 self._deny_order(
                     order=order,
-                    reason=f"NOTIONAL_EXCEEDS_MAX_PER_ORDER: max_notional={max_notional}, notional={notional}",
+                    reason=f"名义价值超过每笔订单最大限制 (NOTIONAL_EXCEEDS_MAX_PER_ORDER): 最大名义价值={max_notional}, 当前名义价值={notional}",
                 )
-                return False  # Denied
+                return False  # 拒绝
 
-            # Check MIN notional instrument limit
+            # 检查标的的最小名义价值限制
             if (
                 instrument.min_notional is not None
                 and instrument.min_notional.currency == notional.currency
@@ -906,11 +903,11 @@ cdef class RiskEngine(Component):
             ):
                 self._deny_order(
                     order=order,
-                    reason=f"NOTIONAL_LESS_THAN_MIN_FOR_INSTRUMENT: min_notional={instrument.min_notional} , notional={notional}",
+                    reason=f"名义价值低于标的最小限制 (NOTIONAL_LESS_THAN_MIN_FOR_INSTRUMENT): 最小名义价值={instrument.min_notional} , 当前名义价值={notional}",
                 )
-                return False  # Denied
+                return False  # 拒绝
 
-            # Check MAX notional instrument limit
+            # 检查标度的最大名义价值限制
             if (
                 instrument.max_notional is not None
                 and instrument.max_notional.currency == notional.currency
@@ -918,22 +915,22 @@ cdef class RiskEngine(Component):
             ):
                 self._deny_order(
                     order=order,
-                    reason=f"NOTIONAL_GREATER_THAN_MAX_FOR_INSTRUMENT: max_notional={instrument.max_notional}, notional={notional}",
+                    reason=f"名义价值超过标的最大限制 (NOTIONAL_GREATER_THAN_MAX_FOR_INSTRUMENT): 最大名义价值={instrument.max_notional}, 当前名义价值={notional}",
                 )
-                return False  # Denied
+                return False  # 拒绝
 
             order_balance_impact = account.balance_impact(instrument, effective_quantity, last_px, order.side)
 
             if self.debug:
-                self._log.debug(f"Balance impact: {order_balance_impact!r}", LogColor.MAGENTA)
+                self._log.debug(f"余额影响: {order_balance_impact!r}", LogColor.MAGENTA)
 
-            # Skip balance check when borrowing is enabled (e.g. spot margin trading)
+            # 当允许借入时（例如现货杠杆交易），跳过余额检查
             if not allow_borrowing and free is not None and (free._mem.raw + order_balance_impact._mem.raw) < 0:
                 self._deny_order(
                     order=order,
-                    reason=f"NOTIONAL_EXCEEDS_FREE_BALANCE: free={free}, balance_impact={order_balance_impact}",
+                    reason=f"名义价值超过可用余额 (NOTIONAL_EXCEEDS_FREE_BALANCE): 可用余额={free}, 余额影响={order_balance_impact}",
                 )
-                return False  # Denied
+                return False  # 拒绝
 
             if base_currency is None:
                 base_currency = instrument.get_base_currency()
@@ -945,14 +942,14 @@ cdef class RiskEngine(Component):
                     cum_notional_buy._mem.raw += -order_balance_impact._mem.raw
 
                 if self.debug:
-                    self._log.debug(f"Cumulative notional BUY: {cum_notional_buy!r}")
+                    self._log.debug(f"累计买入名义价值: {cum_notional_buy!r}")
 
                 if not allow_borrowing and free is not None and cum_notional_buy._mem.raw > free._mem.raw:
                     self._deny_order(
                         order=order,
-                        reason=f"CUM_NOTIONAL_EXCEEDS_FREE_BALANCE: free={free}, cum_notional={cum_notional_buy}",
+                        reason=f"累计名义价值超过可用余额 (CUM_NOTIONAL_EXCEEDS_FREE_BALANCE): 可用余额={free}, 累计名义价值={cum_notional_buy}",
                     )
-                    return False  # Denied
+                    return False  # 拒绝
             elif order.is_sell_c():
                 pending_sell_qty = Quantity.from_raw_c(
                     cum_sell_qty._mem.raw + effective_quantity._mem.raw,
@@ -967,7 +964,7 @@ cdef class RiskEngine(Component):
                 if is_position_reducing_sell:
                     if self.debug:
                         self._log.debug(
-                            "Position-reducing SELL skips balance check",
+                            "平仓卖单跳过余额检查",
                             LogColor.MAGENTA,
                         )
                     continue
@@ -979,13 +976,13 @@ cdef class RiskEngine(Component):
                         cum_notional_sell._mem.raw += order_balance_impact._mem.raw
 
                     if self.debug:
-                        self._log.debug(f"Cumulative notional SELL: {cum_notional_sell!r}")
+                        self._log.debug(f"累计卖出名义价值: {cum_notional_sell!r}")
                     if not allow_borrowing and free is not None and cum_notional_sell._mem.raw > free._mem.raw:
                         self._deny_order(
                             order=order,
-                            reason=f"CUM_NOTIONAL_EXCEEDS_FREE_BALANCE: free={free}, cum_notional={cum_notional_sell}",
+                            reason=f"累计名义价值超过可用余额 (CUM_NOTIONAL_EXCEEDS_FREE_BALANCE): 可用余额={free}, 累计名义价值={cum_notional_sell}",
                         )
-                        return False  # Denied
+                        return False  # 拒绝
                 elif base_currency is not None and account.type == AccountType.CASH:
                     cash_value = Money(effective_quantity.as_f64_c(), base_currency)
                     free = account.balance_free(base_currency)
@@ -993,10 +990,10 @@ cdef class RiskEngine(Component):
                     if self.debug:
                         total = account.balance_total(base_currency)
                         locked = account.balance_locked(base_currency)
-                        self._log.debug(f"Cash value: {cash_value!r}", LogColor.MAGENTA)
-                        self._log.debug(f"Total: {total!r}", LogColor.MAGENTA)
-                        self._log.debug(f"Locked: {locked!r}", LogColor.MAGENTA)
-                        self._log.debug(f"Free: {free!r}", LogColor.MAGENTA)
+                        self._log.debug(f"现货价值: {cash_value!r}", LogColor.MAGENTA)
+                        self._log.debug(f"总额: {total!r}", LogColor.MAGENTA)
+                        self._log.debug(f"锁定: {locked!r}", LogColor.MAGENTA)
+                        self._log.debug(f"可用: {free!r}", LogColor.MAGENTA)
 
                     if cum_notional_sell is None:
                         cum_notional_sell = cash_value
@@ -1004,94 +1001,94 @@ cdef class RiskEngine(Component):
                         cum_notional_sell._mem.raw += cash_value._mem.raw
 
                     if self.debug:
-                        self._log.debug(f"Cumulative notional SELL: {cum_notional_sell!r}")
+                        self._log.debug(f"累计卖出名义价值: {cum_notional_sell!r}")
                     if not allow_borrowing and free is not None and cum_notional_sell._mem.raw > free._mem.raw:
                         self._deny_order(
                             order=order,
-                            reason=f"CUM_NOTIONAL_EXCEEDS_FREE_BALANCE: free={free}, cum_notional={cum_notional_sell}",
+                            reason=f"累计名义价值超过可用余额 (CUM_NOTIONAL_EXCEEDS_FREE_BALANCE): 可用余额={free}, 累计名义价值={cum_notional_sell}",
                         )
-                        return False  # Denied
+                        return False  # 拒绝
 
-        # Finally
-        return True  # Passed
+        # 最后
+        return True  # 通过
 
     cpdef str _check_price(self, Instrument instrument, Price price):
         if price is None:
-            # Nothing to check
+            # 无需检查
             return None
 
         if price.precision > instrument.price_precision:
-            # Check failed
-            return f"price {price} invalid (precision {price.precision} > {instrument.price_precision})"
+            # 检查失败
+            return f"价格 {price} 无效 (精度 {price.precision} > {instrument.price_precision})"
 
         if instrument.instrument_class not in NEGATIVE_PRICE_INSTRUMENT_CLASSES:
             if price.raw_int_c() <= 0:
-                # Check failed
-                return f"price {price} invalid (not positive)"
+                # 检查失败
+                return f"价格 {price} 无效 (非正数)"
 
     cpdef str _check_quantity(self, Instrument instrument, Quantity quantity, bint is_quote_quantity=False):
         if quantity is None:
-            # Nothing to check
+            # 无需检查
             return None
 
         if quantity._mem.precision > instrument.size_precision:
-            # Check failed
-            return f"quantity {quantity} invalid (precision {quantity._mem.precision} > {instrument.size_precision})"
+            # 检查失败
+            return f"数量 {quantity} 无效 (精度 {quantity._mem.precision} > {instrument.size_precision})"
 
-        # Skip min/max checks for quote quantities (they will be checked in _check_orders_risk using effective_quantity)
+        # 对于以报价币种计算数量的订单，跳过最小/最大检查（这些将在 _check_orders_risk 中使用 effective_quantity 进行检查）
         if is_quote_quantity:
             return None
 
         if instrument.max_quantity and quantity > instrument.max_quantity:
-            # Check failed
-            return f"quantity {quantity} invalid (> maximum trade size of {instrument.max_quantity})"
+            # 检查失败
+            return f"数量 {quantity} 无效 (> 最大交易数量 {instrument.max_quantity})"
 
         if instrument.min_quantity and quantity < instrument.min_quantity:
-            # Check failed
-            return f"quantity {quantity} invalid (< minimum trade size of {instrument.min_quantity})"
+            # 检查失败
+            return f"数量 {quantity} 无效 (< 最小交易数量 {instrument.min_quantity})"
 
-# -- DENIALS --------------------------------------------------------------------------------------
+# -- 拒绝处理 --------------------------------------------------------------------------------------
 
     cpdef void _deny_command(self, TradingCommand command, str reason):
         if isinstance(command, SubmitOrder):
             self._deny_order(command.order, reason=reason)
         elif isinstance(command, SubmitOrderList):
             self._deny_order_list(command.order_list, reason=reason)
-        else:  # pragma: no cover (design-time error)
-            raise RuntimeError(f"Cannot deny command {command}")  # pragma: no cover (design-time error)
+        else:  # pragma: no cover (设计时错误)
+            raise RuntimeError(f"无法拒绝命令 {command}")  # pragma: no cover (设计时错误)
 
     # Needs to be `cpdef` due being called from throttler
     cpdef void _deny_new_order(self, TradingCommand command):
         if isinstance(command, SubmitOrder):
-            self._deny_order(command.order, reason="Exceeded MAX_ORDER_SUBMIT_RATE")
+            self._deny_order(command.order, reason="超出最大订单提交速率 (MAX_ORDER_SUBMIT_RATE)")
         elif isinstance(command, SubmitOrderList):
-            self._deny_order_list(command.order_list, reason="Exceeded MAX_ORDER_SUBMIT_RATE")
+            self._deny_order_list(command.order_list, reason="超出最大订单提交速率 (MAX_ORDER_SUBMIT_RATE)")
 
     # Needs to be `cpdef` due being called from throttler
     cpdef void _deny_modify_order(self, ModifyOrder command):
         cdef Order order = self._cache.order(command.client_order_id)
 
         if order is None:
-            self._log.error(f"Order with {command.client_order_id!r} not found")
+            self._log.error(f"未找到 ID 为 {command.client_order_id!r} 的订单")
             return
 
-        self._reject_modify_order(order, reason="Exceeded MAX_ORDER_MODIFY_RATE")
+        self._reject_modify_order(order, reason="超出最大订单修改速率 (MAX_ORDER_MODIFY_RATE)")
 
     cpdef void _deny_order(self, Order order, str reason):
-        self._log.warning(f"SubmitOrder for {order.client_order_id.to_str()} DENIED: {reason}")
+        self._log.warning(f"订单提交 {order.client_order_id.to_str()} 已拒绝: {reason}")
 
         if order is None:
-            # Nothing to deny
+            # 无需执行拒绝操作
             return
 
         if order.status_c() != OrderStatus.INITIALIZED:
-            # Already denied or duplicated (INITIALIZED -> DENIED only valid state transition)
+            # 已经处于拒绝状态或重复 (INITIALIZED -> DENIED 是唯一的有效状态转换)
             return
 
         if not self._cache.order_exists(order.client_order_id):
             self._cache.add_order(order)
 
-        # Generate event
+        # 生成事件
         cdef OrderDenied denied = OrderDenied(
             trader_id=order.trader_id,
             strategy_id=order.strategy_id,
@@ -1110,25 +1107,25 @@ cdef class RiskEngine(Component):
             if not order.is_closed_c():
                 self._deny_order(order=order, reason=reason)
 
-# -- EGRESS ---------------------------------------------------------------------------------------
+# -- 输出处理 --------------------------------------------------------------------------------------
 
     cpdef void _execution_gateway(self, Instrument instrument, TradingCommand command):
-        # Check TradingState
+        # 检查交易状态 (TradingState)
         cdef Order order
 
         if self.trading_state == TradingState.HALTED:
             if isinstance(command, SubmitOrder):
                 self._deny_command(
                     command=command,
-                    reason=f"TradingState.HALTED",
+                    reason=f"交易状态已熔断 (TradingState.HALTED)",
                 )
-                return  # Denied
+                return  # 拒绝
             elif isinstance(command, SubmitOrderList):
                 self._deny_order_list(
                     order_list=command.order_list,
-                    reason="TradingState.HALTED",
+                    reason="交易状态已熔断 (TradingState.HALTED)",
                 )
-                return  # Denied
+                return  # 拒绝
         elif self.trading_state == TradingState.REDUCING:
             if isinstance(command, SubmitOrder):
                 order = command.order
@@ -1136,31 +1133,31 @@ cdef class RiskEngine(Component):
                 if order.is_buy_c() and self._portfolio.is_net_long(instrument.id):
                     self._deny_command(
                         command=command,
-                        reason=f"BUY when TradingState.REDUCING and LONG {instrument.id}",
+                        reason=f"交易状态为 REDUCING 且持有 {instrument.id} 多头仓位时禁止买入",
                     )
-                    return  # Denied
+                    return  # 拒绝
                 elif order.is_sell_c() and self._portfolio.is_net_short(instrument.id):
                     self._deny_command(
                         command=command,
-                        reason=f"SELL when TradingState.REDUCING and SHORT {instrument.id}",
+                        reason=f"交易状态为 REDUCING 且持有 {instrument.id} 空头仓位时禁止卖出",
                     )
-                    return  # Denied
+                    return  # 拒绝
             elif isinstance(command, SubmitOrderList):
                 for order in command.order_list.orders:
                     if order.is_buy_c() and self._portfolio.is_net_long(instrument.id):
                         self._deny_order_list(
                             order_list=command.order_list,
-                            reason=f"OrderList contains BUY when TradingState.REDUCING and LONG {instrument.id}",
+                            reason=f"订单列表中包含买单，而交易状态为 REDUCING 且持有 {instrument.id} 多头仓位",
                         )
-                        return  # Denied
+                        return  # 拒绝
                     elif order.is_sell_c() and self._portfolio.is_net_short(instrument.id):
                         self._deny_order_list(
                             order_list=command.order_list,
-                            reason=f"OrderList contains SELL when TradingState.REDUCING and SHORT {instrument.id}",
+                            reason=f"订单列表中包含卖单，而交易状态为 REDUCING 且持有 {instrument.id} 空头仓位",
                         )
-                        return  # Denied
+                        return  # 拒绝
 
-        # All checks passed: send to ORDER_RATE throttler
+        # 所有检查通过：送入订单速率限流器 (ORDER_RATE throttler)
         self._order_submit_throttler.send(command)
 
     # Needs to be `cpdef` due being called from throttler
@@ -1168,7 +1165,7 @@ cdef class RiskEngine(Component):
         self._msgbus.send(endpoint="ExecEngine.execute", msg=command)
 
     cpdef void _reject_modify_order(self, Order order, str reason):
-        # Generate event
+        # 生成事件
         cdef uint64_t ts_now = self._clock.timestamp_ns()
         cdef OrderModifyRejected denied = OrderModifyRejected(
             trader_id=order.trader_id,
@@ -1185,7 +1182,7 @@ cdef class RiskEngine(Component):
 
         self._msgbus.send(endpoint="ExecEngine.process", msg=denied)
 
-# -- EVENT HANDLERS -------------------------------------------------------------------------------
+# -- 事件处理器 -----------------------------------------------------------------------------------
 
     cpdef void _handle_event(self, Event event):
         if self.debug:

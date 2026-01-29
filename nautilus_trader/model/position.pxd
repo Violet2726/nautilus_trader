@@ -43,65 +43,65 @@ cdef class Position:
     cdef dict _commissions
 
     cdef readonly TraderId trader_id
-    """The trader ID associated with the position.\n\n:returns: `TraderId`"""
+    """与仓位关联的交易员 ID。\n\n:returns: `TraderId`"""
     cdef readonly StrategyId strategy_id
-    """The strategy ID associated with the position.\n\n:returns: `StrategyId`"""
+    """与仓位关联的策略 ID。\n\n:returns: `StrategyId`"""
     cdef readonly InstrumentId instrument_id
-    """The position instrument ID.\n\n:returns: `InstrumentId`"""
+    """仓位的标的 ID。\n\n:returns: `InstrumentId`"""
     cdef readonly PositionId id
-    """The position ID.\n\n:returns: `PositionId`"""
+    """仓位 ID。\n\n:returns: `PositionId`"""
     cdef readonly AccountId account_id
-    """The account ID associated with the position.\n\n:returns: `AccountId`"""
+    """与仓位关联的账户 ID。\n\n:returns: `AccountId`"""
     cdef readonly ClientOrderId opening_order_id
-    """The client order ID for the order which opened the position.\n\n:returns: `ClientOrderId`"""
+    """开启仓位的订单的客户订单 ID。\n\n:returns: `ClientOrderId`"""
     cdef readonly ClientOrderId closing_order_id
-    """The client order ID for the order which closed the position.\n\n:returns: `ClientOrderId` or ``None``"""
+    """关闭仓位的订单的客户订单 ID。\n\n:returns: `ClientOrderId` 或 ``None``"""
     cdef readonly OrderSide entry
-    """The position entry order side.\n\n:returns: `OrderSide`"""
+    """仓位入场订单方向。\n\n:returns: `OrderSide`"""
     cdef readonly PositionSide side
-    """The current position side.\n\n:returns: `PositionSide`"""
+    """当前仓位方向。\n\n:returns: `PositionSide`"""
     cdef readonly double signed_qty
-    """The current signed quantity (positive for position side ``LONG``, negative for ``SHORT``).\n\n:returns: `double`"""
+    """当前带符号数量（多头仓位为正，空头为负）。\n\n:returns: `double`"""
     cdef readonly Quantity quantity
-    """The current open quantity.\n\n:returns: `Quantity`"""
+    """当前未平仓数量。\n\n:returns: `Quantity`"""
     cdef readonly Quantity peak_qty
-    """The peak directional quantity reached by the position.\n\n:returns: `Quantity`"""
+    """仓位达到的峰值定向数量。\n\n:returns: `Quantity`"""
     cdef readonly uint8_t price_precision
-    """The price precision for the position.\n\n:returns: `uint8`"""
+    """仓位的价格精度。\n\n:returns: `uint8`"""
     cdef readonly uint8_t size_precision
-    """The size precision for the position.\n\n:returns: `uint8`"""
+    """仓位的数量精度。\n\n:returns: `uint8`"""
     cdef readonly Quantity multiplier
-    """The multiplier for the positions instrument.\n\n:returns: `Quantity`"""
+    """仓位对应标的的乘数。\n\n:returns: `Quantity`"""
     cdef readonly bint is_inverse
-    """If the quantity is expressed in quote currency.\n\n:returns: `bool`"""
+    """数量是否以报价币种表示。\n\n:returns: `bool`"""
     cdef readonly bint is_spot_currency
-    """If the instrument is a spot currency pair.\n\n:returns: `bool`"""
+    """标的是否为现货货币对。\n\n:returns: `bool`"""
     cdef readonly InstrumentClass instrument_class
-    """The position instrument class.\n\n:returns: `InstrumentClass`"""
+    """仓位的标的类别。\n\n:returns: `InstrumentClass`"""
     cdef readonly Currency quote_currency
-    """The position quote currency.\n\n:returns: `Currency`"""
+    """仓位报价币种。\n\n:returns: `Currency`"""
     cdef readonly Currency base_currency
-    """The position base currency (if applicable).\n\n:returns: `Currency` or ``None``"""
+    """仓位基准币种（如果适用）。\n\n:returns: `Currency` 或 ``None``"""
     cdef readonly Currency settlement_currency
-    """The position settlement currency (for PnL).\n\n:returns: `Currency`"""
+    """仓位结算币种（用于盈亏计算）。\n\n:returns: `Currency`"""
     cdef readonly uint64_t ts_init
-    """UNIX timestamp (nanoseconds) when the object was initialized.\n\n:returns: `uint64_t`"""
+    """对象初始化时的 UNIX 时间戳（纳秒）。\n\n:returns: `uint64_t`"""
     cdef readonly uint64_t ts_opened
-    """UNIX timestamp (nanoseconds) when the position was opened.\n\n:returns: `uint64_t`"""
+    """仓位开启时的 UNIX 时间戳（纳秒）。\n\n:returns: `uint64_t`"""
     cdef readonly uint64_t ts_last
-    """UNIX timestamp (nanoseconds) when the last event occurred.\n\n:returns: `uint64_t`"""
+    """发生最后一次事件时的 UNIX 时间戳（纳秒）。\n\n:returns: `uint64_t`"""
     cdef readonly uint64_t ts_closed
-    """UNIX timestamp (nanoseconds) when the position was closed (zero unless closed).\n\n:returns: `uint64_t`"""
+    """仓位关闭时的 UNIX 时间戳（纳秒，未关闭则为零）。\n\n:returns: `uint64_t`"""
     cdef readonly uint64_t duration_ns
-    """The total open duration in nanoseconds (zero unless closed).\n\n:returns: `uint64_t`"""
+    """总持仓时长（纳秒，未关闭则为零）。\n\n:returns: `uint64_t`"""
     cdef readonly double avg_px_open
-    """The average open price.\n\n:returns: `double`"""
+    """平均开仓价格。\n\n:returns: `double`"""
     cdef readonly double avg_px_close
-    """The average close price.\n\n:returns: `double`"""
+    """平均平仓价格。\n\n:returns: `double`"""
     cdef readonly double realized_return
-    """The current realized return for the position.\n\n:returns: `double`"""
+    """仓当前已实现收益率。\n\n:returns: `double`"""
     cdef readonly Money realized_pnl
-    """The current realized PnL for the position (including commissions).\n\n:returns: `Money` or ``None``"""
+    """仓位当前已实现盈亏（包括佣金）。\n\n:returns: `Money` 或 ``None``"""
 
     cpdef str info(self)
     cpdef dict to_dict(self)

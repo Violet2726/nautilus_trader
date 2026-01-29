@@ -20,21 +20,21 @@ from nautilus_trader.common.config import NautilusConfig
 
 class RiskEngineConfig(NautilusConfig, frozen=True):
     """
-    Configuration for ``RiskEngine`` instances.
+    ``RiskEngine`` 实例的配置。
 
-    Parameters
+    参数
     ----------
-    bypass : bool, default False
-        If True, then will bypass all pre-trade risk checks and rate limits (will still check for duplicate IDs).
-    max_order_submit_rate : str, default 100/00:00:01
-        The maximum rate of submit order commands per timedelta.
-    max_order_modify_rate : str, default 100/00:00:01
-        The maximum rate of modify order commands per timedelta.
-    max_notional_per_order : dict[str, int], default empty dict
-        The maximum notional value of an order per instrument ID.
-        The value should be a valid decimal format.
-    debug : bool, default False
-        If debug mode is active (will provide extra debug logging).
+    bypass : bool, 默认 False
+        如果为 True，则将跳过所有盘前风控检查和频率限制（但仍会检查重复 ID）。
+    max_order_submit_rate : str, 默认 100/00:00:01
+        每个时间间隔内提交订单命令的最大频率。
+    max_order_modify_rate : str, 默认 100/00:00:01
+        每个时间间隔内修改订单命令的最大频率。
+    max_notional_per_order : dict[str, int], 默认空字典
+        每个标的 ID 的订单最大名义价值。
+        该值应为有效的 Decimal 格式。
+    debug : bool, 默认 False
+        调试模式是否激活（将提供额外的调试日志记录）。
 
     """
 

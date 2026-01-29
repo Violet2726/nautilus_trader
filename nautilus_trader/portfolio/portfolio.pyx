@@ -214,7 +214,7 @@ TypeError
 
         self.initialized = False
 
-# -- COMMANDS -------------------------------------------------------------------------------------
+# -- 命令 -----------------------------------------------------------------------------------------
 
     cpdef void set_use_mark_prices(self, bint value):
         """
@@ -767,9 +767,9 @@ TypeError
         所有有状态字段都重置为初始值。
 
         """
-        self._log.debug(f"RESETTING")
+        self._log.debug(f"正在重置 (RESETTING)")
         self._reset()
-        self._log.info("READY")
+        self._log.info("就绪 (READY)")
 
     def dispose(self) -> None:
         """
@@ -778,11 +778,11 @@ TypeError
         所有有状态字段都重置为初始值。
 
         """
-        self._log.debug(f"DISPOSING")
+        self._log.debug(f"正在销毁 (DISPOSING)")
         self._reset()
-        self._log.info("DISPOSED")
+        self._log.info("已销毁 (DISPOSED)")
 
-# -- QUERIES --------------------------------------------------------------------------------------
+# -- 查询 -----------------------------------------------------------------------------------------
 
     cpdef Account account(self, Venue venue=None, AccountId account_id=None):
         """
@@ -1061,9 +1061,9 @@ TypeError
 
                 currencies_str = ", ".join(currency_strs)
                 self._log.error(
-                    f"Cannot calculate net exposures: multiple accounts with different base currencies "
-                    f"({currencies_str}). "
-                    f"Provide an explicit target_currency to aggregate across accounts."
+                    f"无法计算净风险敞口：存在多个具有不同本位币的账户 "
+                    f"({currencies_str})。 "
+                    f"请提供明确的 target_currency 以跨账户进行汇总。"
                 )
                 return None
 
@@ -1381,7 +1381,7 @@ TypeError
         Price price,
         Currency target_currency,
     ):
-        # Calculate exposure for non-betting instruments
+        # 计算非博彩工具的风险敞口
         cdef:
             double total_notional = 0.0
             PriceType price_type = PriceType.MARK  # Default for conversion
@@ -1453,7 +1453,7 @@ TypeError
             bint used_cross = False
 
         if p is None:
-            self._log.debug(f"Cannot calculate net exposure: no price for {position.instrument_id}")
+            self._log.debug(f"无法计算净风险敞口：找不到 {position.instrument_id} 的价格")
             return (None, False)
 
         # 对于带有 target_currency 的 CurrencyPair，使用 cross_notional_value 进行精确转换
@@ -1563,7 +1563,7 @@ TypeError
             )
             return exposure_money.as_f64_c()
 
-        return None  # Cannot use cross_notional, fall back to standard
+        return None  # 无法使用交叉名义价值 (cross_notional)，回退到标准模式
 
     cpdef object net_position(self, InstrumentId instrument_id, AccountId account_id=None):
         """
@@ -1694,7 +1694,7 @@ TypeError
 
         return True
 
-# -- INTERNAL -------------------------------------------------------------------------------------
+# -- 内部 -----------------------------------------------------------------------------------------
 
     cdef tuple _validate_event_account_and_instrument(self, object event, str caller_name):
         if event.account_id is None:
@@ -1898,7 +1898,7 @@ TypeError
         # 如果缓存为空，则计算所有持仓账户的盈亏。
         cdef:
             dict pnl_cache = self._realized_pnls if is_realized else self._unrealized_pnls
-            str pnl_type = "realized" if is_realized else "unrealized"
+            str pnl_type = "已实现 (realized)" if is_realized else "未实现 (unrealized)"
             Money total_pnl = None
             Money pnl
             dict account_pnls
@@ -2696,7 +2696,7 @@ TypeError
             price_type = PriceType.ASK
         else:  # pragma: no cover (design-time error)
             raise RuntimeError(
-                f"invalid `PositionSide`, was {position_side_to_str(position.side)}",
+                f"无效的 `PositionSide`：{position_side_to_str(position.side)}",
             )
 
         cdef InstrumentId instrument_id = position.instrument_id

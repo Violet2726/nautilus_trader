@@ -24,16 +24,16 @@ from nautilus_trader.model.objects cimport Quantity
 
 cdef class PositionSizer:
     """
-    The base class for all position sizers.
+    所有仓位计算器的基类。
 
-    Parameters
+    参数
     ----------
     instrument : Instrument
-        The instrument for position sizing.
+        用于仓位计算的标的。
 
-    Warnings
+    警告
     --------
-    This class should not be used directly, but through a concrete subclass.
+    此类不应直接使用，而应通过具体的子类使用。
     """
 
     def __init__(self, Instrument instrument not None):
@@ -41,17 +41,17 @@ cdef class PositionSizer:
 
     cpdef void update_instrument(self, Instrument instrument):
         """
-        Update the internal instrument with the given instrument.
+        使用给定的标的更新内部标的。
 
-        Parameters
+        参数
         ----------
         instrument : Instrument
-            The instrument for the update.
+            用于更新的标的。
 
-        Raises
+        引发
         ------
         ValueError
-            If `instrument` does not equal the currently held instrument.
+            如果 `instrument` 与目前持有的标的不相等。
 
         """
         Condition.not_none(instrument, "instrument")
@@ -71,8 +71,8 @@ cdef class PositionSizer:
         unit_batch_size: Decimal = Decimal(1),
         int units=1,
     ):
-        """Abstract method (implement in subclass)."""
-        raise NotImplementedError("method `calculate` must be implemented in the subclass")  # pragma: no cover
+        """抽象方法（在子类中实现）。"""
+        raise NotImplementedError("方法 `calculate` 必须在子类中实现")  # pragma: no cover
 
     cdef object _calculate_risk_ticks(self, Price entry, Price stop_loss):
         return abs(entry - stop_loss) / self.instrument.price_increment
@@ -93,12 +93,12 @@ cdef class PositionSizer:
 
 cdef class FixedRiskSizer(PositionSizer):
     """
-    Provides position sizing calculations based on a given risk.
+    提供基于给定风险的仓位计算。
 
-    Parameters
+    参数
     ----------
     instrument : Instrument
-        The instrument for position sizing.
+        用于仓位计算的标的。
     """
 
     def __init__(self, Instrument instrument not None):
@@ -117,45 +117,45 @@ cdef class FixedRiskSizer(PositionSizer):
         int units=1,
     ):
         """
-        Calculate the position size quantity.
+        计算仓位数量。
 
-        Parameters
+        参数
         ----------
         entry : Price
-            The entry price.
+            入场价格。
         stop_loss : Price
-            The stop loss price.
+            止损价格。
         equity : Money
-            The account equity.
+            账户净值。
         risk : Decimal
-            The risk percentage.
+            风险百分比。
         exchange_rate : Decimal
-            The exchange rate for the instrument quote currency vs account currency.
+            标的报价币种与账户币种之间的汇率。
         commission_rate : Decimal
-            The commission rate (>= 0).
-        hard_limit : Decimal, optional
-            The hard limit for the total quantity (>= 0).
+            佣金率 (>= 0)。
+        hard_limit : Decimal, 可选
+            总数量的硬限制 (>= 0)。
         unit_batch_size : Decimal
-            The unit batch size (> 0).
+            单位批量大小 (> 0)。
         units : int
-            The number of units to batch the position into (> 0).
+            将仓位分批的数量 (> 0)。
 
-        Raises
+        引发
         ------
         ValueError
-            If `risk_bp` is not positive (> 0).
+            如果 `risk` 不是正数 (> 0)。
         ValueError
-            If `xrate` is not positive (> 0).
+            如果 `exchange_rate` 不是正数 (> 0)。
         ValueError
-            If `commission_rate` is negative (< 0).
+            如果 `commission_rate` 是负数 (< 0)。
         ValueError
-            If `hard_limit` is not ``None`` and is not positive (> 0).
+            如果 `hard_limit` 不是 ``None`` 且不是正数 (> 0)。
         ValueError
-            If `unit_batch_size` is not positive (> 0).
+            如果 `unit_batch_size` 不是正数 (> 0)。
         ValueError
-            If `units` is not positive (> 0).
+            如果 `units` 不是正数 (> 0)。
 
-        Returns
+        返回
         -------
         Quantity
 
@@ -182,24 +182,24 @@ cdef class FixedRiskSizer(PositionSizer):
         risk_money: Decimal = self._calculate_riskable_money(equity.as_decimal(), risk, commission_rate)
 
         if risk_points <= 0:
-            # Divide by zero protection
+            # 除零保护
             return self.instrument.make_qty(0)
 
-        # Calculate position size
+        # 计算仓位大小
         position_size: Decimal = ((risk_money / exchange_rate) / risk_points) / self.instrument.price_increment
 
-        # Limit size on hard limit
+        # 硬限制大小限制
         if hard_limit is not None:
             position_size = min(position_size, hard_limit)
 
-        # Batch into units
+        # 分成单位
         position_size_batched: Decimal = max(Decimal(0), position_size / units)
 
         if unit_batch_size > 0:
-            # Round position size to nearest unit batch size
+            # 将仓位大小舍入到最近的单位批量大小
             position_size_batched = (position_size_batched // unit_batch_size) * unit_batch_size
 
-        # Limit size on max trade size (if configured)
+        # 最大交易量限制（如果已配置）
         if self.instrument.max_quantity is not None:
             final_size: Decimal = min(
                 position_size_batched,

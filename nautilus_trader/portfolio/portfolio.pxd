@@ -68,7 +68,7 @@ cdef class Portfolio(PortfolioFacade):
     cdef dict[InstrumentId, Price] _bar_close_prices
     cdef dict[AccountId, uint64_t] _last_account_state_log_ts
 
-    # -- COMMANDS -------------------------------------------------------------------------------------
+    # -- 命令 -----------------------------------------------------------------------------------------
 
     cpdef void set_use_mark_prices(self, bint value)
     cpdef void set_use_mark_xrates(self, bint value)
@@ -83,7 +83,7 @@ cdef class Portfolio(PortfolioFacade):
     cpdef void on_order_event(self, OrderEvent event)
     cpdef void on_position_event(self, PositionEvent event)
 
-    # -- INTERNAL -------------------------------------------------------------------------------------
+    # -- 内部 -----------------------------------------------------------------------------------------
 
     cdef void _update_account(self, AccountState event)
     cdef Account _get_account(self, Venue venue, AccountId account_id, str caller_name, str message=*)

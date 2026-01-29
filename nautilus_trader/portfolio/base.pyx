@@ -23,75 +23,75 @@ from nautilus_trader.model.objects cimport Price
 
 cdef class PortfolioFacade:
     """
-    Provides a read-only facade for a `Portfolio`.
+    提供 `Portfolio` 的只读门面 (facade)。
     """
 
-# -- QUERIES --------------------------------------------------------------------------------------
+# -- 查询 --------------------------------------------------------------------------------------
 
     cpdef Account account(self, Venue venue=None, AccountId account_id=None):
-        """Abstract method (implement in subclass)."""
-        raise NotImplementedError("method `account` must be implemented in the subclass")  # pragma: no cover
+        """抽象方法（在子类中实现）。"""
+        raise NotImplementedError("方法 `account` 必须在子类中实现")  # pragma: no cover
 
     cpdef dict balances_locked(self, Venue venue=None, AccountId account_id=None):
-        """Abstract method (implement in subclass)."""
-        raise NotImplementedError("method `balances_locked` must be implemented in the subclass")  # pragma: no cover
+        """抽象方法（在子类中实现）。"""
+        raise NotImplementedError("方法 `balances_locked` 必须在子类中实现")  # pragma: no cover
 
     cpdef dict margins_init(self, Venue venue=None, AccountId account_id=None):
-        """Abstract method (implement in subclass)."""
-        raise NotImplementedError("method `margins_init` must be implemented in the subclass")  # pragma: no cover
+        """抽象方法（在子类中实现）。"""
+        raise NotImplementedError("方法 `margins_init` 必须在子类中实现")  # pragma: no cover
 
     cpdef dict margins_maint(self, Venue venue=None, AccountId account_id=None):
-        """Abstract method (implement in subclass)."""
-        raise NotImplementedError("method `margins_maint` must be implemented in the subclass")  # pragma: no cover
+        """抽象方法（在子类中实现）。"""
+        raise NotImplementedError("方法 `margins_maint` 必须在子类中实现")  # pragma: no cover
 
     cpdef dict realized_pnls(self, Venue venue=None, AccountId account_id=None, Currency target_currency=None):
-        """Abstract method (implement in subclass)."""
-        raise NotImplementedError("method `realized_pnls` must be implemented in the subclass")  # pragma: no cover
+        """抽象方法（在子类中实现）。"""
+        raise NotImplementedError("方法 `realized_pnls` 必须在子类中实现")  # pragma: no cover
 
     cpdef dict unrealized_pnls(self, Venue venue=None, AccountId account_id=None, Currency target_currency=None):
-        """Abstract method (implement in subclass)."""
-        raise NotImplementedError("method `unrealized_pnls` must be implemented in the subclass")  # pragma: no cover
+        """抽象方法（在子类中实现）。"""
+        raise NotImplementedError("方法 `unrealized_pnls` 必须在子类中实现")  # pragma: no cover
 
     cpdef dict total_pnls(self, Venue venue=None, AccountId account_id=None, Currency target_currency=None):
-        """Abstract method (implement in subclass)."""
-        raise NotImplementedError("method `total_pnls` must be implemented in the subclass")  # pragma: no cover
+        """抽象方法（在子类中实现）。"""
+        raise NotImplementedError("方法 `total_pnls` 必须在子类中实现")  # pragma: no cover
 
     cpdef dict net_exposures(self, Venue venue=None, AccountId account_id=None, Currency target_currency=None):
-        """Abstract method (implement in subclass)."""
-        raise NotImplementedError("method `net_exposures` must be implemented in the subclass")  # pragma: no cover
+        """抽象方法（在子类中实现）。"""
+        raise NotImplementedError("方法 `net_exposures` 必须在子类中实现")  # pragma: no cover
 
     cpdef Money realized_pnl(self, InstrumentId instrument_id, AccountId account_id=None, Currency target_currency=None):
-        """Abstract method (implement in subclass)."""
-        raise NotImplementedError("method `realized_pnl` must be implemented in the subclass")  # pragma: no cover
+        """抽象方法（在子类中实现）。"""
+        raise NotImplementedError("方法 `realized_pnl` 必须在子类中实现")  # pragma: no cover
 
     cpdef Money unrealized_pnl(self, InstrumentId instrument_id, Price price=None, AccountId account_id=None, Currency target_currency=None):
-        """Abstract method (implement in subclass)."""
-        raise NotImplementedError("method `unrealized_pnl` must be implemented in the subclass")  # pragma: no cover
+        """抽象方法（在子类中实现）。"""
+        raise NotImplementedError("方法 `unrealized_pnl` 必须在子类中实现")  # pragma: no cover
 
     cpdef Money total_pnl(self, InstrumentId instrument_id, Price price=None, AccountId account_id=None, Currency target_currency=None):
-        """Abstract method (implement in subclass)."""
-        raise NotImplementedError("method `total_pnl` must be implemented in the subclass")  # pragma: no cover
+        """抽象方法（在子类中实现）。"""
+        raise NotImplementedError("方法 `total_pnl` 必须在子类中实现")  # pragma: no cover
 
     cpdef Money net_exposure(self, InstrumentId instrument_id, Price price=None, AccountId account_id=None, Currency target_currency=None):
-        """Abstract method (implement in subclass)."""
-        raise NotImplementedError("method `net_exposure` must be implemented in the subclass")  # pragma: no cover
+        """抽象方法（在子类中实现）。"""
+        raise NotImplementedError("方法 `net_exposure` 必须在子类中实现")  # pragma: no cover
 
     cpdef object net_position(self, InstrumentId instrument_id, AccountId account_id=None):
-        """Abstract method (implement in subclass)."""
-        raise NotImplementedError("method `net_position` must be implemented in the subclass")  # pragma: no cover
+        """抽象方法（在子类中实现）。"""
+        raise NotImplementedError("方法 `net_position` 必须在子类中实现")  # pragma: no cover
 
     cpdef bint is_net_long(self, InstrumentId instrument_id, AccountId account_id=None):
-        """Abstract method (implement in subclass)."""
-        raise NotImplementedError("method `is_net_long` must be implemented in the subclass")  # pragma: no cover
+        """抽象方法（在子类中实现）。"""
+        raise NotImplementedError("方法 `is_net_long` 必须在子类中实现")  # pragma: no cover
 
     cpdef bint is_net_short(self, InstrumentId instrument_id, AccountId account_id=None):
-        """Abstract method (implement in subclass)."""
-        raise NotImplementedError("method `is_net_short` must be implemented in the subclass")  # pragma: no cover
+        """抽象方法（在子类中实现）。"""
+        raise NotImplementedError("方法 `is_net_short` 必须在子类中实现")  # pragma: no cover
 
     cpdef bint is_flat(self, InstrumentId instrument_id, AccountId account_id=None):
-        """Abstract method (implement in subclass)."""
-        raise NotImplementedError("method `is_flat` must be implemented in the subclass")  # pragma: no cover
+        """抽象方法（在子类中实现）。"""
+        raise NotImplementedError("方法 `is_flat` 必须在子类中实现")  # pragma: no cover
 
     cpdef bint is_completely_flat(self, AccountId account_id=None):
-        """Abstract method (implement in subclass)."""
-        raise NotImplementedError("method `is_completely_flat` must be implemented in the subclass")  # pragma: no cover
+        """抽象方法（在子类中实现）。"""
+        raise NotImplementedError("方法 `is_completely_flat` 必须在子类中实现")  # pragma: no cover

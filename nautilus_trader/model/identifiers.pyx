@@ -68,7 +68,7 @@ cdef str _get_symbol_value_from_tuple(tuple x):
 
 cdef class Identifier:
     """
-    The abstract base class for all identifiers.
+    所有标识符的抽象基类。
     """
 
     def __getstate__(self):
@@ -121,23 +121,23 @@ cdef class Identifier:
 
 cdef class Symbol(Identifier):
     """
-    Represents a valid ticker symbol ID for a tradable instrument.
+    表示可交易标的之有效股票代码 (Ticker Symbol) ID。
 
-    Parameters
+    参数
     ----------
     value : str
-        The ticker symbol ID value.
+        股票代码 ID 的值。
 
-    Raises
+    引发
     ------
     ValueError
-        If `value` is not a valid string.
+        如果 `value` 不是有效的字符串。
 
-    Warnings
+    警告
     --------
-    The ID value must be unique for a trading venue.
+    该 ID 值在同一交易平台内必须是唯一的。
 
-    References
+    参考
     ----------
     https://en.wikipedia.org/wiki/Ticker_symbol
     """
@@ -216,17 +216,17 @@ cdef class Symbol(Identifier):
 
 cdef class Venue(Identifier):
     """
-    Represents a valid trading venue ID.
+    表示有效的交易平台 (Venue) ID。
 
-    Parameters
+    参数
     ----------
     name : str
-        The venue ID value.
+        交易平台 ID 的值。
 
-    Raises
+    引发
     ------
     ValueError
-        If `name` is not a valid string.
+        如果 `name` 不是有效的字符串。
     """
 
     def __init__(self, str name not None) -> None:
@@ -303,16 +303,16 @@ cdef class Venue(Identifier):
 
 cdef class InstrumentId(Identifier):
     """
-    Represents a valid instrument ID.
+    表示有效的标的 ID (Instrument ID)。
 
-    The symbol and venue combination should uniquely identify the instrument.
+    代码 (Symbol) 和交易平台 (Venue) 的组合应能唯一标识该标的。
 
-    Parameters
+    参数
     ----------
     symbol : Symbol
-        The instruments ticker symbol.
+        标的代码。
     venue : Venue
-        The instruments trading venue.
+        标的所在的交易平台。
     """
 
     def __init__(self, Symbol symbol not None, Venue venue not None) -> None:
@@ -778,30 +778,28 @@ cdef StrategyId EXTERNAL_STRATEGY_ID = StrategyId("EXTERNAL")
 
 cdef class StrategyId(Identifier):
     """
-    Represents a valid strategy ID.
+    表示有效的策略 ID (Strategy ID)。
 
-    Must be correctly formatted with two valid strings either side of a hyphen.
-    It is expected a strategy ID is the class name of the strategy,
-    with an order ID tag number separated by a hyphen.
+    格式必须正确，由两个有效的字符串和中间的一个连字符组成。
+    策略 ID 通常由策略类名、连字符和订单 ID 标签号组成。
 
-    Example: "EMACross-001".
+    示例："EMACross-001"。
 
-    The reason for the numerical component of the ID is so that order and position IDs
-    do not collide with those from another strategy within the node instance.
+    ID 中包含数字部分是为了防止订单 ID 和持仓 ID 与节点实例中的另一个策略发生冲突。
 
-    Parameters
+    参数
     ----------
     value : str
-        The strategy ID value.
+        策略 ID 的值。
 
-    Raises
+    引发
     ------
     ValueError
-        If `value` is not a valid string containing a hyphen.
+        如果 `value` 不是包含连字符的有效字符串。
 
-    Warnings
+    警告
     --------
-    The name and tag combination must be unique at the trader level.
+    名称和标签的组合在交易者 (Trader) 级别内必须是唯一的。
     """
 
     def __init__(self, str value) -> None:
@@ -867,17 +865,17 @@ cdef class StrategyId(Identifier):
 
 cdef class ExecAlgorithmId(Identifier):
     """
-    Represents a valid execution algorithm ID.
+    表示有效的执行算法 ID (Execution Algorithm ID)。
 
-    Parameters
+    参数
     ----------
     value : str
-        The execution algorithm ID value.
+        执行算法 ID 的值。
 
-    Raises
+    引发
     ------
     ValueError
-        If `value` is not a valid string.
+        如果 `value` 不是有效的字符串。
     """
 
     def __init__(self, str value not None) -> None:
@@ -914,27 +912,26 @@ cdef class ExecAlgorithmId(Identifier):
 
 cdef class AccountId(Identifier):
     """
-    Represents a valid account ID.
+    表示有效的账户 ID (Account ID)。
 
-    Must be correctly formatted with two valid strings either side of a hyphen.
-    It is expected an account ID is the name of the issuer with an account number
-    separated by a hyphen.
+    格式必须正确，由两个有效的字符串和中间的一个连字符组成。
+    账户 ID 通常由发行方名称、连字符和账号组成。
 
-    Example: "IB-D02851908".
+    示例："IB-D02851908"。
 
-    Parameters
+    参数
     ----------
     value : str
-        The account ID value.
+        账户 ID 的值。
 
-    Raises
+    引发
     ------
     ValueError
-        If `value` is not a valid string containing a hyphen.
+        如果 `value` 不是包含连字符的有效字符串。
 
-    Warnings
+    警告
     --------
-    The issuer and number ID combination must be unique at the firm level.
+    发行方和账号的 ID 组合在公司 (Firm) 级别内必须是唯一的。
     """
 
     def __init__(self, str value not None) -> None:
@@ -993,21 +990,21 @@ cdef class AccountId(Identifier):
 
 cdef class ClientOrderId(Identifier):
     """
-    Represents a valid client order ID (assigned by the Nautilus system).
+    表示有效的客户端订单 ID (Client Order ID，由 Nautilus 系统分配)。
 
-    Parameters
+    参数
     ----------
     value : str
-        The client order ID value.
+        客户端订单 ID 的值。
 
-    Raises
+    引发
     ------
     ValueError
-        If `value` is not a valid string.
+        如果 `value` 不是有效的字符串。
 
-    Warnings
+    警告
     --------
-    The ID value must be unique at the firm level.
+    该 ID 值在公司 (Firm) 级别内必须是唯一的。
     """
 
     def __init__(self, str value not None) -> None:
@@ -1043,17 +1040,17 @@ cdef class ClientOrderId(Identifier):
 
 cdef class VenueOrderId(Identifier):
     """
-    Represents a valid venue order ID (assigned by a trading venue).
+    表示有效的交易平台订单 ID (Venue Order ID，由交易平台分配)。
 
-    Parameters
+    参数
     ----------
     value : str
-        The venue assigned order ID value.
+        交易平台分配的订单 ID 值。
 
-    Raises
+    引发
     ------
     ValueError
-        If `value` is not a valid string.
+        如果 `value` 不是有效的字符串。
     """
 
     def __init__(self, str value not None) -> None:
@@ -1089,17 +1086,17 @@ cdef class VenueOrderId(Identifier):
 
 cdef class OrderListId(Identifier):
     """
-    Represents a valid order list ID (assigned by the Nautilus system).
+    表示有效的订单列表 ID (Order List ID，由 Nautilus 系统分配)。
 
-    Parameters
+    参数
     ----------
     value : str
-        The order list ID value.
+        订单列表 ID 的值。
 
-    Raises
+    引发
     ------
     ValueError
-        If `value` is not a valid string.
+        如果 `value` 不是有效的字符串。
     """
 
     def __init__(self, str value not None) -> None:
@@ -1135,17 +1132,17 @@ cdef class OrderListId(Identifier):
 
 cdef class PositionId(Identifier):
     """
-    Represents a valid position ID.
+    表示有效的持仓 ID (Position ID)。
 
-    Parameters
+    参数
     ----------
     value : str
-        The position ID value.
+        持仓 ID 的值。
 
-    Raises
+    引发
     ------
     ValueError
-        If `value` is not a valid string containing a hyphen.
+        如果 `value` 不是包含连字符的有效字符串。
     """
 
     def __init__(self, str value not None) -> None:
@@ -1184,27 +1181,26 @@ cdef class PositionId(Identifier):
 
 cdef class TradeId(Identifier):
     """
-    Represents a valid trade match ID (assigned by a trading venue).
+    表示有效的成交匹配 ID (Trade Match ID，由交易平台分配)。
 
-    Maximum length is 36 characters.
-    Can correspond to the `TradeID <1003> field` of the FIX protocol.
+    最大长度为 36 个字符。
+    可以对应 FIX 协议的 `TradeID <1003>` 字段。
 
-    The unique ID assigned to the trade entity once it is received or matched by
-    the exchange or central counterparty.
+    一旦成交由交易所或中央结算对手方接收或匹配，分配给该成交实体的唯一 ID。
 
-    Parameters
+    参数
     ----------
     value : str
-        The trade match ID value.
+        成交匹配 ID 的值。
 
-    Raises
+    引发
     ------
     ValueError
-        If `value` is not a valid string.
+        如果 `value` 不是有效的字符串。
     ValueError
-        If `value` length exceeds maximum 36 characters.
+        如果 `value` 的长度超过最大值 36 个字符。
 
-    References
+    参考
     ----------
     https://www.onixs.biz/fix-dictionary/5.0/tagnum_1003.html
     """

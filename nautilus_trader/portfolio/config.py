@@ -21,31 +21,31 @@ from nautilus_trader.common.config import PositiveInt
 
 class PortfolioConfig(NautilusConfig, frozen=True):
     """
-    Configuration for ``Portfolio`` instances.
+    ``Portfolio`` 实例的配置。
 
-    Parameters
+    参数
     ----------
-    use_mark_prices : bool, default False
-        The type of prices used for P&L and net exposure calculations.
-        If False (default), uses quote prices if available; otherwise, last trade prices
-        (or falls back to bar prices if `bar_updates` is True).
-        If True, uses mark prices.
-    use_mark_xrates : bool, default False
-        The type of exchange rates used for P&L and net exposure calculations.
-        If False (default), uses quote prices.
-        If True, uses mark prices.
-    bar_updates : bool, default True
-        If external bar prices should be considered for calculations.
-    convert_to_account_base_currency : bool, default True
-        If calculations should be converted into each account's base currency.
-        This setting is only effective for accounts with a specified base currency.
-    min_account_state_logging_interval_ms : PositiveInt, optional
-        The minimum interval (milliseconds) between logging account state events for the same account.
-        When set, account state updates will only be logged if this much time has passed since the last log.
-        Useful for HFT deployments to prevent excessive logging when account states change rapidly.
-        Default is None (no throttling).
-    debug : bool, default False
-        If debug mode is active (will provide extra debug logging).
+    use_mark_prices : bool, 默认 False
+        用于盈亏和净风险敞口计算的价格类型。
+        如果为 False（默认），则优先使用买卖报价（如果可用）；否则，使用最新成交价
+        （如果 `bar_updates` 为 True，则回退到 Bar 价格）。
+        如果为 True，则使用标记价格。
+    use_mark_xrates : bool, 默认 False
+        用于盈亏和净风险敞口计算的汇率类型。
+        如果为 False（默认），则使用买卖报价。
+        如果为 True，则使用标记价格。
+    bar_updates : bool, 默认 True
+        计算时是否应考虑外部 Bar 价格。
+    convert_to_account_base_currency : bool, 默认 True
+        是否应将计算结果转换为每个账户的本位币。
+        此设置仅对指定了本位币的账户有效。
+    min_account_state_logging_interval_ms : PositiveInt, 可选
+        同一账户记录账户状态事件之间的最小间隔（毫秒）。
+        设置后，仅当距上次日志已过去这段时间时，才会记录账户状态更新。
+        适用于高频交易 (HFT) 部署，以防止账户状态快速变化时产生过多的日志。
+        默认值为 None（不限制）。
+    debug : bool, 默认 False
+        调试模式是否激活（将提供额外的调试日志记录）。
 
     """
 

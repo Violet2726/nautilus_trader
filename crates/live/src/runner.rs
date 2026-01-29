@@ -28,7 +28,7 @@ use nautilus_common::{
     timer::TimeEventHandler,
 };
 
-/// Asynchronous implementation of `DataCommandSender` for live environments.
+/// 实盘环境下的 `DataCommandSender` 异步实现。
 #[derive(Debug)]
 pub struct AsyncDataCommandSender {
     cmd_tx: tokio::sync::mpsc::UnboundedSender<DataCommand>,
@@ -44,12 +44,12 @@ impl AsyncDataCommandSender {
 impl DataCommandSender for AsyncDataCommandSender {
     fn execute(&self, command: DataCommand) {
         if let Err(e) = self.cmd_tx.send(command) {
-            log::error!("Failed to send data command: {e}");
+            log::error!("发送数据命令失败: {e}");
         }
     }
 }
 
-/// Asynchronous implementation of `TimeEventSender` for live environments.
+/// 实盘环境下的 `TimeEventSender` 异步实现。
 #[derive(Debug, Clone)]
 pub struct AsyncTimeEventSender {
     time_tx: tokio::sync::mpsc::UnboundedSender<TimeEventHandler>,
@@ -61,10 +61,10 @@ impl AsyncTimeEventSender {
         Self { time_tx }
     }
 
-    /// Gets a clone of the underlying channel sender for async use.
+    /// 获取底层通道发送端的克隆以供异步使用。
     ///
-    /// This allows async contexts to get a direct channel sender that
-    /// can be moved into async tasks without `RefCell` borrowing issues.
+    /// 这允许异步上下文获取一个可以直接移动到异步任务中的通道发送端，
+    /// 从而避免 `RefCell` 借用问题。
     #[must_use]
     pub fn get_channel_sender(&self) -> tokio::sync::mpsc::UnboundedSender<TimeEventHandler> {
         self.time_tx.clone()
@@ -74,12 +74,12 @@ impl AsyncTimeEventSender {
 impl TimeEventSender for AsyncTimeEventSender {
     fn send(&self, handler: TimeEventHandler) {
         if let Err(e) = self.time_tx.send(handler) {
-            log::error!("Failed to send time event handler: {e}");
+            log::error!("发送时间事件处理程序失败: {e}");
         }
     }
 }
 
-/// Asynchronous implementation of `TradingCommandSender` for live environments.
+/// 实盘环境下的 `TradingCommandSender` 异步实现。
 #[derive(Debug)]
 pub struct AsyncTradingCommandSender {
     cmd_tx: tokio::sync::mpsc::UnboundedSender<TradingCommand>,
@@ -95,7 +95,7 @@ impl AsyncTradingCommandSender {
 impl TradingCommandSender for AsyncTradingCommandSender {
     fn execute(&self, command: TradingCommand) {
         if let Err(e) = self.cmd_tx.send(command) {
-            log::error!("Failed to send trading command: {e}");
+            log::error!("发送交易命令失败: {e}");
         }
     }
 }
@@ -104,10 +104,10 @@ pub trait Runner {
     fn run(&mut self);
 }
 
-/// Channel receivers for the async event loop.
+/// 异步事件循环的通道接收端。
 ///
-/// These can be extracted from `AsyncRunner` via `take_channels()` to drive
-/// the event loop directly on the same thread as the msgbus endpoints.
+/// 可以通过 `take_channels()` 从 `AsyncRunner` 中提取这些接收端，
+/// 以便在与消息总线（msgbus）端点相同的线程上直接驱动事件循环。
 #[derive(Debug)]
 pub struct AsyncRunnerChannels {
     pub time_evt_rx: tokio::sync::mpsc::UnboundedReceiver<TimeEventHandler>,
@@ -123,17 +123,17 @@ pub struct AsyncRunner {
     signal_tx: tokio::sync::mpsc::UnboundedSender<()>,
 }
 
-/// Handle for stopping the AsyncRunner from another context.
+/// 用于从另一个上下文停止 `AsyncRunner` 的句柄。
 #[derive(Clone, Debug)]
 pub struct AsyncRunnerHandle {
     signal_tx: tokio::sync::mpsc::UnboundedSender<()>,
 }
 
 impl AsyncRunnerHandle {
-    /// Signals the runner to stop.
+    /// 发送信号停止运行器。
     pub fn stop(&self) {
         if let Err(e) = self.signal_tx.send(()) {
-            log::error!("Failed to send shutdown signal: {e}");
+            log::error!("发送关闭信号失败: {e}");
         }
     }
 }
@@ -151,7 +151,7 @@ impl Debug for AsyncRunner {
 }
 
 impl AsyncRunner {
-    /// Creates a new [`AsyncRunner`] instance.
+    /// 创建一个新的 [`AsyncRunner`] 实例。
     #[must_use]
     pub fn new() -> Self {
         use tokio::sync::mpsc::unbounded_channel; // tokio-import-ok
@@ -182,14 +182,14 @@ impl AsyncRunner {
         }
     }
 
-    /// Stops the runner with an internal shutdown signal.
+    /// 使用内部关闭信号停止运行器。
     pub fn stop(&self) {
         if let Err(e) = self.signal_tx.send(()) {
-            log::error!("Failed to send shutdown signal: {e}");
+            log::error!("发送关闭信号失败: {e}");
         }
     }
 
-    /// Returns a handle that can be used to stop the runner from another context.
+    /// 返回一个句柄，可用于从另一个上下文停止运行器。
     #[must_use]
     pub fn handle(&self) -> AsyncRunnerHandle {
         AsyncRunnerHandle {
@@ -197,16 +197,15 @@ impl AsyncRunner {
         }
     }
 
-    /// Consumes the runner and returns the channel receivers for direct event loop driving.
+    /// 消耗运行器并返回通道接收端，以便直接驱动事件循环。
     ///
-    /// This is used when the event loop needs to run on the same thread as the msgbus
-    /// endpoints (which use thread-local storage).
+    /// 当事件循环需要与消息总线（msgbus）端点（使用线程局部存储）在同一线程上运行时使用此方法。
     #[must_use]
     pub fn take_channels(self) -> AsyncRunnerChannels {
         self.channels
     }
 
-    /// Drains all pending data events from the channel and processes them.
+    /// 从通道中排出所有待处理的数据事件并处理它们。
     pub fn drain_pending_data_events(&mut self) {
         let mut count = 0;
         while let Ok(evt) = self.channels.data_evt_rx.try_recv() {
@@ -214,21 +213,21 @@ impl AsyncRunner {
             count += 1;
         }
         if count > 0 {
-            log::debug!("Drained {count} pending data events");
+            log::debug!("已排出 {count} 个待处理的数据事件");
         }
     }
 
-    /// Runs the async runner event loop.
+    /// 运行异步运行器事件循环。
     ///
-    /// This method processes data events, time events, execution events, and signal events in an async loop.
-    /// It will run until a signal is received or the event streams are closed.
+    /// 此方法在异步循环中处理数据事件、时间事件、执行事件和信号事件。
+    /// 它将一直运行直到收到信号或事件流关闭。
     pub async fn run(&mut self) {
-        log::info!("AsyncRunner starting");
+        log::info!("AsyncRunner 正在启动");
 
         loop {
             tokio::select! {
                 Some(()) = self.signal_rx.recv() => {
-                    log::info!("AsyncRunner received signal, shutting down");
+                    log::info!("AsyncRunner 收到信号，正在关闭");
                     return;
                 },
                 Some(handler) = self.channels.time_evt_rx.recv() => {
@@ -247,26 +246,26 @@ impl AsyncRunner {
                     Self::handle_exec_event(evt);
                 },
                 else => {
-                    log::debug!("AsyncRunner all channels closed, exiting");
+                    log::debug!("AsyncRunner 所有通道已关闭，正在退出");
                     return;
                 }
             };
         }
     }
 
-    /// Handles a time event by running its callback.
+    /// 通过运行回调来处理时间事件。
     #[inline]
     pub fn handle_time_event(handler: TimeEventHandler) {
         handler.run();
     }
 
-    /// Handles a data command by sending to the DataEngine.
+    /// 通过发送给 DataEngine 来处理数据命令。
     #[inline]
     pub fn handle_data_command(cmd: DataCommand) {
         msgbus::send_data_command(MessagingSwitchboard::data_engine_execute(), cmd);
     }
 
-    /// Handles a data event by sending to the appropriate DataEngine endpoint.
+    /// 通过发送给适当的 DataEngine 端点来处理数据事件。
     #[inline]
     pub fn handle_data_event(event: DataEvent) {
         match event {
@@ -289,13 +288,13 @@ impl AsyncRunner {
         }
     }
 
-    /// Handles an execution command by sending to the ExecEngine.
+    /// 通过发送给 ExecEngine 来处理执行命令。
     #[inline]
     pub fn handle_exec_command(cmd: TradingCommand) {
         msgbus::send_trading_command(MessagingSwitchboard::exec_engine_execute(), cmd);
     }
 
-    /// Handles an execution event by sending to the appropriate engine endpoint.
+    /// 通过发送给适当的引擎端点来处理执行事件。
     #[inline]
     pub fn handle_exec_event(event: ExecutionEvent) {
         match event {

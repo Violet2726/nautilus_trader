@@ -45,17 +45,17 @@ cdef class RiskEngine(Component):
     cdef readonly Throttler _order_modify_throttler
 
     cdef readonly TradingState trading_state
-    """The current trading state for the engine.\n\n:returns: `TradingState`"""
+    """引擎当前交易状态。\n\n:returns: `TradingState`"""
     cdef readonly bint is_bypassed
-    """If the risk engine is completely bypassed.\n\n:returns: `bool`"""
+    """是否完全绕过风控引擎。\n\n:returns: `bool`"""
     cdef readonly bint debug
-    """If debug mode is active (will provide extra debug logging).\n\n:returns: `bool`"""
+    """调试模式是否激活（将提供额外的调试日志）。\n\n:returns: `bool`"""
     cdef readonly int command_count
-    """The total count of commands received by the engine.\n\n:returns: `int`"""
+    """引擎接收到的命令总数。\n\n:returns: `int`"""
     cdef readonly int event_count
-    """The total count of events received by the engine.\n\n:returns: `int`"""
+    """引擎接收到的事件总数。\n\n:returns: `int`"""
 
-# -- COMMANDS -------------------------------------------------------------------------------------
+# -- 命令 -----------------------------------------------------------------------------------------
 
     cpdef void execute(self, Command command)
     cpdef void process(self, Event event)
@@ -63,26 +63,26 @@ cdef class RiskEngine(Component):
     cpdef void set_max_notional_per_order(self, InstrumentId instrument_id, new_value: Decimal)
     cpdef void _log_state(self)
 
-# -- RISK SETTINGS --------------------------------------------------------------------------------
+# -- 风险设置 --------------------------------------------------------------------------------------
 
     cpdef tuple max_order_submit_rate(self)
     cpdef tuple max_order_modify_rate(self)
     cpdef dict max_notionals_per_order(self)
     cpdef object max_notional_per_order(self, InstrumentId instrument_id)
 
-# -- ABSTRACT METHODS -----------------------------------------------------------------------------
+# -- 抽象方法 --------------------------------------------------------------------------------------
 
     cpdef void _on_start(self)
     cpdef void _on_stop(self)
 
-# -- COMMAND HANDLERS -----------------------------------------------------------------------------
+# -- 命令处理器 --------------------------------------------------------------------------------------
 
     cpdef void _execute_command(self, Command command)
     cpdef void _handle_submit_order(self, SubmitOrder command)
     cpdef void _handle_submit_order_list(self, SubmitOrderList command)
     cpdef void _handle_modify_order(self, ModifyOrder command)
 
-# -- PRE-TRADE CHECKS -----------------------------------------------------------------------------
+# -- 盘前检查 --------------------------------------------------------------------------------------
 
     cpdef bint _check_order(self, Instrument instrument, Order order)
     cpdef bint _check_order_price(self, Instrument instrument, Order order)
@@ -92,7 +92,7 @@ cdef class RiskEngine(Component):
     cpdef str _check_price(self, Instrument instrument, Price price)
     cpdef str _check_quantity(self, Instrument instrument, Quantity quantity, bint is_quote_quantity=*)
 
-# -- DENIALS --------------------------------------------------------------------------------------
+# -- 拒绝处理 --------------------------------------------------------------------------------------
 
     cpdef void _deny_command(self, TradingCommand command, str reason)
     cpdef void _deny_new_order(self, TradingCommand command)
@@ -101,11 +101,11 @@ cdef class RiskEngine(Component):
     cpdef void _deny_order_list(self, OrderList order_list, str reason)
     cpdef void _reject_modify_order(self, Order order, str reason)
 
-# -- EGRESS ---------------------------------------------------------------------------------------
+# -- 出口 -----------------------------------------------------------------------------------------
 
     cpdef void _execution_gateway(self, Instrument instrument, TradingCommand command)
     cpdef void _send_to_execution(self, TradingCommand command)
 
-# -- EVENT HANDLERS -------------------------------------------------------------------------------
+# -- 事件处理器 -----------------------------------------------------------------------------------
 
     cpdef void _handle_event(self, Event event)
