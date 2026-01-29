@@ -49,79 +49,85 @@ from nautilus_trader.system.config import NautilusKernelConfig
 
 class BacktestVenueConfig(NautilusConfig, frozen=True):
     """
-    表示特定回测引擎的交易场所配置。
+    Represents a venue configuration for one specific backtest engine.
 
-    参数
+    Parameters
     ----------
     name : str
-        交易场所名称。
+        The name of the venue.
     oms_type : OmsType | str
-        交易所的订单管理系统类型。如果为 ``HEDGING``（对冲），将生成新的持仓 ID。
+        The order management system type for the exchange. If ``HEDGING`` will
+        generate new position IDs.
     account_type : AccountType | str
-        交易所的账户类型。
+        The account type for the exchange.
     starting_balances : list[Money | str]
-        起始账户余额（单一资产账户只需指定一个）。
-    base_currency : Currency | str, 可选
-        交易所的账户基础货币。多币种账户使用 ``None``。
-    default_leverage : float, 可选
-        账户默认杠杆（用于保证金账户）。
-    leverages : dict[str, float], 可选
-        合约特定的杠杆配置（用于保证金账户）。
-    margin_model : MarginModelConfig, 可选
-        保证金计算模型配置。默认为 'leveraged'。
-    modules : list[ImportableActorConfig], 可选
-        交易场所的模拟模块。
-    fill_model : ImportableFillModelConfig, 可选
-        交易场所的成交模型。
-    latency_model : ImportableLatencyModelConfig, 可选
-        交易场所的延迟模型。
-    fee_model : ImportableFeeModelConfig, 可选
-        交易场所的手续费模型。
-    book_type : str, 默认 'L1_MBP'
-        默认订单簿类型。
-    routing : bool, 默认 False
-        是否为执行客户端启用多场所路由。
-    reject_stop_orders : bool, 默认 True
-        如果触发价格在市场内，止损订单是否在提交时被拒绝。
-    support_gtd_orders : bool, 默认 True
-        交易场所是否支持 GTD（Good-Till-Date）时效的订单。
-    support_contingent_orders : bool, 默认 True
-        交易场所是否支持/遵守条件订单。
-        如果为 False，则期望策略自己管理条件订单。
-    oto_trigger_mode : OtoTriggerMode | str, 默认 "PARTIAL"
-        条件订单的 OTO（One-Triggers-Other）触发模式：
-        - ``PARTIAL``：按每次部分成交比例释放子订单（默认）。
-        - ``FULL``：仅在父订单完全成交后才释放子订单。
-    use_position_ids : bool, 默认 True
-        是否在订单成交时生成交易场所持仓 ID。
-    use_random_ids : bool, 默认 False
-        是否所有交易场所生成的标识符都使用随机 UUID4。
-    use_reduce_only : bool, 默认 True
-        是否遵守订单上的 `reduce_only` 执行指令。
-    use_market_order_acks : bool, 默认 False
-        是否在市价单成交前生成 OrderAccepted 事件。
-    bar_execution : bool, 默认 True
-        K 线数据是否应由撮合引擎处理（并驱动市场）。
-    bar_adaptive_high_low_ordering : bool, 默认 False
-        确定 K 线价格的处理顺序是否基于启发式自适应。
-        此设置仅在 `bar_execution` 为 True 时有效。
-        如果为 False，K 线价格始终按固定顺序处理：开盘、最高、最低、收盘。
-        如果为 True，处理顺序会自适应启发式规则：
-        - 如果最高价比最低价更接近开盘价，则顺序为：开盘、最高、最低、收盘。
-        - 如果最低价比最高价更接近开盘价，则顺序为：开盘、最低、最高、收盘。
-    trade_execution : bool, 默认 False
-        成交数据是否应由撮合引擎处理（并驱动市场）。
-    liquidity_consumption : bool, 默认 False
-        是否跟踪每个价格档位的流动性消耗。启用时，成交会消耗可用流动性，
-        当该档位有新数据到达时重置。禁用时，每次迭代可以独立地对整个订单簿
-        流动性进行成交。
-    allow_cash_borrowing : bool, 默认 False
-        现金账户是否允许借款（负余额）。
-    frozen_account : bool, 默认 False
-        此交易所的账户是否冻结（余额不会变化）。
-    price_protection_points : int, 默认 0
-        定义交易所计算的价格边界（以点数为单位），防止可成交订单
-        以过于激进的价格执行。
+        The starting account balances (specify one for a single asset account).
+    base_currency : Currency | str, optional
+        The account base currency for the exchange. Use ``None`` for multi-currency accounts.
+    default_leverage : float, optional
+        The account default leverage (for margin accounts).
+    leverages : dict[str, float], optional
+        The instrument specific leverage configuration (for margin accounts).
+    margin_model : MarginModelConfig, optional
+        The margin calculation model configuration. Default 'leveraged'.
+    modules : list[ImportableActorConfig], optional
+        The simulation modules for the venue.
+    fill_model : ImportableFillModelConfig, optional
+        The fill model for the venue.
+    latency_model : ImportableLatencyModelConfig, optional
+        The latency model for the venue.
+    fee_model : ImportableFeeModelConfig, optional
+        The fee model for the venue.
+    book_type : str, default 'L1_MBP'
+        The default order book type.
+    routing : bool, default False
+        If multi-venue routing should be enabled for the execution client.
+    reject_stop_orders : bool, default True
+        If stop orders are rejected on submission if trigger price is in the market.
+    support_gtd_orders : bool, default True
+        If orders with GTD time in force will be supported by the venue.
+    support_contingent_orders : bool, default True
+        If contingent orders will be supported/respected by the venue.
+        If False, then it's expected the strategy will be managing any contingent orders.
+    oto_trigger_mode : OtoTriggerMode | str, default "PARTIAL"
+        The OTO trigger mode for contingent orders:
+        - ``PARTIAL``: release child orders pro-rata to each partial fill (default).
+        - ``FULL``: release child orders only once the parent is fully filled.
+    use_position_ids : bool, default True
+        If venue position IDs will be generated on order fills.
+    use_random_ids : bool, default False
+        If all venue generated identifiers will be random UUID4's.
+    use_reduce_only : bool, default True
+        If the `reduce_only` execution instruction on orders will be honored.
+    use_market_order_acks : bool, default False
+        If OrderAccepted events will be generated for market orders before filling.
+    bar_execution : bool, default True
+        If bars should be processed by the matching engine(s) (and move the market).
+    bar_adaptive_high_low_ordering : bool, default False
+        Determines whether the processing order of bar prices is adaptive based on a heuristic.
+        This setting is only relevant when `bar_execution` is True.
+        If False, bar prices are always processed in the fixed order: Open, High, Low, Close.
+        If True, the processing order adapts with the heuristic:
+        - If High is closer to Open than Low then the processing order is Open, High, Low, Close.
+        - If Low is closer to Open than High then the processing order is Open, Low, High, Close.
+    trade_execution : bool, default False
+        If trades should be processed by the matching engine(s) (and move the market).
+    liquidity_consumption : bool, default False
+        If liquidity consumption should be tracked per price level. When enabled, fills
+        consume available liquidity which resets when fresh data arrives at that level.
+        When disabled, each iteration can fill against the full book liquidity independently.
+    queue_position : bool, default False
+        If queue position tracking should be enabled for limit orders during trade
+        execution mode. When enabled, limit orders only fill after the quantity ahead
+        of them (at order placement time) has been traded through or the price level
+        is deleted. Requires trade_execution=True.
+    allow_cash_borrowing : bool, default False
+        If borrowing is allowed for cash accounts (negative balances).
+    frozen_account : bool, default False
+        If the account for this exchange is frozen (balances will not change).
+    price_protection_points : int, default 0
+        Defines an exchange-calculated price boundary (in points) to prevent
+        marketable orders from executing at excessively aggressive prices.
 
     """
 
@@ -151,6 +157,7 @@ class BacktestVenueConfig(NautilusConfig, frozen=True):
     bar_adaptive_high_low_ordering: bool = False
     trade_execution: bool = False
     liquidity_consumption: bool = False
+    queue_position: bool = False
     allow_cash_borrowing: bool = False
     frozen_account: bool = False
     price_protection_points: int = 0
@@ -158,43 +165,43 @@ class BacktestVenueConfig(NautilusConfig, frozen=True):
 
 class BacktestDataConfig(NautilusConfig, frozen=True):
     """
-    表示特定回测运行的数据配置。
+    Represents the data configuration for one specific backtest run.
 
-    参数
+    Parameters
     ----------
     catalog_path : str
-        数据目录的路径。
+        The path to the data catalog.
     data_cls : str
-        配置的数据类型。
-    catalog_fs_protocol : str, 可选
-        目录的 `fsspec` 文件系统协议。
-    catalog_fs_storage_options : dict, 可选
-        `fsspec` 存储选项。
-    catalog_fs_rust_storage_options : dict, 可选
-        Rust 后端的 `fsspec` 存储选项。
-    instrument_id : InstrumentId | str, 可选
-        数据配置的合约 ID。
-    start_time : str 或 int, 可选
-        数据配置的开始时间。
-        可以是 ISO 8601 格式的日期时间字符串，或 UNIX 纳秒整数。
-    end_time : str 或 int, 可选
-        数据配置的结束时间。
-        可以是 ISO 8601 格式的日期时间字符串，或 UNIX 纳秒整数。
-    filter_expr : str, 可选
-        使用 pyarrow 进行数据目录查询时的额外过滤表达式。
-    client_id : str, 可选
-        数据配置的客户端 ID。
-    metadata : dict 或 callable, 可选
-        数据目录查询的元数据。
-    bar_spec : BarSpecification | str, 可选
-        数据目录查询的 K 线规格。
-    instrument_ids : list[InstrumentId | str], 可选
-        数据目录查询的合约 ID 列表。
-        当未指定 instrument_id 时可使用。
-        如果指定了 bar_spec，将构建等效的 bar_types 列表。
-    bar_types : list[BarType | str], 可选
-        数据目录查询的 K 线类型列表。
-        当未指定 instrument_id 时可使用。
+        The data type for the configuration.
+    catalog_fs_protocol : str, optional
+        The `fsspec` filesystem protocol for the catalog.
+    catalog_fs_storage_options : dict, optional
+        The `fsspec` storage options.
+    catalog_fs_rust_storage_options : dict, optional
+        The `fsspec` storage options for the Rust backend.
+    instrument_id : InstrumentId | str, optional
+        The instrument ID for the data configuration.
+    start_time : str or int, optional
+        The start time for the data configuration.
+        Can be an ISO 8601 format datetime string, or UNIX nanoseconds integer.
+    end_time : str or int, optional
+        The end time for the data configuration.
+        Can be an ISO 8601 format datetime string, or UNIX nanoseconds integer.
+    filter_expr : str, optional
+        The additional filter expressions for a data catalog query that uses pyarrow.
+    client_id : str, optional
+        The client ID for the data configuration.
+    metadata : dict or callable, optional
+        The metadata for the data catalog query.
+    bar_spec : BarSpecification | str, optional
+        The bar specification for the data catalog query.
+    instrument_ids : list[InstrumentId | str], optional
+        The instrument IDs for the data catalog query.
+        Can be used if instrument_id is not specified.
+        If bar_spec is specified an equivalent list of bar_types will be constructed.
+    bar_types : list[BarType | str], optional
+        The bar types for the data catalog query.
+        Can be used if instrument_id is not specified.
 
     """
 
@@ -216,9 +223,9 @@ class BacktestDataConfig(NautilusConfig, frozen=True):
     @property
     def data_type(self) -> type:
         """
-        根据配置的 `data_cls` 返回对应的 `type`。
+        Return a `type` for the specified `data_cls` for the configuration.
 
-        返回
+        Returns
         -------
         type
 
@@ -231,9 +238,9 @@ class BacktestDataConfig(NautilusConfig, frozen=True):
     @property
     def query(self) -> dict[str, Any]:
         """
-        返回配置的目录查询对象。
+        Return a catalog query object for the configuration.
 
-        返回
+        Returns
         -------
         dict[str, Any]
 
@@ -269,11 +276,11 @@ class BacktestDataConfig(NautilusConfig, frozen=True):
     @property
     def start_time_nanos(self) -> int:
         """
-        返回数据配置的开始时间（UNIX 纳秒）。
+        Return the data configuration start time in UNIX nanoseconds.
 
-        如果未指定 `start_time`，则返回零。
+        Will be zero if no `start_time` was specified.
 
-        返回
+        Returns
         -------
         int
 
@@ -286,11 +293,11 @@ class BacktestDataConfig(NautilusConfig, frozen=True):
     @property
     def end_time_nanos(self) -> int:
         """
-        返回数据配置的结束时间（UNIX 纳秒）。
+        Return the data configuration end time in UNIX nanoseconds.
 
-        如果未指定 `end_time`，则返回 sys.maxsize。
+        Will be sys.maxsize if no `end_time` was specified.
 
-        返回
+        Returns
         -------
         int
 
@@ -303,42 +310,42 @@ class BacktestDataConfig(NautilusConfig, frozen=True):
 
 class BacktestEngineConfig(NautilusKernelConfig, frozen=True):
     """
-    ``BacktestEngine`` 实例的配置。
+    Configuration for ``BacktestEngine`` instances.
 
-    参数
+    Parameters
     ----------
     trader_id : TraderId
-        节点的交易者 ID（必须是由连字符分隔的名称和 ID 标签）。
-    log_level : str, 默认 "INFO"
-        节点的标准输出日志级别。
-    loop_debug : bool, 默认 False
-        asyncio 事件循环是否应处于调试模式。
-    cache : CacheConfig, 可选
-        缓存配置。
-    data_engine : DataEngineConfig, 可选
-        实时数据引擎配置。
-    risk_engine : RiskEngineConfig, 可选
-        实时风控引擎配置。
-    exec_engine : ExecEngineConfig, 可选
-        实时执行引擎配置。
-    streaming : StreamingConfig, 可选
-        流式输出到 feather 文件的配置。
+        The trader ID for the node (must be a name and ID tag separated by a hyphen).
+    log_level : str, default "INFO"
+        The stdout log level for the node.
+    loop_debug : bool, default False
+        If the asyncio event loop should be in debug mode.
+    cache : CacheConfig, optional
+        The cache configuration.
+    data_engine : DataEngineConfig, optional
+        The live data engine configuration.
+    risk_engine : RiskEngineConfig, optional
+        The live risk engine configuration.
+    exec_engine : ExecEngineConfig, optional
+        The live execution engine configuration.
+    streaming : StreamingConfig, optional
+        The configuration for streaming to feather files.
     strategies : list[ImportableStrategyConfig]
-        内核的策略配置列表。
+        The strategy configurations for the kernel.
     actors : list[ImportableActorConfig]
-        内核的 Actor 配置列表。
+        The actor configurations for the kernel.
     exec_algorithms : list[ImportableExecAlgorithmConfig]
-        内核的执行算法配置列表。
-    controller : ImportableControllerConfig, 可选
-        内核的交易控制器。
-    load_state : bool, 默认 True
-        启动时是否从数据库加载交易策略状态。
-    save_state : bool, 默认 True
-        停止时是否将交易策略状态保存到数据库。
-    bypass_logging : bool, 默认 False
-        是否绕过日志记录。
-    run_analysis : bool, 默认 True
-        回测后是否运行绩效分析。
+        The execution algorithm configurations for the kernel.
+    controller : ImportableControllerConfig, optional
+        The trader controller for the kernel.
+    load_state : bool, default True
+        If trading strategy state should be loaded from the database on start.
+    save_state : bool, default True
+        If trading strategy state should be saved to the database on stop.
+    bypass_logging : bool, default False
+        If logging should be bypassed.
+    run_analysis : bool, default True
+        If post backtest performance analysis should be run.
 
     """
 
@@ -357,41 +364,42 @@ class BacktestEngineConfig(NautilusKernelConfig, frozen=True):
 
 class BacktestRunConfig(NautilusConfig, frozen=True):
     """
-    表示特定回测运行的配置。
+    Represents the configuration for one specific backtest run.
 
-    包括带有 actors 和 strategies 的回测引擎，以及交易场所和数据的外部输入。
+    This includes a backtest engine with its actors and strategies, with the
+    external inputs of venues and data.
 
-    参数
+    Parameters
     ----------
     venues : list[BacktestVenueConfig]
-        回测运行的交易场所配置列表。
+        The venue configurations for the backtest run.
     data : list[BacktestDataConfig]
-        回测运行的数据配置列表。
+        The data configurations for the backtest run.
     engine : BacktestEngineConfig
-        回测引擎配置（核心系统内核）。
-    chunk_size : int, 可选
-        流式模式下每个块处理的数据点数量。
-        如果为 `None`，回测将不使用流式模式，一次性加载所有数据。
-    raise_exception : bool, 默认 False
-        引擎构建或运行期间的异常是否应抛出以中断节点进程。
-    dispose_on_completion : bool, 默认 True
-        回测运行完成后是否销毁回测引擎。
-        如果为 True，将丢弃数据和所有状态。
-        如果为 False，将*仅*丢弃数据。
-    start : datetime 或 str 或 int, 可选
-        回测运行的开始日期时间（UTC）。
-        如果为 ``None``，引擎从数据的开始处运行。
-    end : datetime 或 str 或 int, 可选
-        回测运行的结束日期时间（UTC）。
-        如果为 ``None``，引擎运行到数据的结束处。
-    data_clients : dict[str, type[LiveDataClientConfig]], 可选
-        回测运行的数据客户端配置。
+        The backtest engine configuration (the core system kernel).
+    chunk_size : int, optional
+        The number of data points to process in each chunk during streaming mode.
+        If `None`, the backtest will run without streaming, loading all data at once.
+    raise_exception : bool, default False
+        If exceptions during an engine build or run should be raised to interrupt the nodes process.
+    dispose_on_completion : bool, default True
+        If the backtest engine should be disposed on completion of the run.
+        If True, then will drop data and all state.
+        If False, then will *only* drop data.
+    start : datetime or str or int, optional
+        The start datetime (UTC) for the backtest run.
+        If ``None`` engine runs from the start of the data.
+    end : datetime or str or int, optional
+        The end datetime (UTC) for the backtest run.
+        If ``None`` engine runs to the end of the data.
+    data_clients : dict[str, type[LiveDataClientConfig]], optional
+        The data clients configuration for the backtest run.
 
-    注意
+    Notes
     -----
-    有效的回测运行配置必须包括：
-      - 至少一个 `venues` 配置。
-      - 至少一个 `data` 配置。
+    A valid backtest run configuration must include:
+      - At least one `venues` config.
+      - At least one `data` config.
 
     """
 
@@ -408,22 +416,22 @@ class BacktestRunConfig(NautilusConfig, frozen=True):
 
 class SimulationModuleConfig(ActorConfig, frozen=True):
     """
-    ``SimulationModule`` 实例的配置。
+    Configuration for ``SimulationModule`` instances.
     """
 
 
 class FillModelConfig(NautilusConfig, frozen=True):
     """
-    ``FillModel`` 实例的配置。
+    Configuration for ``FillModel`` instances.
 
-    参数
+    Parameters
     ----------
-    prob_fill_on_limit : float, 默认 1.0
-        当市场价格停留在限价单价格上时，限价单成交的概率。
-    prob_slippage : float, 默认 0.0
-        订单成交价格滑动一个 tick 的概率。
-    random_seed : int, 可选
-        随机种子（如果为 None 则不使用随机种子）。
+    prob_fill_on_limit : float, default 1.0
+        The probability of limit order filling if the market rests on its price.
+    prob_slippage : float, default 0.0
+        The probability of order fill prices slipping by one tick.
+    random_seed : int, optional
+        The random seed (if None then no random seed).
 
     """
 
@@ -434,16 +442,16 @@ class FillModelConfig(NautilusConfig, frozen=True):
 
 class ImportableFillModelConfig(NautilusConfig, frozen=True):
     """
-    成交模型实例的配置。
+    Configuration for a fill model instance.
 
-    参数
+    Parameters
     ----------
     fill_model_path : str
-        成交模型类的完全限定名。
+        The fully qualified name of the fill model class.
     config_path : str
-        配置类的完全限定名。
+        The fully qualified name of the config class.
     config : dict[str, Any]
-        成交模型配置。
+        The fill model configuration.
 
     """
 
@@ -454,27 +462,27 @@ class ImportableFillModelConfig(NautilusConfig, frozen=True):
 
 class FillModelFactory:
     """
-    提供从可导入配置创建成交模型的功能。
+    Provides fill model creation from importable configurations.
     """
 
     @staticmethod
     def create(config: ImportableFillModelConfig):
         """
-        从给定配置创建成交模型。
+        Create a fill model from the given configuration.
 
-        参数
+        Parameters
         ----------
         config : ImportableFillModelConfig
-            构建步骤的配置。
+            The configuration for the building step.
 
-        返回
+        Returns
         -------
         FillModel
 
-        抛出
+        Raises
         ------
         TypeError
-            如果 `config` 的类型不是 `ImportableFillModelConfig`。
+            If `config` is not of type `ImportableFillModelConfig`.
 
         """
         PyCondition.type(config, ImportableFillModelConfig, "config")
@@ -487,22 +495,22 @@ class FillModelFactory:
 
 class LatencyModelConfig(NautilusConfig, frozen=True):
     """
-    ``LatencyModel`` 实例的配置。
+    Configuration for ``LatencyModel`` instances.
 
-    参数
+    Parameters
     ----------
-    base_latency_nanos : int, 默认 1_000_000_000
-        模型的基础延迟（纳秒）。
-    insert_latency_nanos : int, 默认 0
-        模型的订单提交延迟（纳秒）。
-    update_latency_nanos : int, 默认 0
-        模型的订单修改延迟（纳秒）。
-    cancel_latency_nanos : int, 默认 0
-        模型的订单取消延迟（纳秒）。
+    base_latency_nanos : int, default 1_000_000_000
+        The base latency (nanoseconds) for the model.
+    insert_latency_nanos : int, default 0
+        The order insert latency (nanoseconds) for the model.
+    update_latency_nanos : int, default 0
+        The order update latency (nanoseconds) for the model.
+    cancel_latency_nanos : int, default 0
+        The order cancel latency (nanoseconds) for the model.
 
     """
 
-    base_latency_nanos: NonNegativeInt = 1_000_000_000  # 1 毫秒（纳秒单位）
+    base_latency_nanos: NonNegativeInt = 1_000_000_000  # 1 millisecond in nanoseconds
     insert_latency_nanos: NonNegativeInt = 0
     update_latency_nanos: NonNegativeInt = 0
     cancel_latency_nanos: NonNegativeInt = 0
@@ -510,16 +518,16 @@ class LatencyModelConfig(NautilusConfig, frozen=True):
 
 class ImportableLatencyModelConfig(NautilusConfig, frozen=True):
     """
-    延迟模型实例的配置。
+    Configuration for a latency model instance.
 
-    参数
+    Parameters
     ----------
     latency_model_path : str
-        延迟模型类的完全限定名。
+        The fully qualified name of the latency model class.
     config_path : str
-        配置类的完全限定名。
+        The fully qualified name of the config class.
     config : dict[str, Any]
-        延迟模型配置。
+        The latency model configuration.
 
     """
 
@@ -530,27 +538,27 @@ class ImportableLatencyModelConfig(NautilusConfig, frozen=True):
 
 class LatencyModelFactory:
     """
-    提供从可导入配置创建延迟模型的功能。
+    Provides latency model creation from importable configurations.
     """
 
     @staticmethod
     def create(config: ImportableLatencyModelConfig):
         """
-        从给定配置创建延迟模型。
+        Create a latency model from the given configuration.
 
-        参数
+        Parameters
         ----------
         config : ImportableLatencyModelConfig
-            构建步骤的配置。
+            The configuration for the building step.
 
-        返回
+        Returns
         -------
         LatencyModel
 
-        抛出
+        Raises
         ------
         TypeError
-            如果 `config` 的类型不是 `ImportableLatencyModelConfig`。
+            If `config` is not of type `ImportableLatencyModelConfig`.
 
         """
         PyCondition.type(config, ImportableLatencyModelConfig, "config")
@@ -563,29 +571,29 @@ class LatencyModelFactory:
 
 class FeeModelConfig(NautilusConfig, frozen=True):
     """
-    ``FeeModel`` 实例的基础配置。
+    Base configuration for ``FeeModel`` instances.
     """
 
 
 class MakerTakerFeeModelConfig(FeeModelConfig, frozen=True):
     """
-    ``MakerTakerFeeModel`` 实例的配置。
+    Configuration for ``MakerTakerFeeModel`` instances.
 
-    此费用模型使用合约上定义的 maker/taker 费率。
+    This fee model uses the maker/taker fees defined on the instrument.
 
     """
 
 
 class FixedFeeModelConfig(FeeModelConfig, frozen=True):
     """
-    ``FixedFeeModel`` 实例的配置。
+    Configuration for ``FixedFeeModel`` instances.
 
-    参数
+    Parameters
     ----------
     commission : Money | str
-        交易的固定佣金金额。
-    charge_commission_once : bool, 默认 True
-        是每个订单收取一次佣金，还是每次成交都收取。
+        The fixed commission amount for trades.
+    charge_commission_once : bool, default True
+        Whether to charge the commission once per order or per fill.
 
     """
 
@@ -595,12 +603,12 @@ class FixedFeeModelConfig(FeeModelConfig, frozen=True):
 
 class PerContractFeeModelConfig(FeeModelConfig, frozen=True):
     """
-    ``PerContractFeeModel`` 实例的配置。
+    Configuration for ``PerContractFeeModel`` instances.
 
-    参数
+    Parameters
     ----------
     commission : Money | str
-        每份合约的佣金金额。
+        The commission amount per contract.
 
     """
 
@@ -609,16 +617,16 @@ class PerContractFeeModelConfig(FeeModelConfig, frozen=True):
 
 class ImportableFeeModelConfig(NautilusConfig, frozen=True):
     """
-    费用模型实例的配置。
+    Configuration for a fee model instance.
 
-    参数
+    Parameters
     ----------
     fee_model_path : str
-        费用模型类的完全限定名。
+        The fully qualified name of the fee model class.
     config_path : str
-        配置类的完全限定名。
+        The fully qualified name of the config class.
     config : dict[str, Any]
-        费用模型配置。
+        The fee model configuration.
 
     """
 
@@ -629,27 +637,27 @@ class ImportableFeeModelConfig(NautilusConfig, frozen=True):
 
 class FeeModelFactory:
     """
-    提供从可导入配置创建费用模型的功能。
+    Provides fee model creation from importable configurations.
     """
 
     @staticmethod
     def create(config: ImportableFeeModelConfig):
         """
-        从给定配置创建费用模型。
+        Create a fee model from the given configuration.
 
-        参数
+        Parameters
         ----------
         config : ImportableFeeModelConfig
-            构建步骤的配置。
+            The configuration for the building step.
 
-        返回
+        Returns
         -------
         FeeModel
 
-        抛出
+        Raises
         ------
         TypeError
-            如果 `config` 的类型不是 `ImportableFeeModelConfig`。
+            If `config` is not of type `ImportableFeeModelConfig`.
 
         """
         PyCondition.type(config, ImportableFeeModelConfig, "config")
@@ -662,31 +670,31 @@ class FeeModelFactory:
 
 class FXRolloverInterestConfig(SimulationModuleConfig, frozen=True):
     """
-    提供外汇展期利息模拟模块。
+    Provides an FX rollover interest simulation module.
 
-    参数
+    Parameters
     ----------
     rate_data : pd.DataFrame
-        内部展期利息计算器的利率数据。
+        The interest rate data for the internal rollover interest calculator.
 
     """
 
-    rate_data: pd.DataFrame  # TODO: 这可能可以直接变成 JSON 数据
+    rate_data: pd.DataFrame  # TODO: This could probably just become JSON data
 
 
 class MarginModelConfig(NautilusConfig, frozen=True):
     """
-    保证金计算模型的配置。
+    Configuration for margin calculation models.
 
-    参数
+    Parameters
     ----------
-    model_type : str, 默认 'leveraged'
-        要使用的保证金模型类型。选项：
-        - "standard"：无杠杆除法的固定百分比（传统经纪商）
-        - "leveraged"：保证金要求按杠杆减少（当前 Nautilus 行为）
-        - 自定义模型的类路径
-    config : dict, 可选
-        自定义模型的额外配置参数。
+    model_type : str, default 'leveraged'
+        The type of margin model to use. Options:
+        - "standard": Fixed percentages without leverage division (traditional brokers)
+        - "leveraged": Margin requirements reduced by leverage (current Nautilus behavior)
+        - Custom class path for custom models
+    config : dict, optional
+        Additional configuration parameters for custom models.
 
     """
 
@@ -696,28 +704,28 @@ class MarginModelConfig(NautilusConfig, frozen=True):
 
 class MarginModelFactory:
     """
-    提供从配置创建保证金模型的功能。
+    Provides margin model creation from configurations.
     """
 
     @staticmethod
     def create(config: MarginModelConfig):
         """
-        从给定配置创建保证金模型。
+        Create a margin model from the given configuration.
 
-        参数
+        Parameters
         ----------
         config : MarginModelConfig
-            保证金模型的配置。
+            The configuration for the margin model.
 
-        返回
+        Returns
         -------
         MarginModel
-            创建的保证金模型实例。
+            The created margin model instance.
 
-        抛出
+        Raises
         ------
         ValueError
-            如果模型类型未知或无效。
+            If the model type is unknown or invalid.
 
         """
         from nautilus_trader.backtest.models import LeveragedMarginModel
@@ -730,7 +738,7 @@ class MarginModelFactory:
         elif model_type == "leveraged":
             return LeveragedMarginModel()
         else:
-            # 尝试导入自定义模型
+            # Try to import custom model
             try:
                 from nautilus_trader.common.config import resolve_path
 
@@ -738,7 +746,7 @@ class MarginModelFactory:
                 return model_cls(config)
             except Exception as e:
                 raise ValueError(
-                    f"未知的 `MarginModel` 类型 '{config.model_type}'。"
-                    f"支持的类型：'standard'、'leveraged'，"
-                    f"或完全限定的类路径。错误：{e}",
+                    f"Unknown `MarginModel` type '{config.model_type}'. "
+                    f"Supported types: 'standard', 'leveraged', "
+                    f"or a fully qualified class path. Error: {e}",
                 ) from e
