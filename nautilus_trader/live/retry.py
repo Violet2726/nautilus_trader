@@ -29,29 +29,29 @@ def get_exponential_backoff(
     jitter: bool = True,
 ) -> int:
     """
-    Compute the backoff using exponential backoff and jitter.
+    使用指数退避（exponential backoff）和抖动（jitter）计算退避延迟时间。
 
-    Parameters
+    参数
     ----------
-    num_attempts : int, default 1
-        The number of attempts that have already been made.
-    delay_initial_ms : int, default 500
-        The time to sleep in the first attempt.
-    delay_max_ms : int, default 2_000
-        The maximum delay.
-    backoff_factor : int, default 2
-        The exponential backoff factor for delays.
-    jitter : bool, default True
-        Whether or not to apply jitter.
+    num_attempts : int, 默认 1
+        已经尝试过的次数。
+    delay_initial_ms : int, 默认 500
+        第一次尝试时的休眠时间（毫秒）。
+    delay_max_ms : int, 默认 2_000
+        最大延迟（毫秒）。
+    backoff_factor : int, 默认 2
+        延迟的指数退避因子。
+    jitter : bool, 默认 True
+        是否应用抖动。
 
-    Notes
+    注意
     -----
-    https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/
+    参考：https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/
 
-    Returns
+    返回
     -------
     int
-        Delay in milliseconds.
+        以毫秒为单位的延迟时间。
 
     """
     delay = min(delay_max_ms, delay_initial_ms * backoff_factor ** (num_attempts - 1))
@@ -64,33 +64,31 @@ def get_exponential_backoff(
 
 class RetryManager[T]:
     """
-    Provides retry state management for an HTTP request.
+    为 HTTP 请求提供重试状态管理。
 
-    This class is generic over `T`, where `T` is the return type of the
-    function passed to the `run` method.
+    此类对 `T` 是泛型的，其中 `T` 是传递给 `run` 方法的函数的返回类型。
 
-    Parameters
+    参数
     ----------
     max_retries : int
-        The maximum number of retries before failure.
+        失败前的最大重试次数。
     delay_initial_ms : int
-        The initial delay (milliseconds) for retries.
+        重试的初始延迟（毫秒）。
     delay_max_ms : int
-        The maximum delay (milliseconds) for exponential backoff.
+        指数退避的最大延迟（毫秒）。
     backoff_factor : int
-        The exponential backoff factor for retry delays.
+        重试延迟的指数退避因子。
     logger : Logger
-        The logger for the manager.
+        管理器的日志记录器。
     exc_types : tuple[Type[BaseException], ...]
-        The exception types to handle for retries.
-    retry_check : Callable[[BaseException], None], optional
-        A function that performs additional checks on the exception.
-        If the function returns `False`, a retry will not be attempted.
-    error_logger : Callable[[str, BaseException | None], None], optional
-        A custom error logging function to use instead of the default logger.error.
+        重试时要处理的异常类型。
+    retry_check : Callable[[BaseException], None], 可选
+        对异常执行额外检查的函数。
+        如果该函数返回 `False`，则不会尝试重试。
+    error_logger : Callable[[str, BaseException | None], None], 可选
+        用于替代默认 `logger.error` 的自定义错误日志记录函数。
 
     """
-
     def __init__(
         self,
         max_retries: int,
@@ -132,28 +130,28 @@ class RetryManager[T]:
         **kwargs,
     ) -> T | None:
         """
-        Execute the given `func` with retry management.
+        通过重试管理执行给定的 `func`。
 
-        If an exception in `self.exc_types` is raised, a warning is logged, and the function is
-        retried after a delay until the maximum retries are reached, at which point an error is logged.
+        如果抛出 `self.exc_types` 中的异常，则记录警告，并在延迟后重试该函数，
+        直到达到最大重试次数，届时将记录错误。
 
-        Parameters
+        参数
         ----------
         name : str
-            The name of the operation to run.
-        details : list[object], optional
-            The operation details such as identifiers.
+            要运行的操作名称。
+        details : list[object], 可选
+            标识符等操作详情。
         func : Callable[..., Awaitable[T]]
-            The function to execute.
+            要执行的函数。
         args : Any
-            Positional arguments to pass to the function `func`.
+            要传递给函数 `func` 的位置参数。
         kwargs : Any
-            Keyword arguments to pass to the function `func`.
+            要传递给函数 `func` 的关键字参数。
 
-        Returns
+        返回
         -------
         T | None
-            The result of the executed function, or ``None`` if the retries fail.
+            执行函数的结果，如果重试失败则返回 ``None``。
 
         """
         self.name = name
@@ -168,7 +166,7 @@ class RetryManager[T]:
                 try:
                     response = await func(*args, **kwargs)
                     self.result = True
-                    return response  # Successful request
+                    return response  # 请求成功
                 except self.exc_types as e:
                     self.last_exception = e
 
@@ -180,8 +178,7 @@ class RetryManager[T]:
                         self._log_error()
                         self.result = False
                         self.message = str(e)
-                        return None  # Operation failed
-
+                        return None  # 操作失败
                     self.retries += 1
                     retry_delay_ms = get_exponential_backoff(
                         delay_initial_ms=self.delay_initial_ms,
@@ -198,14 +195,14 @@ class RetryManager[T]:
 
     def cancel(self) -> None:
         """
-        Cancel the retry operation.
+        取消重试操作。
         """
-        self.log.debug(f"Canceling {self!r}")
+        self.log.debug(f"正在取消 {self!r}")
         self.cancel_event.set()
 
     def clear(self) -> None:
         """
-        Clear all state from this retry manager.
+        清除此重试管理器的所有状态。
         """
         self.retries = 0
         self.name = None
@@ -216,18 +213,18 @@ class RetryManager[T]:
         self.last_exception = None
 
     def _cancel(self) -> None:
-        self.log.warning(f"Canceled retry for '{self.name}'")
+        self.log.warning(f"已取消 '{self.name}' 的重试")
         self.result = False
-        self.message = "Canceled retry"
+        self.message = "重试已取消"
 
     def _log_retry(self, retry_delay_ms: int) -> None:
         self.log.warning(
-            f"Retrying {self.retries}/{self.max_retries} for '{self.name}' "
-            f"in {retry_delay_ms / 1000}s{self._details_str()}",
+            f"正在重试 '{self.name}' ({self.retries}/{self.max_retries})，"
+            f"延迟 {retry_delay_ms / 1000} 秒{self._details_str()}",
         )
 
     def _log_error(self) -> None:
-        message = f"Failed on {self.name}{self._details_str()}"
+        message = f"执行 {self.name} 失败{self._details_str()}"
         if self.error_logger:
             self.error_logger(message, self.last_exception)
         else:
@@ -241,29 +238,29 @@ class RetryManager[T]:
 
 class RetryManagerPool[T]:
     """
-    Provides a pool of `RetryManager`s.
+    提供 `RetryManager` 对象池。
 
-    Parameters
+    参数
     ----------
     pool_size : int
-        The size of the retry manager pool.
+        重试管理器池的大小。
     max_retries : int
-        The maximum number of retries before failure.
+        失败前的最大重试次数。
     delay_initial_ms : int
-        The initial delay (milliseconds) for retries.
+        重试的初始延迟（毫秒）。
     delay_max_ms : int
-        The maximum delay (milliseconds) for exponential backoff.
+        指数退避的最大延迟（毫秒）。
     backoff_factor : int
-        The exponential backoff factor for retry delays.
+        重试延迟的指数退避因子。
     logger : Logger
-        The logger for retry managers.
+        用于重试管理器的日志记录器。
     exc_types : tuple[Type[BaseException], ...]
-        The exception types to handle for retries.
-    retry_check : Callable[[BaseException], None], optional
-        A function that performs additional checks on the exception.
-        If the function returns `False`, a retry will not be attempted.
-    error_logger : Callable[[str, BaseException | None], None], optional
-        A custom error logging function to use instead of the default logger.error.
+        重试时要处理的异常类型。
+    retry_check : Callable[[BaseException], None], 可选
+        对异常执行额外检查的函数。
+        如果该函数返回 `False`，则不会尝试重试。
+    error_logger : Callable[[str, BaseException | None], None], 可选
+        用于替代默认 `logger.error` 的自定义错误日志记录函数。
 
     """
 
@@ -306,65 +303,62 @@ class RetryManagerPool[T]:
 
     def shutdown(self) -> None:
         """
-        Gracefully shuts down the retry manager pool, ensuring all active retry managers
-        are canceled.
+        优雅地关闭重试管理器池，确保所有活动的重试管理器都被取消。
 
-        This method should be called when the component using the pool is stopped, to
-        ensure that all resources are released in an orderly manner.
+        当使用该池的组件停止时，应调用此方法，以确保所有资源有序释放。
 
         """
-        self.logger.info("Shutting down retry manager pool")
+        self.logger.info("正在关闭重试管理器池")
         for retry_manager in self._active_managers:
             retry_manager.cancel()
         self._active_managers.clear()
 
     async def acquire(self) -> RetryManager:
         """
-        Acquire a `RetryManager` from the pool, or creates a new one if the pool is
-        empty.
+        从池中获取一个 `RetryManager`，如果池为空则创建一个新的。
 
-        Returns
+        返回
         -------
         RetryManager
 
         """
         async with self._lock:
             if self._pool:
-                # Pop the most recently used manager and clear its state
+                # 弹出最近使用的管理器并清除其状态
                 retry_manager = self._pool.pop()
                 retry_manager.clear()
             else:
-                # Create new manager if pool is empty
+                # 如果池为空，则创建新的管理器
                 retry_manager = self._create_manager()
 
             self._active_managers.add(retry_manager)
-            self.logger.debug(f"Acquired {retry_manager!r} (active: {len(self._active_managers)})")
+            self.logger.debug(f"已获取 {retry_manager!r} (活动中: {len(self._active_managers)})")
             return retry_manager
 
     async def release(self, retry_manager: RetryManager) -> None:
         """
-        Release the given `retry_manager` back into the pool.
+        将给定的 `retry_manager` 释放回池中。
 
-        If the pool is already full, the `retry_manager` will be dropped.
+        如果池已满，该 `retry_manager` 将被丢弃。
 
-        Parameters
+        参数
         ----------
         retry_manager : RetryManager
-            The manager to be returned to the pool.
+            要返回池中的管理器。
 
         """
         async with self._lock:
             self._active_managers.discard(retry_manager)
 
             if len(self._pool) < self.pool_size:
-                # Append the manager to the pool without clearing its state,
-                # state is cleared on acquisition to avoid potential race conditions.
+                # 将管理器附加到池中而不清除其状态，
+                # 状态在获取时被清除，以避免潜在的竞态条件。
                 self._pool.append(retry_manager)
                 self.logger.debug(
-                    f"Released {retry_manager!r} back to pool (active: {len(self._active_managers)})",
+                    f"已将 {retry_manager!r} 释放回池中 (活动中: {len(self._active_managers)})",
                 )
             else:
-                # Pool already at capacity
+                # 池已满
                 self.logger.debug(
-                    f"Discarding extra {retry_manager!r} (active: {len(self._active_managers)})",
+                    f"丢弃多余的 {retry_manager!r} (活动中: {len(self._active_managers)})",
                 )

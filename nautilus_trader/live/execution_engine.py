@@ -95,25 +95,25 @@ from nautilus_trader.model.position import Position
 
 class LiveExecutionEngine(ExecutionEngine):
     """
-    Provides a high-performance asynchronous live execution engine.
+    提供高性能的异步实盘执行引擎。
 
-    Parameters
+    参数
     ----------
     loop : asyncio.AbstractEventLoop
-        The event loop for the engine.
+        引擎的事件循环。
     msgbus : MessageBus
-        The message bus for the engine.
+        引擎的消息总线。
     cache : Cache
-        The cache for the engine.
+        引擎的缓存。
     clock : LiveClock
-        The clock for the engine.
-    config : LiveExecEngineConfig, optional
-        The configuration for the instance.
+        引擎的时钟。
+    config : LiveExecEngineConfig, 可选
+        实例的配置。
 
-    Raises
+    异常
     ------
     TypeError
-        If `config` is not of type `LiveExecEngineConfig`.
+        如果 `config` 的类型不是 `LiveExecEngineConfig`。
 
     """
 
@@ -141,12 +141,12 @@ class LiveExecutionEngine(ExecutionEngine):
         self._cmd_queue: asyncio.Queue = Queue(maxsize=config.qsize)
         self._evt_queue: asyncio.Queue = Queue(maxsize=config.qsize)
 
-        # Reconciliation
+        # 对账
         self._recon_check_retries: Counter[ClientOrderId] = Counter()
         self._ts_last_query: dict[ClientOrderId, int] = {}
         self._order_local_activity_ns: dict[ClientOrderId, int] = {}
         self._position_local_activity_ns: dict[InstrumentId, int] = {}
-        self._recent_fills_cache: dict[TradeId, int] = {}  # TradeId -> timestamp_ns (TTL cache)
+        self._recent_fills_cache: dict[TradeId, int] = {}  # TradeId -> timestamp_ns (TTL 缓存)
         self._inferred_fill_ts: dict[ClientOrderId, int] = {}
         self._fill_application_audit: dict[ClientOrderId, list[tuple[TradeId, str, int]]] = {}
         self._startup_reconciliation_event: asyncio.Event = asyncio.Event()
@@ -167,7 +167,7 @@ class LiveExecutionEngine(ExecutionEngine):
             logger=self._log,
         )
 
-        # Async tasks
+        # 异步任务
         self._cmd_queue_task: asyncio.Task | None = None
         self._evt_queue_task: asyncio.Task | None = None
         self._reconciliation_task: asyncio.Task | None = None
@@ -178,7 +178,7 @@ class LiveExecutionEngine(ExecutionEngine):
         self._is_shutting_down: bool = False
         self._kill: bool = False
 
-        # Configuration
+        # 配置
         self._reconciliation: bool = config.reconciliation
         self.reconciliation_lookback_mins: int = config.reconciliation_lookback_mins or 0
         self.reconciliation_instrument_ids: list[InstrumentId] = (
@@ -259,9 +259,9 @@ class LiveExecutionEngine(ExecutionEngine):
     @property
     def reconciliation(self) -> bool:
         """
-        Return whether the reconciliation process will be run on start.
+        返回对账过程是否将在启动时运行。
 
-        Returns
+        返回
         -------
         bool
 
@@ -272,17 +272,17 @@ class LiveExecutionEngine(ExecutionEngine):
 
     def connect(self) -> None:
         """
-        Connect the engine by calling connect on all registered clients.
+        通过调用所有注册客户端的 connect 方法来连接引擎。
         """
         if self._clients:
-            self._log.info("Connecting all clients...")
+            self._log.info("正在连接所有客户端...")
         elif self._external_clients:
             self._log.info(
-                f"Configured for external clients: {self._external_clients}",
+                f"已配置外部客户端：{self._external_clients}",
                 LogColor.BLUE,
             )
         else:
-            self._log.warning("No clients to connect")
+            self._log.warning("没有可连接的客户端")
             return
 
         for client in self._clients.values():
@@ -290,12 +290,12 @@ class LiveExecutionEngine(ExecutionEngine):
 
     def disconnect(self) -> None:
         """
-        Disconnect the engine by calling disconnect on all registered clients.
+        通过调用所有注册客户端的 disconnect 方法来断开引擎连接。
         """
         if self._clients:
-            self._log.info("Disconnecting all clients...")
+            self._log.info("正在断开所有客户端的连接...")
         else:
-            self._log.warning("No clients to disconnect")
+            self._log.warning("没有可断开连接的客户端")
             return
 
         for client in self._clients.values():
@@ -303,53 +303,53 @@ class LiveExecutionEngine(ExecutionEngine):
 
     def get_cmd_queue_task(self) -> asyncio.Task | None:
         """
-        Return the internal command queue task for the engine.
+        返回引擎内部命令队列的任务。
 
-        Returns
+        返回
         -------
-        asyncio.Task or ``None``
+        asyncio.Task 或 ``None``
 
         """
         return self._cmd_queue_task
 
     def get_evt_queue_task(self) -> asyncio.Task | None:
         """
-        Return the internal event queue task for the engine.
+        返回引擎内部事件队列的任务。
 
-        Returns
+        返回
         -------
-        asyncio.Task or ``None``
+        asyncio.Task 或 ``None``
 
         """
         return self._evt_queue_task
 
     def get_own_books_audit_task(self) -> asyncio.Task | None:
         """
-        Return the own books audit task for the engine.
+        返回引擎的自有订单簿审计任务。
 
-        Returns
+        返回
         -------
-        asyncio.Task or ``None``
+        asyncio.Task 或 ``None``
 
         """
         return self._own_books_audit_task
 
     def get_reconciliation_task(self) -> asyncio.Task | None:
         """
-        Return the continuous reconciliation task for the engine.
+        返回引擎的持续对账任务。
 
-        Returns
+        返回
         -------
-        asyncio.Task or ``None``
+        asyncio.Task 或 ``None``
 
         """
         return self._reconciliation_task
 
     def cmd_qsize(self) -> int:
         """
-        Return the number of `Command` messages buffered on the internal queue.
+        返回内部队列中缓冲的 `Command` 消息数量。
 
-        Returns
+        返回
         -------
         int
 
@@ -358,9 +358,9 @@ class LiveExecutionEngine(ExecutionEngine):
 
     def evt_qsize(self) -> int:
         """
-        Return the number of `Event` messages buffered on the internal queue.
+        返回内部队列中缓冲的 `Event` 消息数量。
 
-        Returns
+        返回
         -------
         int
 
@@ -369,18 +369,18 @@ class LiveExecutionEngine(ExecutionEngine):
 
     def _on_start(self) -> None:
         if not self._loop.is_running():
-            self._log.warning("Started when loop is not running")
+            self._log.warning("启动时循环（loop）未运行")
 
-        # Clear reconciliation event for fresh start cycle
+        # 清除对账事件以开始新的启动周期
         self._startup_reconciliation_event.clear()
         self._is_shutting_down = False
 
         self._cmd_queue_task = self._loop.create_task(self._run_cmd_queue(), name="cmd_queue")
         self._evt_queue_task = self._loop.create_task(self._run_evt_queue(), name="evt_queue")
-        self._log.debug(f"Scheduled task '{self._cmd_queue_task.get_name()}'")
-        self._log.debug(f"Scheduled task '{self._evt_queue_task.get_name()}'")
+        self._log.debug(f"已调度任务 '{self._cmd_queue_task.get_name()}'")
+        self._log.debug(f"已调度任务 '{self._evt_queue_task.get_name()}'")
 
-        # Start reconciliation task if any check is configured
+        # 如果配置了任何检查，则启动对账任务
         if (
             self.inflight_check_interval_ms
             or self.open_check_interval_secs
@@ -390,8 +390,8 @@ class LiveExecutionEngine(ExecutionEngine):
                 self._continuous_reconciliation_loop(),
                 name="continuous_reconciliation",
             )
-            self._log.debug(f"Scheduled task '{self._reconciliation_task.get_name()}'")
-            self._log.info("Started reconciliation task", LogColor.BLUE)
+            self._log.debug(f"已调度任务 '{self._reconciliation_task.get_name()}'")
+            self._log.info("已启动对账任务", LogColor.BLUE)
 
         if self.own_books_audit_interval_secs and not self._own_books_audit_task:
             self._own_books_audit_task = self._loop.create_task(
@@ -432,9 +432,9 @@ class LiveExecutionEngine(ExecutionEngine):
                     purge_from_database=self.purge_from_database,
                 )
         except asyncio.CancelledError:
-            self._log.debug("Canceled task 'purge_closed_positions'")
+            self._log.debug("任务 'purge_closed_positions' 已取消")
         except Exception as e:
-            self._log.exception("Error purging closed positions", e)
+            self._log.exception("清除已关闭持仓时出错", e)
 
     async def _purge_closed_orders_loop(self, interval_mins: int) -> None:
         interval_secs = interval_mins * 60
@@ -451,113 +451,111 @@ class LiveExecutionEngine(ExecutionEngine):
                     purge_from_database=self.purge_from_database,
                 )
         except asyncio.CancelledError:
-            self._log.debug("Canceled task 'purge_closed_orders'")
+            self._log.debug("任务 'purge_closed_orders' 已取消")
         except Exception as e:
-            self._log.exception("Error purging closed orders", e)
+            self._log.exception("清除已关闭订单时出错", e)
 
     def _on_stop(self) -> None:
         self._is_shutting_down = True
 
         if self._reconciliation_task:
-            self._log.debug(f"Canceling task '{self._reconciliation_task.get_name()}'")
+            self._log.debug(f"正在取消任务 '{self._reconciliation_task.get_name()}'")
             self._reconciliation_task.cancel()
             self._reconciliation_task = None
 
         if self._own_books_audit_task:
-            self._log.debug(f"Canceling task '{self._own_books_audit_task.get_name()}'")
+            self._log.debug(f"正在取消任务 '{self._own_books_audit_task.get_name()}'")
             self._own_books_audit_task.cancel()
             self._own_books_audit_task = None
 
         if self._purge_closed_orders_task:
-            self._log.debug(f"Canceling task '{self._purge_closed_orders_task.get_name()}'")
+            self._log.debug(f"正在取消任务 '{self._purge_closed_orders_task.get_name()}'")
             self._purge_closed_orders_task.cancel()
             self._purge_closed_orders_task = None
 
         if self._filtered_external_orders_count > 0:
             self._log.info(
-                f"Filtered {self._filtered_external_orders_count:,} unclaimed EXTERNAL orders during run",
+                f"运行期间过滤了 {self._filtered_external_orders_count:,} 个未认领的外部（EXTERNAL）订单",
                 LogColor.BLUE,
             )
 
         if self._purge_closed_positions_task:
-            self._log.debug(f"Canceling task '{self._purge_closed_positions_task.get_name()}'")
+            self._log.debug(f"正在取消任务 '{self._purge_closed_positions_task.get_name()}'")
             self._purge_closed_positions_task.cancel()
             self._purge_closed_positions_task = None
 
         if self._purge_account_events_task:
-            self._log.debug(f"Canceling task '{self._purge_account_events_task.get_name()}'")
+            self._log.debug(f"正在取消任务 '{self._purge_account_events_task.get_name()}'")
             self._purge_account_events_task.cancel()
             self._purge_account_events_task = None
 
         if self._kill:
-            return  # Avoids enqueuing unnecessary sentinel messages when termination already signaled
+            return  # 避免排队冗余的哨兵消息
 
-        # This will stop queue processing as soon as they 'see' the sentinel message
+        # 这将在队列看到哨兵消息时停止队列处理
         self._enqueue_sentinel()
 
     def _enqueue_sentinel(self) -> None:
-        # Signal queue processing to stop
+        # 信号通知队列停止处理
         self._loop.call_soon_threadsafe(self._cmd_queue.put_nowait, self._sentinel)
         self._loop.call_soon_threadsafe(self._evt_queue.put_nowait, self._sentinel)
-        self._log.debug("Sentinel messages placed on queues")
+        self._log.debug("哨兵消息已放入队列")
 
-    # -- COMMANDS ----------------------------------------------------------------------------------
+    # -- 命令 ---------------------------------------------------------------------------------------
 
     def kill(self) -> None:
         """
-        Kill the engine by abruptly canceling the queue task and calling stop.
+        通过强行取消队列任务并调用 stop 来停止引擎。
         """
-        self._log.warning("Killing engine")
+        self._log.warning("正在停止引擎（Kill）")
         self._kill = True
         self.stop()
 
         if self._cmd_queue_task:
-            self._log.debug(f"Canceling task '{self._cmd_queue_task.get_name()}'")
+            self._log.debug(f"正在取消任务 '{self._cmd_queue_task.get_name()}'")
             self._cmd_queue_task.cancel()
             self._cmd_queue_task = None
 
         if self._evt_queue_task:
-            self._log.debug(f"Canceling task '{self._evt_queue_task.get_name()}'")
+            self._log.debug(f"正在取消任务 '{self._evt_queue_task.get_name()}'")
             self._evt_queue_task.cancel()
             self._evt_queue_task = None
 
     def execute(self, command: Command) -> None:
         """
-        Execute the given command.
+        执行给定的命令。
 
-        If the internal queue is already full then will log a warning and block
-        until queue size reduces.
+        如果内部队列已满，则记录警告并阻塞，直到队列大小减小。
 
-        Parameters
+        参数
         ----------
         command : Command
-            The command to execute.
+            要执行的命令。
 
         """
         self._cmd_enqueuer.enqueue(command)
 
     def process(self, event: OrderEvent) -> None:
         """
-        Process the given event message.
+        处理给定的事件消息。
 
-        If the internal queue is at or near capacity, it logs a warning (throttled)
-        and schedules an asynchronous `put()` operation. This ensures all messages are
-        eventually enqueued and processed without blocking the caller when the queue is full.
+        如果内部队列已满或接近满，它将记录一条警告（限流）并调度异步 `put()` 操作。
+        这确保了所有消息最终都会排入队列并得到处理，而不会在队列已满时阻塞调用者。
 
-        Parameters
+        参数
         ----------
         event : OrderEvent
-            The event to process.
+            要处理的事件。
 
         """
         self._record_local_activity(event)
         self._evt_enqueuer.enqueue(event)
 
-    # -- QUEUE PROCESSING --------------------------------------------------------------------------
+    # -- 队列处理 -----------------------------------------------------------------------------------
 
     async def _run_cmd_queue(self) -> None:
         self._log.debug(
-            f"Command message queue processing starting (qsize={self.cmd_qsize()})",
+            f"Command 消息队列处理开始 (qsize={self.cmd_qsize()})",
         )
         try:
             while True:
@@ -568,21 +566,21 @@ class LiveExecutionEngine(ExecutionEngine):
 
                     self._execute_command(command)
                 except asyncio.CancelledError:
-                    self._log.warning("Canceled task 'run_cmd_queue'")
+                    self._log.warning("任务 'run_cmd_queue' 已取消")
                     break
                 except Exception as e:
                     self._handle_queue_exception(e, "command")
         finally:
-            stopped_msg = "Command message queue stopped"
+            stopped_msg = "Command 消息队列已停止"
 
             if not self._cmd_queue.empty():
-                self._log.warning(f"{stopped_msg} with {self.cmd_qsize()} message(s) on queue")
+                self._log.warning(f"{stopped_msg}，队列中仍有 {self.cmd_qsize()} 条消息")
             else:
                 self._log.debug(stopped_msg)
 
     async def _run_evt_queue(self) -> None:
         self._log.debug(
-            f"Event message queue processing starting (qsize={self.evt_qsize()})",
+            f"Event 消息队列处理开始 (qsize={self.evt_qsize()})",
         )
         try:
             while True:
@@ -593,40 +591,40 @@ class LiveExecutionEngine(ExecutionEngine):
 
                     self._handle_event_with_tracking(event)
                 except asyncio.CancelledError:
-                    self._log.warning("Canceled task 'run_evt_queue'")
+                    self._log.warning("任务 'run_evt_queue' 已取消")
                     break
                 except Exception as e:
                     self._handle_queue_exception(e, "event")
         finally:
-            stopped_msg = "Event message queue stopped"
+            stopped_msg = "Event 消息队列已停止"
 
             if not self._evt_queue.empty():
-                self._log.warning(f"{stopped_msg} with {self.evt_qsize()} message(s) on queue")
+                self._log.warning(f"{stopped_msg}，队列中仍有 {self.evt_qsize()} 条消息")
             else:
                 self._log.debug(stopped_msg)
 
     def _handle_queue_exception(self, e: Exception, queue_name: str) -> None:
         self._log.exception(
-            f"Unexpected exception in {queue_name} queue processing: {e!r}",
+            f"{queue_name} 队列处理中出现意外异常: {e!r}",
             e,
         )
 
         if self.graceful_shutdown_on_exception:
             if not self._is_shutting_down:
                 self._log.warning(
-                    "Initiating graceful shutdown due to unexpected exception",
+                    "由于意外异常，正在启动优雅停机",
                 )
                 self.shutdown_system(
-                    f"Unexpected exception in {queue_name} queue processing: {e!r}",
+                    f"{queue_name} 队列处理中出现意外异常: {e!r}",
                 )
                 self._is_shutting_down = True
         else:
             self._log.error(
-                "System will terminate immediately to prevent operation in degraded state",
+                "系统将立即终止，以防止在降级状态下运行",
             )
-            os._exit(1)  # Immediate crash
+            os._exit(1)  # 立即崩溃
 
-    # -- CONTINUOUS MONITORING ---------------------------------------------------------------------
+    # -- 持续监控 -----------------------------------------------------------------------------------
 
     async def _own_books_audit_loop(self, interval_secs: float) -> None:
         try:
@@ -634,14 +632,14 @@ class LiveExecutionEngine(ExecutionEngine):
                 await asyncio.sleep(interval_secs)
                 self._cache.audit_own_order_books()
         except asyncio.CancelledError:
-            self._log.debug("Canceled task 'own_books_audit'")
+            self._log.debug("任务 'own_books_audit' 已取消")
         except Exception as e:
-            self._log.exception("Error auditing own books", e)
+            self._log.exception("审计自有订单簿时出错", e)
 
     # ruff: noqa: C901
     async def _continuous_reconciliation_loop(self) -> None:
         try:
-            # Convert intervals to nanoseconds (handle None values)
+            # 将间隔转换为纳秒（处理 None 值）
             inflight_check_interval_ns = (
                 millis_to_nanos(self.inflight_check_interval_ms)
                 if self.inflight_check_interval_ms > 0
@@ -657,7 +655,7 @@ class LiveExecutionEngine(ExecutionEngine):
             )
             cache_prune_interval_ns = secs_to_nanos(60.0)
 
-            # Determine minimum sleep interval (in seconds)
+            # 确定最小休眠间隔（秒）
             intervals_secs: list[float] = []
 
             if self.inflight_check_interval_ms > 0:
@@ -672,38 +670,38 @@ class LiveExecutionEngine(ExecutionEngine):
             min_interval_secs = min(intervals_secs) if intervals_secs else 1.0
 
             self._log.info(
-                f"Starting continuous reconciliation with intervals: "
+                f"启动持续对账，间隔设置如下： "
                 f"inflight={self.inflight_check_interval_ms}ms, "
                 f"consistency={self.open_check_interval_secs}s, "
                 f"position={self.position_check_interval_secs}s",
                 LogColor.BLUE,
             )
 
-            # Only wait if reconciliation is enabled (otherwise event never set)
+            # 仅在启用对账时才等待（否则事件永远不会设置）
             if self.reconciliation:
                 self._log.info(
-                    "Awaiting startup reconciliation completion before starting continuous checks",
+                    "在开始持续检查前，等待启动对账完成",
                     LogColor.BLUE,
                 )
                 await self._startup_reconciliation_event.wait()
-                self._log.info("Startup reconciliation completed", LogColor.GREEN)
+                self._log.info("启动对账已完成", LogColor.GREEN)
 
-                # Apply additional startup delay AFTER reconciliation completes
+                # 在对账完成后应用额外的启动延迟
                 if self.reconciliation_startup_delay_secs > 0:
                     self._log.info(
-                        f"Applying post-reconciliation startup delay "
-                        f"({self.reconciliation_startup_delay_secs}s)",
+                        f"应用对账后的启动延迟 "
+                        f"({self.reconciliation_startup_delay_secs}秒)",
                         LogColor.BLUE,
                     )
                     await asyncio.sleep(self.reconciliation_startup_delay_secs)
             else:
                 self._log.info(
-                    "Startup reconciliation disabled, proceeding with continuous checks",
+                    "启动对账已禁用，继续执行持续检查",
                     LogColor.BLUE,
                 )
 
-            # Initialize timestamps to current time so first checks wait the full interval,
-            # giving execution clients time to complete their connection initialization
+            # 将时间戳初始化为当前时间，以便第一次检查等待完整间隔，
+            # 给执行客户端时间完成其连接初始化
             ts_now_init = self._clock.timestamp_ns()
             ts_last_inflight_check = ts_now_init
             ts_last_consistency_check = ts_now_init
@@ -712,70 +710,70 @@ class LiveExecutionEngine(ExecutionEngine):
 
             while True:
                 if self._is_shutting_down:
-                    self._log.debug("Reconciliation loop exiting due to stop signal")
+                    self._log.debug("由于停止信号，对账循环退出")
                     break
 
                 ts_now = self._clock.timestamp_ns()
 
-                # Check in-flight orders
+                # 检查在途（In-flight）订单
                 if (
                     inflight_check_interval_ns > 0
                     and ts_now - ts_last_inflight_check >= inflight_check_interval_ns
                 ):
-                    # Check stop signal before starting check
+                    # 在开始检查前确认停止信号
                     if self._is_shutting_down:
                         break
                     try:
                         await self._check_inflight_orders()
                         ts_last_inflight_check = ts_now
                     except Exception as e:
-                        self._log.exception("Failed in check_inflight_orders", e)
+                        self._log.exception("check_inflight_orders 失败", e)
 
-                # Check open orders consistency
+                # 检查开仓订单的一致性
                 if (
                     consistency_check_interval_ns > 0
                     and ts_now - ts_last_consistency_check >= consistency_check_interval_ns
                 ):
-                    # Check stop signal before starting check
+                    # 在开始检查前确认停止信号
                     if self._is_shutting_down:
                         break
                     try:
                         await self._check_orders_consistency()
                         ts_last_consistency_check = ts_now
                     except Exception as e:
-                        self._log.exception("Failed in check_orders_consistency", e)
+                        self._log.exception("check_orders_consistency 失败", e)
 
-                # Check positions consistency
+                # 检查持仓一致性
                 if (
                     position_check_interval_ns > 0
                     and ts_now - ts_last_position_check >= position_check_interval_ns
                 ):
-                    # Check stop signal before starting check
+                    # 在开始检查前确认停止信号
                     if self._is_shutting_down:
                         break
                     try:
                         await self._check_positions_consistency()
                         ts_last_position_check = ts_now
                     except Exception as e:
-                        self._log.exception("Failed in check_positions_consistency", e)
+                        self._log.exception("check_positions_consistency 失败", e)
 
                 if ts_now - ts_last_cache_prune >= cache_prune_interval_ns:
                     try:
                         self._prune_recent_fills_cache()
                         ts_last_cache_prune = ts_now
                     except Exception as e:
-                        self._log.exception("Failed in prune_recent_fills_cache", e)
+                        self._log.exception("prune_recent_fills_cache 失败", e)
 
                 await asyncio.sleep(min_interval_secs)
         except asyncio.CancelledError:
-            self._log.debug("Canceled task 'continuous_reconciliation'")
+            self._log.debug("任务 'continuous_reconciliation' 已取消")
 
     async def _check_inflight_orders(self) -> None:
         if self._is_shutting_down:
-            self._log.debug("Skipping in-flight orders check due to stop signal")
+            self._log.debug("由于停止信号，跳过在途（In-flight）订单检查")
             return
 
-        self._log.debug("Checking in-flight orders status")
+        self._log.debug("正在检查在途订单状态")
 
         delayed_orders: list[Order] = []
         inflight_orders: list[Order] = self._cache.orders_inflight()
@@ -788,11 +786,10 @@ class LiveExecutionEngine(ExecutionEngine):
 
         if delayed_orders:
             self._log.debug(
-                f"Detected {len(delayed_orders)} delayed in-flight "
-                f"order{'' if len(delayed_orders) == 1 else 's'}",
+                f"检测到 {len(delayed_orders)} 个延迟的在途订单",
             )
 
-        # Query and potentially resolve each inconsistent order
+        # 查询并可能解决每个不一致的订单
         for order in delayed_orders:
             if not order.is_inflight:
                 self._clear_recon_tracking(order.client_order_id, drop_last_query=False)
@@ -801,7 +798,7 @@ class LiveExecutionEngine(ExecutionEngine):
             last_query_ts = self._ts_last_query.get(order.client_order_id)
             if last_query_ts and ts_now - last_query_ts < self._inflight_check_threshold_ns:
                 self._log.debug(
-                    f"Skipping re-query for {order.client_order_id!r} - awaiting prior response",
+                    f"跳过 {order.client_order_id!r} 的重新查询 - 正在等待之前的响应",
                 )
                 continue
 
@@ -810,18 +807,18 @@ class LiveExecutionEngine(ExecutionEngine):
                 backlog = self.evt_qsize()
                 if backlog > 0:
                     self._log.debug(
-                        f"Deferring inflight resolution for {order.client_order_id!r} - event queue backlog {backlog}",
+                        f"推迟 {order.client_order_id!r} 的在途对账 - 事件队列积压 {backlog}",
                     )
                     continue
 
                 self._log.warning(
-                    f"Order {order.client_order_id!r} exceeded max inflight retries ({retries}), "
-                    f"resolving as failed",
+                    f"订单 {order.client_order_id!r} 超过最大在途重试次数 ({retries})，"
+                    f"将其解析为失败状态",
                     LogColor.YELLOW,
                 )
                 self._resolve_inflight_order(order)
             else:
-                self._log.debug(f"Querying {order} with venue...")
+                self._log.debug(f"正在向柜台查询 {order}...")
                 query_ts = self._clock.timestamp_ns()
                 query = QueryOrder(
                     trader_id=order.trader_id,
@@ -839,7 +836,7 @@ class LiveExecutionEngine(ExecutionEngine):
     def _resolve_inflight_order(self, order: Order) -> None:
         if not order.is_inflight:
             self._log.debug(
-                f"Skipping inflight resolution for {order.client_order_id!r} - current status {order.status_string()}",
+                f"跳过 {order.client_order_id!r} 的在途对账 - 当前状态为 {order.status_string()}",
             )
             self._clear_recon_tracking(order.client_order_id)
             self._order_local_activity_ns.pop(order.client_order_id, None)
@@ -853,27 +850,27 @@ class LiveExecutionEngine(ExecutionEngine):
                 ts_now=ts_now,
                 reason="UNKNOWN",
             )
-            self._log.debug(f"Generated {rejected}")
+            self._log.debug(f"生成了 {rejected}")
             self._handle_event_with_tracking(rejected)
         elif order.status in (OrderStatus.PENDING_UPDATE, OrderStatus.PENDING_CANCEL):
             canceled = create_order_canceled_event(
                 order=order,
                 ts_now=ts_now,
             )
-            self._log.debug(f"Generated {canceled}")
+            self._log.debug(f"生成了 {canceled}")
             self._handle_event_with_tracking(canceled)
         else:
-            raise RuntimeError(f"Invalid status for in-flight order, was '{order.status_string()}'")
+            raise RuntimeError(f"在途订单状态无效，当前为 '{order.status_string()}'")
 
         self._clear_recon_tracking(order.client_order_id)
         self._order_local_activity_ns.pop(order.client_order_id, None)
 
     async def _check_positions_consistency(self) -> None:
         if self._is_shutting_down:
-            self._log.debug("Skipping position consistency check due to stop signal")
+            self._log.debug("由于停止信号，跳过持仓一致性检查")
             return
 
-        self._log.debug("Checking position consistency between cached-state and venues")
+        self._log.debug("正在检查缓存状态与柜台之间的持仓一致性")
 
         open_positions = self._cache.positions_open()
 
@@ -882,7 +879,7 @@ class LiveExecutionEngine(ExecutionEngine):
                 p for p in open_positions if p.instrument_id in self.reconciliation_instrument_ids
             ]
 
-        # Group positions by instrument_id (for netting)
+        # 按交易标的 ID 对持仓进行分组（用于净额对账）
         positions_by_instrument: dict[InstrumentId, list[Position]] = {}
 
         for position in open_positions:
@@ -892,11 +889,11 @@ class LiveExecutionEngine(ExecutionEngine):
             positions_by_instrument[position.instrument_id].append(position)
 
         self._log.debug(
-            f"Found {len(positions_by_instrument)} unique instrument(s) with open positions",
+            f"发现 {len(positions_by_instrument)} 个具有开仓持仓的唯一交易标的",
         )
 
         if not self._clients:
-            self._log.debug("No execution clients to check position consistency, early return")
+            self._log.debug("没有执行客户端可用于检查持仓一致性，提前返回")
             return
 
         venue_positions = await self._query_position_status_reports()
@@ -917,8 +914,8 @@ class LiveExecutionEngine(ExecutionEngine):
         tasks = [
             c.generate_position_status_reports(
                 GeneratePositionStatusReports(
-                    instrument_id=None,  # Get all positions
-                    start=None,  # No time filter - we want all open and closed positions
+                    instrument_id=None,  # 获取所有持仓
+                    start=None,  # 不设时间过滤 - 我们需要所有开仓和已平仓的持仓
                     end=None,
                     command_id=UUID4(),
                     ts_init=self._clock.timestamp_ns(),
@@ -931,15 +928,15 @@ class LiveExecutionEngine(ExecutionEngine):
         try:
             position_reports_all = await asyncio.gather(*tasks, return_exceptions=True)
         except Exception as e:
-            self._log.error(f"Failed to gather position status reports: {e}")
+            self._log.error(f"无法获取持仓状态报告：{e}")
             return {}
 
-        # Build mapping: instrument_id -> venue report
+        # 建立映射：instrument_id -> venue report
         venue_positions: dict[InstrumentId, PositionStatusReport] = {}
         for reports_or_exception in position_reports_all:
             if isinstance(reports_or_exception, Exception):
                 self._log.error(
-                    f"Failed to generate position status reports: {reports_or_exception}",
+                    f"无法生成持仓状态报告：{reports_or_exception}",
                 )
                 continue
 
@@ -973,8 +970,8 @@ class LiveExecutionEngine(ExecutionEngine):
                 ts_now = self._clock.timestamp_ns()
                 if ts_now - last_activity_ts < self._position_check_threshold_ns:
                     self._log.debug(
-                        f"Skipping position reconciliation for {instrument_id}: "
-                        f"recent activity within threshold ({self.position_check_threshold_ms}ms)",
+                        f"跳过 {instrument_id} 的持仓对账： "
+                        f"近期活动在阈值范围内 ({self.position_check_threshold_ms}ms)",
                     )
                     continue
 
@@ -982,8 +979,8 @@ class LiveExecutionEngine(ExecutionEngine):
             venue_qty = venue_report.signed_decimal_qty if venue_report else Decimal(0)
 
             self._log.warning(
-                f"Position discrepancy detected for {instrument_id}: "
-                f"cached_qty={cached_qty}, venue_qty={venue_qty}; querying for missing fills...",
+                f"检测到 {instrument_id} 的持仓不一致： "
+                f"cached_qty={cached_qty}, venue_qty={venue_qty}；正在查询缺失的成交...",
                 LogColor.YELLOW,
             )
 
@@ -992,9 +989,9 @@ class LiveExecutionEngine(ExecutionEngine):
 
             if not missing_fills and has_discrepancy:
                 self._log.warning(
-                    f"Position discrepancy for {instrument_id} persists but no missing fills found. "
-                    f"Possible causes: fills outside lookback window ({self.position_check_lookback_mins}min), "
-                    f"venue position error, or internal calculation error.",
+                    f"{instrument_id} 的持仓不一致仍然存在，但未发现缺失的成交。 "
+                    f"可能原因：成交超出回溯窗口 ({self.position_check_lookback_mins}分钟)， "
+                    f"柜台持仓错误，或内部计算错误。",
                     LogColor.YELLOW,
                 )
 
@@ -1004,14 +1001,14 @@ class LiveExecutionEngine(ExecutionEngine):
         venue_report: PositionStatusReport | None,
         instrument_id: InstrumentId,
     ) -> bool:
-        # Calculate cached position quantity
+        # 计算缓存的持仓数量
         cached_qty = Decimal(0)
         for position in cached_positions:
             cached_qty += position.signed_decimal_qty()
 
-        # Handle case where venue has no position report
+        # 处理场地没有持仓报告的情况
         if venue_report is None:
-            # We think we have a position, but venue says flat (or no report)
+            # 我们认为有持仓，但场地显示为平仓（或无报告）
             if cached_qty != 0:
                 instrument = self._cache.instrument(instrument_id)
                 if instrument is not None:
@@ -1023,21 +1020,20 @@ class LiveExecutionEngine(ExecutionEngine):
                         return False
                 else:
                     self._log.debug(
-                        f"Cannot apply tolerance check for {instrument_id}: instrument not in cache",
+                        f"无法对 {instrument_id} 应用容差检查：缓存中未找到该标的",
                     )
 
                 self._log.warning(
-                    f"Position discrepancy for {instrument_id}: "
-                    f"cached_qty={cached_qty}, venue has no position report",
+                    f"{instrument_id} 的持仓不一致： "
+                    f"cached_qty={cached_qty}，柜台无持仓报告",
                     LogColor.YELLOW,
                 )
                 return True
-            # Both flat - no discrepancy
+            # 两者都平仓 - 无差异
             return False
 
+        # 检查数量是否匹配（两者都可能为零）
         venue_qty = venue_report.signed_decimal_qty
-
-        # Check if quantities match (both could be zero)
         if cached_qty == venue_qty:
             return False
 
@@ -1051,7 +1047,7 @@ class LiveExecutionEngine(ExecutionEngine):
                 return False
         else:
             self._log.debug(
-                f"Cannot apply tolerance check for {instrument_id}: instrument not in cache",
+                f"无法对 {instrument_id} 应用容差检查：缓存中未找到该标的",
             )
 
         return True
@@ -1074,24 +1070,24 @@ class LiveExecutionEngine(ExecutionEngine):
             ):
                 continue
 
-            # Venue has a position but we don't - this is a discrepancy
+            # 场地有持仓但我们没有 - 这是一个差异
             if venue_report.signed_decimal_qty == 0:
-                continue  # Both flat, no discrepancy
+                continue  # 两者均平仓，无差异
 
-            # THRESHOLD CHECK
+            # 阈值检查
             last_activity_ts = self._position_local_activity_ns.get(instrument_id)
             if last_activity_ts:
                 ts_now = self._clock.timestamp_ns()
                 if ts_now - last_activity_ts < self._position_check_threshold_ns:
                     self._log.debug(
-                        f"Skipping position reconciliation for {instrument_id}: "
-                        f"recent activity within threshold ({self.position_check_threshold_ms}ms)",
+                        f"跳过 {instrument_id} 的持仓对账： "
+                        f"近期活动在阈值内 ({self.position_check_threshold_ms}ms)",
                     )
                     continue
 
             self._log.warning(
-                f"Position discrepancy detected for {instrument_id}: "
-                f"cached_qty=0 (flat), venue_qty={venue_report.signed_decimal_qty}. Querying for missing fills...",
+                f"检测到 {instrument_id} 的持仓不一致： "
+                f"cached_qty=0 (无持仓), venue_qty={venue_report.signed_decimal_qty}。正在查询缺失的成交...",
                 LogColor.YELLOW,
             )
 
@@ -1100,9 +1096,9 @@ class LiveExecutionEngine(ExecutionEngine):
 
             if not missing_fills:
                 self._log.warning(
-                    f"Position discrepancy for {instrument_id} persists but no missing fills found. "
-                    f"Possible causes: fills outside lookback window ({self.position_check_lookback_mins}min), "
-                    f"venue position error, or internal calculation error.",
+                    f"{instrument_id} 的持仓不一致仍然存在，但未发现缺失的成交。 "
+                    f"可能原因：成交超出回溯窗口 ({self.position_check_lookback_mins}分钟)， "
+                    f"柜台持仓错误，或内部计算错误。",
                     LogColor.YELLOW,
                 )
 
@@ -1135,7 +1131,7 @@ class LiveExecutionEngine(ExecutionEngine):
         for fills_or_exception in fill_reports_all:
             if isinstance(fills_or_exception, Exception):
                 self._log.error(
-                    f"Failed to generate fill reports for {instrument_id}: {fills_or_exception}",
+                    f"无法为 {instrument_id} 生成成交报告：{fills_or_exception}",
                 )
                 continue
 
@@ -1148,7 +1144,7 @@ class LiveExecutionEngine(ExecutionEngine):
                 if isinstance(event, OrderFilled):
                     cached_fill_trade_ids.add(event.trade_id)
 
-        # Find missing fills (not in cache and not in recent fills cache)
+        # 查找缺失的成交（不在缓存中，也不在最近成交缓存中）
         missing_fills = [
             fill
             for fill in venue_fills
@@ -1167,7 +1163,7 @@ class LiveExecutionEngine(ExecutionEngine):
             return
 
         self._log.warning(
-            f"Found {len(missing_fills)} missing fill(s) for {instrument_id}",
+            f"发现 {instrument_id} 有 {len(missing_fills)} 个缺失的成交",
             LogColor.YELLOW,
         )
 
@@ -1178,18 +1174,18 @@ class LiveExecutionEngine(ExecutionEngine):
                     self._position_local_activity_ns[instrument_id] = self._clock.timestamp_ns()
                 else:
                     self._log.warning(
-                        f"Failed to reconcile fill {fill_report.trade_id} for {instrument_id}: "
-                        f"order not yet cached or other prerequisite missing. "
-                        f"Fill will be retried in next position check cycle.",
+                        f"无法对账 {instrument_id} 的成交 {fill_report.trade_id}： "
+                        f"订单尚未缓存或缺少其他前提条件。 "
+                        f"成交将在下一个持仓检查周期中重试。",
                         LogColor.YELLOW,
                     )
             except Exception as e:
                 self._log.error(
-                    f"Exception reconciling missing fill {fill_report.trade_id} for {instrument_id}: {e}",
+                    f"对账 {instrument_id} 缺失的成交 {fill_report.trade_id} 时出现异常：{e}",
                 )
 
     def _prune_recent_fills_cache(self, ttl_secs: float = 60.0) -> None:
-        # Remove expired fills from cache (default TTL: 60 seconds)
+        # 从缓存中移除过期的成交（默认 TTL：60 秒）
         ts_now = self._clock.timestamp_ns()
         ttl_ns = secs_to_nanos(ttl_secs)
         expired_trade_ids = [
@@ -1203,10 +1199,10 @@ class LiveExecutionEngine(ExecutionEngine):
     async def _check_orders_consistency(self) -> None:
         try:
             if self._is_shutting_down:
-                self._log.debug("Skipping order consistency check due to stop signal")
+                self._log.debug("由于停止信号，跳过订单一致性检查")
                 return
 
-            self._log.debug("Checking order consistency between cached-state and venues")
+            self._log.debug("正在检查缓存状态与柜台之间的订单一致性")
 
             open_order_ids: set[ClientOrderId] = self._cache.client_order_ids_open()
             open_orders: list[Order] = self._cache.orders_open()
@@ -1218,10 +1214,10 @@ class LiveExecutionEngine(ExecutionEngine):
                 open_order_ids = {o.client_order_id for o in open_orders}
 
             open_len = len(open_orders)
-            self._log.debug(f"Found {open_len} order{'' if open_len == 1 else 's'} open in cache")
+            self._log.debug(f"发现缓存中有 {open_len} 个订单处于开仓状态")
 
             if not self._clients:
-                self._log.debug("No execution clients to check orders consistency, early return")
+                self._log.debug("没有执行客户端可用于检查订单一致性，提前返回")
                 return
 
             all_order_reports, venue_reported_ids = await self._query_order_status_reports()
@@ -1232,8 +1228,8 @@ class LiveExecutionEngine(ExecutionEngine):
                 missing_orders = open_order_ids - venue_reported_ids
                 if missing_orders:
                     self._log.debug(
-                        f"{len(missing_orders)} cached open order(s) not in venue's current response - "
-                        f"likely recently filled/canceled (venue may include recent closed orders with open query):",
+                        f"{len(missing_orders)} 个缓存中的开仓订单不在柜台当前的响应中 - "
+                        f"可能已于近期成交/取消（柜台在查询开仓订单时可能包含近期已关闭订单）：",
                     )
 
                     for order_id in missing_orders:
@@ -1245,15 +1241,15 @@ class LiveExecutionEngine(ExecutionEngine):
 
             self._validate_open_orders_consistency()
         except Exception as e:
-            self._log.exception("Error in check_order_consistency", e)
+            self._log.exception("check_order_consistency 出现错误", e)
 
     def _validate_open_orders_consistency(self) -> None:
         for order in self._cache.orders_open():
             computed_filled = sum(e.last_qty for e in order.events if isinstance(e, OrderFilled))
             if computed_filled != order.filled_qty:
                 self._log.error(
-                    f"INCONSISTENCY: {order.client_order_id} "
-                    f"computed={computed_filled} vs cached={order.filled_qty}",
+                    f"不一致：{order.client_order_id} "
+                    f"计算的成交值={computed_filled} 与 缓存的成交值={order.filled_qty} 不符",
                 )
 
     async def _handle_missing_orders_at_venue(
@@ -1270,23 +1266,23 @@ class LiveExecutionEngine(ExecutionEngine):
         for client_order_id in missing_at_venue:
             order = self._cache.order(client_order_id)
             if order is None:
-                self._log.error(f"{client_order_id!r} missing at venue and not found in cache")
+                self._log.error(f"柜台缺失 {client_order_id!r} 且缓存中未找到")
                 continue
 
             # Check if order is too recent to reconcile (avoid race conditions)
             ts_last = order.ts_last
             if (ts_now - ts_last) < self._open_check_threshold_ns:
                 self._log.debug(
-                    f"Skipping reconciliation for {client_order_id!r} - order too recent "
-                    f"(age={(ts_now - ts_last) / 1_000_000}ms < threshold={self.open_check_threshold_ms}ms)",
+                    f"跳过 {client_order_id!r} 的对账 - 订单过新 "
+                    f"(时长={(ts_now - ts_last) / 1_000_000:.0f}ms < 阈值={self.open_check_threshold_ms}ms)",
                 )
                 continue
 
             local_activity = self._order_local_activity_ns.get(client_order_id)
             if local_activity and (ts_now - local_activity) < self._open_check_threshold_ns:
                 self._log.debug(
-                    f"Skipping reconciliation for {client_order_id!r}; "
-                    f"pending local activity ({(ts_now - local_activity) / 1_000_000}ms < threshold={self.open_check_threshold_ms}ms)",
+                    f"跳过 {client_order_id!r} 的对账；"
+                    f"待处理的本地活动 ({(ts_now - local_activity) / 1_000_000:.0f}ms < 阈值={self.open_check_threshold_ms}ms)",
                 )
                 continue
 
@@ -1313,10 +1309,10 @@ class LiveExecutionEngine(ExecutionEngine):
                         )
                         logged_limit_warning = True
 
-                    continue  # Skip query but continue processing other orders
+                    continue  # 跳过查询但继续处理其他订单
 
                 self._log.warning(
-                    f"Order {client_order_id!r} not found at venue after {retries} retries, performing single-order query",
+                    f"重试 {retries} 次后柜台仍未找到订单 {client_order_id!r}，正在执行单笔订单查询",
                     LogColor.YELLOW,
                 )
                 self._clear_recon_tracking(client_order_id, drop_last_query=False)
@@ -1332,21 +1328,21 @@ class LiveExecutionEngine(ExecutionEngine):
             else:
                 self._recon_check_retries[client_order_id] = retries + 1
                 self._log.debug(
-                    f"Order {client_order_id!r} not found at venue, retry {retries + 1}/{self.open_check_missing_retries}",
+                    f"柜台未找到订单 {client_order_id!r}，重试中 {retries + 1}/{self.open_check_missing_retries}",
                 )
 
     async def _resolve_order_not_found_at_venue(self, order: Order) -> None:
         ts_now = self._clock.timestamp_ns()
 
         self._log.debug(
-            f"Performing single-order query for {order.client_order_id!r} before marking as REJECTED",
+            f"在将 {order.client_order_id!r} 标记为 REJECTED 前对其执行单笔订单查询",
             LogColor.BLUE,
         )
 
         client_id = self._cache.client_id(order.client_order_id)
         if client_id is None:
             self._log.warning(
-                f"No client_id found for {order.client_order_id!r}, skipping targeted query",
+                f"未找到 {order.client_order_id!r} 的 client_id，跳过针对性查询",
             )
             # Skip targeted query but proceed with resolution
         else:
@@ -1366,17 +1362,17 @@ class LiveExecutionEngine(ExecutionEngine):
                 report = await client.generate_order_status_report(command)
                 if report is not None:
                     self._log.info(
-                        f"Found {order.client_order_id!r} via targeted query: {report.order_status}",
+                        f"通过针对性查询找到 {order.client_order_id!r}：{report.order_status}",
                         LogColor.BLUE,
                     )
                     self._reconcile_order_report(report, trades=[])
-                    return  # Order found and reconciled, no need to mark as rejected
+                    return  # 订单已找到并对账，无需标记为拒绝
             except Exception as e:
-                self._log.warning(f"Error during targeted query for {order.client_order_id!r}: {e}")
+                self._log.warning(f"对 {order.client_order_id!r} 执行针对性查询时出错：{e}")
 
         if not order.is_open:
             self._log.debug(
-                f"Skipping reconciliation for {order.client_order_id!r} - already {order.status_string()}",
+                f"跳过 {order.client_order_id!r} 的对账 - 状态已为 {order.status_string()}",
             )
             self._clear_recon_tracking(order.client_order_id)
             self._order_local_activity_ns.pop(order.client_order_id, None)
@@ -1384,7 +1380,7 @@ class LiveExecutionEngine(ExecutionEngine):
 
         if order.status == OrderStatus.ACCEPTED:
             self._log.warning(
-                f"Reconciling {order.client_order_id!r}: ACCEPTED order not found at venue, marking as REJECTED",
+                f"正在对账 {order.client_order_id!r}：柜台未找到 ACCEPTED 订单，标记为 REJECTED",
                 LogColor.YELLOW,
             )
             rejected = create_order_rejected_event(
@@ -1399,8 +1395,8 @@ class LiveExecutionEngine(ExecutionEngine):
 
         if order.status == OrderStatus.PARTIALLY_FILLED:
             self._log.warning(
-                f"Reconciling {order.client_order_id!r}: PARTIALLY_FILLED "
-                f"order not found at venue, marking as CANCELED (preserving {order.filled_qty} filled quantity)",
+                f"正在对账 {order.client_order_id!r}：PARTIALLY_FILLED "
+                f"订单未在柜台找到，标记为 CANCELED（保留 {order.filled_qty} 成交数量）",
                 LogColor.YELLOW,
             )
             canceled = create_order_canceled_event(
@@ -1414,7 +1410,7 @@ class LiveExecutionEngine(ExecutionEngine):
 
         if order.is_inflight:
             self._log.debug(
-                f"Deferring resolution for {order.client_order_id!r} - still inflight state {order.status_string()}",
+                f"推迟 {order.client_order_id!r} 的对账 - 仍处于在途（In-flight）状态 {order.status_string()}",
             )
             self._clear_recon_tracking(order.client_order_id, drop_last_query=False)
             self._ts_last_query[order.client_order_id] = ts_now
@@ -1423,20 +1419,19 @@ class LiveExecutionEngine(ExecutionEngine):
         if order.is_closed:
             if order.status == OrderStatus.FILLED:
                 self._log.debug(
-                    f"{order.client_order_id!r} is FILLED and not found at venue (expected behavior)",
+                    f"{order.client_order_id!r} 已成交（FILLED）且柜台未找到（符合预期）",
                 )
             else:
                 self._log.warning(
-                    f"Order {order.client_order_id!r} is already closed as {order.status_string()}, "
-                    "skipping missing-order resolution",
+                    f"订单 {order.client_order_id!r} 已作为 {order.status_string()} 关闭，"
+                    "跳过缺失订单对账",
                 )
             self._clear_recon_tracking(order.client_order_id)
             self._order_local_activity_ns.pop(order.client_order_id, None)
             return
 
         self._log.warning(
-            f"Unexpected order status {order.status_string()} "
-            f"for order not found at venue: {order.client_order_id!r}",
+            f"未在柜台找到的订单 {order.client_order_id!r} 状态异常：{order.status_string()}",
         )
         self._clear_recon_tracking(order.client_order_id)
         self._order_local_activity_ns.pop(order.client_order_id, None)
@@ -1471,7 +1466,7 @@ class LiveExecutionEngine(ExecutionEngine):
         for reports_or_exception in order_reports_all:
             if isinstance(reports_or_exception, Exception):
                 self._log.error(
-                    f"Failed to generate order status reports: {reports_or_exception}",
+                    f"无法生成订单状态报告：{reports_or_exception}",
                 )
                 continue
 
@@ -1496,16 +1491,16 @@ class LiveExecutionEngine(ExecutionEngine):
         for report in all_order_reports:
             is_in_open_ids = report.client_order_id in open_order_ids
 
-            # Clear any retry counts for successfully queried orders
+            # 清除成功查询订单的重试次数
             if report.client_order_id:
                 self._clear_recon_tracking(report.client_order_id)
             elif report.venue_order_id:
-                # Try to map venue-only ID to client order ID and clear that retry counter
+                # 尝试将仅有场地 ID 的订单映射到客户端订单 ID，并清除该重试计数器
                 mapped_client_id = self._cache.client_order_id(report.venue_order_id)
                 if mapped_client_id:
                     self._clear_recon_tracking(mapped_client_id)
 
-            # Check if we should reconcile this order
+            # 检查是否应该对账此订单
             should_reconcile = False
             reconcile_reason = ""
 
@@ -1515,7 +1510,7 @@ class LiveExecutionEngine(ExecutionEngine):
             elif report.client_order_id:
                 order = self._cache.order(report.client_order_id)
                 if order:
-                    # Check filled_qty mismatch, treating None as zero
+                    # 检查成交数量是否匹配，将 None 视为零
                     report_filled = (
                         report.filled_qty
                         if report.filled_qty is not None
@@ -1528,27 +1523,27 @@ class LiveExecutionEngine(ExecutionEngine):
                         )
 
             if should_reconcile:
-                # Apply include filter before reconciling
+                # 对账前应用包含（include）过滤器
                 if not self._consider_for_reconciliation(report.instrument_id):
                     self._log.debug(
-                        f"Skipping reconciliation for {report.client_order_id!r}: "
-                        f"instrument {report.instrument_id} not in include list",
+                        f"跳过 {report.client_order_id!r} 的对账： "
+                        f"交易标的 {report.instrument_id} 不在包含列表中",
                     )
                     continue
 
-                # Check for recent local activity to avoid race conditions with in-flight fills
+                # 检查近期本地活动，以避免与在途（In-flight）成交产生竞态条件
                 local_activity = self._order_local_activity_ns.get(report.client_order_id)
                 if local_activity and (ts_now - local_activity) < self._open_check_threshold_ns:
                     self._log.info(
-                        f"Deferring reconciliation for {report.client_order_id!r}: "
-                        f"recent local activity ({(ts_now - local_activity) / 1_000_000:.0f}ms < "
-                        f"threshold={self.open_check_threshold_ms}ms), "
-                        f"reason was: {reconcile_reason}",
+                        f"推迟 {report.client_order_id!r} 的对账： "
+                        f"近期本地活动 ({(ts_now - local_activity) / 1_000_000:.0f}ms < "
+                        f"阈值={self.open_check_threshold_ms}ms)， "
+                        f"原因为：{reconcile_reason}",
                     )
                     continue
 
                 self._log.debug(
-                    f"Reconciling {report.client_order_id!r}: {reconcile_reason}",
+                    f"正在对账 {report.client_order_id!r}：{reconcile_reason}",
                     LogColor.BLUE,
                 )
                 self._reconcile_order_report(report, trades=[])
@@ -1568,18 +1563,17 @@ class LiveExecutionEngine(ExecutionEngine):
                     purge_from_database=self.purge_from_database,
                 )
         except asyncio.CancelledError:
-            self._log.debug("Canceled task 'purge_account_events'")
+            self._log.debug("任务 'purge_account_events' 已取消")
         except Exception as e:
-            self._log.exception("Error purging account events", e)
+            self._log.exception("清除账户事件时出错", e)
 
-    # -- REQUEST HANDLERS --------------------------------------------------------------------------
+    # -- 请求处理器 ----------------------------------------------------------------------------------
 
     def generate_execution_mass_status(self, command: GenerateExecutionMassStatus) -> None:
         """
-        Handle request to generate execution mass status, triggering startup
-        reconciliation.
+        处理生成执行批量状态的请求，触发启动对账。
         """
-        self._log.info(f"Received {command!r}", LogColor.BLUE)
+        self._log.info(f"收到 {command!r}", LogColor.BLUE)
         self._loop.create_task(self.reconcile_execution_state())
 
     async def reconcile_execution_state(
@@ -1587,8 +1581,7 @@ class LiveExecutionEngine(ExecutionEngine):
         timeout_secs: float = 10.0,
     ) -> bool:
         """
-        Reconcile execution state as main entry point for startup reconciliation,
-        coordinating reconciliation across all execution clients.
+        对账执行状态，作为启动对账的主要入口点，协调所有执行客户端的对账工作。
         """
         PyCondition.positive(timeout_secs, "timeout_secs")
 
@@ -1602,7 +1595,7 @@ class LiveExecutionEngine(ExecutionEngine):
                     ts_init=self._clock.timestamp_ns(),
                 )
                 self._log.info(
-                    f"Requesting execution mass status from {client_id}",
+                    f"正在向 {client_id} 请求执行批量状态",
                     LogColor.BLUE,
                 )
                 self._msgbus.publish(
@@ -1611,13 +1604,13 @@ class LiveExecutionEngine(ExecutionEngine):
                 )
 
             if not self._clients:
-                self._log.debug("No execution clients for reconciliation")
-                # Signal completion even with no clients
+                self._log.debug("没有用于对账的执行客户端")
+                # 即使没有客户端，也发出完成信号
                 return True
 
             results: list[bool] = []
 
-            # Request execution mass status report from clients
+            # 向客户端请求执行批量状态报告
             reconciliation_lookback_mins: int | None = (
                 self.reconciliation_lookback_mins if self.reconciliation_lookback_mins > 0 else None
             )
@@ -1626,17 +1619,17 @@ class LiveExecutionEngine(ExecutionEngine):
             ]
             mass_status_all = await asyncio.gather(*mass_status_coros, return_exceptions=True)
 
-            # Reconcile each mass status with the execution engine
+            # 将每个批量状态与执行引擎进行对账
             for mass_status_or_exception in mass_status_all:
                 if isinstance(mass_status_or_exception, BaseException):
-                    self._log.error(f"Failed to generate mass status: {mass_status_or_exception}")
+                    self._log.error(f"无法生成批量状态：{mass_status_or_exception}")
                     results.append(False)
                     continue
 
                 if mass_status_or_exception is None:
                     self._log.warning(
-                        "No execution mass status available for reconciliation "
-                        "(likely due to an adapter client error when generating reports)",
+                        "没有可用于对账的执行批量状态 "
+                        "（可能是由于生成报告时适配器客户端出错）",
                     )
                     results.append(False)
                     continue
@@ -1650,17 +1643,17 @@ class LiveExecutionEngine(ExecutionEngine):
                     self._log_reconciliation_result(client_id, result)
                     results.append(result)
                     self._log.warning(
-                        "`filter_position_reports` enabled, skipping further reconciliation",
+                        "已启用 `filter_position_reports`，跳过后续对账",
                     )
                     continue
 
                 client = self._clients[client_id]
 
-                # Check internal and external position reconciliation
+                # 检查内部和外部持仓对账
                 report_tasks: list[asyncio.Task] = []
 
-                # For routing brokers, venue may differ from instrument venue (e.g., IB client venue
-                # vs NYSE instrument venue), so filter by account_id instead of venue
+                # 对于具有路由功能的券商，场地可能与标的场地不同（例如：IB 客户端场地对应
+                # NYSE 标的场地），因此按 account_id 进行过滤，而不是按 venue
                 for position in self._cache.positions_open(
                     venue=None,
                     account_id=client.account_id,
@@ -1668,11 +1661,11 @@ class LiveExecutionEngine(ExecutionEngine):
                     instrument_id = position.instrument_id
                     if instrument_id in mass_status.position_reports:
                         self._log.debug(
-                            f"Position {instrument_id} for {client_id} already reconciled",
+                            f"已为 {client_id} 对账标的 {instrument_id} 的持仓",
                         )
-                        continue  # Already reconciled
+                        continue  # 已完成对账
 
-                    self._log.info(f"{position} pending reconciliation")
+                    self._log.info(f"{position} 等待对账")
                     position_status_command = GeneratePositionStatusReports(
                         instrument_id=instrument_id,
                         start=None,
@@ -1685,8 +1678,8 @@ class LiveExecutionEngine(ExecutionEngine):
                     )
 
                 if report_tasks:
-                    # Reconcile specific internal open positions
-                    self._log.info(f"Awaiting {len(report_tasks)} position reports for {client_id}")
+                    # 对账特定的内部开仓持仓
+                    self._log.info(f"正在等待 {client_id} 的 {len(report_tasks)} 份持仓报告")
 
                     position_results: list[bool] = []
                     for task_result_or_exception in await asyncio.gather(
@@ -1695,7 +1688,7 @@ class LiveExecutionEngine(ExecutionEngine):
                     ):
                         if isinstance(task_result_or_exception, Exception):
                             self._log.error(
-                                f"Failed to generate position status reports: {task_result_or_exception}",
+                                f"无法生成持仓状态报告：{task_result_or_exception}",
                             )
                             position_results.append(False)
                             continue
@@ -1718,38 +1711,37 @@ class LiveExecutionEngine(ExecutionEngine):
 
             return all(results)
         finally:
-            # Always signal completion to prevent continuous loop signal await hang
+            # 始终发出完成信号，以防止持续循环中的信号等待挂起
             self._startup_reconciliation_event.set()
 
     def _log_reconciliation_result(self, value: ClientId | InstrumentId, result: bool) -> None:
         if result:
-            self._log.info(f"Reconciliation for {value} succeeded", LogColor.GREEN)
+            self._log.info(f"{value} 的对账成功", LogColor.GREEN)
         else:
-            self._log.warning(f"Reconciliation for {value} failed")
+            self._log.warning(f"{value} 的对账失败")
 
     def reconcile_execution_report(self, report: ExecutionReport) -> bool:
         """
-        Reconcile a single execution report received at runtime, routing to appropriate
-        reconciliation method based on report type.
+        对收到的单个执行报告进行运行时对账，根据报告类型路由到相应的对账方法。
         """
         self._log.debug(f"<--[RPT] {report}")
         self.report_count += 1
 
         if not self._consider_for_reconciliation(report.instrument_id):
             self._log_skipping_reconciliation_on_instrument_id(report)
-            return True  # Filtered
+            return True  # 已过滤
 
-        self._log.debug(f"Reconciling {report}", color=LogColor.BLUE)
+        self._log.debug(f"正在对账 {report}", color=LogColor.BLUE)
 
         if isinstance(report, OrderStatusReport):
-            result = self._reconcile_order_report(report, [])  # No trades to reconcile
+            result = self._reconcile_order_report(report, [])  # 无成交需要对账
         elif isinstance(report, FillReport):
             result = self._reconcile_fill_report_single(report)
         elif isinstance(report, PositionStatusReport):
             result = self._reconcile_position_report(report)
         else:
             self._log.error(  # pragma: no cover (design-time error)
-                f"Cannot handle unrecognized report: {report}",  # pragma: no cover (design-time error)
+                f"无法处理未识别的报告：{report}",  # pragma: no cover (design-time error)
             )
             return False
 
@@ -1760,11 +1752,11 @@ class LiveExecutionEngine(ExecutionEngine):
 
         return result
 
-    # -- RECONCILIATION ----------------------------------------------------------------------------
+    # -- 对账 ---------------------------------------------------------------------------------------
 
     def reconcile_execution_mass_status(self, report: ExecutionMassStatus) -> None:
         """
-        Entry point for mass status reconciliation.
+        批量状态对账的入口点。
         """
         self._reconcile_execution_mass_status(report)
 
@@ -1776,49 +1768,49 @@ class LiveExecutionEngine(ExecutionEngine):
         self.report_count += 1
 
         self._log.info(
-            f"Reconciling ExecutionMassStatus for {mass_status.venue}",
+            f"正在为 {mass_status.venue} 对账执行批量状态",
             color=LogColor.BLUE,
         )
 
-        # Adjust fills for instruments with incomplete first lifecycles
+        # 为首个生命周期不完整的标的调整成交
         self._adjust_mass_status_fills(mass_status)
 
-        # Deduplicate orders in mass status
+        # 对批量状态中的订单进行去重
         self._deduplicate_mass_status_orders(mass_status)
 
         results: list[bool] = []
         reconciled_orders: set[ClientOrderId] = set()
         reconciled_trades: set[TradeId] = set()
 
-        # Reconcile all reported orders
+        # 对账所有报告的订单
         for venue_order_id, order_report in mass_status.order_reports.items():
             trades = mass_status.fill_reports.get(venue_order_id, [])
 
             if not self._consider_for_reconciliation(order_report.instrument_id):
                 self._log_skipping_reconciliation_on_instrument_id(order_report)
-                continue
+                continue  # 已过滤
 
             client_order_id = order_report.client_order_id
 
             if client_order_id is not None and client_order_id in self.filtered_client_order_ids:
                 self._log.debug(
-                    f"Skipping {type(order_report).__name__} reconciliation for {order_report.client_order_id!r}: "
-                    f"in `filtered_client_order_ids` list",
+                    f"跳过 {order_report.client_order_id!r} 的 {type(order_report).__name__} 对账： "
+                    f"在 `filtered_client_order_ids` 列表中",
                     LogColor.MAGENTA,
                 )
                 continue
 
-            # Check for duplicate trade IDs
+            # 检查重复的 trade ID
             for fill_report in trades:
                 if fill_report.trade_id in reconciled_trades:
                     self._log.warning(
-                        f"Duplicate {fill_report.trade_id!r} detected: {fill_report}",
+                        f"检测到重复的 {fill_report.trade_id!r}：{fill_report}",
                     )
 
                 reconciled_trades.add(fill_report.trade_id)
 
             try:
-                # Apply all fills - let position cycle naturally through all lifecycles
+                # 应用所有成交 - 让持仓通过所有生命周期自然循环
                 result = self._reconcile_order_report(order_report, trades)
             except InvalidStateTrigger as e:
                 self._log.error(str(e))
@@ -1827,7 +1819,7 @@ class LiveExecutionEngine(ExecutionEngine):
             results.append(result)
 
             if order_report.client_order_id is not None:
-                # Only track orders where instrument was loaded (others are filtered)
+                # 仅追踪标的已加载的订单（其他订单已被过滤）
                 instrument = self._cache.instrument(order_report.instrument_id)
                 if instrument is not None:
                     reconciled_orders.add(order_report.client_order_id)
@@ -1841,37 +1833,37 @@ class LiveExecutionEngine(ExecutionEngine):
         if not self.filter_position_reports:
             position_reports: list[PositionStatusReport]
 
-            # Reconcile all reported positions
+            # 对账所有报告的持仓
             for position_reports in mass_status.position_reports.values():
                 for report in position_reports:
                     if not self._consider_for_reconciliation(report.instrument_id):
                         self._log_skipping_reconciliation_on_instrument_id(report)
-                        continue
+                        continue  # 已过滤
 
                     result = self._reconcile_position_report(report)
                     results.append(result)
 
-        # Publish mass status
+        # 发布批量状态
         self._msgbus.publish(
             topic=f"reports.execution.{mass_status.venue}",
             msg=mass_status,
         )
 
-        # Validate reconciliation state for consistency
+        # 验证对账状态一致性
         self._validate_reconciliation_state(mass_status, reconciled_orders)
 
         return all(results)
 
     def _adjust_mass_status_fills(self, mass_status: ExecutionMassStatus) -> None:
-        # Adjust fills for instruments with incomplete first lifecycles
-        # Start with original orders and fills
+        # 为首个生命周期不完整的标的调整成交
+        # 从原始订单和成交开始
         final_orders = dict(mass_status._order_reports)
         final_fills = dict(mass_status._fill_reports)
 
         reconciliation_instruments: list[Instrument] = []
         for instrument_id, position_reports in mass_status.position_reports.items():
-            # Skip hedge mode instruments (have venue_position_id) as partial-window
-            # adjustment assumes a single net position per instrument
+            # 跳过双向持仓模式（具有 venue_position_id）的标的，因为部分窗口
+            # 调整假设每个标的只有一个净持仓
             is_hedge_mode = any(r.venue_position_id is not None for r in position_reports)
             if is_hedge_mode:
                 self._log.debug(
@@ -1898,7 +1890,7 @@ class LiveExecutionEngine(ExecutionEngine):
             reconciliation_instruments.append(instrument)
 
         self._log.info(
-            f"Attempting to adjust fills for {len(reconciliation_instruments)} instruments",
+            f"正在尝试为 {len(reconciliation_instruments)} 个交易标的调整成交",
             LogColor.BLUE,
         )
         adjusted_results = adjust_fills_for_partial_window(
@@ -1907,7 +1899,7 @@ class LiveExecutionEngine(ExecutionEngine):
             self._log,
         )
         self._log.info(
-            f"Updating adjusted fills for {len(reconciliation_instruments)} instruments",
+            f"正在为 {len(reconciliation_instruments)} 个交易标的更新已调整的成交",
             LogColor.BLUE,
         )
 
@@ -1926,51 +1918,51 @@ class LiveExecutionEngine(ExecutionEngine):
                 if fills and fills[0].instrument_id == instrument_id:
                     del final_fills[venue_order_id]
 
-            # Add adjusted orders and fills for this instrument
+            # 为此标的更新已调整的成交
             final_orders.update(adjusted_orders_for_instrument)
             final_fills.update(adjusted_fills_for_instrument)
 
-        # Apply all adjustments at once
+        # 一次性应用所有调整
         mass_status._order_reports = final_orders
         mass_status._fill_reports = final_fills
         self._log.info(
-            f"Final order_reports contains {len(final_orders)} orders, fill_reports contains {len(final_fills)} fills across all instruments",
+            f"最终的 order_reports 包含 {len(final_orders)} 个订单，fill_reports 包含所有标的的 {len(final_fills)} 个成交",
             LogColor.BLUE,
         )
 
     def _deduplicate_mass_status_orders(self, mass_status: ExecutionMassStatus) -> None:
-        # Remove duplicate orders within mass status report
+        # 移除批量状态报告中的重复项
         seen_client_order_ids: dict[ClientOrderId, VenueOrderId] = {}
         duplicate_venue_order_ids: list[VenueOrderId] = []
         orders_to_skip: list[VenueOrderId] = []
 
-        # First pass: deduplicate within the current report
+        # 第一遍：当前报告内去重
         for venue_order_id, order_report in mass_status._order_reports.items():
             if order_report.client_order_id is not None:
                 if order_report.client_order_id in seen_client_order_ids:
-                    # Duplicate found in current report - mark for removal
+                    # 在当前报告中发现重复项 - 标记以移除
                     duplicate_venue_order_ids.append(venue_order_id)
                     self._log.warning(
-                        f"Deduplicating order: {order_report.client_order_id} "
-                        f"(venue_order_id={venue_order_id}, "
-                        f"keeping first occurrence {seen_client_order_ids[order_report.client_order_id]})",
+                        f"正在对订单进行去重：{order_report.client_order_id} "
+                        f"（venue_order_id={venue_order_id}，"
+                        f"保留首次出现的 {seen_client_order_ids[order_report.client_order_id]}）",
                     )
                 else:
-                    # First occurrence - track it
+                    # 第一次出现 - 追踪
                     seen_client_order_ids[order_report.client_order_id] = venue_order_id
 
-        # Second pass: check against cached orders to prevent duplicates
-        # Only skip if order is an exact match (same status, filled_qty, etc.)
-        # This prevents duplicate creation while still allowing reconciliation of mismatches
+        # 第二遍：检查缓存订单以防止重复
+        # 仅当订单完全匹配（状态、成交数量等相同）时才跳过
+        # 这样可以在防止重复创建的同时，仍然允许对差异进行对账
         for venue_order_id, order_report in mass_status._order_reports.items():
             if venue_order_id in duplicate_venue_order_ids:
-                continue  # Already marked as duplicate
+                continue  # 已标记为重复
 
-            # Check if this order already exists in cache by client_order_id
+            # 通过 client_order_id 检查此订单是否已存在于缓存中
             if order_report.client_order_id is not None:
                 cached_order = self._cache.order(order_report.client_order_id)
                 if cached_order is not None:
-                    # Skip closed reconciliation orders to prevent duplicate inferred fills on restart
+                    # 跳过已关闭的对账订单，以防止重启时生成重复的推断成交
                     if (
                         cached_order.is_closed
                         and cached_order.tags is not None
@@ -1978,21 +1970,21 @@ class LiveExecutionEngine(ExecutionEngine):
                     ):
                         orders_to_skip.append(venue_order_id)
                         self._log.debug(
-                            f"Skipping closed reconciliation order {order_report.client_order_id}: "
-                            f"synthetic position adjustment from previous session",
+                            f"跳过已关闭的对账订单 {order_report.client_order_id}： "
+                            "来自上个周期的合成持仓调整",
                         )
                         continue
 
-                    # Order exists in cache - check if it's an exact duplicate
-                    # Only skip if it's an exact match (prevents duplicate creation)
-                    # But still reconcile if there are any discrepancies
+                    # 订单已存在于缓存中 - 检查其是否为完全重复的
+                    # 只有在完全匹配时才跳过（防止重复创建）
+                    # 但如果有任何差异，仍需进行对账
                     report_filled = (
                         order_report.filled_qty
                         if order_report.filled_qty is not None
                         else Quantity.zero(cached_order.quantity.precision)
                     )
 
-                    # Check for exact match - same status, filled_qty, and instrument
+                    # 检查是否完全匹配 - 具有相同的状态、成交数量和交易标的
                     is_exact_match = (
                         cached_order.status == order_report.order_status
                         and cached_order.filled_qty == report_filled
@@ -2001,42 +1993,42 @@ class LiveExecutionEngine(ExecutionEngine):
                     )
 
                     if is_exact_match:
-                        # Exact duplicate - skip to prevent duplicate creation
+                        # 完全重复 - 跳过以防止重复创建
                         orders_to_skip.append(venue_order_id)
                         self._log.debug(
-                            f"Skipping exact duplicate order {order_report.client_order_id}: "
-                            f"order already exists in cache with identical state",
+                            f"跳过完全重复的订单 {order_report.client_order_id}： "
+                            "缓存中已存在状态相同的订单",
                         )
                         continue
-                    # If not exact match, continue with reconciliation to fix discrepancies
+                    # 如果不是完全匹配，继续执行对账以修正差异
 
-            # Also check by venue_order_id if client_order_id lookup failed or wasn't provided
+            # 如果根据 client_order_id 查找失败或未提供，则还需尝试通过 venue_order_id 检查
             if order_report.venue_order_id is not None and order_report.client_order_id is None:
                 cached_client_id = self._cache.client_order_id(order_report.venue_order_id)
                 if cached_client_id is not None:
                     cached_order = self._cache.order(cached_client_id)
                     if cached_order is not None:
-                        # Update the report to use the cached client_order_id for consistency
+                        # 对报告进行更新，使用缓存的 client_order_id 以保持一致性
                         order_report.client_order_id = cached_client_id
                         self._log.debug(
-                            f"Found cached order {cached_client_id} by venue_order_id {order_report.venue_order_id}, "
-                            f"updating report to use cached client_order_id",
+                            f"通过 venue_order_id {order_report.venue_order_id} 找到缓存中的订单 {cached_client_id}，"
+                             "正在更新报告以使用缓存的 client_order_id",
                         )
-                        # Don't skip - still need to reconcile in case there are discrepancies
+                        # 不要跳过 - 如果存在差异仍需进行对账
 
         # Remove duplicates and orders to skip
         orders_to_remove = set(duplicate_venue_order_ids) | set(orders_to_skip)
         for venue_order_id in orders_to_remove:
             del mass_status._order_reports[venue_order_id]
 
-            # Also remove associated fills
+            # 同时也移除关联的成交
             if venue_order_id in mass_status._fill_reports:
                 del mass_status._fill_reports[venue_order_id]
 
         if orders_to_remove:
             self._log.debug(
-                f"Removed {len(orders_to_remove)} duplicate/skipped order(s) from reconciliation "
-                f"({len(duplicate_venue_order_ids)} duplicates, {len(orders_to_skip)} already in cache)",
+                f"从对账中移除了 {len(orders_to_remove)} 个重复/跳过的订单 "
+                f"（{len(duplicate_venue_order_ids)} 个重复，{len(orders_to_skip)} 个已在缓存中）",
                 LogColor.YELLOW,
             )
 
@@ -2052,114 +2044,112 @@ class LiveExecutionEngine(ExecutionEngine):
             if order_report.venue_order_id is None:
                 continue
 
-            # Skip orders that were filtered (e.g., instrument not loaded)
+            # 跳过已过滤的订单（例如，交易标的未加载）
             if order_report.client_order_id not in reconciled_orders:
                 self._log.debug(
-                    f"Skipping validation for {order_report.client_order_id} "
-                    f"(venue_order_id={order_report.venue_order_id}) - not in reconciled_orders",
+                    f"跳过 {order_report.client_order_id}（venue_order_id={order_report.venue_order_id}）的验证 - 不在 reconciled_orders 中",
                 )
                 continue
 
             if order_report.venue_order_id in venue_order_ids_seen:
                 issues.append(
-                    f"Duplicate venue_order_id {order_report.venue_order_id} in mass status",
+                    f"批量状态中存在重复的 venue_order_id {order_report.venue_order_id}",
                 )
 
             venue_order_ids_seen.add(order_report.venue_order_id)
 
-            # Check if venue_order_id is properly indexed
+            # 检查 venue_order_id 是否已正确建立索引
             if order_report.client_order_id:
                 cached_client_id = self._cache.client_order_id(order_report.venue_order_id)
                 if cached_client_id is None:
                     issues.append(
-                        f"Venue order ID {order_report.venue_order_id} not indexed in cache "
-                        f"for client_order_id {order_report.client_order_id}",
+                        f"柜台订单 ID {order_report.venue_order_id} 在缓存中未索引，"
+                        f"对应 client_order_id {order_report.client_order_id}",
                     )
                 elif cached_client_id != order_report.client_order_id:
                     issues.append(
-                        f"Venue order ID {order_report.venue_order_id} indexing mismatch: "
-                        f"expected {order_report.client_order_id}, found {cached_client_id}",
+                        f"柜台订单 ID {order_report.venue_order_id} 索引不匹配："
+                        f"预期为 {order_report.client_order_id}，实际找到 {cached_client_id}",
                     )
 
         if issues:
             self._log.warning(
-                f"Reconciliation state validation found {len(issues)} issue(s):\n"
+                f"对账状态验证发现 {len(issues)} 个问题：\n"
                 + "\n".join(f"  - {issue}" for issue in issues),
             )
         else:
             self._log.debug(
-                f"Reconciliation state validation passed for {len(mass_status._order_reports)} order(s)",
+                f"{len(mass_status._order_reports)} 个订单的对账状态验证通过",
             )
 
-    # -- FILL RECONCILIATION -----------------------------------------------------------------------
+    # -- 成交对账 -----------------------------------------------------------------------------------
 
     def _reconcile_fill_report_single(self, report: FillReport) -> bool:
         if self._is_shutting_down:
-            return True  # Skip reconciliation during shutdown
+            return True  # 停机期间跳过对账
 
         if not self._consider_for_reconciliation(report.instrument_id):
             self._log_skipping_reconciliation_on_instrument_id(report)
-            return True  # Filtered
+            return True  # 已过滤
 
         client_order_id: ClientOrderId | None = self._cache.client_order_id(
             report.venue_order_id,
         )
         if client_order_id is None:
             self._log.warning(
-                f"FillReport received before OrderStatusReport for {report.venue_order_id!r}, "
-                "deferring reconciliation - this may require a synthetic order",
+                f"在收到 OrderStatusReport 之前收到了 {report.venue_order_id!r} 的 FillReport，"
+                "推迟对账 - 这可能需要一个合成订单",
             )
-            return False  # Failed
+            return False  # 失败
 
         order: Order | None = self._cache.order(client_order_id)
 
         if order is None:
-            # Try to find order by venue_order_id if client_order_id lookup failed
-            # This handles cases where external orders might not be fully indexed yet
+            # 如果根据 client_order_id 查询失败，尝试根据 venue_order_id 查找订单
+            # 这处理了外部订单可能尚未完全被索引的情况
             if report.venue_order_id is not None:
                 order = self._find_order_by_venue_order_id(
                     venue_order_id=report.venue_order_id,
                     instrument_id=report.instrument_id,
-                    order_side=None,  # Don't filter by side to find any matching order
+                    order_side=None,  # 不按方向过滤，查找任何匹配的订单
                 )
                 if order is not None:
                     self._log.debug(
-                        f"Found order {order.client_order_id} by venue_order_id "
-                        f"{report.venue_order_id} for fill report",
+                        f"通过 venue_order_id {report.venue_order_id} 找到订单 {order.client_order_id}，"
+                        "用于成交报告",
                     )
-                    # Ensure mapping is indexed
+                    # 确保映射已建立索引
                     self._ensure_venue_order_id_indexed(
                         client_order_id=order.client_order_id,
                         venue_order_id=report.venue_order_id,
-                        log_context="for fill report",
+                        log_context="用于成交报告 (for fill report)",
                     )
-
             if order is None:
                 self._log.warning(
-                    f"FillReport received before order cached for {client_order_id!r} "
-                    f"(venue_order_id={report.venue_order_id!r}), deferring reconciliation",
+                    f"在订单缓存之前收到了 {client_order_id!r} 的 FillReport"
+                    f"（venue_order_id={report.venue_order_id!r}），推迟对账",
                 )
-                return False  # Failed
+                return False  # 失败
 
-        # Log external order processing for better visibility
+        # 记录外部订单处理情况以提高可见性
         if order.strategy_id.value == "EXTERNAL":
             self._log.debug(
-                f"Processing fill for external order {order.client_order_id} "
-                f"(venue_order_id={order.venue_order_id})",
+                f"正在处理外部订单 {order.client_order_id} 的成交 "
+                f"（venue_order_id={order.venue_order_id}）",
             )
 
         instrument: Instrument | None = self._cache.instrument(order.instrument_id)
         if instrument is None:
             self._log.debug(
-                f"Cannot reconcile order for {order.client_order_id!r}: "
-                f"instrument {order.instrument_id} not found",
+                f"无法为 {order.client_order_id!r} 对账订单： "
+                f"未找到交易标的 {order.instrument_id}",
             )
-            return True  # Filtered instrument not loaded
+            return True  # 标的已过滤或未加载
 
         return self._reconcile_fill_report(order, report, instrument)
 
     def _fill_reports_equal(self, cached_fill: OrderFilled, report: FillReport) -> bool:
-        # Commission can be missing on reports from some venues/paths; compare safely
+        # 来自某些场地/路径的报告中可能缺失手续费信息；进行安全比较
         if cached_fill.commission is None and report.commission is None:
             commissions_equal = True
         elif cached_fill.commission is None or report.commission is None:
@@ -2183,7 +2173,7 @@ class LiveExecutionEngine(ExecutionEngine):
         client_order_id: ClientOrderId,
         audit_entry: tuple[TradeId, str, int],
     ) -> None:
-        # Remove audit entry when fill application fails
+        # 当成交应用失败时，移除审计分录
         if audit_entry in self._fill_application_audit.get(client_order_id, []):
             self._fill_application_audit[client_order_id].remove(audit_entry)
 
@@ -2220,15 +2210,15 @@ class LiveExecutionEngine(ExecutionEngine):
             client_order_id=cached_order.client_order_id,
         )
 
-    # -- POSITION RECONCILIATION -------------------------------------------------------------------
+    # -- 持仓对账 -----------------------------------------------------------------------------------
 
     def _reconcile_position_report(self, report: PositionStatusReport) -> bool:
         if self._is_shutting_down:
-            return True  # Skip reconciliation during shutdown
+            return True  # 停机期间跳过对账
 
         if not self._consider_for_reconciliation(report.instrument_id):
             self._log_skipping_reconciliation_on_instrument_id(report)
-            return True  # Filtered
+            return True  # 已过滤
 
         if report.venue_position_id is not None:
             return self._reconcile_position_report_hedging(report)
@@ -2243,14 +2233,14 @@ class LiveExecutionEngine(ExecutionEngine):
 
     def _log_skipping_reconciliation_on_instrument_id(self, report: ExecutionReport) -> None:
         self._log.debug(
-            f"Skipping {type(report).__name__} reconciliation for {report.instrument_id}: "
-            f"not in `reconciliation_instrument_ids` include list",
+            f"跳过 {report.instrument_id} 的 {type(report).__name__} 对账： "
+            "不在 `reconciliation_instrument_ids` 包含列表中",
             LogColor.MAGENTA,
         )
 
     def _reconcile_position_report_hedging(self, report: PositionStatusReport) -> bool:
         self._log.info(
-            f"Reconciling HEDGE position for {report.instrument_id}, venue_position_id={report.venue_position_id}",
+            f"正在为 {report.instrument_id} 对账对冲（HEDGE）持仓，venue_position_id={report.venue_position_id}",
             LogColor.BLUE,
         )
 
@@ -2258,12 +2248,12 @@ class LiveExecutionEngine(ExecutionEngine):
 
         if position is None:
             if report.signed_decimal_qty == 0:
-                return True  # Both flat, no issue
+                return True  # 均为平仓，没有问题
 
             if not self.generate_missing_orders:
                 self._log.error(
-                    f"Cannot reconcile position: {report.venue_position_id!r} not found "
-                    "and `generate_missing_orders` is disabled",
+                    f"无法对账持仓：未找到 {report.venue_position_id!r} "
+                    "且已禁用 `generate_missing_orders`",
                 )
                 return False
 
@@ -2274,9 +2264,9 @@ class LiveExecutionEngine(ExecutionEngine):
         if position_signed_decimal_qty != report.signed_decimal_qty:
             if not self.generate_missing_orders:
                 self._log.error(
-                    f"Cannot reconcile {report.instrument_id} {report.venue_position_id!r}: "
-                    f"position net qty {position_signed_decimal_qty} != reported net qty "
-                    f"{report.signed_decimal_qty} and `generate_missing_orders` is disabled",
+                    f"无法对账 {report.instrument_id} {report.venue_position_id!r}： "
+                    f"持仓净数量 {position_signed_decimal_qty} != 报告的净数量 "
+                    f"{report.signed_decimal_qty} 且已禁用 `generate_missing_orders`",
                 )
                 return False
 
@@ -2286,7 +2276,7 @@ class LiveExecutionEngine(ExecutionEngine):
                 position_signed_decimal_qty=position_signed_decimal_qty,
             )
 
-        return True  # Reconciled
+        return True  # 已对账
 
     def _reconcile_hedge_position_discrepancy(
         self,
@@ -2297,23 +2287,22 @@ class LiveExecutionEngine(ExecutionEngine):
         instrument = self._cache.instrument(report.instrument_id)
         if instrument is None:
             self._log.debug(
-                f"Cannot reconcile position for {report.instrument_id}: instrument not found",
+                f"无法为 {report.instrument_id} 对账持仓：未找到交易标的",
             )
-            return True  # Filtered instrument not loaded
+            return True  # 标的已过滤或未加载
 
         diff = abs(position_signed_decimal_qty - report.signed_decimal_qty)
         diff_quantity = Quantity(diff, instrument.size_precision)
 
         if diff_quantity == 0:
             self._log.debug(
-                f"Difference quantity rounds to zero for {instrument.id}, skipping",
+                f"{instrument.id} 的差额数量四舍五入后为零，跳过",
             )
             return True
 
         self._log.warning(
-            f"Hedge position discrepancy for {report.instrument_id} "
-            f"{report.venue_position_id!r}: cached={position_signed_decimal_qty}, "
-            f"venue={report.signed_decimal_qty}, generating reconciliation order",
+            f"{report.instrument_id} {report.venue_position_id!r} 的对冲持仓不一致： "
+            f"缓存={position_signed_decimal_qty}，柜台={report.signed_decimal_qty}，正在生成对账订单",
             LogColor.YELLOW,
         )
 
@@ -2336,9 +2325,9 @@ class LiveExecutionEngine(ExecutionEngine):
         instrument = self._cache.instrument(report.instrument_id)
         if instrument is None:
             self._log.debug(
-                f"Cannot reconcile position for {report.instrument_id}: instrument not found",
+                f"无法为 {report.instrument_id} 对账持仓：未找到交易标的",
             )
-            return True  # Filtered instrument not loaded
+            return True  # 标的已过滤或未加载
 
         quantity = Quantity(abs(report.signed_decimal_qty), instrument.size_precision)
 
@@ -2346,9 +2335,8 @@ class LiveExecutionEngine(ExecutionEngine):
             return True
 
         self._log.warning(
-            f"Missing hedge position for {report.instrument_id} "
-            f"{report.venue_position_id!r}: venue reports {report.signed_decimal_qty}, "
-            f"generating reconciliation order",
+            f"{report.instrument_id} {report.venue_position_id!r} 缺失对冲持仓： "
+            f"柜台报告为 {report.signed_decimal_qty}，正在生成对账订单",
             LogColor.YELLOW,
         )
 
@@ -2369,17 +2357,17 @@ class LiveExecutionEngine(ExecutionEngine):
         self,
         report: PositionStatusReport,
     ) -> bool:
-        self._log.info(f"Reconciling NET position for {report.instrument_id}", LogColor.BLUE)
+        self._log.info(f"正在为 {report.instrument_id} 对账净额（NET）持仓", LogColor.BLUE)
 
         instrument = self._cache.instrument(report.instrument_id)
         if instrument is None:
             self._log.debug(
-                f"Cannot reconcile position for {report.instrument_id}: instrument not found",
+                f"无法为 {report.instrument_id} 对账持仓：未找到交易标的",
             )
-            return True  # Filtered instrument not loaded
+            return True  # 标的已过滤或未加载
 
         positions_open: list[Position] = self._cache.positions_open(
-            venue=None,  # Faster query filtering
+            venue=None,  # 更快的查询过滤
             instrument_id=report.instrument_id,
         )
 
@@ -2391,14 +2379,13 @@ class LiveExecutionEngine(ExecutionEngine):
         self._log.info(f"{report.signed_decimal_qty=}", LogColor.BLUE)
         self._log.info(f"{position_signed_decimal_qty=}", LogColor.BLUE)
 
-        # Check if quantities match
+        # 检查数量是否匹配
         quantities_match = position_signed_decimal_qty == report.signed_decimal_qty
 
         if not quantities_match:
             if not self.generate_missing_orders:
                 self._log.warning(
-                    f"Discrepancy for {report.instrument_id} position "
-                    "when `generate_missing_orders` disabled, skipping further reconciliation",
+                    f"当禁用 `generate_missing_orders` 时，{report.instrument_id} 持仓出现不一致，跳过进一步对账",
                 )
                 return True
 
@@ -2408,14 +2395,14 @@ class LiveExecutionEngine(ExecutionEngine):
 
             if diff_quantity == 0:
                 self._log.debug(
-                    f"Difference quantity rounds to zero for {instrument.id}, skipping order generation",
+                    f"{instrument.id} 的差额数量四舍五入后为零，跳过订单生成",
                 )
                 return True
 
-            # Calculate current position average price if available (needed for reconciliation)
+            # 如果可用，计算当前持仓平均价格（对账所需）
             current_avg_px = None
             if positions_open:
-                # Calculate weighted average price of current positions
+                # 计算当前持仓的加权平均价格
                 total_value = Decimal(0)
                 total_qty = Decimal(0)
 
@@ -2429,7 +2416,7 @@ class LiveExecutionEngine(ExecutionEngine):
                 if total_qty > 0:
                     current_avg_px = total_value / total_qty
 
-            # Check if position crosses through zero (flips from long to short or vice versa)
+            # 检查持仓是否跨越零点（从多头转为空头，或反之亦然）
             crosses_zero = (
                 position_signed_decimal_qty != 0
                 and report.signed_decimal_qty != 0
@@ -2457,10 +2444,10 @@ class LiveExecutionEngine(ExecutionEngine):
             if diff_report:
                 self._reconcile_order_report(diff_report, trades=[], is_external=False)
         elif quantities_match and report.avg_px_open is not None:
-            # Quantities match, but verify avg_px_open also matches
+            # 数量匹配，但需验证 avg_px_open 是否也匹配
             current_avg_px = None
             if positions_open:
-                # Calculate weighted average price of current positions
+                # 计算当前持仓的加权平均价格
                 total_value = Decimal(0)
                 total_qty = Decimal(0)
 
@@ -2475,26 +2462,26 @@ class LiveExecutionEngine(ExecutionEngine):
                     current_avg_px = total_value / total_qty
 
             if current_avg_px is not None:
-                # Check if avg_px matches within tolerance
+                # 检查 avg_px 在容差范围内是否匹配
                 avg_px_diff = abs(current_avg_px - report.avg_px_open)
                 relative_diff = avg_px_diff / report.avg_px_open if report.avg_px_open != 0 else 0
 
-                if relative_diff > Decimal("0.0001"):  # 0.01% tolerance
+                if relative_diff > Decimal("0.0001"):  # 0.01% 容差
                     self._log.warning(
-                        f"Position avg_px mismatch for {report.instrument_id} after reconciliation: "
-                        f"internal={current_avg_px}, venue={report.avg_px_open}, "
-                        f"diff={avg_px_diff} ({relative_diff * 100:.4f}%). "
-                        f"This indicates incomplete reconciliation data from the venue.",
+                        f"{report.instrument_id} 对账后持仓平均价格（avg_px）不匹配： "
+                        f"内部={current_avg_px}, 柜台={report.avg_px_open}, "
+                        f"差异={avg_px_diff} ({relative_diff * 100:.4f}%)。 "
+                        "这表明来自柜台的对账数据不完整。",
                         LogColor.YELLOW,
                     )
                 else:
                     self._log.info(
-                        f"Position avg_px verified for {report.instrument_id}: "
-                        f"internal={current_avg_px}, venue={report.avg_px_open}",
+                        f"已验证 {report.instrument_id} 的持仓平均价格（avg_px）： "
+                        f"内部={current_avg_px}, 柜台={report.avg_px_open}",
                         LogColor.BLUE,
                     )
 
-        return True  # Reconciled
+        return True  # 已完成对账
 
     def _reconcile_cross_zero_position(
         self,
@@ -2504,20 +2491,20 @@ class LiveExecutionEngine(ExecutionEngine):
         current_avg_px: Decimal | None,
     ) -> bool:
         self._log.info(
-            f"Position crosses through zero for {report.instrument_id}: "
-            f"current={position_signed_decimal_qty}, target={report.signed_decimal_qty}. "
-            f"Splitting reconciliation into two fills: close existing position, then open new position",
+            f"{report.instrument_id} 的持仓跨越零点（反向）： "
+            f"当前={position_signed_decimal_qty}, 目标={report.signed_decimal_qty}。 "
+            "将对账拆分为两次成交：首先平掉现有持仓，然后开设新持仓",
             LogColor.BLUE,
         )
 
         now = self._clock.timestamp_ns()
 
-        # First fill: Close the existing position (bring to zero)
+        # 第一笔成交：平掉现有持仓（归零）
         close_qty_decimal = abs(position_signed_decimal_qty)
         close_quantity = Quantity(close_qty_decimal, instrument.size_precision)
         close_side = OrderSide.BUY if position_signed_decimal_qty < 0 else OrderSide.SELL
 
-        # Use current position average price for closing
+        # 使用当前持仓平均价进行平仓
         close_price = None
         if current_avg_px is not None:
             close_price = instrument.make_price(current_avg_px)
@@ -2528,7 +2515,7 @@ class LiveExecutionEngine(ExecutionEngine):
 
         close_result = False
         if close_price:
-            # Fix 2: Check for matching cached order before creating synthetic order
+            # 修正 2：在创建合成订单前检查匹配的缓存订单
             close_avg_px = close_price.as_decimal()
             matching_close_order = self._find_matching_cached_order(
                 instrument_id=report.instrument_id,
@@ -2540,8 +2527,8 @@ class LiveExecutionEngine(ExecutionEngine):
 
             if matching_close_order:
                 self._log.debug(
-                    f"Found matching cached order {matching_close_order.client_order_id} "
-                    f"for closing position {report.instrument_id}, reusing instead of creating synthetic order",
+                    f"找到匹配的缓存订单 {matching_close_order.client_order_id} "
+                    f"用于平仓 {report.instrument_id}，重用该订单而不是创建合成订单",
                 )
                 close_report = self._create_order_status_report_from_cached_order(
                     cached_order=matching_close_order,
@@ -2580,12 +2567,12 @@ class LiveExecutionEngine(ExecutionEngine):
                 is_external=False,
             )
 
-        # Second fill: Open new position in opposite direction
+        # 第二笔成交：反向开设新持仓
         open_qty_decimal = abs(report.signed_decimal_qty)
         open_quantity = Quantity(open_qty_decimal, instrument.size_precision)
         open_side = OrderSide.BUY if report.signed_decimal_qty > 0 else OrderSide.SELL
 
-        # Use venue's reported average price for the new position
+        # 使用场地报告的平均价作为新持仓价格
         open_price = None
         if report.avg_px_open is not None:
             open_price = instrument.make_price(report.avg_px_open)
@@ -2594,32 +2581,31 @@ class LiveExecutionEngine(ExecutionEngine):
             if quote:
                 open_price = quote.ask_price if open_side == OrderSide.BUY else quote.bid_price
             elif close_price:
-                # Only allow fallback for CurrencyPair since spot asset positions may lack cost basis
+                # 仅允许对 CurrencyPair 进行备选处理，因为现货资产持仓可能缺少成本依据
                 is_currency_pair = isinstance(instrument, CurrencyPair)
 
                 if is_currency_pair:
                     open_price = close_price
                     self._log.warning(
-                        f"Using close price {close_price} as fallback for opening position "
-                        f"in cross-zero reconciliation for {report.instrument_id}; "
-                        f"venue position report lacks avg_px_open (spot asset position without cost basis)",
+                        f"在 {report.instrument_id} 的跨零对账中，使用平仓价格 {close_price} 作为开仓位置的备选； "
+                        "柜台持仓报告缺少 avg_px_open（没有成本依据的现货资产持仓）",
                     )
                 else:
                     self._log.error(
-                        f"Cannot determine open price for {report.instrument_id}: "
-                        f"venue position report lacks avg_px_open and no quote tick available; "
-                        f"this fallback is only allowed for CurrencyPair (spot asset) positions",
+                        f"无法确定 {report.instrument_id} 的开仓价格： "
+                        "柜台持仓报告缺少 avg_px_open 且没有可用的报价（quote tick）； "
+                        "此备选方案仅允许用于 CurrencyPair（现货资产）持仓",
                     )
             else:
                 self._log.error(
-                    f"Cannot determine open price for {report.instrument_id}: "
-                    f"no close price available (existing position lacks avg_px), "
-                    f"venue position report lacks avg_px_open, and no quote tick available",
+                    f"无法确定 {report.instrument_id} 的开仓价格： "
+                    "没有可用的平仓价格（现有持仓缺少 avg_px）， "
+                    "柜台持仓报告缺少 avg_px_open，且没有可用的报价",
                 )
 
         open_result = False
         if open_price:
-            # Fix 2: Check for matching cached order before creating synthetic order
+            # 修正 2：在创建合成订单前检查匹配的缓存订单
             open_avg_px = open_price.as_decimal()
             matching_open_order = self._find_matching_cached_order(
                 instrument_id=report.instrument_id,
@@ -2631,8 +2617,8 @@ class LiveExecutionEngine(ExecutionEngine):
 
             if matching_open_order:
                 self._log.debug(
-                    f"Found matching cached order {matching_open_order.client_order_id} "
-                    f"for opening position {report.instrument_id}, reusing instead of creating synthetic order",
+                    f"找到匹配的缓存订单 {matching_open_order.client_order_id} "
+                    f"用于开仓 {report.instrument_id}，重用该订单而不是创建合成订单",
                 )
                 open_report = self._create_order_status_report_from_cached_order(
                     cached_order=matching_open_order,
@@ -2671,15 +2657,15 @@ class LiveExecutionEngine(ExecutionEngine):
                 is_external=False,
             )
 
-        # Check both fills succeeded
+        # 检查两笔成交是否均成功
         if not (close_result and open_result):
             self._log.error(
-                f"Failed to reconcile cross-zero position for {report.instrument_id}: "
-                f"close={close_result}, open={open_result}",
+                f"对账 {report.instrument_id} 的跨零持仓失败： "
+                f"平仓={close_result}, 开仓={open_result}",
             )
             return False
 
-        return True  # Reconciliation complete via split fills
+        return True  # 通过拆分成两笔成交完成对账
 
     def _create_position_reconciliation_report(
         self,
@@ -2695,7 +2681,7 @@ class LiveExecutionEngine(ExecutionEngine):
             else OrderSide.SELL
         )
 
-        # Calculate reconciliation price
+        # 计算对账价格
         reconciliation_price = calculate_reconciliation_price(
             current_position_qty=position_signed_decimal_qty,
             current_position_avg_px=current_avg_px,
@@ -2704,13 +2690,13 @@ class LiveExecutionEngine(ExecutionEngine):
             instrument=instrument,
         )
 
-        # If we couldn't calculate a price, use a reasonable fallback
+        # 如果无法计算价格，使用合理的备选方案
         if reconciliation_price is None:
-            # If avg_px_open is None, we cannot compute an exact reconciliation price
-            # and will fall back to a market price.
+            # 如果 avg_px_open 为 None，我们无法计算精确的对账价格，
+            # 将回退到市价。
             self._log.warning(
-                f"Cannot calculate exact reconciliation price for {report.instrument_id}: "
-                f"position report lacks average price information, using last quote fallback",
+                f"无法计算 {report.instrument_id} 的精确对账价格： "
+                "持仓报告缺少平均价格信息，使用最后报价作为备选",
             )
 
             quote = self._cache.quote_tick(report.instrument_id)
@@ -2721,18 +2707,18 @@ class LiveExecutionEngine(ExecutionEngine):
                 else:  # OrderSide.SELL
                     reconciliation_price = quote.bid_price
             else:
-                # If no market data, use current average price of positions as fallback
+                # 如果没有市场数据，使用持仓的当前平均价格作为备选
                 if current_avg_px is not None:
                     reconciliation_price = instrument.make_price(current_avg_px)
 
         now = self._clock.timestamp_ns()
 
         if reconciliation_price:
-            # Generate a LIMIT order with the calculated reconciliation price
+            # 生成一笔带有计算得出的对账价格的限价（LIMIT）订单
             avg_px = reconciliation_price.as_decimal()
 
-            # Only reuse cached orders for netting mode - hedge mode positions are tracked
-            # separately and reusing orders could match the wrong position
+            # 仅在净额模式下重用缓存订单 - 对冲模式持仓是单独跟踪的，
+            # 重用订单可能会匹配到错误的持仓
             matching_diff_order = None
             if report.venue_position_id is None:
                 matching_diff_order = self._find_matching_cached_order(
@@ -2745,8 +2731,8 @@ class LiveExecutionEngine(ExecutionEngine):
 
             if matching_diff_order:
                 self._log.debug(
-                    f"Found matching cached order {matching_diff_order.client_order_id} "
-                    f"for position reconciliation {report.instrument_id}, reusing instead of creating synthetic order",
+                    f"找到匹配的缓存订单 {matching_diff_order.client_order_id} "
+                    f"用于持仓对账 {report.instrument_id}，重用该订单而不是创建合成订单",
                 )
                 return self._create_order_status_report_from_cached_order(
                     cached_order=matching_diff_order,
@@ -2780,15 +2766,15 @@ class LiveExecutionEngine(ExecutionEngine):
                     ts_init=now,
                 )
         else:
-            # No price information, fall back to generated MARKET order
+            # 无价格信息，回退到生成的市价（MARKET）订单
             avg_px = None
             self._log.warning(
-                f"Could not determine reconciliation price for {report.instrument_id}, "
-                f"generating MARKET order for position reconciliation "
-                f"(current: {position_signed_decimal_qty}, target: {report.signed_decimal_qty})",
+                f"无法确定 {report.instrument_id} 的对账价格， "
+                "正在为持仓对账生成市价（MARKET）订单 "
+                f"（当前：{position_signed_decimal_qty}，目标：{report.signed_decimal_qty}）",
             )
 
-            # Only reuse cached orders for netting mode
+            # 仅对净额模式重用缓存订单
             matching_diff_order = None
             if report.venue_position_id is None:
                 matching_diff_order = self._find_matching_cached_order(
@@ -2801,8 +2787,8 @@ class LiveExecutionEngine(ExecutionEngine):
 
             if matching_diff_order:
                 self._log.debug(
-                    f"Found matching cached order {matching_diff_order.client_order_id} "
-                    f"for position reconciliation {report.instrument_id}, reusing instead of creating synthetic order",
+                    f"找到匹配的缓存订单 {matching_diff_order.client_order_id} "
+                    f"用于持仓对账 {report.instrument_id}，重用该订单而不是创建合成订单",
                 )
                 return self._create_order_status_report_from_cached_order(
                     cached_order=matching_diff_order,
@@ -2842,36 +2828,36 @@ class LiveExecutionEngine(ExecutionEngine):
         is_external: bool = True,
     ) -> bool:
         if self._is_shutting_down:
-            return True  # Skip reconciliation during shutdown
+            return True  # 停机期间跳过对账
 
         client_order_id = self._resolve_client_order_id(report)
 
-        # Reset retry count
+        # 重置重试计数
         self._clear_recon_tracking(client_order_id)
 
-        self._log.debug(f"Reconciling order for {client_order_id!r}", LogColor.MAGENTA)
+        self._log.debug(f"正在为 {client_order_id!r} 对账订单", LogColor.MAGENTA)
         order: Order = self._cache.order(client_order_id)
 
         if order is None:
             instrument = self._cache.instrument(report.instrument_id)
             if instrument is None:
                 self._log.debug(
-                    f"Cannot reconcile order for {client_order_id!r}: "
-                    f"instrument {report.instrument_id} not found",
+                    f"无法为 {client_order_id!r} 对账订单： "
+                    f"未找到交易标的 {report.instrument_id}",
                 )
-                return True  # Filtered instrument not loaded
+                return True  # 标的已过滤或未加载
 
             order = self._generate_order(report, is_external)
 
             if order is None:
-                # External order dropped
-                return True  # No further reconciliation
+                # 外部订单已丢弃
+                return True  # 不再进行进一步对账
 
-            # Add to cache without determining any position ID initially
+            # 加入缓存时最初不确定任何持仓 ID
             self._cache.add_order(order)
 
-            # Explicitly index venue_order_id for external orders to ensure they can be found
-            # by venue_order_id in subsequent reconciliation passes
+            # 为外部订单显式建立 venue_order_id 索引，以确保在随后的对账过程中
+            # 能够通过 venue_order_id 找到它们
             if order.venue_order_id is not None:
                 self._ensure_venue_order_id_indexed(
                     client_order_id=order.client_order_id,
@@ -2882,28 +2868,28 @@ class LiveExecutionEngine(ExecutionEngine):
                 self._add_own_book_order(order)
 
         else:
-            # Order already exists, check instrument
+            # 订单已存在，检查交易标的
             instrument = self._cache.instrument(order.instrument_id)
             if instrument is None:
                 self._log.debug(
-                    f"Cannot reconcile order for {order.client_order_id!r}: "
-                    f"instrument {order.instrument_id} not found",
+                    f"无法为 {order.client_order_id!r} 对账订单： "
+                    f"未找到交易标的 {order.instrument_id}",
                 )
-                return True  # Filtered instrument not loaded
+                return True  # 标的已过滤或未加载
 
-        # Handle order status transitions
+        # 处理订单状态转换
         status_result = self._handle_order_status_transitions(order, report, trades, instrument)
         if status_result is not None:
             return status_result
 
-        # Reconcile all trades
+        # 对账所有成交
         for trade in trades:
             self._reconcile_fill_report(order, trade, instrument)
 
         if report.avg_px is None:
-            self._log.warning("report.avg_px was `None` when a value was expected")
+            self._log.warning("预期有值时 report.avg_px 为 `None`")
 
-        # Handle fill quantity mismatches
+        # 处理成交数量不匹配的情况
         return self._handle_fill_quantity_mismatch(order, report, instrument, client_order_id)
 
     def _resolve_client_order_id(self, report: OrderStatusReport) -> ClientOrderId:
@@ -2911,8 +2897,8 @@ class LiveExecutionEngine(ExecutionEngine):
         if client_order_id is None:
             client_order_id = self._cache.client_order_id(report.venue_order_id)
             if client_order_id is None and report.venue_order_id is not None:
-                # Check if an external order with this venue_order_id already exists
-                # by searching cached orders (handles cases where index might not be built yet)
+                # 检查具有此 venue_order_id 的外部订单是否已存在
+                # 通过搜索缓存的订单（处理索引可能尚未建立的情况）
                 cached_order = self._find_order_by_venue_order_id(
                     venue_order_id=report.venue_order_id,
                     instrument_id=report.instrument_id,
@@ -2921,20 +2907,20 @@ class LiveExecutionEngine(ExecutionEngine):
                 if cached_order is not None:
                     client_order_id = cached_order.client_order_id
                     self._log.debug(
-                        f"Found existing external order {client_order_id} by venue_order_id "
-                        f"{report.venue_order_id}, reusing",
+                        f"通过 venue_order_id {report.venue_order_id} 找到现有的外部订单 {client_order_id}， "
+                        "正在重用",
                     )
-                    # Ensure mapping is indexed
+                    # 确保映射已建立索引
                     self._ensure_venue_order_id_indexed(
                         client_order_id=client_order_id,
                         venue_order_id=report.venue_order_id,
                     )
 
             if client_order_id is None:
-                # Generate external client order ID
+                # 生成外部客户端订单 ID
                 client_order_id = ClientOrderId(UUID4().value)
 
-            # Assign to report
+            # 分配给报告
             report.client_order_id = client_order_id
 
         return client_order_id
@@ -2945,7 +2931,7 @@ class LiveExecutionEngine(ExecutionEngine):
         venue_order_id: VenueOrderId,
         log_context: str = "",
     ) -> None:
-        # Index venue_order_id in cache for lookups
+        # 在缓存中为 venue_order_id 建立索引以便查询
         try:
             self._cache.add_venue_order_id(
                 client_order_id,
@@ -2953,11 +2939,11 @@ class LiveExecutionEngine(ExecutionEngine):
                 overwrite=False,
             )
         except ValueError:
-            # Mapping already exists or conflicts - this is expected if order was
-            # previously indexed or if there's a conflict (which should be rare)
+            # 映射已存在或冲突 - 如果订单在
+            # 之前已建立索引，或存在冲突（应该很少见），这是符合预期的
             self._log.debug(
-                f"Venue order ID {venue_order_id} already indexed for "
-                f"{client_order_id}{' ' + log_context if log_context else ''}, skipping",
+                f"柜台订单 ID {venue_order_id} 已为 "
+                f"{client_order_id}{' ' + log_context if log_context else ''} 建立索引，跳过",
             )
 
     def _handle_fill_quantity_mismatch(
@@ -2968,7 +2954,7 @@ class LiveExecutionEngine(ExecutionEngine):
         client_order_id: ClientOrderId,
     ) -> bool:
         if report.filled_qty < order.filled_qty:
-            # Gather diagnostic information
+            # 收集诊断信息
             fill_history = [
                 (event.trade_id, event.last_qty, event.ts_event)
                 for event in order.events
@@ -2976,8 +2962,8 @@ class LiveExecutionEngine(ExecutionEngine):
             ]
 
             self._log.error(
-                f"report.filled_qty {report.filled_qty} < order.filled_qty {order.filled_qty}, "
-                f"this could potentially be caused by duplicate fills or corrupted cached state; "
+                f"report.filled_qty {report.filled_qty} < order.filled_qty {order.filled_qty}， "
+                "这可能是由于成交重复或缓存状态损坏引起的； "
                 f"order_id={order.client_order_id}, venue_order_id={order.venue_order_id}, "
                 f"total_fills_applied={len(fill_history)}, "
                 f"fill_trade_ids={order.trade_ids}, "
@@ -2985,16 +2971,16 @@ class LiveExecutionEngine(ExecutionEngine):
                 f"order_status={order.status}, report_status={report.order_status}",
             )
 
-            # Log each fill for forensics
+            # 记录每笔成交以便法庭调查（forensics）
             for trade_id, qty, ts in fill_history:
-                self._log.error(f"  Fill: {trade_id}, qty={qty}, ts={ts}")
+                self._log.error(f"  成交：{trade_id}，数量={qty}，时间={ts}")
 
-            return False  # Failed
+            return False  # 失败
 
         if report.filled_qty > order.filled_qty:
-            # Check if order is already closed to avoid duplicate inferred fills
+            # 检查订单是否已关闭，以避免重复生成推断成交
             if order.is_closed:
-                # Use the higher precision for tolerance check
+                # 使用更高精度进行容差检查
                 precision = max(report.filled_qty.precision, order.filled_qty.precision)
                 if is_within_single_unit_tolerance(
                     report.filled_qty.as_decimal(),
@@ -3003,26 +2989,26 @@ class LiveExecutionEngine(ExecutionEngine):
                 ):
                     return True
 
-                self._log.debug(  # TODO: Reduce level to debug after initial development phase
-                    f"{order.instrument_id} {order.client_order_id!r} already {order.status_string()} but "
-                    f"reported difference in filled_qty: "
-                    f"report={report.filled_qty}, cached={order.filled_qty}, "
-                    f"skipping inferred fill generation for closed order",
+                # 注意：在初始开发阶段后，可以将日志级别降至 debug
+                self._log.debug(
+                    f"{order.instrument_id} {order.client_order_id!r} 已处于 {order.status_string()} 状态，但 "
+                    "报告的成交数量有差异： "
+                    f"报告={report.filled_qty}，缓存={order.filled_qty}， "
+                    "跳过为已关闭订单生成推断成交",
                 )
-                return True  # Consider it reconciled to avoid infinite loops
+                return True  # 视为已完成对账以避免无限循环
 
-            # This is due to missing fill report(s), there may now be some
-            # information loss if multiple fills occurred to reach the reported
-            # state, or if commissions differed from the default.
+            # 这是由于成交报告缺失引起的，如果达到报告状态前
+            # 发生了多次成交，或者手续费与默认值不同，现在可能会有一些信息丢失。
             try:
                 fill: OrderFilled = self._generate_inferred_fill(order, report, instrument)
                 self._handle_event_with_tracking(fill)
             except ValueError as e:
                 self._log.error(
-                    f"Cannot generate inferred fill for {order.client_order_id}: {e}. "
-                    f"Reconciliation for this order failed.",
+                    f"无法为 {order.client_order_id} 生成推断成交：{e}。 "
+                    "该订单的对账失败。",
                 )
-                return False  # Failed
+                return False  # 失败
 
             if (
                 report.avg_px is not None
@@ -3030,11 +3016,11 @@ class LiveExecutionEngine(ExecutionEngine):
                 and not math.isclose(float(report.avg_px), float(order.avg_px))
             ):
                 self._log.warning(
-                    f"report.avg_px {report.avg_px} != order.avg_px {order.avg_px}, "
-                    "this could potentially be caused by information loss due to inferred fills",
+                    f"report.avg_px {report.avg_px} != order.avg_px {order.avg_px}， "
+                    "这可能是由于推断成交导致信息丢失引起的",
                 )
 
-        return True  # Reconciled
+        return True  # 已完成对账
 
     def _handle_order_status_transitions(
         self,
@@ -3047,19 +3033,19 @@ class LiveExecutionEngine(ExecutionEngine):
             if order.status != OrderStatus.REJECTED:
                 self._generate_order_rejected(order, report)
 
-            return True  # Reconciled
+            return True  # 已完成对账
 
         if report.order_status == OrderStatus.ACCEPTED:
             if order.status != OrderStatus.ACCEPTED:
                 self._generate_order_accepted(order, report)
 
-            return True  # Reconciled
+            return True  # 已完成对账
 
-        # Order must have been accepted from this point
+        # 从此点开始订单必须已被接受
         if order.status in (OrderStatus.INITIALIZED, OrderStatus.SUBMITTED):
             self._generate_order_accepted(order, report)
 
-        # Update order quantity and price differences
+        # 更新订单数量和价格差异
         if self._should_update(order, report):
             self._generate_order_updated(order, report)
 
@@ -3067,39 +3053,39 @@ class LiveExecutionEngine(ExecutionEngine):
             if order.status != OrderStatus.TRIGGERED:
                 self._generate_order_triggered(order, report)
 
-            return True  # Reconciled
+            return True  # 已完成对账
 
         if report.order_status == OrderStatus.CANCELED:
             if order.status != OrderStatus.CANCELED and order.is_open:
                 if report.ts_triggered > 0:
                     self._generate_order_triggered(order, report)
 
-                # Reconcile all trades
+                # 对账所有成交
                 for trade in trades:
                     self._reconcile_fill_report(order, trade, instrument)
 
                 self._generate_order_canceled(order, report)
 
-            return True  # Reconciled
+            return True  # 已完成对账
 
         if report.order_status == OrderStatus.EXPIRED:
             if order.status != OrderStatus.EXPIRED and order.is_open:
                 if report.ts_triggered > 0:
                     self._generate_order_triggered(order, report)
 
-                # Reconcile all trades before expired event (same as canceled)
+                # 在过期事件前对账所有成交（与取消相同）
                 for trade in trades:
                     self._reconcile_fill_report(order, trade, instrument)
 
                 self._generate_order_expired(order, report)
 
-            return True  # Reconciled
+            return True  # 已完成对账
 
-        return None  # Continue with fill reconciliation
+        return None  # 继续处理成交对账
 
     def _should_update(self, order: Order, report: OrderStatusReport) -> bool:
         if report.quantity != order.quantity and report.quantity >= order.filled_qty:
-            return True  # Valid quantity update
+            return True  # 有效的数量更新
 
         match order.order_type:
             case OrderType.LIMIT:
@@ -3117,50 +3103,49 @@ class LiveExecutionEngine(ExecutionEngine):
         report: FillReport,
         instrument: Instrument,
     ) -> bool:
-        # Check if this fill should be skipped (predates inferred fill or is duplicate)
+        # 检查是否应跳过此成交（早于推断成交或者是重复成交）
         skip_result = self._check_and_skip_duplicate_fill(order, report)
         if skip_result is not None:
             return skip_result
 
-        # Check if fill would cause overfill
+        # 检查成交是否会导致超额成交
         potential_filled_qty = order.filled_qty + report.last_qty
         if potential_filled_qty > order.quantity:
             if not self.allow_overfills:
                 self._log.warning(
-                    f"Rejecting fill that would cause overfill for {order.client_order_id!r}: "
-                    f"order.quantity={order.quantity}, order.filled_qty={order.filled_qty}, "
-                    f"fill.last_qty={report.last_qty}, would result in filled_qty={potential_filled_qty}",
+                    f"拒绝会导致 {order.client_order_id!r} 超额成交的成交报告： "
+                    f"订单数量={order.quantity}，已成交数量={order.filled_qty}， "
+                    f"成交数量={report.last_qty}，将导致成交总量={potential_filled_qty}",
                 )
-                return False  # Reject fill to prevent overfill
-            # allow_overfills=True: log warning but allow the fill through
+                return False  # 拒绝成交以防止超额成交
+            # allow_overfills=True: 记录警告但允许成交通过
             self._log.warning(
-                f"Allowing overfill during reconciliation for {order.client_order_id!r}: "
-                f"order.quantity={order.quantity}, order.filled_qty={order.filled_qty}, "
-                f"fill.last_qty={report.last_qty}, will result in filled_qty={potential_filled_qty}",
+                f"允许在对账期间为 {order.client_order_id!r} 进行超额成交： "
+                f"订单数量={order.quantity}，已成交数量={order.filled_qty}， "
+                f"成交数量={report.last_qty}，将导致成交总量={potential_filled_qty}",
             )
 
-        # Verify total fills consistency BEFORE applying
+        # 在应用之前，验证总成交的一致性
         current_total = sum(
             event.last_qty for event in order.events if isinstance(event, OrderFilled)
         )
         if current_total != order.filled_qty:
             self._log.error(
-                f"INCONSISTENCY DETECTED before applying fill: "
-                f"sum(fills)={current_total} != order.filled_qty={order.filled_qty} "
-                f"for {order.client_order_id}",
+                f"应用成交前检测到不一致： "
+                f"{order.client_order_id} 的成交总和 sum(fills)={current_total} != 已成交数量 order.filled_qty={order.filled_qty}",
             )
 
-        # Final check: ensure trade_id doesn't already exist before generating fill
-        # This prevents KeyError from being raised in _apply_event_to_order
+        # 最终检查：在生成成交前确保 trade_id 不存在
+        # 这防止了在 _apply_event_to_order 中抛出 KeyError
         existing_fill = get_existing_fill_for_trade_id(order, report.trade_id)
         if report.trade_id in order.trade_ids or existing_fill is not None:
             self._log.debug(
-                f"Fill with trade_id {report.trade_id} already exists for order {order.client_order_id}, skipping duplicate",
+                f"订单 {order.client_order_id} 已存在 trade_id 为 {report.trade_id} 的成交，跳过重复项",
             )
-            return True  # Fill already exists, treat as successful
+            return True  # 成交已存在，视为成功
 
-        # Track fill application in audit trail BEFORE generating the fill
-        # This ensures cleanup on close remains effective if this fill closes the order
+        # 在生成成交之前跟踪审计路径中的成交应用
+        # 如果此成交平掉了订单，这确保了关闭时的清理操作仍然有效
         if order.client_order_id not in self._fill_application_audit:
             self._fill_application_audit[order.client_order_id] = []
 
@@ -3175,17 +3160,17 @@ class LiveExecutionEngine(ExecutionEngine):
             return False
         except ValueError as e:
             self._rollback_fill_audit_entry(order.client_order_id, audit_entry)
-            # Handle the negative leaves_qty error
+            # 处理负 leaves_qty 错误
             self._log.exception(
-                f"ValueError when applying fill to {order.client_order_id!r}: {e}",
+                f"向 {order.client_order_id!r} 应用成交时出现 ValueError：{e}",
                 e,
             )
             return False
 
-        # Check correct ordering of fills
+        # 检查成交的顺序是否正确
         if report.ts_event < order.ts_last:
             self._log.warning(
-                f"OrderFilled applied out of chronological order from {report}",
+                f"来自 {report} 的 OrderFilled 未按时间顺序应用",
             )
         return True
 
@@ -3194,49 +3179,48 @@ class LiveExecutionEngine(ExecutionEngine):
         order: Order,
         report: FillReport,
     ) -> bool | None:
-        # Check if this fill predates an inferred reconciliation fill
-        # This prevents historical fills from being applied on top of inferred fills
+        # 检查此成交是否早于推断的对账成交
+        # 这防止了历史成交被应用在推断成交之上
         client_order_id = order.client_order_id
         if client_order_id in self._inferred_fill_ts:
             earliest_inferred_ts = self._inferred_fill_ts[client_order_id]
             if report.ts_event < earliest_inferred_ts:
                 self._log.debug(
-                    f"Skipping historical fill {report.trade_id} (ts_event={report.ts_event}) "
-                    f"for {client_order_id!r} as it predates inferred reconciliation fill "
-                    f"(ts={earliest_inferred_ts}); this fill is already accounted for in the inferred fill",
+                    f"跳过 {client_order_id!r} 的历史成交 {report.trade_id}（ts_event={report.ts_event}）， "
+                    f"因为它早于推断的对账成交（ts={earliest_inferred_ts}）； "
+                    "推断成交中已包含此成交",
                 )
-                return True  # Skip this fill, it's already covered by inferred fill
+                return True  # 跳过此成交，推断成交中已包含它
 
-        # Check for duplicate fill by trade_id - check both trade_ids collection and events
-        # This handles cases where order is loaded from cache and trade_ids might not be fully populated
+        # 检查 trade_id 是否重复 - 同时检查 trade_ids 集合和事件
+        # 这处理了从缓存加载订单且 trade_ids 可能未被完全填充的情况
         existing_fill = get_existing_fill_for_trade_id(order, report.trade_id)
         if report.trade_id in order.trade_ids or existing_fill is not None:
-            # Fill already applied; check if data is consistent.
-            # An existing fill may be sourced from the cache on start,
-            # or may exist in-memory when a reconciliation is triggered.
-
-            # Log detailed info about when it was first applied
+            # 成交已应用；检查数据是否一致
+            # 现有的成交可能在启动时源自缓存，
+            # 或者在触发对账时已存在于内存中
+            # 记录关于其首次应用时间的详细信息
             if order.client_order_id in self._fill_application_audit:
                 audit = self._fill_application_audit[order.client_order_id]
                 previous = [a for a in audit if a[0] == report.trade_id]
                 if previous:
                     self._log.debug(
-                        f"Duplicate fill detected; {report.trade_id} was already applied "
-                        f"at ts={previous[0][2]}, source={previous[0][1]}",
+                        f"检测到重复成交；{report.trade_id} 已在 "
+                        f"ts={previous[0][2]} 应用，来源为 {previous[0][1]}",
                     )
 
             if existing_fill and not self._fill_reports_equal(existing_fill, report):
                 differences: list[str] = []
 
-                # Last quantity
+                # 成交数量
                 if existing_fill.last_qty != report.last_qty:
                     differences.append(f"qty: {existing_fill.last_qty} vs {report.last_qty}")
 
-                # Last price
+                # 成交价格
                 if existing_fill.last_px != report.last_px:
                     differences.append(f"px: {existing_fill.last_px} vs {report.last_px}")
 
-                # Commission
+                # 手续费
                 if existing_fill.commission is None and report.commission is not None:
                     differences.append(f"commission: None vs {report.commission}")
                 elif existing_fill.commission is not None and report.commission is None:
@@ -3251,28 +3235,28 @@ class LiveExecutionEngine(ExecutionEngine):
                             f"commission: {existing_fill.commission} vs {report.commission}",
                         )
 
-                # Liquidity side
+                # 流动性方向
                 if existing_fill.liquidity_side != report.liquidity_side:
                     differences.append(
                         f"liquidity: {existing_fill.liquidity_side} vs {report.liquidity_side}",
                     )
 
-                # Timestamp
+                # 时间戳
                 if existing_fill.ts_event != report.ts_event:
                     differences.append(
                         f"ts_event: {existing_fill.ts_event} vs {report.ts_event}",
                     )
 
                 self._log.warning(
-                    f"Fill report data differs from existing data for trade_id {report.trade_id}, "
-                    f"differences: {', '.join(differences)}; retaining cached data for consistency",
+                    f"trade_id {report.trade_id} 的成交报告数据与现有数据不同， "
+                    f"差异如下：{', '.join(differences)}；为保持一致性，保留缓存数据",
                 )
 
-            # If trade_id is in order.trade_ids or we found an existing fill, skip this fill
-            # This prevents duplicate fills from being applied
-            return True  # Fill already applied, continue with existing data
+            # 如果 trade_id 在 order.trade_ids 中，或者我们找到了现有的成交，跳过此成交
+            # 这防止了重复应用成交
+            return True  # 成交已应用，继续使用现有数据
 
-        return None  # Not a duplicate, proceed with fill
+        return None  # 不是重复成交，继续处理
 
     def _generate_inferred_fill(
         self,
@@ -3286,18 +3270,18 @@ class LiveExecutionEngine(ExecutionEngine):
             report=report,
             instrument=instrument,
         )
-        self._log.info(f"Generated inferred {filled}", LogColor.BLUE)
+        self._log.info(f"已生成推断成交 {filled}", LogColor.BLUE)
 
         return filled
 
-    # -- ORDER AND EVENTS GENERATION ---------------------------------------------------------------
+    # -- 订单和事件生成 -----------------------------------------------------------------------------
 
     def _generate_order(
         self,
         report: OrderStatusReport,
         is_external: bool = True,
     ) -> Order | None:
-        self._log.debug(f"Generating order {report.client_order_id!r}", color=LogColor.MAGENTA)
+        self._log.debug(f"正在生成订单 {report.client_order_id!r}", color=LogColor.MAGENTA)
 
         options: dict[str, Any] = {}
 
@@ -3329,38 +3313,38 @@ class LiveExecutionEngine(ExecutionEngine):
             0 if report.expire_time is None else dt_to_unix_nanos(report.expire_time)
         )
 
-        # Check if any strategy has claimed external orders for this instrument
-        # This allows strategies to resume managing existing orders on restart
+        # 检查是否有任何策略已认领此交易标的的外部订单
+        # 这允许策略在重启时恢复管理现有订单
         strategy_id = self.get_external_order_claim(report.instrument_id)
 
         if strategy_id is None:
-            # All unclaimed reconciliation uses EXTERNAL strategy ID
-            # Tags distinguish the source for filtering purposes
+            # 所有的未认领对账使用 EXTERNAL 策略 ID
+            # 标签用于区分过滤用途的来源
             strategy_id = StrategyId("EXTERNAL")
             if is_external:
-                # Actual external order found on venue
+                # 在场地上发现的实际外部订单
                 tags = ["VENUE"]
             else:
-                # Internal position diff alignment (synthetic fill)
+                # 内部持仓差异对齐（合成成交）
                 tags = ["RECONCILIATION"]
         else:
-            # External order claimed by a strategy via external_order_claims config
-            # This order will be managed by the claiming strategy
+            # 通过 external_order_claims 配置被策略认领的外部订单
+            # 此订单将由认领策略管理
             tags = None
             self._log.info(
-                f"External order {report.client_order_id} for {report.instrument_id} "
-                f"claimed by strategy {strategy_id}",
+                f"{report.instrument_id} 的外部订单 {report.client_order_id} "
+                f"被策略 {strategy_id} 认领",
                 LogColor.BLUE,
             )
 
-        # Filter unclaimed external orders (but not reconciliation fills)
+        # 过滤未认领的外部订单（但不对账成交）
         if self.filter_unclaimed_external_orders and tags and "VENUE" in tags:
             self._filtered_external_orders_count += 1
 
             if self._filtered_external_orders_count == 1:
-                self._log.warning("Filtering unclaimed EXTERNAL orders", LogColor.BLUE)
+                self._log.warning("正在过滤未认领的外部（EXTERNAL）订单", LogColor.BLUE)
 
-            return None  # No further reconciliation
+            return None  # 不再进行进一步对账
 
         initialized = OrderInitialized(
             trader_id=self.trader_id,
@@ -3391,7 +3375,7 @@ class LiveExecutionEngine(ExecutionEngine):
         )
 
         order: Order = OrderUnpacker.from_init(initialized)
-        self._log.debug(f"Generated {initialized}")
+        self._log.debug(f"已生成 {initialized}")
 
         return order
 
@@ -3401,14 +3385,14 @@ class LiveExecutionEngine(ExecutionEngine):
             ts_now=self._clock.timestamp_ns(),
             report=report,
         )
-        self._log.debug(f"Generated {rejected}")
+        self._log.debug(f"已生成 {rejected}")
         self._handle_event_with_tracking(rejected)
 
     def _generate_order_accepted(self, order: Order, report: OrderStatusReport) -> None:
-        # Clear any retry counts when order transitions to ACCEPTED
+        # 当订单转换为已接受（ACCEPTED）时，清除所有重试计数
         self._clear_recon_tracking(order.client_order_id)
 
-        # Also try to clear by venue order ID mapping
+        # 同时也尝试通过柜台订单 ID 映射清除
         if report.venue_order_id:
             mapped_client_id = self._cache.client_order_id(report.venue_order_id)
             if mapped_client_id:
@@ -3420,7 +3404,7 @@ class LiveExecutionEngine(ExecutionEngine):
             ts_now=self._clock.timestamp_ns(),
             report=report,
         )
-        self._log.debug(f"Generated {accepted}")
+        self._log.debug(f"已生成 {accepted}")
         self._handle_event_with_tracking(accepted)
 
     def _generate_order_triggered(self, order: Order, report: OrderStatusReport) -> None:
@@ -3430,7 +3414,7 @@ class LiveExecutionEngine(ExecutionEngine):
             ts_now=self._clock.timestamp_ns(),
             report=report,
         )
-        self._log.debug(f"Generated {triggered}")
+        self._log.debug(f"已生成 {triggered}")
         self._handle_event_with_tracking(triggered)
 
     def _generate_order_updated(self, order: Order, report: OrderStatusReport) -> None:
@@ -3440,7 +3424,7 @@ class LiveExecutionEngine(ExecutionEngine):
             ts_now=self._clock.timestamp_ns(),
             report=report,
         )
-        self._log.debug(f"Generated {updated}")
+        self._log.debug(f"已生成 {updated}")
         self._handle_event_with_tracking(updated)
 
     def _generate_order_canceled(self, order: Order, report: OrderStatusReport) -> None:
@@ -3449,7 +3433,7 @@ class LiveExecutionEngine(ExecutionEngine):
             ts_now=self._clock.timestamp_ns(),
             report=report,
         )
-        self._log.debug(f"Generated {canceled}")
+        self._log.debug(f"已生成 {canceled}")
         self._handle_event_with_tracking(canceled)
 
     def _generate_order_expired(self, order: Order, report: OrderStatusReport) -> None:
@@ -3458,7 +3442,7 @@ class LiveExecutionEngine(ExecutionEngine):
             ts_now=self._clock.timestamp_ns(),
             report=report,
         )
-        self._log.debug(f"Generated {expired}")
+        self._log.debug(f"已生成 {expired}")
         self._handle_event_with_tracking(expired)
 
     def _generate_order_filled(
@@ -3473,10 +3457,10 @@ class LiveExecutionEngine(ExecutionEngine):
             report=report,
             instrument=instrument,
         )
-        self._log.debug(f"Generated {filled}")
+        self._log.debug(f"已生成 {filled}")
         self._handle_event_with_tracking(filled)
 
-    # -- INTERNAL ----------------------------------------------------------------------------------
+    # -- 内部 ---------------------------------------------------------------------------------------
 
     def _clear_recon_tracking(
         self,
@@ -3490,15 +3474,15 @@ class LiveExecutionEngine(ExecutionEngine):
             self._ts_last_query.pop(client_order_id, None)
 
     def _handle_event_with_tracking(self, event: OrderEvent) -> None:
-        # Handle an order event with activity tracking, recording fills in cache and
-        # cleaning up tracking data for closed orders.
+        # 处理带有活动追踪的订单事件，在缓存中记录成交并
+        # 为已关闭订单清理追踪数据
         self._record_local_activity(event)
 
         if isinstance(event, OrderFilled):
             self._recent_fills_cache[event.trade_id] = self._clock.timestamp_ns()
             self._position_local_activity_ns[event.instrument_id] = event.ts_event
 
-            # Track inferred fill timestamps to prevent duplicate historical fills
+            # 追踪推断成交的时间戳，以防止重复的历史成交
             if event.reconciliation:
                 client_order_id = event.client_order_id
                 if client_order_id not in self._inferred_fill_ts:
@@ -3524,10 +3508,9 @@ class LiveExecutionEngine(ExecutionEngine):
         if client_order_id is None:
             return
 
-        # Use receipt time (current clock time) instead of venue time (ts_event)
-        # to accurately track when we last processed activity for this order.
-        # This avoids race conditions where network/queue latency makes events
-        # appear "old" even though they just arrived.
+        # 使用接收时间（当前时钟时间）而不是场地时间（ts_event）
+        # 以准确追踪该订单最后一次处理活动的时间。
+        # 这避免了由于网络/队列延迟导致事件到达时看起来像“旧”的竞态条件。
         self._order_local_activity_ns[client_order_id] = self._clock.timestamp_ns()
 
     def _find_matching_cached_order(
@@ -3538,7 +3521,7 @@ class LiveExecutionEngine(ExecutionEngine):
         price: Price | None,
         avg_px: Decimal | None,
     ) -> Order | None:
-        # Search cache for existing order matching reconciliation parameters
+        # 在缓存中搜索匹配对账参数的现有订单
         cached_orders = self._cache.orders(
             instrument_id=instrument_id,
             venue=None,
@@ -3546,25 +3529,25 @@ class LiveExecutionEngine(ExecutionEngine):
         )
 
         for cached_order in cached_orders:
-            # Check if order is filled and matches the parameters
+            # 检查订单是否已成交并匹配参数
             if cached_order.status != OrderStatus.FILLED:
                 continue
 
-            # Match quantity
+            # 匹配数量
             if cached_order.filled_qty != quantity:
                 continue
 
-            # Match price if provided (market orders don't have price)
+            # 如果提供了价格，则匹配价格（市价单没有价格）
             if price is not None and cached_order.has_price and cached_order.price != price:
                 continue
 
-            # Match avg_px if provided
+            # 如果提供了 avg_px，则进行匹配
             if avg_px is not None and cached_order.avg_px is not None:
                 cached_avg_px = Decimal(str(cached_order.avg_px))
                 if cached_avg_px != avg_px:
                     continue
 
-            # Found a match
+            # 找到匹配项
             return cached_order
 
         return None
@@ -3575,7 +3558,7 @@ class LiveExecutionEngine(ExecutionEngine):
         instrument_id: InstrumentId,
         order_side: OrderSide | None = None,
     ) -> Order | None:
-        # Fallback search when venue_order_id index not built
+        # 当 venue_order_id 索引未建立时的回退搜索
         cached_orders = self._cache.orders(
             venue=instrument_id.venue,
             instrument_id=instrument_id,

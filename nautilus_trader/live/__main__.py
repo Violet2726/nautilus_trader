@@ -22,19 +22,19 @@ from nautilus_trader.live.node import TradingNode
 
 
 @click.command()
-@click.option("--raw", help="A raw string config")
-@click.option("--fsspec-url", help="A fsspec url to read config from")
-@click.option("--start", default=True, help="Start the live node")
+@click.option("--raw", help="原始字符串配置")
+@click.option("--fsspec-url", help="用于读取配置的 fsspec url")
+@click.option("--start", default=True, help="启动实盘节点")
 def main(
     raw: str | None = None,
     fsspec_url: str | None = None,
     start: bool = True,
 ) -> None:
-    assert raw is not None or fsspec_url is not None, "Must pass one of `raw` or `fsspec_url`"
+    assert raw is not None or fsspec_url is not None, "必须传入 `raw` 或 `fsspec_url` 之一"
     if fsspec_url and raw is None:
         with fsspec.open(fsspec_url, "rb") as f:
             raw = f.read().decode()
-    assert raw is not None  # Type checking
+    assert raw is not None  # 类型检查
     config: TradingNodeConfig = msgspec.json.decode(raw, type=TradingNodeConfig)
     node = TradingNode(config=config)
     node.build()

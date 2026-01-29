@@ -13,7 +13,7 @@
 #  limitations under the License.
 # -------------------------------------------------------------------------------------------------
 """
-Provide task cancellation utilities for live components.
+为实盘组件提供任务取消工具。
 """
 
 import asyncio
@@ -22,10 +22,10 @@ from weakref import WeakSet
 from nautilus_trader.common.component import Logger
 
 
-# Default timeout for canceling futures (shorter than tasks as they represent external connections)
+# 取消 Future 的默认超时时间（比任务短，因为它们代表外部连接）
 DEFAULT_FUTURE_CANCELLATION_TIMEOUT: float = 2.0
 
-# Default timeout for canceling regular tasks
+# 取消常规任务的默认超时时间
 DEFAULT_TASK_CANCELLATION_TIMEOUT: float = 5.0
 
 
@@ -35,56 +35,54 @@ async def cancel_tasks_with_timeout(
     timeout_secs: float = DEFAULT_TASK_CANCELLATION_TIMEOUT,
 ) -> None:
     """
-    Cancel all pending tasks and await their completion with timeout.
+    取消所有待处理任务，并等待它们在超时时间内完成。
 
-    This function takes a strong snapshot of the tasks to ensure they don't get
-    garbage collected during cancellation. It cancels all pending tasks and waits
-    for them to complete with the specified timeout.
+    此函数会对任务进行强引用快照，以确保它们在取消过程中不被垃圾回收。
+    它会取消所有待处理任务，并等待它们在指定的超时时间内完成。
 
-    Parameters
+    参数
     ----------
     tasks : WeakSet[asyncio.Task] | set[asyncio.Task | asyncio.Future]
-        The collection of tasks to cancel. Can be a WeakSet (for normal operation)
-        or a regular set (for futures).
-    logger : Logger | None, optional
-        Logger for debug and warning messages.
-    timeout_secs : float, default 5.0
-        Maximum time to wait for tasks to complete cancellation.
+        要取消的任务集合。可以是 WeakSet（用于正常操作）或常规集合（用于 future）。
+    logger : Logger | None, 可选
+        用于调试和警告消息的记录器。
+    timeout_secs : float, 默认 5.0
+        等待任务完成取消的最大时间。
 
-    Notes
+    注意
     -----
-    - Takes a strong reference snapshot to prevent tasks from being GC'd during cancellation.
-    - Uses return_exceptions=True to prevent "exception was never retrieved" warnings.
-    - Logs timeout warnings if tasks don't complete within the specified timeout.
+    - 采用强引用快照，防止任务在取消期间被垃圾回收（GC）。
+    - 使用 return_exceptions=True 以防止“异常未被检索”的警告。
+    - 如果任务未在指定超时内完成，则记录超时警告。
 
     """
-    # Take a strong snapshot to prevent tasks from disappearing during cancellation
+    # 获取强引用快照，防止任务在取消期间消失
     pending_tasks = [task for task in tasks if not task.done()]
 
     if not pending_tasks:
         if logger:
-            logger.debug("No pending tasks to cancel")
+            logger.debug("没有待取消的任务")
         return
 
     if logger:
-        logger.debug(f"Canceling {len(pending_tasks)} pending tasks")
+        logger.debug(f"正在取消 {len(pending_tasks)} 个待处理任务")
 
-    # Cancel all tasks
+    # 取消所有任务
     for task in pending_tasks:
         task.cancel()
 
-    # Await with the strong references we captured
+    # 使用我们捕获的强引用进行等待
     try:
         await asyncio.wait_for(
             asyncio.gather(*pending_tasks, return_exceptions=True),
             timeout=timeout_secs,
         )
         if logger:
-            logger.debug(f"Successfully canceled {len(pending_tasks)} tasks")
+            logger.debug(f"已成功取消 {len(pending_tasks)} 个任务")
     except TimeoutError:
         if logger:
             logger.warning(
-                f"Timeout ({timeout_secs}s) waiting for {len(pending_tasks)} tasks to cancel",
+                f"等待 {len(pending_tasks)} 个任务取消超时 ({timeout_secs}s)",
             )
             _log_still_pending_tasks(pending_tasks, logger)
 
@@ -98,8 +96,8 @@ def _log_still_pending_tasks(
         return
 
     for task in still_pending:
-        # Tasks have get_name(), Futures don't
+        # Task 有 get_name()，Future 没有
         if hasattr(task, "get_name"):
-            logger.warning(f"Task still pending: {task.get_name()} (id={id(task)})")
+            logger.warning(f"任务仍未完成: {task.get_name()} (id={id(task)})")
         else:
-            logger.warning(f"Future still pending: id={id(task)}")
+            logger.warning(f"Future 仍未完成: id={id(task)}")

@@ -26,7 +26,7 @@ from nautilus_trader.live.execution_client import LiveExecutionClient
 
 class LiveDataClientFactory:
     """
-    Provides a factory for creating `LiveDataClient` instances.
+    提供用于创建 `LiveDataClient` 实例的工厂。
     """
 
     @staticmethod
@@ -39,36 +39,36 @@ class LiveDataClientFactory:
         clock: LiveClock,
     ) -> LiveDataClient:
         """
-        Return a new data client.
+        返回一个新的数据客户端。
 
-        Parameters
+        参数
         ----------
         loop : asyncio.AbstractEventLoop
-            The event loop for the client.
+            客户端使用的事件循环。
         name : str
-            The custom client ID.
+            自定义客户端 ID。
         config : dict[str, object]
-            The configuration for the client.
+            客户端的配置。
         msgbus : MessageBus
-            The message bus for the client.
+            客户端的消息总线。
         cache : Cache
-            The cache for the client.
+            客户端使用的缓存。
         clock : LiveClock
-            The clock for the client.
+            客户端使用的时钟。
 
-        Returns
+        返回
         -------
         LiveDataClient
 
         """
         raise NotImplementedError(
-            "method `create` must be implemented in the subclass",
+            "`create` 方法必须在子类中实现",
         )  # pragma: no cover
 
 
 class LiveExecClientFactory:
     """
-    Provides a factory for creating `LiveExecutionClient` instances.
+    提供用于创建 `LiveExecutionClient` 实例的工厂。
     """
 
     @staticmethod
@@ -81,28 +81,27 @@ class LiveExecClientFactory:
         clock: LiveClock,
     ) -> LiveExecutionClient:
         """
-        Return a new execution client.
+        返回一个新的执行客户端。
 
-        Parameters
+        参数
         ----------
         loop : asyncio.AbstractEventLoop
-            The event loop for the client.
+            客户端使用的事件循环。
         name : str
-            The custom client ID.
+            自定义客户端 ID。
         config : dict[str, object]
-            The configuration for the client.
+            客户端的配置。
         msgbus : MessageBus
-            The message bus for the client.
+            客户端的消息总线。
         cache : Cache
-            The cache for the client.
+            客户端使用的缓存。
         clock : LiveClock
-            The clock for the client.
+            客户端使用的时钟。
 
-        Returns
+        返回
         -------
         LiveExecutionClient
 
         """
         raise NotImplementedError(
-            "method `create' must be implemented in the subclass",
         )  # pragma: no cover

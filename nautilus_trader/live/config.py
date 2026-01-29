@@ -39,15 +39,14 @@ from nautilus_trader.trading.config import ImportableControllerConfig
 
 class LiveDataEngineConfig(DataEngineConfig, frozen=True):
     """
-    Configuration for ``LiveDataEngine`` instances.
+    ``LiveDataEngine`` 实例的配置。
 
-    Parameters
+    参数
     ----------
-    qsize : PositiveInt, default 100_000
-        The queue size for the engines internal queue buffers.
-    graceful_shutdown_on_exception : bool, default False
-        If the system should perform a graceful shutdown when an unexpected exception
-        occurs during message queue processing (does not include user actor/strategy exceptions).
+    qsize : PositiveInt, 默认 100_000
+        引擎内部队列缓冲区的队列大小。
+    graceful_shutdown_on_exception : bool, 默认 False
+        当消息队列处理过程中发生意外异常时，系统是否应执行优雅停机（不包括用户 Actor/策略异常）。
 
     """
 
@@ -57,15 +56,14 @@ class LiveDataEngineConfig(DataEngineConfig, frozen=True):
 
 class LiveRiskEngineConfig(RiskEngineConfig, frozen=True):
     """
-    Configuration for ``LiveRiskEngine`` instances.
+    ``LiveRiskEngine`` 实例的配置。
 
-    Parameters
+    参数
     ----------
-    qsize : PositiveInt, default 100_000
-        The queue size for the engines internal queue buffers.
-    graceful_shutdown_on_exception : bool, default False
-        If the system should perform a graceful shutdown when an unexpected exception
-        occurs during message queue processing (does not include user actor/strategy exceptions).
+    qsize : PositiveInt, 默认 100_000
+        引擎内部队列缓冲区的队列大小。
+    graceful_shutdown_on_exception : bool, 默认 False
+        当消息队列处理过程中发生意外异常时，系统是否应执行优雅停机（不包括用户 Actor/策略异常）。
 
     """
 
@@ -75,120 +73,94 @@ class LiveRiskEngineConfig(RiskEngineConfig, frozen=True):
 
 class LiveExecEngineConfig(ExecEngineConfig, frozen=True):
     """
-    Configuration for ``LiveExecEngine`` instances.
+    ``LiveExecEngine`` 实例的配置。
 
-    The purpose of the in-flight order check is for live reconciliation, events
-    emitted from the venue may have been lost at some point - leaving an order
-    in an intermediate state, the check can recover these events via status reports.
+    处理中（in-flight）订单检查的目的是为了实盘对账。从场地发出的事件可能在某些时候丢失，
+    导致订单处于中间状态，该检查可以通过状态报告恢复这些事件。
 
-    Parameters
+    参数
     ----------
-    reconciliation : bool, default True
-        If execution reconciliation is active at start-up.
-    reconciliation_lookback_mins : NonNegativeInt, optional
-        The maximum lookback minutes to reconcile execution state for.
-        If ``None`` or 0 then will use the maximum lookback available from the venues.
-    reconciliation_instrument_ids : list[InstrumentId], optional
-        An include list of instrument IDs for execution reconciliation.
-        If provided, only these instruments are reconciled.
-        If ``None`` or empty then all instruments are reconciled.
-    filter_unclaimed_external_orders : bool, default False
-        If unclaimed order events with an EXTERNAL strategy ID should be filtered/dropped.
-    filter_position_reports : bool, default False
-        If position status reports are filtered from reconciliation.
-        This may be applicable when other nodes are trading the same instrument(s), on the same
-        account - which could cause conflicts in position status.
-    filtered_client_order_ids : list[ClientOrderId], optional
-        A list of client order IDs to filter from reconciliation.
-    generate_missing_orders : bool, default True
-        If MARKET order events will be generated during reconciliation to align discrepancies
-        between internal and external positions.
-    inflight_check_interval_ms : NonNegativeInt, default 2_000
-        The interval (milliseconds) between checking whether in-flight orders
-        have exceeded their time-in-flight threshold.
-        This should not be set less than the `inflight_check_threshold_ms`.
-    inflight_check_threshold_ms : NonNegativeInt, default 5_000
-        The threshold (milliseconds) beyond which an in-flight orders status is checked with the venue.
-        As a rule of thumb, you shouldn't consider reducing this setting unless you
-        are colocated with the venue (to avoid the potential for race conditions).
-    inflight_check_retries : NonNegativeInt, default 5
-        The number of retry attempts the engine will make to verify the status of an
-        in-flight order with the venue, should the initial attempt fail.
-    own_books_audit_interval_secs : NonNegativeFloat, optional
-        The interval (seconds) between auditing all own books against public order books.
-        The audit will ensure all order statuses are in sync and that no closed orders remain in
-        an own book. Logs all failures as errors.
-    open_check_interval_secs : PositiveFloat, optional
-        The interval (seconds) between checks for open orders at the venue.
-        If there is a discrepancy then an order status report is generated and reconciled.
-        A recommended setting is between 5-10 seconds, consider API rate limits and the additional
-        request weights. If no value is specified then the open order checking task is not started.
-    open_check_open_only : bool, default True
-        If True, the **check_open_orders** requests only currently open orders from the venue.
-        If False, it requests the entire order history, which can be a heavy API call.
-        This parameter only applies if the **check_open_orders** task is running.
-    open_check_lookback_mins : PositiveInt, default 60
-        The lookback window (minutes) for order status polling during continuous reconciliation.
-        Only orders modified within this time window will be considered for reconciliation.
-    open_check_threshold_ms : NonNegativeInt, default 5_000
-        The minimum elapsed time (milliseconds) since the order's last cached event before the
-        open-order check acts on venue discrepancies (missing, status drift, etc.).
-    open_check_missing_retries : NonNegativeInt, default 5
-        The maximum number of retries before resolving an order that is open in cache but
-        not found at the venue. This prevents race conditions where orders are resolved too
-        quickly due to network delays or venue processing time.
-    max_single_order_queries_per_cycle : PositiveInt, default 10
-        The maximum number of single-order queries to perform per reconciliation cycle.
-        Prevents rate limit exhaustion when many orders fail bulk query checks.
-    single_order_query_delay_ms : NonNegativeInt, default 100
-        The delay (milliseconds) between single-order queries to prevent rate limit exhaustion.
-    position_check_interval_secs : PositiveFloat, optional
-        The interval (seconds) between checks for position discrepancies between cache and venue.
-        When a discrepancy is detected, the system queries for missing fills that may have been lost.
-        A recommended setting is between 30-60 seconds. If no value is specified then position
-        checking is not started.
-    position_check_lookback_mins : PositiveInt, default 60
-        The lookback window (minutes) for querying fill reports when a position discrepancy is detected.
-        Only fills within this window will be requested from the venue.
-    position_check_threshold_ms : NonNegativeInt, default 5_000
-        The minimum elapsed time (milliseconds) since the position's last local activity before
-        the position check acts on discrepancies. This prevents race conditions with in-flight fills.
-    reconciliation_startup_delay_secs : PositiveFloat, default 10.0
-        The additional delay (seconds) applied AFTER startup reconciliation
-        completes before starting the continuous reconciliation loop. This provides time
-        for additional system stabilization after initial reconciliation.
-    purge_closed_orders_interval_mins : PositiveInt, optional
-        The interval (minutes) between purging closed orders from the in-memory cache,
-        **will not purge from the database**. If None, closed orders will **not** be automatically purged.
-        A recommended setting is 10-15 minutes for HFT.
-    purge_closed_orders_buffer_mins : NonNegativeInt, optional
-        The time buffer (minutes) from when an order was closed before it can be purged.
-        Only orders closed for at least this amount of time will be purged.
-        A recommended setting is 60 minutes for HFT.
-    purge_closed_positions_interval_mins : PositiveInt, optional
-        The interval (minutes) between purging closed positions from the in-memory cache,
-        **will not purge from the database**. If None, closed positions will **not** be automatically purged.
-        A recommended setting is 10-15 minutes for HFT.
-    purge_closed_positions_buffer_mins : NonNegativeInt, optional
-        The time buffer (minutes) from when a position was closed before it can be purged.
-        Only positions closed for at least this amount of time will be purged.
-        A recommended setting is 60 minutes for HFT.
-    purge_account_events_interval_mins : PositiveInt, optional
-        The interval (minutes) between purging account events from the in-memory cache,
-        **will not purge from the database**. If None, account events will **not** be automatically purged.
-        A recommended setting is 10-15 minutes for HFT.
-    purge_account_events_lookback_mins : NonNegativeInt, optional
-        The time buffer (minutes) from when an account event occurred before it can be purged.
-        Only events outside the lookback window will be purged.
-        A recommended setting is 60 minutes for HFT.
+    reconciliation : bool, 默认 True
+        启动时是否激活执行对账。
+    reconciliation_lookback_mins : NonNegativeInt, 可选
+        对账执行状态的最大回溯分钟数。
+        如果为 ``None`` 或 0，将使用场地提供的最大回溯时间。
+    reconciliation_instrument_ids : list[InstrumentId], 可选
+        用于执行对账的标的 ID 包含列表。
+        如果提供，则仅对这些标的进行对账。
+        如果为 ``None`` 或为空，则对所有标的进行对账。
+    filter_unclaimed_external_orders : bool, 默认 False
+        是否过滤/丢弃策略 ID 为 EXTERNAL 的未认领订单事件。
+    filter_position_reports : bool, 默认 False
+        是否在对账中过滤掉仓位状态报告。
+        当其他节点在同一账户上交易相同标的时，这可能适用，因为这可能导致仓位状态冲突。
+    filtered_client_order_ids : list[ClientOrderId], 可选
+        要从对账中过滤掉的客户端订单 ID 列表。
+    generate_missing_orders : bool, 默认 True
+        如果在对账期间内部和外部仓位不一致，是否生成 MARKET 订单事件以对齐差异。
+    inflight_check_interval_ms : NonNegativeInt, 默认 2_000
+        检查处理中订单是否超过其处理时间阈值的间隔（毫秒）。
+        此值不应设置为小于 `inflight_check_threshold_ms`。
+    inflight_check_threshold_ms : NonNegativeInt, 默认 5_000
+        向场地检查处理中订单状态的阈值（毫秒）。
+        作为经验法则，除非你与场地处于同机房（以避免潜在的竞态条件），否则你不应考虑减少此设置。
+    inflight_check_retries : NonNegativeInt, 默认 5
+        如果初始尝试失败，引擎将为验证处理中订单与场地的状态而进行的重试次数。
+    own_books_audit_interval_secs : NonNegativeFloat, 可选
+        对所有自有委托单簿（own books）与公共委托单簿进行审计的间隔（秒）。
+        审计将确保所有订单状态保持同步，并且没有已关闭的订单残留在自有委托单簿中。所有失败都记录为错误。
+    open_check_interval_secs : PositiveFloat, 可选
+        检场地上未平仓订单的间隔（秒）。
+        如果存在差异，则生成订单状态报告并进行对账。
+        建议设置为 5-10 秒，需考虑 API 速率限制和额外的请求权重。如果未指定值，则不启动未平仓订单检查任务。
+    open_check_open_only : bool, 默认 True
+        如果为 True，**check_open_orders** 请求仅从场地请求当前未完成的订单。
+        如果为 False，它请求整个订单历史记录，这可能是一个繁重的 API 调用。
+        此参数仅在 **check_open_orders** 任务运行时生效。
+    open_check_lookback_mins : PositiveInt, 默认 60
+        连续对账期间订单状态轮询的回溯窗口（分钟）。
+        仅在此时间窗口内修改的订单才会被考虑进行对账。
+    open_check_threshold_ms : NonNegativeInt, 默认 5_000
+        未平仓订单检查在根据场地差异（缺失、状态偏移等）采取行动之前，距离订单最后一次缓存事件的最小间隔时间（毫秒）。
+    open_check_missing_retries : NonNegativeInt, 默认 5
+        在结清缓存中开启但在场地上未找到的订单之前的最大重试次数。这可以防止由于网络延迟或场地处理时间过快而导致的竞态条件。
+    max_single_order_queries_per_cycle : PositiveInt, 默认 10
+        每个对账周期执行的最大单笔订单查询次数。防止在许多订单批量查询检查失败时耗尽速率限制。
+    single_order_query_delay_ms : NonNegativeInt, 默认 100
+        单笔订单查询之间的延迟（毫秒），以防止耗尽速率限制。
+    position_check_interval_secs : PositiveFloat, 可选
+        检查缓存与场地之间仓位差异的间隔（秒）。
+        当检测到差异时，系统会查询可能已丢失的成交（fills）。
+        建议设置为 30-60 秒。如果未指定值，则不启动仓位检查。
+    position_check_lookback_mins : PositiveInt, 默认 60
+        检测到仓位差异时查询成交报告的回溯窗口（分钟）。
+        将仅从场地请求此窗口内的成交记录。
+    position_check_threshold_ms : NonNegativeInt, 默认 5_000
+        仓位检查在根据差异采取行动之前，距离仓位最后一次本地活动的最小间隔时间（毫秒）。这可以防止与处理中的成交流生竞态条件。
+    reconciliation_startup_delay_secs : PositiveFloat, 默认 10.0
+        在启动对账完成后，开始连续对账循环之前的额外延迟（秒）。这为初始对账后的系统进一步稳定提供了时间。
+    purge_closed_orders_interval_mins : PositiveInt, 可选
+        从内存缓存中清除已关闭订单的间隔（分钟），**不会从数据库中清除**。如果为 None，则已关闭订单将**不会**被自动清除。对于高频交易（HFT），建议设置为 10-15 分钟。
+    purge_closed_orders_buffer_mins : NonNegativeInt, 可选
+        订单关闭后到可以被清除之间的时间缓冲（分钟）。
+        仅关闭至少达到此时间的订单才会被清除。对于高频交易（HFT），建议设置为 60 分钟。
+    purge_closed_positions_interval_mins : PositiveInt, 可选
+        从内存缓存中清除已关闭仓位的间隔（分钟），**不会从数据库中清除**。如果为 None，则已关闭仓位将**不会**被自动清除。对于高频交易（HFT），建议设置为 10-15 分钟。
+    purge_closed_positions_buffer_mins : NonNegativeInt, 可选
+        仓位关闭后到可以被清除之间的时间缓冲（分钟）。
+        仅关闭至少达到此时间的仓位才会被清除。对于高频交易（HFT），建议设置为 60 分钟。
+    purge_account_events_interval_mins : PositiveInt, 可选
+        从内存缓存中清除账户事件的间隔（分钟），**不会从数据库中清除**。如果为 None，则账户事件将**不会**被自动清除。对于高频交易（HFT），建议设置为 10-15 分钟。
+    purge_account_events_lookback_mins : NonNegativeInt, 可选
+        账户事件发生后到可以被清除之间的时间缓冲（分钟）。
+        仅回溯窗口之外的事件才会被清除。对于高频交易（HFT），建议设置为 60 分钟。
     purge_from_database : bool, default False
-        If purging operations will also delete from the backing database, in addition to the in-memory cache.
-        **Note:** Currently account events are not purged from the database - pending reimplementation.
-    qsize : PositiveInt, default 100_000
-        The queue size for the engines internal queue buffers.
-    graceful_shutdown_on_exception : bool, default False
-        If the system should perform a graceful shutdown when an unexpected exception
-        occurs during message queue processing (does not include user actor/strategy exceptions).
+        清除操作是否也从后端数据库中删除（除了从内存缓存中删除外）。
+        **注意：** 目前账户事件尚未从数据库中清除 - 等待重新实现。
+    qsize : PositiveInt, 默认 100_000
+        引擎内部队列缓冲区的队列大小。
+    graceful_shutdown_on_exception : bool, 默认 False
+        当消息队列处理过程中发生意外异常时，系统是否应执行优雅停机（不包括用户 Actor/策略异常）。
 
     """
 
@@ -227,15 +199,14 @@ class LiveExecEngineConfig(ExecEngineConfig, frozen=True):
 
 class RoutingConfig(NautilusConfig, frozen=True):
     """
-    Configuration for live client message routing.
+    实盘客户端消息路由配置。
 
-    Parameters
+    参数
     ----------
     default : bool
-        If the client should be registered as the default routing client
-        (when a specific venue routing cannot be found).
-    venues : list[str], optional
-        The venues to register for routing.
+        是否应将客户端注册为默认路由客户端（当找不到特定场地的路由时）。
+    venues : list[str], 可选
+        要注册路由的场地。
 
     """
 
@@ -245,16 +216,16 @@ class RoutingConfig(NautilusConfig, frozen=True):
 
 class LiveDataClientConfig(NautilusConfig, frozen=True):
     """
-    Configuration for ``LiveDataClient`` instances.
+    ``LiveDataClient`` 实例的配置。
 
-    Parameters
+    参数
     ----------
     handle_revised_bars : bool
-        If DataClient will emit bar updates when a new bar opens.
+        当新 K 线开启时，DataClient 是否会发出 K 线更新。
     instrument_provider : InstrumentProviderConfig
-        The clients instrument provider configuration.
+        客户端的标的提供者（instrument provider）配置。
     routing : RoutingConfig
-        The clients message routing config.
+        客户端的消息路由配置。
 
     """
 
@@ -265,14 +236,14 @@ class LiveDataClientConfig(NautilusConfig, frozen=True):
 
 class LiveExecClientConfig(NautilusConfig, frozen=True):
     """
-    Configuration for ``LiveExecutionClient`` instances.
+    ``LiveExecutionClient`` 实例的配置。
 
-    Parameters
+    参数
     ----------
     instrument_provider : InstrumentProviderConfig
-        The clients instrument provider configuration.
+        客户端的标的提供者配置。
     routing : RoutingConfig
-        The clients message routing config.
+        客户端的消息路由配置。
 
     """
 
@@ -282,13 +253,13 @@ class LiveExecClientConfig(NautilusConfig, frozen=True):
 
 class ControllerConfig(ActorConfig, kw_only=True, frozen=True):
     """
-    The base model for all controller configurations.
+    所有控制器（controller）配置的基础模型。
     """
 
 
 class ControllerFactory:
     """
-    Provides controller creation from importable configurations.
+    提供从可导入配置中创建控制器的功能。
     """
 
     @staticmethod
@@ -307,24 +278,24 @@ class ControllerFactory:
 
 class TradingNodeConfig(NautilusKernelConfig, frozen=True):
     """
-    Configuration for ``TradingNode`` instances.
+    ``TradingNode`` 实例的配置。
 
-    Parameters
+    参数
     ----------
-    trader_id : TraderId, default "TRADER-001"
-        The trader ID for the node (must be a name and ID tag separated by a hyphen).
-    cache : CacheConfig, optional
-        The cache configuration.
-    data_engine : LiveDataEngineConfig, optional
-        The live data engine configuration.
-    risk_engine : LiveRiskEngineConfig, optional
-        The live risk engine configuration.
-    exec_engine : LiveExecEngineConfig, optional
-        The live execution engine configuration.
-    data_clients : dict[str, ImportableConfig | LiveDataClientConfig], optional
-        The data client configurations.
-    exec_clients : dict[str, ImportableConfig | LiveExecClientConfig], optional
-        The execution client configurations.
+    trader_id : TraderId, 默认 "TRADER-001"
+        节点的交易者 ID（必须是由连字符分隔的名称和 ID 标签）。
+    cache : CacheConfig, 可选
+        缓存配置。
+    data_engine : LiveDataEngineConfig, 可选
+        实盘数据引擎配置。
+    risk_engine : LiveRiskEngineConfig, 可选
+        实盘风控引擎配置。
+    exec_engine : LiveExecEngineConfig, 可选
+        实盘执行引擎配置。
+    data_clients : dict[str, ImportableConfig | LiveDataClientConfig], 可选
+        数据客户端配置。
+    exec_clients : dict[str, ImportableConfig | LiveExecClientConfig], 可选
+        执行客户端配置。
 
     """
 

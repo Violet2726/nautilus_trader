@@ -13,10 +13,9 @@
 #  limitations under the License.
 # -------------------------------------------------------------------------------------------------
 """
-The `live` subpackage groups all engine and client implementations for live trading.
+`live` 子包汇总了用于实盘交易的所有引擎和客户端实现。
 
-Generally a common event loop is passed into each live engine to support the overarching
-design of a single efficient event loop, by default
-`uvloop <https://github.com/MagicStack/uvloop>`_.
+通常，每个实盘引擎都会传入一个共同的事件循环，以支持单个高效事件循环的总体设计，
+默认情况下使用 `uvloop <https://github.com/MagicStack/uvloop>`_。
 
 """

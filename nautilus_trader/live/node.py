@@ -38,15 +38,15 @@ from nautilus_trader.trading.trader import Trader
 
 class TradingNode:
     """
-    Provides an asynchronous network node for live trading.
+    提供一个用于实盘交易的异步网络节点。
 
-    Parameters
+    参数
     ----------
-    config : TradingNodeConfig, optional
-        The configuration for the instance.
-    loop : asyncio.AbstractEventLoop, optional
-        The event loop for the node.
-        If ``None`` then will get the running event loop internally.
+    config : TradingNodeConfig, 可选
+        实例的配置。
+    loop : asyncio.AbstractEventLoop, 可选
+        节点的事件循环。
+        如果为 ``None``，则会在内部获取运行中的事件循环。
 
     """
 
@@ -93,18 +93,18 @@ class TradingNode:
 
         self._stream_processors: list[Callable] = []
 
-        # Async tasks
+        # 异步任务
         self._task_streaming: asyncio.Future | None = None
 
-        # State flags
+        # 状态标志
         self._is_built = False
 
     @property
     def trader_id(self) -> TraderId:
         """
-        Return the nodes trader ID.
+        返回节点的交易员 ID。
 
-        Returns
+        返回
         -------
         TraderId
 
@@ -114,9 +114,9 @@ class TradingNode:
     @property
     def machine_id(self) -> str:
         """
-        Return the nodes machine ID.
+        返回节点的机器 ID。
 
-        Returns
+        返回
         -------
         str
 
@@ -126,9 +126,9 @@ class TradingNode:
     @property
     def instance_id(self) -> UUID4:
         """
-        Return the nodes instance ID.
+        返回节点的实例 ID。
 
-        Returns
+        返回
         -------
         UUID4
 
@@ -138,9 +138,9 @@ class TradingNode:
     @property
     def trader(self) -> Trader:
         """
-        Return the nodes internal trader.
+        返回节点内部的交易员对象。
 
-        Returns
+        返回
         -------
         Trader
 
@@ -150,9 +150,9 @@ class TradingNode:
     @property
     def cache(self) -> CacheFacade:
         """
-        Return the nodes internal read-only cache.
+        返回节点内部的只读缓存（facade）。
 
-        Returns
+        返回
         -------
         CacheFacade
 
@@ -162,9 +162,9 @@ class TradingNode:
     @property
     def portfolio(self) -> PortfolioFacade:
         """
-        Return the nodes internal read-only portfolio.
+        返回节点内部的只读投资组合（facade）。
 
-        Returns
+        返回
         -------
         PortfolioFacade
 
@@ -173,9 +173,9 @@ class TradingNode:
 
     def is_running(self) -> bool:
         """
-        Return whether the trading node is running.
+        返回交易节点是否正在运行。
 
-        Returns
+        返回
         -------
         bool
 
@@ -184,9 +184,9 @@ class TradingNode:
 
     def is_built(self) -> bool:
         """
-        Return whether the trading node clients are built.
+        返回交易节点的客户端是否已构建。
 
-        Returns
+        返回
         -------
         bool
 
@@ -195,20 +195,20 @@ class TradingNode:
 
     def get_event_loop(self) -> asyncio.AbstractEventLoop | None:
         """
-        Return the event loop of the trading node.
+        返回交易节点的事件循环。
 
-        Returns
+        返回
         -------
-        asyncio.AbstractEventLoop or ``None``
+        asyncio.AbstractEventLoop 或 ``None``
 
         """
         return self.kernel.loop
 
     def get_logger(self) -> Logger:
         """
-        Return the logger for the trading node.
+        返回交易节点的日志记录器（logger）。
 
-        Returns
+        返回
         -------
         Logger
 
@@ -217,64 +217,64 @@ class TradingNode:
 
     def add_stream_processor(self, callback: Callable) -> None:
         """
-        Add the given stream processor callback.
+        添加给定的流处理器回调。
 
-        Parameters
+        参数
         ----------
         callback : Callable
-            The callback to add.
+            要添加的回调函数。
 
         """
         self._stream_processors.append(callback)
 
     def add_data_client_factory(self, name: str, factory: type[LiveDataClientFactory]) -> None:
         """
-        Add the given data client factory to the node.
+        向节点添加给定的数据客户端工厂。
 
-        Parameters
+        参数
         ----------
         name : str
-            The name of the client factory.
+            客户端工厂的名称。
         factory : type[LiveDataClientFactory]
-            The factory class to add.
+            要添加的工厂类。
 
-        Raises
+        异常
         ------
         ValueError
-            If `name` is not a valid string.
+            如果 `name` 不是有效的字符串。
         KeyError
-            If `name` has already been added.
+            如果 `name` 已经添加过。
 
         """
         self._builder.add_data_client_factory(name, factory)
 
     def add_exec_client_factory(self, name: str, factory: type[LiveExecClientFactory]) -> None:
         """
-        Add the given execution client factory to the node.
+        向节点添加给定的执行客户端工厂。
 
-        Parameters
+        参数
         ----------
         name : str
-            The name of the client factory.
+            客户端工厂的名称。
         factory : type[LiveExecutionClientFactory]
-            The factory class to add.
+            要添加的工厂类。
 
-        Raises
+        异常
         ------
         ValueError
-            If `name` is not a valid string.
+            如果 `name` 不是有效的字符串。
         KeyError
-            If `name` has already been added.
+            如果 `name` 已经添加过。
 
         """
         self._builder.add_exec_client_factory(name, factory)
 
     def build(self) -> None:
         """
-        Build the nodes clients.
+        构建节点客户端。
         """
         if self._is_built:
-            raise RuntimeError("the trading nodes clients are already built.")
+            raise RuntimeError("交易节点的客户端已经构建。")
 
         self._builder.build_data_clients(self._config.data_clients)
         self._builder.build_exec_clients(self._config.exec_clients)
@@ -282,12 +282,12 @@ class TradingNode:
 
     def run(self, raise_exception: bool = False) -> None:
         """
-        Start and run the trading node.
+        启动并运行交易节点。
 
-        Parameters
+        参数
         ----------
-        raise_exception : bool, default False
-            If runtime exceptions should be re-raised as well as being logged.
+        raise_exception : bool, 默认 False
+            是否在记录日志的同时重新抛出运行时异常。
 
         """
         try:
@@ -297,27 +297,27 @@ class TradingNode:
             else:
                 self.kernel.loop.run_until_complete(self.run_async())
         except RuntimeError as e:
-            self.kernel.logger.exception("Error on run", e)
+            self.kernel.logger.exception("运行出错", e)
 
             if raise_exception:
                 raise e
 
     def publish_bus_message(self, bus_msg: nautilus_pyo3.BusMessage) -> None:
         """
-        Publish bus message on the internal message bus.
+        在内部消息总线上发布消息。
 
-        Note the message will not be published externally.
+        注意：消息不会发布到外部。
 
-        Parameters
+        参数
         ----------
         bus_msg : nautilus_pyo3.BusMessage
-            The bus message to publish.
+            要发布的消息。
 
         """
         try:
             msg = self.kernel.msgbus_serializer.deserialize(bus_msg.payload)
         except Exception as e:
-            self.kernel.logger.error(f"Failed to deserialize bus message: {e}")
+            self.kernel.logger.error(f"反序列化总线消息失败：{e}")
             return
 
         try:
@@ -325,35 +325,35 @@ class TradingNode:
                 processor(msg)
 
             if not self.kernel.msgbus.is_streaming_type(type(msg)):
-                return  # Type has not been registered for message streaming
+                return  # 类型尚未注册消息流
         except Exception as e:
-            self.kernel.logger.error(f"Failed to process bus message: {e}")
+            self.kernel.logger.error(f"处理总线消息失败：{e}")
             return
 
         try:
             self.kernel.msgbus.publish(bus_msg.topic, msg, external_pub=False)
         except Exception as e:
-            self.kernel.logger.error(f"Failed to publish bus message: {e}")
+            self.kernel.logger.error(f"发布总线消息失败：{e}")
 
     async def run_async(self) -> None:
         """
-        Start and run the trading node asynchronously.
+        异步启动并运行交易节点。
         """
         try:
             if not self._is_built:
                 raise RuntimeError(
-                    "The trading nodes clients have not been built. "
-                    "Run `node.build()` prior to start.",
+                    "交易节点的客户端尚未构建。 "
+                    "启动前请运行 `node.build()`。",
                 )
 
             await self.kernel.start_async()
 
             if self.kernel.loop.is_running():
-                self.kernel.logger.info("RUNNING")
+                self.kernel.logger.info("运行中 (RUNNING)")
             else:
-                self.kernel.logger.warning("Event loop is not running")
+                self.kernel.logger.warning("事件循环（event loop）未运行")
 
-            # Continue to run while engines are running...
+            # 在引擎运行时持续运行...
             tasks: list[asyncio.Task] = [
                 self.kernel.data_engine.get_cmd_queue_task(),
                 self.kernel.data_engine.get_req_queue_task(),
@@ -367,8 +367,8 @@ class TradingNode:
 
             if self._config.message_bus and self._config.message_bus.external_streams:
                 streams = self._config.message_bus.external_streams
-                self.kernel.logger.info("Starting task: external message streaming", LogColor.BLUE)
-                self.kernel.logger.info(f"Listening to streams: {streams}", LogColor.BLUE)
+                self.kernel.logger.info("正在启动任务：外部消息流处理", LogColor.BLUE)
+                self.kernel.logger.info(f"正在监听流：{streams}", LogColor.BLUE)
                 self._task_streaming = asyncio.ensure_future(
                     self.kernel.msgbus_database.stream(self.publish_bus_message),
                 )
@@ -380,11 +380,11 @@ class TradingNode:
 
     def stop(self) -> None:
         """
-        Stop the trading node gracefully.
+        优雅地停止交易节点。
 
-        After a specified delay the internal `Trader` residual state will be checked.
+        在指定的延迟之后，将检查内部 `Trader` 的残留状态。
 
-        If save strategy is configured, then strategy states will be saved.
+        如果配置了保存策略，则会保存策略状态。
 
         """
         try:
@@ -393,24 +393,24 @@ class TradingNode:
             else:
                 self.kernel.loop.run_until_complete(self.stop_async())
         except RuntimeError as e:
-            self.kernel.logger.exception("Error on stop", e)
+            self.kernel.logger.exception("停止出错", e)
 
     async def stop_async(self) -> None:
         """
-        Stop the trading node gracefully, asynchronously.
+        异步地优雅停止交易节点。
 
-        After a specified delay the internal `Trader` residual state will be checked.
+        在指定的延迟之后，将检查内部 `Trader` 的残留状态。
 
-        If save strategy is configured, then strategy states will be saved.
+        如果配置了保存策略，则会保存策略状态。
 
         """
         await self.kernel.stop_async()
 
     def dispose(self) -> None:
         """
-        Dispose of the trading node.
+        清理并注销交易节点。
 
-        Gracefully shuts down the executor and event loop.
+        优雅地关闭执行器和事件循环。
 
         """
         try:
@@ -423,18 +423,18 @@ class TradingNode:
 
                 if self.kernel.clock.utc_now() >= timeout:
                     self.kernel.logger.warning(
-                        f"Timed out ({self._config.timeout_disconnection}s) waiting for node to stop"
-                        f"\nStatus"
+                        f"等待节点停止超时（{self._config.timeout_disconnection}s）"
+                        f"\n状态"
                         f"\n------"
                         f"\nDataEngine.check_disconnected() == {self.kernel.data_engine.check_disconnected()}"
                         f"\nExecEngine.check_disconnected() == {self.kernel.exec_engine.check_disconnected()}",
                     )
                     break
 
-            self.kernel.logger.debug("DISPOSING")
+            self.kernel.logger.debug("正在注销 (DISPOSING)")
 
             if self._task_streaming:
-                self.kernel.logger.info("Canceling task 'streaming'")
+                self.kernel.logger.info("正在取消任务 'streaming'")
                 self._task_streaming.cancel()
                 self._task_streaming = None
 
@@ -450,27 +450,27 @@ class TradingNode:
             self.kernel.dispose()
 
             if self.kernel.executor:
-                self.kernel.logger.info("Shutting down executor")
+                self.kernel.logger.info("正在关闭执行器 (executor)")
                 self.kernel.executor.shutdown(wait=True, cancel_futures=True)
 
             loop = self.kernel.loop
 
             if not loop.is_closed():
                 if loop.is_running():
-                    self.kernel.logger.info("Stopping event loop")
+                    self.kernel.logger.info("正在停止事件循环")
                     self.kernel.cancel_all_tasks()
                     loop.stop()
                 else:
-                    self.kernel.logger.info("Closing event loop")
+                    self.kernel.logger.info("正在关闭事件循环")
                     loop.close()
             else:
-                self.kernel.logger.info("Event loop already closed (normal with asyncio.run)")
+                self.kernel.logger.info("事件循环已关闭（asyncio.run 的正常情况）")
         except (asyncio.CancelledError, RuntimeError) as e:
-            self.kernel.logger.exception("Error on dispose", e)
+            self.kernel.logger.exception("注销出错", e)
         finally:
             self.kernel.logger.info(f"loop.is_running={self.kernel.loop.is_running()}")
             self.kernel.logger.info(f"loop.is_closed={self.kernel.loop.is_closed()}")
-            self.kernel.logger.info("DISPOSED")
+            self.kernel.logger.info("已注销 (DISPOSED)")
 
     def _handle_run_task_result(self, task: asyncio.Task) -> None:
         try:
@@ -478,7 +478,7 @@ class TradingNode:
         except asyncio.CancelledError:
             return  # Normal control flow
         except BaseException as e:
-            self.kernel.logger.exception("Error in run_async task", e)
+            self.kernel.logger.exception("run_async 任务出错", e)
 
     def _handle_streaming_exception(self, task: asyncio.Future) -> None:
         try:
@@ -486,8 +486,8 @@ class TradingNode:
         except asyncio.CancelledError:
             return  # Normal control flow
         except BaseException as e:
-            self.kernel.logger.exception("Error in external message streaming task", e)
+            self.kernel.logger.exception("外部消息流任务出错", e)
 
     def _loop_sig_handler(self, sig: signal.Signals) -> None:
-        self.kernel.logger.warning(f"Received {sig.name}, shutting down")
+        self.kernel.logger.warning(f"收到 {sig.name}，正在关机")
         self.stop()

@@ -33,28 +33,28 @@ from nautilus_trader.portfolio.portfolio import Portfolio
 
 class TradingNodeBuilder:
     """
-    Provides building services for a trading node.
+    提供交易节点的构建服务。
 
-    Parameters
+    参数
     ----------
     loop : asyncio.AbstractEventLoop
-        The event loop for the clients.
+        客户端使用的事件循环。
     data_engine : LiveDataEngine
-        The data engine for the trading node.
+        交易节点的数据引擎。
     exec_engine : LiveExecutionEngine
-        The execution engine for the trading node.
+        交易节点的执行引擎。
     portfolio : Portfolio
-        The portfolio for the trading node.
+        交易节点的投资组合。
     msgbus : MessageBus
-        The message bus for the trading node.
+        交易节点的消息总线。
     cache : Cache
-        The cache for building clients.
+        用于构建客户端的缓存。
     clock : LiveClock
-        The clock for building clients.
+        用于构建客户端的时钟。
     logger : Logger
-        The logger for building clients.
+        用于构建客户端的日志记录器。
     log : Logger
-        The trading nodes logger.
+        交易节点的日志记录器。
 
     """
 
@@ -84,58 +84,58 @@ class TradingNodeBuilder:
 
     def add_data_client_factory(self, name: str, factory: type[LiveDataClientFactory]) -> None:
         """
-        Add the given data client factory to the builder.
+    向构建器添加给定的数据客户端工厂。
 
-        Parameters
-        ----------
-        name : str
-            The name of the client.
-        factory : type[LiveDataClientFactory]
-            The factory to add.
+    参数
+    ----------
+    name : str
+        客户端的名称。
+    factory : type[LiveDataClientFactory]
+        要添加的工厂。
 
-        Raises
-        ------
-        ValueError
-            If `name` is not a valid string.
-        KeyError
-            If `name` has already been added.
+    异常
+    ------
+    ValueError
+        如果 `name` 不是有效的字符串。
+    KeyError
+        如果 `name` 已经添加过。
 
-        """
+    """
         PyCondition.valid_string(name, "name")
         PyCondition.not_none(factory, "factory")
         PyCondition.not_in(name, self._data_factories, "name", "_data_factories")
 
         if not issubclass(factory, LiveDataClientFactory):
-            self._log.error(f"Factory was not of type `LiveDataClientFactory`, was {factory}")
+            self._log.error(f"工厂类型不是 `LiveDataClientFactory`，而是 {factory}")
             return
 
         self._data_factories[name] = factory
 
     def add_exec_client_factory(self, name: str, factory: type[LiveExecClientFactory]) -> None:
         """
-        Add the given client factory to the builder.
+    向构建器添加给定的执行客户端工厂。
 
-        Parameters
-        ----------
-        name : str
-            The name of the client.
-        factory : type[LiveExecClientFactory]
-            The factory to add.
+    参数
+    ----------
+    name : str
+        客户端的名称。
+    factory : type[LiveExecClientFactory]
+        要添加的工厂。
 
-        Raises
-        ------
-        ValueError
-            If `name` is not a valid string.
-        KeyError
-            If `name` has already been added.
+    异常
+    ------
+    ValueError
+        如果 `name` 不是有效的字符串。
+    KeyError
+        如果 `name` 已经添加过。
 
-        """
+    """
         PyCondition.valid_string(name, "name")
         PyCondition.not_none(factory, "factory")
         PyCondition.not_in(name, self._exec_factories, "name", "_exec_factories")
 
         if not issubclass(factory, LiveExecClientFactory):
-            self._log.error(f"Factory was not of type `LiveExecClientFactory`, was {factory}")
+            self._log.error(f"工厂类型不是 `LiveExecClientFactory`，而是 {factory}")
             return
 
         self._exec_factories[name] = factory
@@ -145,22 +145,22 @@ class TradingNodeBuilder:
         config: dict[str, LiveDataClientConfig],
     ) -> None:
         """
-        Build the data clients with the given configuration.
+    使用给定的配置构建数据客户端。
 
-        Parameters
-        ----------
-        config : dict[str, ImportableConfig | LiveDataClientConfig]
-            The data clients configuration.
+    参数
+    ----------
+    config : dict[str, ImportableConfig | LiveDataClientConfig]
+        数据客户端的配置。
 
-        """
+    """
         PyCondition.not_none(config, "config")
 
         if not config and not self._data_engine.get_external_client_ids():
-            self._log.warning("No `data_clients` configuration found")
+            self._log.warning("未发现 `data_clients` 配置")
 
         for parts, cfg in config.items():
             name = parts.partition("-")[0]
-            self._log.info(f"Building data client for {name}")
+            self._log.info(f"正在为 {name} 构建数据客户端")
 
             if isinstance(cfg, ImportableConfig):
                 if name not in self._data_factories and cfg.factory is not None:
@@ -171,7 +171,7 @@ class TradingNodeBuilder:
                 client_config: LiveDataClientConfig = cfg  # type: ignore
 
             if name not in self._data_factories:
-                self._log.error(f"No `LiveDataClientFactory` registered for {name}")
+                self._log.error(f"未注册用于 {name} 的 `LiveDataClientFactory`")
                 continue
 
             factory = self._data_factories[name]
@@ -203,22 +203,22 @@ class TradingNodeBuilder:
         config: dict[str, LiveExecClientConfig],
     ) -> None:
         """
-        Build the execution clients with the given configuration.
+    使用给定的配置构建执行客户端。
 
-        Parameters
-        ----------
-        config : dict[str, ImportableConfig | LiveExecClientConfig]
-            The execution clients configuration.
+    参数
+    ----------
+    config : dict[str, ImportableConfig | LiveExecClientConfig]
+        执行客户端的配置。
 
-        """
+    """
         PyCondition.not_none(config, "config")
 
         if not config and not self._exec_engine.get_external_client_ids():
-            self._log.warning("No `exec_clients` configuration found")
+            self._log.warning("未发现 `exec_clients` 配置")
 
         for parts, cfg in config.items():
             name = parts.partition("-")[0]
-            self._log.info(f"Building execution client for {name}")
+            self._log.info(f"正在为 {name} 构建执行客户端")
 
             if isinstance(cfg, ImportableConfig):
                 if name not in self._exec_factories and cfg.factory is not None:
@@ -229,7 +229,7 @@ class TradingNodeBuilder:
                 client_config: LiveExecClientConfig = cfg  # type: ignore
 
             if name not in self._exec_factories:
-                self._log.error(f"No `LiveExecClientFactory` registered for {name}")
+                self._log.error(f"未注册用于 {name} 的 `LiveExecClientFactory`")
                 continue
 
             factory = self._exec_factories[name]

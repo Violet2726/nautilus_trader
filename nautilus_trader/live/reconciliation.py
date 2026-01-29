@@ -13,7 +13,7 @@
 #  limitations under the License.
 # -------------------------------------------------------------------------------------------------
 """
-Reconciliation functions for live trading.
+实盘交易的对账函数。
 """
 
 from decimal import Decimal
@@ -54,27 +54,27 @@ def is_within_single_unit_tolerance(
     precision: int,
 ) -> bool:
     """
-    Check if two decimal values are within single unit tolerance based on precision.
+    检查两个十进制数值是否在基于精度的单一单位容差范围内。
 
-    Handles rounding discrepancies from venues (e.g., OKX fillSz vs accFillSz).
+    处理来自交易场的舍入差异（例如，OKX 的 fillSz 与 accFillSz）。
 
-    Parameters
+    参数
     ----------
     value1 : Decimal
-        The first value to compare.
+        要比较的第一个值。
     value2 : Decimal
-        The second value to compare.
+        要比较的第二个值。
     precision : int
-        The decimal precision for tolerance calculation.
+        用于计算容差的十进制精度。
 
-    Returns
+    返回
     -------
     bool
 
     """
-    # Only apply tolerance for fractional quantities (precision > 0)
+    # 仅对小数数量应用容忍度（精度 > 0）
     if precision == 0:
-        return value1 == value2  # Integer quantities require exact match
+        return value1 == value2  # 整数数量要求完全匹配
 
     tolerance = Decimal(10) ** -precision
 
@@ -86,18 +86,18 @@ def get_existing_fill_for_trade_id(
     trade_id: TradeId,
 ) -> OrderFilled | None:
     """
-    Find an existing fill event for a trade ID in the order's event history.
+    在订单的事件历史中查找特定成交 ID 的现有成交事件。
 
-    Parameters
+    参数
     ----------
     order : Order
-        The order to search.
+        要搜索的订单。
     trade_id : TradeId
-        The trade ID to find.
+        要查找的成交 ID。
 
-    Returns
+    返回
     -------
-    OrderFilled or ``None``
+    OrderFilled 或 ``None``
 
     """
     for event in order.events:
@@ -114,29 +114,29 @@ def create_order_rejected_event(
     reason: str | None = None,
 ) -> OrderRejected:
     """
-    Create an OrderRejected event for reconciliation.
+    为对账创建一个 `OrderRejected`（订单被拒绝）事件。
 
-    This function unifies the creation of OrderRejected events across different
-    reconciliation paths (startup with report, continuous without report).
+    此函数统一了不同对账路径（带报告的启动对账，不带报告的持续对账）下
+    `OrderRejected` 事件的创建。
 
-    Parameters
+    参数
     ----------
     order : Order
-        The order to create the rejection event for.
+        要创建拒绝事件的订单。
     ts_now : int
-        The current timestamp in nanoseconds.
-    report : OrderStatusReport, optional
-        The order status report from the venue (if available).
-    reason : str, optional
-        The rejection reason (used when no report is available).
+        以纳秒为单位的当前时间戳。
+    report : OrderStatusReport, 可选
+        来自场地的订单状态报告（如果有）。
+    reason : str, 可选
+        拒绝原因（在没有报告时使用）。
 
-    Returns
+    返回
     -------
     OrderRejected
 
     """
     if report:
-        # Use report data when available (startup reconciliation)
+        # 当报告可用时使用其数据（启动对账）
         return OrderRejected(
             trader_id=order.trader_id,
             strategy_id=order.strategy_id,
@@ -150,7 +150,7 @@ def create_order_rejected_event(
             reconciliation=True,
         )
     else:
-        # Use current timestamp and provided reason (continuous reconciliation)
+        # 使用当前时间戳和提供的拒绝原因（持续对账）
         return OrderRejected(
             trader_id=order.trader_id,
             strategy_id=order.strategy_id,
@@ -171,27 +171,27 @@ def create_order_canceled_event(
     report: OrderStatusReport | None = None,
 ) -> OrderCanceled:
     """
-    Create an OrderCanceled event for reconciliation.
+    为对账创建一个 `OrderCanceled`（订单已取消）事件。
 
-    This function unifies the creation of OrderCanceled events across different
-    reconciliation paths (startup with report, continuous without report).
+    此函数统一了不同对账路径（带报告的启动对账，不带报告的持续对账）下
+    `OrderCanceled` 事件的创建。
 
-    Parameters
+    参数
     ----------
     order : Order
-        The order to create the cancellation event for.
+        要创建取消事件的订单。
     ts_now : int
-        The current timestamp in nanoseconds.
-    report : OrderStatusReport, optional
-        The order status report from the venue (if available).
+        以纳秒为单位的当前时间戳。
+    report : OrderStatusReport, 可选
+        来自场地的订单状态报告（如果有）。
 
-    Returns
+    返回
     -------
     OrderCanceled
 
     """
     if report:
-        # Use report data when available (startup reconciliation)
+        # 当报告可用时使用其数据（启动对账）
         return OrderCanceled(
             trader_id=order.trader_id,
             strategy_id=order.strategy_id,
@@ -205,7 +205,7 @@ def create_order_canceled_event(
             reconciliation=True,
         )
     else:
-        # Use current timestamp (continuous reconciliation)
+        # 使用当前时间戳（持续对账）
         return OrderCanceled(
             trader_id=order.trader_id,
             strategy_id=order.strategy_id,
@@ -226,18 +226,18 @@ def create_order_expired_event(
     report: OrderStatusReport,
 ) -> OrderExpired:
     """
-    Create an OrderExpired event for reconciliation.
+    为对账创建一个 `OrderExpired`（订单已过期）事件。
 
-    Parameters
+    参数
     ----------
     order : Order
-        The order to create the expiration event for.
+        要创建过期事件的订单。
     ts_now : int
-        The current timestamp in nanoseconds.
+        以纳秒为单位的当前时间戳。
     report : OrderStatusReport
-        The order status report from the venue.
+        来自场地的订单状态报告。
 
-    Returns
+    返回
     -------
     OrderExpired
 
@@ -263,20 +263,20 @@ def create_order_accepted_event(
     report: OrderStatusReport,
 ) -> OrderAccepted:
     """
-    Create an OrderAccepted event for reconciliation.
+    为对账创建一个 `OrderAccepted`（订单已受理）事件。
 
-    Parameters
+    参数
     ----------
     trader_id : TraderId
-        The trader ID for the order.
+        订单的交易员 ID。
     order : Order
-        The order to create the acceptance event for.
+        要创建受理事件的订单。
     ts_now : int
-        The current timestamp in nanoseconds.
+        以纳秒为单位的当前时间戳。
     report : OrderStatusReport
-        The order status report from the venue.
+        来自场地的订单状态报告。
 
-    Returns
+    返回
     -------
     OrderAccepted
 
@@ -302,20 +302,20 @@ def create_order_triggered_event(
     report: OrderStatusReport,
 ) -> OrderTriggered:
     """
-    Create an OrderTriggered event for reconciliation.
+    为对账创建一个 `OrderTriggered`（订单已触发）事件。
 
-    Parameters
+    参数
     ----------
     trader_id : TraderId
-        The trader ID for the order.
+        订单的交易员 ID。
     order : Order
-        The order to create the trigger event for.
+        要创建触发事件的订单。
     ts_now : int
-        The current timestamp in nanoseconds.
+        以纳秒为单位的当前时间戳。
     report : OrderStatusReport
-        The order status report from the venue.
+        来自场地的订单状态报告。
 
-    Returns
+    返回
     -------
     OrderTriggered
 
@@ -341,20 +341,20 @@ def create_order_updated_event(
     report: OrderStatusReport,
 ) -> OrderUpdated:
     """
-    Create an OrderUpdated event for reconciliation.
+    为对账创建一个 `OrderUpdated`（订单已更新）事件。
 
-    Parameters
+    参数
     ----------
     trader_id : TraderId
-        The trader ID for the order.
+        订单的交易员 ID。
     order : Order
-        The order to create the update event for.
+        要创建更新事件的订单。
     ts_now : int
-        The current timestamp in nanoseconds.
+        以纳秒为单位的当前时间戳。
     report : OrderStatusReport
-        The order status report from the venue.
+        来自场地的订单状态报告。
 
-    Returns
+    返回
     -------
     OrderUpdated
 
@@ -383,20 +383,20 @@ def create_order_filled_event(
     instrument: Instrument,
 ) -> OrderFilled:
     """
-    Create an OrderFilled event for reconciliation.
+    为对账创建一个 `OrderFilled`（订单已成交）事件。
 
-    Parameters
+    参数
     ----------
     order : Order
-        The order to create the fill event for.
+        要创建成交事件的订单。
     ts_now : int
-        The current timestamp in nanoseconds.
+        以纳秒为单位的当前时间戳。
     report : FillReport
-        The fill report from the venue.
+        来自场地的成交报告。
     instrument : Instrument
-        The instrument for the order.
+        订单对应的交易标的。
 
-    Returns
+    返回
     -------
     OrderFilled
 
@@ -431,28 +431,27 @@ def create_inferred_order_filled_event(
     instrument: Instrument,
 ) -> OrderFilled:
     """
-    Create an inferred OrderFilled event for reconciliation.
+    为对账创建一个推断出的 `OrderFilled`（订单已成交）事件。
 
-    This function is used when fill details are missing but can be inferred
-    from order status reports showing filled quantities.
+    此函数在成交详情缺失但可以通过显示已成交数量的订单状态报告进行推断时使用。
 
-    Parameters
+    参数
     ----------
     order : Order
-        The order to create the inferred fill for.
+        要为其创建推断成交的订单。
     ts_now : int
-        The current timestamp in nanoseconds.
+        以纳秒为单位的当前时间戳。
     report : OrderStatusReport
-        The order status report showing filled quantity.
+        显示已成交数量的订单状态报告。
     instrument : Instrument
-        The instrument for the order.
+        订单对应的交易标的。
 
-    Returns
+    返回
     -------
     OrderFilled
 
     """
-    # Infer liquidity side
+    # 推断流动性方向
     liquidity_side: LiquiditySide = LiquiditySide.NO_LIQUIDITY_SIDE
 
     if order.order_type in (
@@ -464,19 +463,19 @@ def create_inferred_order_filled_event(
     elif report.post_only:
         liquidity_side = LiquiditySide.MAKER
 
-    # Calculate last qty
+    # 计算上一次成交数量
     last_qty: Quantity = instrument.make_qty(report.filled_qty - order.filled_qty)
 
-    # Calculate last px
+    # 计算上一次成交价格
     if order.avg_px is None:
-        # For the first fill, use the report's average price
+        # 对于首笔成交，使用报告的平均成交价
         if report.avg_px:
             last_px: Price = instrument.make_price(report.avg_px)
         elif report.price is not None:
-            # If no avg_px but we have a price (e.g., from LIMIT order), use that
+            # 如果没有平均成交价但有价格（例如来自限价单），则使用该价格
             last_px = report.price
         else:
-            # Retain original fallback for now
+            # 目前保留原始备选方案
             last_px = instrument.make_price(0.0)
     else:
         report_cost: float = float(report.avg_px or 0.0) * float(report.filled_qty)
@@ -522,35 +521,34 @@ def calculate_reconciliation_price(
     instrument: Instrument,
 ) -> Price | None:
     """
-    Calculate the price needed for a reconciliation order to achieve target position.
+    计算对账订单所需的价格以达到目标持仓。
 
-    This is a pure function that calculates what price a fill would need to have
-    to move from the current position state to the target position state with the
-    correct average price, accounting for the netting simulation logic.
+    这是一个纯函数，用于计算成交需要什么价格才能从当前持仓状态
+    以正确的平均价格移动到目标持仓状态，同时考虑净额结算模拟逻辑。
 
-    Parameters
+    参数
     ----------
     current_position_qty : Decimal
-        The current signed position quantity (positive for long, negative for short).
+        当前的带符号持仓数量（正数表示多头，负数表示空头）。
     current_position_avg_px : Decimal, optional
-        The current position average price (can be None for flat position).
+        当前的持仓平均价格（平仓时可为 None）。
     target_position_qty : Decimal
-        The target signed position quantity.
+        目标带符号持仓数量。
     target_position_avg_px : Decimal, optional
-        The target position average price.
+        目标持仓平均价格。
     instrument : Instrument
-        The instrument for price precision.
+        用于价格精度的交易标的。
 
-    Returns
+    返回
     -------
-    Price or ``None``
+    Price 或 ``None``
 
     Notes
     -----
-    The function handles three scenarios:
-    1. Flat to position: reconciliation_px = target_avg_px
-    2. Position flip (sign change): reconciliation_px = target_avg_px (due to value reset in simulation)
-    3. Accumulation/reduction: weighted average formula
+    该函数处理三种情况：
+    1. 平仓到持仓：reconciliation_px = target_avg_px
+    2. 持仓反转（符号改变）：reconciliation_px = target_avg_px（由于模拟中值重置）
+    3. 累积/减少：加权平均公式
 
     """
     result = nautilus_pyo3.calculate_reconciliation_price(
@@ -572,7 +570,7 @@ def adjust_fills_for_partial_window_single(
     logger: Logger | None = None,
 ) -> tuple[dict[VenueOrderId, OrderStatusReport], dict[VenueOrderId, list[FillReport]]]:
     """
-    Adjust fills to account for incomplete position lifecycle at window start.
+    调整成交以说明窗口开始时持仓生命周期的不完整逻辑。
     """
     return adjust_fills_for_partial_window(mass_status, [instrument], logger)[instrument.id]
 
@@ -586,31 +584,30 @@ def adjust_fills_for_partial_window(
     tuple[dict[VenueOrderId, OrderStatusReport], dict[VenueOrderId, list[FillReport]]],
 ]:
     """
-    Adjust fills to account for incomplete position lifecycle at window start.
+    调整成交以说明窗口开始时持仓生命周期的不完整逻辑。
 
-    This function analyzes fill reports from a lookback window and adjusts them
-    to ensure the simulated position matches the venue's reported position, accounting
-    for scenarios where:
-    - The position lifecycle started before the lookback window
-    - Multiple position lifecycles occurred (with zero-crossings)
-    - Fill reports from old lifecycles should be excluded
+    此函数分析回溯窗口（lookback window）内的成交报告，并对其进行调整，
+    以确保模拟持仓与场地报告的持仓相匹配，考虑到以下场景：
+    - 持仓生命周期在回溯窗口之前就开始了
+    - 发生了多次持仓生命周期（伴随跨零点）
+    - 来自旧生命周期的成交报告应被排除
 
-    Parameters
+    参数
     ----------
     mass_status : ExecutionMassStatus
-        The execution mass status containing order, fill, and position reports.
+        包含订单、成交和持仓报告的执行总量状态（mass status）。
     instruments : list[Instrument]
-        The instruments to adjust fills for (all instruments in the mass status).
-    logger : Logger, optional
-        The logger for diagnostic output.
+        需要调整成交的交易标的（总量状态中的所有标的）。
+    logger : Logger, 可选
+        用于诊断输出的日志记录器。
 
-    Returns
+    返回
     -------
     tuple[dict[VenueOrderId, OrderStatusReport], dict[VenueOrderId, list[FillReport]]]
-        Tuple of (adjusted order reports, adjusted fill reports) matching venue position.
+        由（调整后的订单报告, 调整后的成交报告）组成的元组，与交易场持仓匹配。
 
     """
-    # Register all required commission currencies
+    # 注册所有要求的手续费货币
     seen_currencies: set[Currency] = set()
     for fill_list in mass_status.fill_reports.values():
         for fill in fill_list:
@@ -618,7 +615,7 @@ def adjust_fills_for_partial_window(
             if currency not in seen_currencies:
                 register_currency(currency)
                 if logger:
-                    logger.debug(f"Registered currency: {currency}")
+                    logger.debug(f"已注册货币：{currency}")
                 seen_currencies.add(currency)
 
     pyo3_mass_status = mass_status.to_pyo3()
@@ -656,7 +653,7 @@ def adjust_fills_for_partial_window(
 
             if logger:
                 logger.debug(
-                    f"Adjusted fills for {instrument.id}: {len(orders)} orders, {len(fills)} fills",
+                    f"已为 {instrument.id} 调整成交：{len(orders)} 个订单，{len(fills)} 个成交",
                 )
 
         results[instrument.id] = (orders, fills)

@@ -13,10 +13,10 @@
 #  limitations under the License.
 # -------------------------------------------------------------------------------------------------
 """
-The `LiveDataClient` class is responsible for interfacing with a particular API which
-may be presented directly by a venue, or through a broker intermediary.
+`LiveDataClient` 类负责与特定 API 进行交互，该 API 可能由场地直接提供，
+也可能通过经纪商中间商提供。
 
-It could also be possible to write clients for specialized data providers.
+也可以为专门的数据提供商编写客户端。
 
 """
 
@@ -77,28 +77,28 @@ from nautilus_trader.model.identifiers import Venue
 
 class LiveDataClient(DataClient):
     """
-    The base class for all live data clients.
+    所有实盘数据客户端的基类。
 
-    Parameters
+    参数
     ----------
     loop : asyncio.AbstractEventLoop
-        The event loop for the client.
+        客户端的事件循环。
     client_id : ClientId
-        The client ID.
-    venue : Venue or ``None``
-        The client venue. If multi-venue then can be ``None``.
+        客户端 ID。
+    venue : Venue 或 ``None``
+        客户端场地。如果是多场地，则可以为理论上的 ``None``。
     msgbus : MessageBus
-        The message bus for the client.
+        客户端的消息总线。
     cache : Cache
-        The cache for the client.
+        客户端的缓存。
     clock : LiveClock
-        The clock for the client.
-    config : NautilusConfig, optional
-        The configuration for the instance.
+        客户端的时钟。
+    config : NautilusConfig, 可选
+        实例的配置。
 
-    Warnings
+    警告
     --------
-    This class should not be used directly, but through a concrete subclass.
+    此类不应直接使用，而应通过具体的子类使用。
 
     """
 
@@ -130,14 +130,14 @@ class LiveDataClient(DataClient):
         coro: Coroutine,
     ) -> None:
         """
-        Run the given coroutine after a delay.
+        延迟一定时间后运行给定的协程（coroutine）。
 
-        Parameters
+        参数
         ----------
         delay : float
-            The delay (seconds) before running the coroutine.
+            运行协程前的延迟（秒）。
         coro : Coroutine
-            The coroutine to run after the initial delay.
+            在初始延迟后运行的协程。
 
         """
         await asyncio.sleep(delay)
@@ -152,29 +152,28 @@ class LiveDataClient(DataClient):
         success_color: LogColor = LogColor.NORMAL,
     ) -> asyncio.Task:
         """
-        Run the given coroutine with error handling and optional callback actions when
-        done.
+        运行给定的协程，并包含错误处理和完成后可选的回调动作。
 
-        Parameters
+        参数
         ----------
         coro : Coroutine
-            The coroutine to run.
-        log_msg : str, optional
-            The log message for the task.
-        actions : Callable, optional
-            The actions callback to run when the coroutine is done.
-        success_msg : str, optional
-            The log message to write on `actions` success.
-        success_color : LogColor, default ``NORMAL``
-            The log message color for `actions` success.
+            要运行的协程。
+        log_msg : str, 可选
+            任务的日志消息。
+        actions : Callable, 可选
+            协程完成时要运行的回调动作。
+        success_msg : str, 可选
+            动作成功完成后要写入的日志消息。
+        success_color : LogColor, 默认 ``NORMAL``
+            动作成功完成后日志消息的颜色。
 
-        Returns
+        返回
         -------
         asyncio.Task
 
         """
         task_name = log_msg or getattr(coro, "__name__", None) or coro.__class__.__name__
-        self._log.debug(f"Creating task '{task_name}'")
+        self._log.debug(f"正在创建任务 '{task_name}'")
         task = self._loop.create_task(
             coro,
             name=task_name,
@@ -200,18 +199,18 @@ class LiveDataClient(DataClient):
         try:
             e: BaseException | None = task.exception()
         except asyncio.CancelledError:
-            self._log.warning(f"Task '{task.get_name()}' was canceled")
+            self._log.warning(f"任务 '{task.get_name()}' 已取消")
             return
 
         if e:
-            self._log.exception(f"Error on '{task.get_name()}'", e)
+            self._log.exception(f"任务 '{task.get_name()}' 出错", e)
         else:
             if actions:
                 try:
                     actions()
                 except Exception as e:
                     self._log.exception(
-                        f"Failed triggering action {actions.__name__} on '{task.get_name()}'",
+                        f"在任务 '{task.get_name()}' 成功后触发动作 {actions.__name__} 失败",
                         e,
                     )
             if success_msg:
@@ -219,27 +218,27 @@ class LiveDataClient(DataClient):
 
     def connect(self) -> None:
         """
-        Connect the client.
+        连接客户端。
         """
-        self._log.info("Connecting...")
+        self._log.info("正在连接...")
         self.create_task(
             self._connect(),
             actions=lambda: self._set_connected(True),
-            success_msg="Connected",
+            success_msg="已连接",
             success_color=LogColor.GREEN,
         )
 
     def disconnect(self) -> None:
         """
-        Disconnect the client.
+        断开客户端连接。
         """
-        self._log.info("Disconnecting...")
+        self._log.info("正在断开连接...")
 
         async def _disconnect_with_cleanup():
             await self._disconnect()
             await self.cancel_pending_tasks()
             self._set_connected(False)
-            self._log.info("Disconnected", LogColor.GREEN)
+            self._log.info("已断开连接", LogColor.GREEN)
 
         self._loop.create_task(_disconnect_with_cleanup())
 
@@ -249,8 +248,8 @@ class LiveDataClient(DataClient):
         self._add_subscription(command.data_type)
         self.create_task(
             self._subscribe(command),
-            log_msg=f"subscribe: {command.data_type}",
-            success_msg=f"Subscribed {command.data_type}",
+            log_msg=f"订阅: {command.data_type}",
+            success_msg=f"已订阅 {command.data_type}",
             success_color=LogColor.BLUE,
         )
 
@@ -258,18 +257,18 @@ class LiveDataClient(DataClient):
         self._remove_subscription(command.data_type)
         self.create_task(
             self._unsubscribe(command),
-            log_msg=f"unsubscribe_{command.data_type}",
-            success_msg=f"Unsubscribed {command.data_type}",
+            log_msg=f"取消订阅: {command.data_type}",
+            success_msg=f"已取消订阅 {command.data_type}",
             success_color=LogColor.BLUE,
         )
 
     # -- REQUESTS ---------------------------------------------------------------------------------
 
     def request(self, request: RequestData) -> None:
-        self._log.debug(f"Request {request.data_type} {request.id}")
+        self._log.debug(f"请求 {request.data_type} {request.id}")
         self.create_task(
             self._request(request),
-            log_msg=f"request_{request.data_type}",
+            log_msg=f"请求_{request.data_type}",
         )
 
     ############################################################################
@@ -277,37 +276,37 @@ class LiveDataClient(DataClient):
     ############################################################################
     async def _connect(self) -> None:
         raise NotImplementedError(  # pragma: no cover
-            "implement the `_connect` coroutine",  # pragma: no cover
+            "请实现 `_connect` 协程",  # pragma: no cover
         )
 
     async def _disconnect(self) -> None:
         raise NotImplementedError(  # pragma: no cover
-            "implement the `_disconnect` coroutine",  # pragma: no cover
+            "请实现 `_disconnect` 协程",  # pragma: no cover
         )
 
     async def _subscribe(self, command: SubscribeData) -> None:
         raise NotImplementedError(  # pragma: no cover
-            "implement the `_subscribe` coroutine",  # pragma: no cover
+            "请实现 `_subscribe` 协程",  # pragma: no cover
         )
 
     async def _unsubscribe(self, command: UnsubscribeBars) -> None:
         raise NotImplementedError(  # pragma: no cover
-            "implement the `_unsubscribe` coroutine",  # pragma: no cover
+            "请实现 `_unsubscribe` 协程",  # pragma: no cover
         )
 
     async def _request(self, request: RequestData) -> None:
         raise NotImplementedError(  # pragma: no cover
-            "implement the `_request` coroutine",  # pragma: no cover
+            "请实现 `_request` 协程",  # pragma: no cover
         )
 
     async def cancel_pending_tasks(self, timeout_secs: float = 5.0) -> None:
         """
-        Cancel all pending tasks and await their cancellation.
+        取消所有待处理任务并等待其取消。
 
-        Parameters
+        参数
         ----------
-        timeout_secs : float, default 5.0
-            The timeout in seconds to wait for tasks to cancel.
+        timeout_secs : float, 默认 5.0
+            等待任务取消的超时时间（秒）。
 
         """
         await cancel_tasks_with_timeout(self._tasks, self._log, timeout_secs)
@@ -315,30 +314,30 @@ class LiveDataClient(DataClient):
 
 class LiveMarketDataClient(MarketDataClient):
     """
-    The base class for all live data clients.
+    所有实盘行情数据客户端的基类。
 
-    Parameters
+    参数
     ----------
     loop : asyncio.AbstractEventLoop
-        The event loop for the client.
+        客户端的事件循环。
     client_id : ClientId
-        The client ID.
-    venue : Venue or ``None``
-        The client venue. If multi-venue then can be ``None``.
+        客户端 ID。
+    venue : Venue 或 ``None``
+        客户端场地。如果是多场地，则可以为理论上的 ``None``。
     msgbus : MessageBus
-        The message bus for the client.
+        客户端的消息总线。
     cache : Cache
-        The cache for the client.
+        客户端的缓存。
     clock : LiveClock
-        The clock for the client.
+        客户端的时钟。
     instrument_provider : InstrumentProvider
-        The instrument provider for the client.
-    config : NautilusConfig, optional
-        The configuration for the instance.
+        客户端的标的提供者。
+    config : NautilusConfig, 可选
+        实例的配置。
 
-    Warnings
+    警告
     --------
-    This class should not be used directly, but through a concrete subclass.
+    此类不应直接使用，而应通过具体的子类使用。
 
     """
 
@@ -373,8 +372,8 @@ class LiveMarketDataClient(MarketDataClient):
 
         if self._is_sync:
             self._log.warning(
-                "Client initialized in synchronous mode; "
-                "ensure nest_asyncio.apply() is called if running in an async environment like a jupyter notebook",
+                "客户端初始化为同步模式；"
+                "如果在 Jupyter Notebook 等异步环境中运行，请确保调用了 nest_asyncio.apply()",
             )
 
     async def run_after_delay(
@@ -383,14 +382,14 @@ class LiveMarketDataClient(MarketDataClient):
         coro: Coroutine,
     ) -> None:
         """
-        Run the given coroutine after a delay.
+        延迟一定时间后运行给定的协程（coroutine）。
 
-        Parameters
+        参数
         ----------
         delay : float
-            The delay (seconds) before running the coroutine.
+            运行协程前的延迟（秒）。
         coro : Coroutine
-            The coroutine to run after the initial delay.
+            在初始延迟后运行的协程。
 
         """
         await asyncio.sleep(delay)
@@ -405,23 +404,22 @@ class LiveMarketDataClient(MarketDataClient):
         success_color: LogColor = LogColor.NORMAL,
     ) -> asyncio.Task | None:
         """
-        Run the given coroutine with error handling and optional callback actions when
-        done.
+        运行给定的协程，并包含错误处理和完成后可选的回调动作。
 
-        Parameters
+        参数
         ----------
         coro : Coroutine
-            The coroutine to run.
-        log_msg : str, optional
-            The log message for the task.
-        actions : Callable, optional
-            The actions callback to run when the coroutine is done.
-        success_msg : str, optional
-            The log message to write on `actions` success.
-        success_color : LogColor, default ``NORMAL``
-            The log message color for `actions` success.
+            要运行的协程。
+        log_msg : str, 可选
+            任务的日志消息。
+        actions : Callable, 可选
+            协程完成时要运行的回调动作。
+        success_msg : str, 可选
+            动作成功完成后要写入的日志消息。
+        success_color : LogColor, 默认 ``NORMAL``
+            动作成功完成后日志消息的颜色。
 
-        Returns
+        返回
         -------
         asyncio.Task
 
@@ -429,7 +427,7 @@ class LiveMarketDataClient(MarketDataClient):
         task_name = log_msg or coro.__name__
 
         if self._is_sync:
-            self._log.debug(f"Running coroutine '{task_name}' synchronously...")
+            self._log.debug(f"正在同步运行协程 '{task_name}'...")
             result = None
             exception: BaseException | None = None
 
@@ -447,15 +445,15 @@ class LiveMarketDataClient(MarketDataClient):
             )
 
             if exception:
-                self._log.error(f"Synchronous execution of '{task_name}' failed")
+                self._log.error(f"同步执行 '{task_name}' 失败")
                 return None
             else:
                 return result
 
-        self._log.debug(f"Creating async task '{task_name}'")
+        self._log.debug(f"正在创建异步任务 '{task_name}'")
 
         if not self._loop or not self._loop.is_running():
-            self._log.error(f"Async task '{task_name}' created but event loop is not running")
+            self._log.error(f"异步任务 '{task_name}' 已创建，但事件循环未运行")
             return None
 
         task = self._loop.create_task(
@@ -487,7 +485,7 @@ class LiveMarketDataClient(MarketDataClient):
         try:
             task.result()
         except asyncio.CancelledError:
-            self._log.warning(f"Task '{coro_name}' was cancelled")
+            self._log.warning(f"任务 '{coro_name}' 已取消")
             return
         except Exception as e:
             exception = e
@@ -509,16 +507,16 @@ class LiveMarketDataClient(MarketDataClient):
         exception: BaseException | None = None,
     ) -> None:
         if exception:
-            self._log.exception(f"Error running '{coro_name}'", exception)
+            self._log.exception(f"运行 '{coro_name}' 时出错", exception)
         else:
-            self._log.debug(f"Coroutine '{coro_name}' completed")
+            self._log.debug(f"协程 '{coro_name}' 已完成")
 
             if actions:
                 try:
                     actions()
                 except Exception as e:
                     self._log.exception(
-                        f"Failed triggering action {getattr(actions, '__name__', 'N/A')} on '{coro_name}' success",
+                        f"在 '{coro_name}' 成功完成之后触发动作 {getattr(actions, '__name__', 'N/A')} 失败",
                         e,
                     )
 
@@ -527,30 +525,30 @@ class LiveMarketDataClient(MarketDataClient):
 
     def connect(self) -> None:
         """
-        Connect the client.
+        连接客户端。
         """
-        self._log.info("Connecting...")
+        self._log.info("正在连接...")
         self.create_task(
             self._connect(),
             actions=lambda: self._set_connected(True),
-            success_msg="Connected",
+            success_msg="已连接",
             success_color=LogColor.GREEN,
         )
 
     def disconnect(self) -> None:
         """
-        Disconnect the client.
+        断开客户端连接。
         """
-        self._log.info("Disconnecting...")
+        self._log.info("正在断开连接...")
 
         async def _disconnect_with_cleanup():
             await self._disconnect()
             await self.cancel_pending_tasks()
             self._set_connected(False)
-            self._log.info("Disconnected", LogColor.GREEN)
+            self._log.info("已断开连接", LogColor.GREEN)
 
-        # Create disconnect task directly without using create_task helper
-        # so it won't be cancelled by cancel_pending_tasks()
+        # 直接创建断开连接任务，不使用 create_task 辅助函数，
+        # 这样它就不会被 cancel_pending_tasks() 取消
         self._loop.create_task(_disconnect_with_cleanup())
 
     # -- SUBSCRIPTIONS ----------------------------------------------------------------------------
@@ -559,8 +557,8 @@ class LiveMarketDataClient(MarketDataClient):
         self._add_subscription(command.data_type)
         self.create_task(
             self._subscribe(command),
-            log_msg=f"subscribe: {command.data_type}",
-            success_msg=f"Subscribed {command.data_type}",
+            log_msg=f"订阅: {command.data_type}",
+            success_msg=f"已订阅 {command.data_type}",
             success_color=LogColor.BLUE,
         )
 
@@ -569,8 +567,8 @@ class LiveMarketDataClient(MarketDataClient):
         [self._add_subscription_instrument(i) for i in instrument_ids]
         self.create_task(
             self._subscribe_instruments(command),
-            log_msg=f"subscribe: instruments {self.venue}",
-            success_msg=f"Subscribed {self.venue} instruments",
+            log_msg=f"订阅: {self.venue} 标的",
+            success_msg=f"已订阅 {self.venue} 标的",
             success_color=LogColor.BLUE,
         )
 
@@ -578,8 +576,8 @@ class LiveMarketDataClient(MarketDataClient):
         self._add_subscription_instrument(command.instrument_id)
         self.create_task(
             self._subscribe_instrument(command),
-            log_msg=f"subscribe: instrument {command.instrument_id}",
-            success_msg=f"Subscribed {command.instrument_id} instrument",
+            log_msg=f"订阅: 标的 {command.instrument_id}",
+            success_msg=f"已订阅标的 {command.instrument_id}",
             success_color=LogColor.BLUE,
         )
 
@@ -587,8 +585,8 @@ class LiveMarketDataClient(MarketDataClient):
         self._add_subscription_order_book_deltas(command.instrument_id)
         self.create_task(
             self._subscribe_order_book_deltas(command),
-            log_msg=f"subscribe: order_book_deltas {command.instrument_id}",
-            success_msg=f"Subscribed {command.instrument_id} order book deltas; depth={command.depth}",
+            log_msg=f"订阅: 订单簿增量 {command.instrument_id}",
+            success_msg=f"已订阅 {command.instrument_id} 订单簿增量; 深度={command.depth}",
             success_color=LogColor.BLUE,
         )
 
@@ -596,8 +594,8 @@ class LiveMarketDataClient(MarketDataClient):
         self._add_subscription_order_book_depth(command.instrument_id)
         self.create_task(
             self._subscribe_order_book_depth(command),
-            log_msg=f"subscribe: order_book_depth {command.instrument_id}",
-            success_msg=f"Subscribed {command.instrument_id} order book depth; depth={command.depth}",
+            log_msg=f"订阅: 订单簿深度 {command.instrument_id}",
+            success_msg=f"已订阅 {command.instrument_id} 订单簿深度; 深度={command.depth}",
             success_color=LogColor.BLUE,
         )
 
@@ -605,8 +603,8 @@ class LiveMarketDataClient(MarketDataClient):
         self._add_subscription_quote_ticks(command.instrument_id)
         self.create_task(
             self._subscribe_quote_ticks(command),
-            log_msg=f"subscribe: quote_ticks {command.instrument_id}",
-            success_msg=f"Subscribed {command.instrument_id} quotes",
+            log_msg=f"订阅: 报价跳动 {command.instrument_id}",
+            success_msg=f"已订阅 {command.instrument_id} 报价",
             success_color=LogColor.BLUE,
         )
 
@@ -614,8 +612,8 @@ class LiveMarketDataClient(MarketDataClient):
         self._add_subscription_trade_ticks(command.instrument_id)
         self.create_task(
             self._subscribe_trade_ticks(command),
-            log_msg=f"subscribe: trade_ticks {command.instrument_id}",
-            success_msg=f"Subscribed {command.instrument_id} trades",
+            log_msg=f"订阅: 成交跳动 {command.instrument_id}",
+            success_msg=f"已订阅 {command.instrument_id} 成交记录",
             success_color=LogColor.BLUE,
         )
 
@@ -623,8 +621,8 @@ class LiveMarketDataClient(MarketDataClient):
         self._add_subscription_mark_prices(command.instrument_id)
         self.create_task(
             self._subscribe_mark_prices(command),
-            log_msg=f"subscribe: mark_prices {command.instrument_id}",
-            success_msg=f"Subscribed {command.instrument_id} mark prices",
+            log_msg=f"订阅: 标记价格 {command.instrument_id}",
+            success_msg=f"已订阅 {command.instrument_id} 标记价格",
             success_color=LogColor.BLUE,
         )
 
@@ -632,8 +630,8 @@ class LiveMarketDataClient(MarketDataClient):
         self._add_subscription_index_prices(command.instrument_id)
         self.create_task(
             self._subscribe_index_prices(command),
-            log_msg=f"subscribe: index_prices {command.instrument_id}",
-            success_msg=f"Subscribed {command.instrument_id} index prices",
+            log_msg=f"订阅: 指数价格 {command.instrument_id}",
+            success_msg=f"已订阅 {command.instrument_id} 指数价格",
             success_color=LogColor.BLUE,
         )
 
@@ -641,8 +639,8 @@ class LiveMarketDataClient(MarketDataClient):
         self._add_subscription_funding_rates(command.instrument_id)
         self.create_task(
             self._subscribe_funding_rates(command),
-            log_msg=f"subscribe: funding_rates {command.instrument_id}",
-            success_msg=f"Subscribed {command.instrument_id} funding rates",
+            log_msg=f"订阅: 资金费率 {command.instrument_id}",
+            success_msg=f"已订阅 {command.instrument_id} 资金费率",
             success_color=LogColor.BLUE,
         )
 
@@ -655,8 +653,8 @@ class LiveMarketDataClient(MarketDataClient):
         self._add_subscription_bars(command.bar_type)
         self.create_task(
             self._subscribe_bars(command),
-            log_msg=f"subscribe: bars {command.bar_type}",
-            success_msg=f"Subscribed {command.bar_type} bars",
+            log_msg=f"订阅: K 线 {command.bar_type}",
+            success_msg=f"已订阅 {command.bar_type} K 线",
             success_color=LogColor.BLUE,
         )
 
@@ -664,8 +662,8 @@ class LiveMarketDataClient(MarketDataClient):
         self._add_subscription_instrument_status(command.instrument_id)
         self.create_task(
             self._subscribe_instrument_status(command),
-            log_msg=f"subscribe: instrument_status {command.instrument_id}",
-            success_msg=f"Subscribed {command.instrument_id} instrument status ",
+            log_msg=f"订阅: 标的状态 {command.instrument_id}",
+            success_msg=f"已订阅 {command.instrument_id} 标的状态",
             success_color=LogColor.BLUE,
         )
 
@@ -673,8 +671,8 @@ class LiveMarketDataClient(MarketDataClient):
         self._add_subscription_instrument_close(command.instrument_id)
         self.create_task(
             self._subscribe_instrument_close(command),
-            log_msg=f"subscribe: instrument_close {command.instrument_id}",
-            success_msg=f"Subscribed {command.instrument_id} instrument close",
+            log_msg=f"订阅: 标的收盘 {command.instrument_id}",
+            success_msg=f"已订阅 {command.instrument_id} 标的收盘",
             success_color=LogColor.BLUE,
         )
 
@@ -682,8 +680,8 @@ class LiveMarketDataClient(MarketDataClient):
         self._remove_subscription(command.data_type)
         self.create_task(
             self._unsubscribe(command),
-            log_msg=f"unsubscribe {command.data_type}",
-            success_msg=f"Unsubscribed {command.data_type}",
+            log_msg=f"取消订阅 {command.data_type}",
+            success_msg=f"已取消订阅 {command.data_type}",
             success_color=LogColor.BLUE,
         )
 
@@ -692,8 +690,8 @@ class LiveMarketDataClient(MarketDataClient):
         [self._remove_subscription_instrument(i) for i in instrument_ids]
         self.create_task(
             self._unsubscribe_instruments(command),
-            log_msg=f"unsubscribe: instruments {self.venue}",
-            success_msg=f"Unsubscribed {self.venue} instruments",
+            log_msg=f"取消订阅: {self.venue} 标的",
+            success_msg=f"已取消订阅 {self.venue} 标的",
             success_color=LogColor.BLUE,
         )
 
@@ -701,8 +699,8 @@ class LiveMarketDataClient(MarketDataClient):
         self._remove_subscription_instrument(command.instrument_id)
         self.create_task(
             self._unsubscribe_instrument(command),
-            log_msg=f"unsubscribe: instrument {command.instrument_id}",
-            success_msg=f"Unsubscribed {command.instrument_id} instrument",
+            log_msg=f"取消订阅: 标的 {command.instrument_id}",
+            success_msg=f"已取消订阅标的 {command.instrument_id}",
             success_color=LogColor.BLUE,
         )
 
@@ -710,8 +708,8 @@ class LiveMarketDataClient(MarketDataClient):
         self._remove_subscription_order_book_deltas(command.instrument_id)
         self.create_task(
             self._unsubscribe_order_book_deltas(command),
-            log_msg=f"unsubscribe: order_book_deltas {command.instrument_id}",
-            success_msg=f"Unsubscribed {command.instrument_id} order book deltas",
+            log_msg=f"取消订阅: 订单簿增量 {command.instrument_id}",
+            success_msg=f"已取消订阅 {command.instrument_id} 订单簿增量",
             success_color=LogColor.BLUE,
         )
 
@@ -719,8 +717,8 @@ class LiveMarketDataClient(MarketDataClient):
         self._remove_subscription_order_book_depth(command.instrument_id)
         self.create_task(
             self._unsubscribe_order_book_depth(command),
-            log_msg=f"unsubscribe: order_book_depth {command.instrument_id}",
-            success_msg=f"Unsubscribed {command.instrument_id} order book depth",
+            log_msg=f"取消订阅: 订单簿深度 {command.instrument_id}",
+            success_msg=f"已取消订阅 {command.instrument_id} 订单簿深度",
             success_color=LogColor.BLUE,
         )
 
@@ -728,8 +726,8 @@ class LiveMarketDataClient(MarketDataClient):
         self._remove_subscription_quote_ticks(command.instrument_id)
         self.create_task(
             self._unsubscribe_quote_ticks(command),
-            log_msg=f"unsubscribe: quote_ticks {command.instrument_id}",
-            success_msg=f"Unsubscribed {command.instrument_id} quotes",
+            log_msg=f"取消订阅: 报价跳动 {command.instrument_id}",
+            success_msg=f"已取消订阅 {command.instrument_id} 报价",
             success_color=LogColor.BLUE,
         )
 
@@ -737,8 +735,8 @@ class LiveMarketDataClient(MarketDataClient):
         self._remove_subscription_trade_ticks(command.instrument_id)
         self.create_task(
             self._unsubscribe_trade_ticks(command),
-            log_msg=f"unsubscribe: trade_ticks {command.instrument_id}",
-            success_msg=f"Unsubscribed {command.instrument_id} trades",
+            log_msg=f"取消订阅: 成交跳动 {command.instrument_id}",
+            success_msg=f"已取消订阅 {command.instrument_id} 成交记录",
             success_color=LogColor.BLUE,
         )
 
@@ -746,8 +744,8 @@ class LiveMarketDataClient(MarketDataClient):
         self._remove_subscription_mark_prices(command.instrument_id)
         self.create_task(
             self._unsubscribe_mark_prices(command),
-            log_msg=f"unsubscribe: mark_prices {command.instrument_id}",
-            success_msg=f"Unsubscribed {command.instrument_id} mark prices",
+            log_msg=f"取消订阅: 标记价格 {command.instrument_id}",
+            success_msg=f"已取消订阅 {command.instrument_id} 标记价格",
             success_color=LogColor.BLUE,
         )
 
@@ -755,8 +753,8 @@ class LiveMarketDataClient(MarketDataClient):
         self._remove_subscription_index_prices(command.instrument_id)
         self.create_task(
             self._unsubscribe_index_prices(command),
-            log_msg=f"unsubscribe: index_prices {command.instrument_id}",
-            success_msg=f"Unsubscribed {command.instrument_id} index prices",
+            log_msg=f"取消订阅: 指数价格 {command.instrument_id}",
+            success_msg=f"已取消订阅 {command.instrument_id} 指数价格",
             success_color=LogColor.BLUE,
         )
 
@@ -764,8 +762,8 @@ class LiveMarketDataClient(MarketDataClient):
         self._remove_subscription_funding_rates(command.instrument_id)
         self.create_task(
             self._unsubscribe_funding_rates(command),
-            log_msg=f"unsubscribe: funding_rates {command.instrument_id}",
-            success_msg=f"Unsubscribed {command.instrument_id} funding rates",
+            log_msg=f"取消订阅: 资金费率 {command.instrument_id}",
+            success_msg=f"已取消订阅 {command.instrument_id} 资金费率",
             success_color=LogColor.BLUE,
         )
 
@@ -773,8 +771,8 @@ class LiveMarketDataClient(MarketDataClient):
         self._remove_subscription_bars(command.bar_type)
         self.create_task(
             self._unsubscribe_bars(command),
-            log_msg=f"unsubscribe: bars {command.bar_type}",
-            success_msg=f"Unsubscribed {command.bar_type} bars",
+            log_msg=f"取消订阅: K 线 {command.bar_type}",
+            success_msg=f"已取消订阅 {command.bar_type} K 线",
             success_color=LogColor.BLUE,
         )
 
@@ -782,8 +780,8 @@ class LiveMarketDataClient(MarketDataClient):
         self._remove_subscription_instrument_status(command.instrument_id)
         self.create_task(
             self._unsubscribe_instrument_status(command),
-            log_msg=f"unsubscribe: instrument_status {command.instrument_id}",
-            success_msg=f"Unsubscribed {command.instrument_id} instrument status",
+            log_msg=f"取消订阅: 标的状态 {command.instrument_id}",
+            success_msg=f"已取消订阅 {command.instrument_id} 标的状态",
             success_color=LogColor.BLUE,
         )
 
@@ -791,93 +789,93 @@ class LiveMarketDataClient(MarketDataClient):
         self._remove_subscription_instrument_close(command.instrument_id)
         self.create_task(
             self._unsubscribe_instrument_close(command),
-            log_msg=f"unsubscribe: instrument_close {command.instrument_id}",
-            success_msg=f"Unsubscribed {command.instrument_id} instrument close",
+            log_msg=f"取消订阅: 标的收盘 {command.instrument_id}",
+            success_msg=f"已取消订阅 {command.instrument_id} 标的收盘",
             success_color=LogColor.BLUE,
         )
 
     # -- REQUESTS ---------------------------------------------------------------------------------
 
     def request(self, request: RequestData) -> None:
-        self._log.info(f"Request {request.data_type}", LogColor.BLUE)
+        self._log.info(f"请求 {request.data_type}", LogColor.BLUE)
         self.create_task(
             self._request(request),
-            log_msg=f"request: {request.data_type}",
+            log_msg=f"请求: {request.data_type}",
         )
 
     def request_instrument(self, request: RequestInstrument) -> None:
         time_range_str = format_utc_timerange(request.start, request.end)
-        self._log.info(f"Request {request.instrument_id} instrument{time_range_str}", LogColor.BLUE)
+        self._log.info(f"请求 {request.instrument_id} 标的{time_range_str}", LogColor.BLUE)
         self.create_task(
             self._request_instrument(request),
-            log_msg=f"request: instrument {request.instrument_id}",
+            log_msg=f"请求: 标的 {request.instrument_id}",
         )
 
     def request_instruments(self, request: RequestInstruments) -> None:
         time_range_str = format_utc_timerange(request.start, request.end)
         self._log.info(
-            f"Request {request.venue} instruments for{time_range_str}",
+            f"请求 {request.venue} 标的列表，范围{time_range_str}",
             LogColor.BLUE,
         )
         self.create_task(
             self._request_instruments(request),
-            log_msg=f"request: instruments for {request.venue}",
+            log_msg=f"请求: {request.venue} 标的列表",
         )
 
     def request_quote_ticks(self, request: RequestQuoteTicks) -> None:
         time_range_str = format_utc_timerange(request.start, request.end)
         limit_str = f" limit={request.limit}" if request.limit != 0 else ""
         self._log.info(
-            f"Request {request.instrument_id} quotes{time_range_str}{limit_str}",
+            f"请求 {request.instrument_id} 报价{time_range_str}{limit_str}",
             LogColor.BLUE,
         )
         self.create_task(
             self._request_quote_ticks(request),
-            log_msg=f"request: quotes {request.instrument_id}",
+            log_msg=f"请求: 报价 {request.instrument_id}",
         )
 
     def request_trade_ticks(self, request: RequestTradeTicks) -> None:
         time_range_str = format_utc_timerange(request.start, request.end)
         limit_str = f" limit={request.limit}" if request.limit != 0 else ""
         self._log.info(
-            f"Request {request.instrument_id} trades{time_range_str}{limit_str}",
+            f"请求 {request.instrument_id} 成交记录{time_range_str}{limit_str}",
             LogColor.BLUE,
         )
         self.create_task(
             self._request_trade_ticks(request),
-            log_msg=f"request: trades {request.instrument_id}",
+            log_msg=f"请求: 成交记录 {request.instrument_id}",
         )
 
     def request_funding_rates(self, request: RequestFundingRates) -> None:
         time_range_str = format_utc_timerange(request.start, request.end)
         limit_str = f" limit={request.limit}" if request.limit != 0 else ""
         self._log.info(
-            f"Request {request.instrument_id} funding rates{time_range_str}{limit_str}",
+            f"请求 {request.instrument_id} 资金费率{time_range_str}{limit_str}",
             LogColor.BLUE,
         )
         self.create_task(
             self._request_funding_rates(request),
-            log_msg=f"request: funding rates {request.instrument_id}",
+            log_msg=f"请求: 资金费率 {request.instrument_id}",
         )
 
     def request_bars(self, request: RequestBars) -> None:
         time_range_str = format_utc_timerange(request.start, request.end)
         limit_str = f" limit={request.limit}" if request.limit != 0 else ""
-        self._log.info(f"Request {request.bar_type} bars{time_range_str}{limit_str}", LogColor.BLUE)
+        self._log.info(f"请求 {request.bar_type} K 线{time_range_str}{limit_str}", LogColor.BLUE)
         self.create_task(
             self._request_bars(request),
-            log_msg=f"request: bars {request.bar_type}",
+            log_msg=f"请求: K 线 {request.bar_type}",
         )
 
     def request_order_book_snapshot(self, request: RequestOrderBookSnapshot) -> None:
         limit_str = f" limit={request.limit}" if request.limit != 0 else ""
         self._log.info(
-            f"Request {request.instrument_id} order_book_snapshot{limit_str}",
+            f"请求 {request.instrument_id} 订单簿快照{limit_str}",
             LogColor.BLUE,
         )
         self.create_task(
             self._request_order_book_snapshot(request),
-            log_msg=f"request: order_book_snapshot {request.instrument_id}",
+            log_msg=f"请求: 订单簿快照 {request.instrument_id}",
         )
 
     def request_order_book_depth(self, request: RequestOrderBookDepth) -> None:
@@ -885,12 +883,12 @@ class LiveMarketDataClient(MarketDataClient):
         limit_str = f" limit={request.limit}" if request.limit != 0 else ""
         depth_str = f" depth={request.depth}"
         self._log.info(
-            f"Request {request.instrument_id} order_book_depth{time_range_str}{limit_str}{depth_str}",
+            f"请求 {request.instrument_id} 订单簿深度{time_range_str}{limit_str}{depth_str}",
             LogColor.BLUE,
         )
         self.create_task(
             self._request_order_book_depth(request),
-            log_msg=f"request: order_book_depth {request.instrument_id}",
+            log_msg=f"请求: 订单簿深度 {request.instrument_id}",
         )
 
     ############################################################################
@@ -898,197 +896,197 @@ class LiveMarketDataClient(MarketDataClient):
     ############################################################################
     async def _connect(self) -> None:
         raise NotImplementedError(  # pragma: no cover
-            "implement the `_connect` coroutine",  # pragma: no cover
+            "请实现 `_connect` 协程",  # pragma: no cover
         )
 
     async def _disconnect(self) -> None:
         raise NotImplementedError(  # pragma: no cover
-            "implement the `_disconnect` coroutine",  # pragma: no cover
+            "请实现 `_disconnect` 协程",  # pragma: no cover
         )
 
     async def _subscribe(self, command: SubscribeData) -> None:
         raise NotImplementedError(  # pragma: no cover
-            "implement the `_subscribe` coroutine",  # pragma: no cover
+            "请实现 `_subscribe` 协程",  # pragma: no cover
         )
 
     async def _subscribe_instruments(self, command: SubscribeInstruments) -> None:
         raise NotImplementedError(  # pragma: no cover
-            "implement the `_subscribe_instruments` coroutine",  # pragma: no cover
+            "请实现 `_subscribe_instruments` 协程",  # pragma: no cover
         )
 
     async def _subscribe_instrument(self, command: SubscribeInstrument) -> None:
         raise NotImplementedError(  # pragma: no cover
-            "implement the `_subscribe_instrument` coroutine",  # pragma: no cover
+            "请实现 `_subscribe_instrument` 协程",  # pragma: no cover
         )
 
     async def _subscribe_order_book_deltas(self, command: SubscribeOrderBook) -> None:
         raise NotImplementedError(  # pragma: no cover
-            "implement the `_subscribe_order_book_deltas` coroutine",  # pragma: no cover
+            "请实现 `_subscribe_order_book_deltas` 协程",  # pragma: no cover
         )
 
     async def _subscribe_order_book_depth(self, command: SubscribeOrderBook) -> None:
         raise NotImplementedError(  # pragma: no cover
-            "implement the `_subscribe_order_book_depth` coroutine",  # pragma: no cover
+            "请实现 `_subscribe_order_book_depth` 协程",  # pragma: no cover
         )
 
     async def _subscribe_quote_ticks(self, command: SubscribeQuoteTicks) -> None:
         raise NotImplementedError(  # pragma: no cover
-            "implement the `_subscribe_quote_ticks` coroutine",  # pragma: no cover
+            "请实现 `_subscribe_quote_ticks` 协程",  # pragma: no cover
         )
 
     async def _subscribe_trade_ticks(self, command: SubscribeTradeTicks) -> None:
         raise NotImplementedError(  # pragma: no cover
-            "implement the `_subscribe_trade_ticks` coroutine",  # pragma: no cover
+            "请实现 `_subscribe_trade_ticks` 协程",  # pragma: no cover
         )
 
     async def _subscribe_mark_prices(self, command: SubscribeMarkPrices) -> None:
         raise NotImplementedError(  # pragma: no cover
-            "implement the `_subscribe_mark_prices` coroutine",  # pragma: no cover
+            "请实现 `_subscribe_mark_prices` 协程",  # pragma: no cover
         )
 
     async def _subscribe_index_prices(self, command: SubscribeIndexPrices) -> None:
         raise NotImplementedError(  # pragma: no cover
-            "implement the `_subscribe_index_prices` coroutine",  # pragma: no cover
+            "请实现 `_subscribe_index_prices` 协程",  # pragma: no cover
         )
 
     async def _subscribe_funding_rates(self, command: SubscribeFundingRates) -> None:
         raise NotImplementedError(  # pragma: no cover
-            "implement the `_subscribe_funding_rates` coroutine",  # pragma: no cover
+            "请实现 `_subscribe_funding_rates` 协程",  # pragma: no cover
         )
 
     async def _subscribe_bars(self, command: SubscribeBars) -> None:
         raise NotImplementedError(  # pragma: no cover
-            "implement the `_subscribe_bars` coroutine",  # pragma: no cover
+            "请实现 `_subscribe_bars` 协程",  # pragma: no cover
         )
 
     async def _subscribe_instrument_status(self, command: SubscribeInstrumentStatus) -> None:
         raise NotImplementedError(  # pragma: no cover
-            "implement the `_subscribe_instrument_status` coroutine",  # pragma: no cover
+            "请实现 `_subscribe_instrument_status` 协程",  # pragma: no cover
         )
 
     async def _subscribe_instrument_close(self, command: SubscribeInstrumentClose) -> None:
         raise NotImplementedError(  # pragma: no cover
-            "implement the `_subscribe_instrument_close` coroutine",  # pragma: no cover
+            "请实现 `_subscribe_instrument_close` 协程",  # pragma: no cover
         )
 
     async def _unsubscribe(self, command: UnsubscribeData) -> None:
         raise NotImplementedError(  # pragma: no cover
-            "implement the `_unsubscribe` coroutine",  # pragma: no cover
+            "请实现 `_unsubscribe` 协程",  # pragma: no cover
         )
 
     async def _unsubscribe_instruments(self, command: UnsubscribeInstruments) -> None:
         raise NotImplementedError(  # pragma: no cover
-            "implement the `_unsubscribe_instruments` coroutine",  # pragma: no cover
+            "请实现 `_unsubscribe_instruments` 协程",  # pragma: no cover
         )
 
     async def _unsubscribe_instrument(self, command: UnsubscribeInstrument) -> None:
         raise NotImplementedError(  # pragma: no cover
-            "implement the `_unsubscribe_instrument` coroutine",  # pragma: no cover
+            "请实现 `_unsubscribe_instrument` 协程",  # pragma: no cover
         )
 
     async def _unsubscribe_order_book_deltas(self, command: UnsubscribeOrderBook) -> None:
         raise NotImplementedError(  # pragma: no cover
-            "implement the `_unsubscribe_order_book_deltas` coroutine",  # pragma: no cover
+            "请实现 `_unsubscribe_order_book_deltas` 协程",  # pragma: no cover
         )
 
     async def _unsubscribe_order_book_depth(self, command: UnsubscribeOrderBook) -> None:
         raise NotImplementedError(  # pragma: no cover
-            "implement the `_unsubscribe_order_book_depth` coroutine",  # pragma: no cover
+            "请实现 `_unsubscribe_order_book_depth` 协程",  # pragma: no cover
         )
 
     async def _unsubscribe_quote_ticks(self, command: UnsubscribeQuoteTicks) -> None:
         raise NotImplementedError(  # pragma: no cover
-            "implement the `_unsubscribe_quote_ticks` coroutine",  # pragma: no cover
+            "请实现 `_unsubscribe_quote_ticks` 协程",  # pragma: no cover
         )
 
     async def _unsubscribe_trade_ticks(self, command: UnsubscribeTradeTicks) -> None:
         raise NotImplementedError(  # pragma: no cover
-            "implement the `_unsubscribe_trade_ticks` coroutine",  # pragma: no cover
+            "请实现 `_unsubscribe_trade_ticks` 协程",  # pragma: no cover
         )
 
     async def _unsubscribe_mark_prices(self, command: UnsubscribeMarkPrices) -> None:
         raise NotImplementedError(  # pragma: no cover
-            "implement the `_unsubscribe_mark_prices` coroutine",  # pragma: no cover
+            "请实现 `_unsubscribe_mark_prices` 协程",  # pragma: no cover
         )
 
     async def _unsubscribe_index_prices(self, command: UnsubscribeIndexPrices) -> None:
         raise NotImplementedError(  # pragma: no cover
-            "implement the `_unsubscribe_index_prices` coroutine",  # pragma: no cover
+            "请实现 `_unsubscribe_index_prices` 协程",  # pragma: no cover
         )
 
     async def _unsubscribe_funding_rates(self, command: UnsubscribeFundingRates) -> None:
         raise NotImplementedError(  # pragma: no cover
-            "implement the `_unsubscribe_funding_rates` coroutine",  # pragma: no cover
+            "请实现 `_unsubscribe_funding_rates` 协程",  # pragma: no cover
         )
 
     async def _unsubscribe_bars(self, command: UnsubscribeBars) -> None:
         raise NotImplementedError(  # pragma: no cover
-            "implement the `_unsubscribe_bars` coroutine",  # pragma: no cover
+            "请实现 `_unsubscribe_bars` 协程",  # pragma: no cover
         )
 
     async def _unsubscribe_instrument_status(self, command: UnsubscribeInstrumentStatus) -> None:
         raise NotImplementedError(  # pragma: no cover
-            "implement the `_unsubscribe_instrument_status` coroutine",  # pragma: no cover
+            "请实现 `_unsubscribe_instrument_status` 协程",  # pragma: no cover
         )
 
     async def _unsubscribe_instrument_close(self, command: UnsubscribeInstrumentClose) -> None:
         raise NotImplementedError(  # pragma: no cover
-            "implement the `_unsubscribe_instrument_close` coroutine",  # pragma: no cover
+            "请实现 `_unsubscribe_instrument_close` 协程",  # pragma: no cover
         )
 
     async def _request(self, request: RequestData) -> None:
         raise NotImplementedError(  # pragma: no cover
-            "implement the `_request` coroutine",  # pragma: no cover
+            "请实现 `_request` 协程",  # pragma: no cover
         )
 
     async def _request_instrument(self, request: RequestInstrument) -> None:
         raise NotImplementedError(  # pragma: no cover
-            "implement the `_request_instrument` coroutine",  # pragma: no cover
+            "请实现 `_request_instrument` 协程",  # pragma: no cover
         )
 
     async def _request_instruments(self, request: RequestInstruments) -> None:
         raise NotImplementedError(  # pragma: no cover
-            "implement the `_request_instruments` coroutine",  # pragma: no cover
+            "请实现 `_request_instruments` 协程",  # pragma: no cover
         )
 
     async def _request_quote_ticks(self, request: RequestQuoteTicks) -> None:
         raise NotImplementedError(  # pragma: no cover
-            "implement the `_request_quote_ticks` coroutine",  # pragma: no cover
+            "请实现 `_request_quote_ticks` 协程",  # pragma: no cover
         )
 
     async def _request_trade_ticks(self, request: RequestTradeTicks) -> None:
         raise NotImplementedError(  # pragma: no cover
-            "implement the `_request_trade_ticks` coroutine",  # pragma: no cover
+            "请实现 `_request_trade_ticks` 协程",  # pragma: no cover
         )
 
     async def _request_funding_rates(self, request: RequestFundingRates) -> None:
         raise NotImplementedError(  # pragma: no cover
-            "implement the `_request_funding_rates` coroutine",  # pragma: no cover
+            "请实现 `_request_funding_rates` 协程",  # pragma: no cover
         )
 
     async def _request_bars(self, request: RequestBars) -> None:
         raise NotImplementedError(  # pragma: no cover
-            "implement the `_request_bars` coroutine",  # pragma: no cover
+            "请实现 `_request_bars` 协程",  # pragma: no cover
         )
 
     async def _request_order_book_snapshot(self, request: RequestOrderBookSnapshot) -> None:
         raise NotImplementedError(
-            "implement the `_request_order_book_snapshot` coroutine",  # pragma: no cover
+            "请实现 `_request_order_book_snapshot` 协程",  # pragma: no cover
         )
 
     async def _request_order_book_depth(self, request: RequestOrderBookDepth) -> None:
         raise NotImplementedError(  # pragma: no cover
-            "implement the `_request_order_book_depth` coroutine",  # pragma: no cover
+            "请实现 `_request_order_book_depth` 协程",  # pragma: no cover
         )
 
     async def cancel_pending_tasks(self, timeout_secs: float = 5.0) -> None:
         """
-        Cancel all pending tasks and await their cancellation.
+        取消所有待处理任务并等待其取消。
 
-        Parameters
+        参数
         ----------
-        timeout_secs : float, default 5.0
-            The timeout in seconds to wait for tasks to cancel.
+        timeout_secs : float, 默认 5.0
+            等待任务取消的超时时间（秒）。
 
         """
         await cancel_tasks_with_timeout(self._tasks, self._log, timeout_secs)

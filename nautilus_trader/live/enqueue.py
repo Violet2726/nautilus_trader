@@ -23,20 +23,20 @@ from nautilus_trader.core.nautilus_pyo3 import NANOSECONDS_IN_SECOND
 
 class ThrottledEnqueuer[T]:
     """
-    Manages enqueuing messages of type T onto an internal asynchronous queue.
+    管理将类型为 T 的消息排入内部异步队列的操作。
 
-    Parameters
+    参数
     ----------
     qname : str
-        The name of the inner queue  (e.g., "data_queue").
+        内部队列的名称（例如 "data_queue"）。
     queue : asyncio.Queue
-        The inner asyncio queue to manage.
+        要管理的内部 asyncio 队列。
     loop : asyncio.AbstractEventLoop
-        The event loop used for scheduling queue operations.
+        用于调度队列操作的事件循环。
     clock : Clock
-        The clock for throttling log messages.
+        用于限流日志消息的时钟。
     logger : Logger
-        The logger to use for capacity warning logs.
+        用于记录容量警告日志的记录器。
 
     """
 
@@ -59,9 +59,9 @@ class ThrottledEnqueuer[T]:
     @property
     def qname(self) -> str:
         """
-        Return the name of the inner queue.
+        返回内部队列的名称。
 
-        Returns
+        返回
         -------
         str
 
@@ -71,9 +71,9 @@ class ThrottledEnqueuer[T]:
     @property
     def size(self) -> int:
         """
-        Return the current inner queue size.
+        返回当前内部队列的大小。
 
-        Returns
+        返回
         -------
         int
 
@@ -83,9 +83,9 @@ class ThrottledEnqueuer[T]:
     @property
     def capacity(self) -> int:
         """
-        Return the inner queue maximum capacity.
+        返回内部队列的最大容量。
 
-        Returns
+        返回
         -------
         int
 
@@ -94,19 +94,18 @@ class ThrottledEnqueuer[T]:
 
     def enqueue(self, msg: T) -> None:
         """
-        Enqueue a message and logs a throttled warning if the queue is at capacity.
+        将消息排入队列，并在队列达到容量上限时记录限流警告。
 
-        This method ensures that the message is always queued, even if the queue is
-        momentarily full (it schedules an asynchronous put).
+        此方法确保消息始终被排入队列，即使队列暂时已满（它会调度一个异步 put 操作）。
 
-        Parameters
+        参数
         ----------
         msg : T
-            The message to enqueue.
+            要排入队列的消息。
 
         """
-        # Do not allow None through (None is a sentinel value which stops the queue)
-        assert msg is not None, "message was `None` when a value was expected"
+        # 不允许 None 通过（None 是停止队列的哨兵值）
+        assert msg is not None, "预期应有值，但消息为 `None`"
 
         if self._queue.qsize() < self._queue.maxsize:
             self._loop.call_soon_threadsafe(self._enqueue_nowait_safely, self._queue, msg)
@@ -116,21 +115,20 @@ class ThrottledEnqueuer[T]:
         task.add_done_callback(self._handle_task_exception)
         self._pending_tasks.add(task)
 
-        # Throttle logging to once per second
+        # 限流日志记录，每秒最多一次
         now_ns = self._clock.timestamp_ns()
         if now_ns > self._ts_last_logged + NANOSECONDS_IN_SECOND:
             self._log.warning(
-                f"{self._qname} at capacity ({self._queue.qsize():_}/{self._queue.maxsize}), "
-                "scheduled asynchronous put() onto queue",
+                f"{self._qname} 已达容量上限 ({self._queue.qsize():_}/{self._queue.maxsize})，"
+                "已调度异步 put() 操作到队列",
             )
             self._ts_last_logged = now_ns
 
     def cancel_pending_tasks(self) -> None:
         """
-        Cancel all pending async put tasks.
+        取消所有挂起的异步 put 任务。
 
-        This should be called during shutdown to prevent "Task was destroyed but it is
-        pending!" warnings.
+        应在停机期间调用此方法，以防止出现 "Task was destroyed but it is pending!" 警告。
 
         """
         for task in list(self._pending_tasks):
@@ -143,11 +141,11 @@ class ThrottledEnqueuer[T]:
 
         exc = task.exception()
         if exc is not None:
-            self._log.error(f"Error putting message on {self._qname}: {exc!r}")
+            self._log.error(f"将消息放入 {self._qname} 时出错: {exc!r}")
 
     def _enqueue_nowait_safely(self, queue: asyncio.Queue, msg: T) -> None:
-        # Attempt put_nowait(msg) and if the queue is full,
-        # schedule an async put() as a fallback.
+        # 尝试执行 put_nowait(msg)，如果队列已满，
+        # 则调度异步 put() 作为后备方案。
         try:
             queue.put_nowait(msg)
         except asyncio.QueueFull:
