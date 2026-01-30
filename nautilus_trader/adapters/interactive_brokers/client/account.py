@@ -28,21 +28,20 @@ from nautilus_trader.model.position import Position
 
 class InteractiveBrokersClientAccountMixin(BaseMixin):
     """
-    Handles various account and position related requests for the
-    InteractiveBrokersClient.
+    处理 InteractiveBrokersClient 的各种账户和持仓相关请求。
 
-    Parameters
+    参数
     ----------
     client : InteractiveBrokersClient
-        The client instance that will be used to communicate with the TWS API.
+        用于与 TWS API 通信的客户端实例。
 
     """
 
     def accounts(self) -> set[str]:
         """
-        Return a set of account identifiers managed by this instance.
+        返回此实例管理的账户标识符集合。
 
-        Returns
+        返回
         -------
         set[str]
 
@@ -51,10 +50,9 @@ class InteractiveBrokersClientAccountMixin(BaseMixin):
 
     def subscribe_account_summary(self) -> None:
         """
-        Subscribe to the account summary for all accounts.
+        订阅所有账户的账户摘要（Account Summary）。
 
-        It sends a request to Interactive Brokers to retrieve account summary
-        information.
+        它向 Interactive Brokers 发送请求以检索账户摘要信息。
 
         """
         name = "accountSummary"
@@ -76,7 +74,7 @@ class InteractiveBrokersClientAccountMixin(BaseMixin):
                 ),
             )
 
-        # Allow fetching all tags upon request even if already subscribed
+        # 即使已经订阅，如果请求获取所有标签，也允许调用 handle
         if not subscription:
             return
 
@@ -84,10 +82,9 @@ class InteractiveBrokersClientAccountMixin(BaseMixin):
 
     def subscribe_positions(self) -> None:
         """
-        Subscribe to real-time position updates for all accounts.
+        订阅所有账户的实时持仓更新。
 
-        This enables automatic detection of position changes from option exercises and
-        other external events.
+        这将启用对期权行权和其他外部事件引起的持仓变化的自动检测。
 
         """
         name = "PositionUpdates"
@@ -107,7 +104,7 @@ class InteractiveBrokersClientAccountMixin(BaseMixin):
 
     def unsubscribe_positions(self) -> None:
         """
-        Unsubscribe from real-time position updates.
+        取消订阅实时持仓更新。
         """
         name = "PositionUpdates"
 
@@ -117,13 +114,12 @@ class InteractiveBrokersClientAccountMixin(BaseMixin):
 
     def unsubscribe_account_summary(self, account_id: str) -> None:
         """
-        Unsubscribe from the account summary for the specified account. This method is
-        not implemented.
+        取消订阅指定账户的账户摘要。此方法尚未实现。
 
-        Parameters
+        参数
         ----------
         account_id : str
-            The identifier of the account to unsubscribe from.
+            要取消订阅的账户标识符。
 
         """
         name = "accountSummary"
@@ -131,25 +127,25 @@ class InteractiveBrokersClientAccountMixin(BaseMixin):
         if subscription := self._subscriptions.get(name=name):
             self._subscriptions.remove(subscription.req_id)
             self._eclient.cancelAccountSummary(reqId=subscription.req_id)
-            self._log.debug(f"Unsubscribed from {subscription}")
+            self._log.debug(f"已取消订阅 {subscription}")
         else:
-            self._log.debug(f"Subscription doesn't exist for {name}")
+            self._log.debug(f"订阅 {name} 不存在")
 
     async def get_positions(self, account_id: str) -> list[Position]:
         """
-        Fetch open positions for a specified account.
+        获取指定账户的未平仓持仓。
 
-        Parameters
+        参数
         ----------
         account_id: str
-            The account identifier for which to fetch positions.
+            要获取持仓的账户标识符。
 
-        Returns
+        返回
         -------
         list[Position]
 
         """
-        self._log.debug(f"Requesting open positions for {account_id}")
+        self._log.debug(f"正在请求 {account_id} 的未平仓持仓")
         name = "OpenPositions"
 
         if not (request := self._requests.get(name=name)):
@@ -188,7 +184,7 @@ class InteractiveBrokersClientAccountMixin(BaseMixin):
         currency: str,
     ) -> None:
         """
-        Receive account information.
+        接收账户信息。
         """
         name = f"accountSummary-{account_id}"
 
@@ -197,20 +193,20 @@ class InteractiveBrokersClientAccountMixin(BaseMixin):
 
     async def process_managed_accounts(self, *, accounts_list: str) -> None:
         """
-        Receive a comma-separated string with the managed account ids.
+        接收包含托管账户 ID 的逗号分隔字符串。
 
-        Occurs automatically on initial API client connection.
+        在初始 API 客户端连接时自动发生。
 
         """
         self._account_ids = {a for a in accounts_list.split(",") if a}
         self._log.debug(
-            f"Managed accounts set: {self._account_ids}, next_valid_order_id: {self._next_valid_order_id}",
+            f"受管理账户已设置：{self._account_ids}，下一个有效订单 ID：{self._next_valid_order_id}",
         )
 
-        # Set connection flag if we have next valid order id
-        # Accounts may be empty in some cases, but nextValidId is required
+        # 如果有下一个有效订单 ID，则设置连接标志
+        # 在某些情况下账户可能为空，但 nextValidId 是必需的
         if self._next_valid_order_id >= 0 and not self._is_ib_connected.is_set():
-            self._log.debug("`_is_ib_connected` set by `managedAccounts`", LogColor.BLUE)
+            self._log.debug("在 `managedAccounts` 中设置了 `_is_ib_connected` 标志", LogColor.BLUE)
             self._is_ib_connected.set()
 
     async def process_position(
@@ -222,24 +218,24 @@ class InteractiveBrokersClientAccountMixin(BaseMixin):
         avg_cost: float,
     ) -> None:
         """
-        Provide the portfolio's open positions.
+        提供投资组合的未平仓持仓。
         """
         if request := self._requests.get(name="OpenPositions"):
-            # Handle position updates for requests (get_positions)
+            # 处理请求的持仓更新 (get_positions)
             ib_contract = IBContract(**contract.__dict__)
             request.result.append(IBPosition(account_id, ib_contract, position, avg_cost))
         elif self._subscriptions.get(name="PositionUpdates"):
-            # Handle real-time position updates from subscription
+            # 处理来自订阅的实时持仓更新
             ib_contract = IBContract(**contract.__dict__)
             ib_position = IBPosition(account_id, ib_contract, position, avg_cost)
 
-            # Emit position update event for registered clients
+            # 为注册客户端发送持仓更新事件
             if handler := self._event_subscriptions.get(f"positionUpdate-{account_id}", None):
                 handler(ib_position)
 
     async def process_position_end(self) -> None:
         """
-        Indicate that all the positions have been transmitted.
+        指示所有持仓均已传输完毕。
         """
         if request := self._requests.get(name="OpenPositions"):
             self._end_request(request.req_id)

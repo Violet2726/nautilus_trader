@@ -23,13 +23,12 @@ from nautilus_trader.model.identifiers import VenueOrderId
 
 class InteractiveBrokersClientErrorMixin(BaseMixin):
     """
-    Handles errors and warnings for the InteractiveBrokersClient.
+    处理 InteractiveBrokersClient 的错误和警告。
 
-    This class is designed to process and log various types of error messages and
-    warnings encountered during the operation of the InteractiveBrokersClient. It
-    categorizes different error codes and manages appropriate responses, including
-    logging and state updates.
+    该类旨在处理并记录 InteractiveBrokersClient 运行期间遇到的各种类型的错误消息和
+    警告。它对不同的错误代码进行分类并管理相应的响应，包括日志记录和状态更新。
 
+    参考资料：
     https://ibkrcampus.com/ibkr-api-page/tws-api-error-codes/#understanding-error-codes
 
     """
@@ -49,18 +48,18 @@ class InteractiveBrokersClientErrorMixin(BaseMixin):
         is_warning: bool,
     ) -> None:
         """
-        Log the provided error or warning message.
+        记录提供的错误或警告消息。
 
-        Parameters
+        参数
         ----------
         error_code : int
-            The error code associated with the message.
+            与消息关联的错误代码。
         req_id : int
-            The request ID associated with the error or warning.
+            与错误或警告关联的请求 ID。
         error_string : str
-            The error or warning message string.
+            错误或警告消息字符串。
         is_warning : bool
-            Indicates whether the message is a warning or an error.
+            指示消息是警告还是错误。
 
         """
         msg = f"{error_string} (code: {error_code}, {req_id=})"
@@ -80,22 +79,21 @@ class InteractiveBrokersClientErrorMixin(BaseMixin):
         advanced_order_reject_json: str = "",
     ) -> None:
         """
-        Process an error based on its code, request ID, and message. Depending on the
-        error code, this method delegates to specific error handlers or performs general
-        error handling.
+        根据错误代码、请求 ID 和消息处理错误。根据错误代码，此方法会委托给特定的
+        错误处理程序或执行通用的错误处理。
 
-        Parameters
+        参数
         ----------
         req_id : int
-            The request ID associated with the error.
+            与错误关联的请求 ID。
         error_time : int
-            The timestamp when the error occurred.
+            错误发生时的时间戳。
         error_code : int
-            The error code.
+            错误代码。
         error_string : str
-            The error message string.
+            错误消息字符串。
         advanced_order_reject_json : str
-            The JSON string for advanced order rejection.
+            高级订单拒绝的 JSON 字符串。
 
         """
         is_warning = error_code in self.WARNING_CODES or 2100 <= error_code < 2200
@@ -110,17 +108,17 @@ class InteractiveBrokersClientErrorMixin(BaseMixin):
             elif VenueOrderId(str(req_id)) in self._order_id_to_order_ref:
                 await self._handle_order_error(req_id, error_code, error_string)
             else:
-                self._log.warning(f"Unhandled error: {error_code} for req_id {req_id}")
+                self._log.warning(f"未处理的错误：代码 {error_code}，针对 req_id {req_id}")
         elif error_code in self.CLIENT_ERRORS or error_code in self.CONNECTIVITY_LOST_CODES:
             if self._is_ib_connected.is_set():
                 self._log.debug(
-                    f"`_is_ib_connected` unset by code {error_code} in `_process_error`",
+                    f"在 `_process_error` 中代码 {error_code} 取消了 `_is_ib_connected` 状态",
                     LogColor.BLUE,
                 )
                 self._is_ib_connected.clear()
         elif error_code in self.CONNECTIVITY_RESTORED_CODES and not self._is_ib_connected.is_set():
             self._log.debug(
-                f"`_is_ib_connected` set by code {error_code} in `_process_error`",
+                f"在 `_process_error` 中代码 {error_code} 设置了 `_is_ib_connected` 状态",
                 LogColor.BLUE,
             )
             self._is_ib_connected.set()
@@ -132,18 +130,17 @@ class InteractiveBrokersClientErrorMixin(BaseMixin):
         error_string: str,
     ) -> None:
         """
-        Handle errors specific to data subscriptions. Processes subscription-related
-        errors and takes appropriate actions, such as canceling the subscription or
-        clearing flags.
+        处理特定于数据订阅的错误。处理与订阅相关的错误并采取适当措施，
+        例如取消订阅或清除标志。
 
-        Parameters
+        参数
         ----------
         req_id : int
-            The request ID associated with the subscription error.
+            与订阅错误关联的请求 ID。
         error_code : int
-            The error code.
+            错误代码。
         error_string : str
-            The error message string.
+            错误消息字符串。
 
         """
         subscription = self._subscriptions.get(req_id=req_id)
@@ -152,7 +149,7 @@ class InteractiveBrokersClientErrorMixin(BaseMixin):
             return
 
         if error_code in [10189, 366, 102]:
-            # Handle specific subscription-related error codes
+            # 处理特定订阅相关的错误代码
             self._log.warning(f"{error_code}: {error_string}")
             subscription.cancel()
 
@@ -161,33 +158,31 @@ class InteractiveBrokersClientErrorMixin(BaseMixin):
             else:
                 subscription.handle()
         elif error_code == 10182:
-            # Handle disconnection error
+            # 处理断开连接错误
             self._log.warning(f"{error_code}: {error_string}")
 
             if self._is_ib_connected.is_set():
                 self._log.info(
-                    f"`_is_ib_connected` unset by {subscription.name} in `_handle_subscription_error`",
+                    f"在 `_handle_subscription_error` 中 {subscription.name} 取消了 `_is_ib_connected` 状态",
                 )
                 self._is_ib_connected.clear()
-        else:
-            # Log unknown subscription errors
+            # 记录未知的订阅错误
             self._log.warning(
-                f"Unknown subscription error: {error_code} for req_id {req_id}",
+                f"未知订阅错误：代码 {error_code}，针对 req_id {req_id}",
             )
 
     async def _handle_request_error(self, req_id: int, error_code: int, error_string: str) -> None:
         """
-        Handle errors related to general requests. Logs the error and ends the request
-        associated with the given request ID.
+        处理与常规请求相关的错误。记录错误并结束与给定请求 ID 关联的请求。
 
-        Parameters
+        参数
         ----------
         req_id : int
-            The request ID associated with the error.
+            与错误关联的请求 ID。
         error_code : int
-            The error code.
+            错误代码。
         error_string : str
-            The error message string.
+            错误消息字符串。
 
         """
         request = self._requests.get(req_id=req_id)
@@ -201,40 +196,40 @@ class InteractiveBrokersClientErrorMixin(BaseMixin):
 
     async def _handle_order_error(self, req_id: int, error_code: int, error_string: str) -> None:
         """
-        Handle errors related to orders. Manages various order-related errors, including
-        rejections and cancellations, and logs or forwards them as appropriate.
+        处理订单相关的错误。管理各种订单相关的错误，包括拒绝和取消，并视情况
+        记录或转发它们。
 
-        Parameters
+        参数
         ----------
         req_id : int
-            The request ID associated with the order error.
+            与订单错误关联的请求 ID。
         error_code : int
-            The error code.
+            错误代码。
         error_string : str
-            The error message string.
+            错误消息字符串。
 
         """
-        # Use VenueOrderId as dict key (for orders we placed, req_id is the valid orderId)
+        # 使用 VenueOrderId 作为字典键（对于我们下的订单，req_id 是有效的 orderId）
         order_ref = self._order_id_to_order_ref.get(VenueOrderId(str(req_id)), None)
 
         if not order_ref:
-            self._log.warning(f"Order reference not found for req_id {req_id}")
+            self._log.warning(f"未找到 req_id {req_id} 的订单引用")
             return
 
         name = f"orderStatus-{order_ref.account_id}"
         handler = self._event_subscriptions.get(name, None)
 
         if error_code in self.ORDER_REJECTION_CODES:
-            # Handle various order rejections
+            # 处理各种订单拒绝情况
             if handler:
                 handler(order_ref=order_ref.order_id, order_status="Rejected", reason=error_string)
         elif error_code == 202:
-            # Handle order cancellation warning
+            # 处理订单取消警告
             if handler:
                 handler(order_ref=order_ref.order_id, order_status="Cancelled", reason=error_string)
         else:
-            # Log unknown order warnings / errors
+            # 记录未知的订单警告/错误
             self._log.warning(
-                f"Unhandled order warning or error code: {error_code} (req_id {req_id}) - "
+                f"未处理的订单警告或错误代码：{error_code} (req_id {req_id}) - "
                 f"{error_string}",
             )

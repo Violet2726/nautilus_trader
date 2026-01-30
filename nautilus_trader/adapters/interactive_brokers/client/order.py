@@ -34,12 +34,10 @@ from nautilus_trader.model.identifiers import VenueOrderId
 
 class InteractiveBrokersClientOrderMixin(BaseMixin):
     """
-    Manages orders for the InteractiveBrokersClient.
+    为 InteractiveBrokersClient 管理订单。
 
-    This class enables the execution and management of trades. It maintains an internal
-    state that tracks the relationship between Nautilus orders and IB API orders,
-    ensuring that actions such as placing, modifying, and canceling orders are correctly
-    reflected in both systems.
+    此类负责执行和管理交易。它维护内部状态，跟踪 Nautilus 订单与 IB API 订单
+    之间的关系，确保下单、修改和取消等操作能正确反映在两个系统中。
 
     """
 
@@ -47,16 +45,15 @@ class InteractiveBrokersClientOrderMixin(BaseMixin):
 
     def place_order(self, order: IBOrder) -> None:
         """
-        Place an order through the EClient.
+        通过 EClient 下单。
 
-        Parameters
+        参数
         ----------
         order : IBOrder
-            The order object containing details such as the order ID, contract
-            details, and order specifics.
+            包含订单详情（如订单 ID、合约详情和具体订单参数）的订单对象。
 
         """
-        # For orders we place, orderId is valid (permId not yet assigned)
+        # 对于我们下的订单，orderId 是有效的（permId 尚未分配）
         venue_order_id = VenueOrderId(str(order.orderId))
         self._order_id_to_order_ref[venue_order_id] = AccountOrderRef(
             account_id=order.account,
@@ -67,12 +64,12 @@ class InteractiveBrokersClientOrderMixin(BaseMixin):
 
     def place_order_list(self, orders: list[IBOrder]) -> None:
         """
-        Place a list of orders through the EClient.
+        通过 EClient 下达一组订单。
 
-        Parameters
+        参数
         ----------
         orders : list[IBOrder]
-            A list of order objects to be placed.
+            要下达的订单对象列表。
 
         """
         for order in orders:
@@ -81,14 +78,14 @@ class InteractiveBrokersClientOrderMixin(BaseMixin):
 
     def cancel_order(self, order_id: int, order_cancel: IBOrderCancel = None) -> None:
         """
-        Cancel an order through the EClient.
+        通过 EClient 取消订单。
 
-        Parameters
+        参数
         ----------
         order_id : int
-            The unique identifier for the order to be canceled.
-        order_cancel : OrderCancel object, optional.
-            The Order cancellation parameters when canceling an order, when subject to CME Rule 576.
+            要取消订单的唯一标识符。
+        order_cancel : OrderCancel 对象, 可选。
+            根据 CME Rule 576 规定取消订单时的参数。
 
         """
         if order_cancel is None:
@@ -98,40 +95,38 @@ class InteractiveBrokersClientOrderMixin(BaseMixin):
 
     def cancel_all_orders(self) -> None:
         """
-        Request to cancel all open orders through the EClient.
+        通过 EClient 请求取消所有未平仓订单。
         """
         self._log.warning(
-            "Canceling all open orders, regardless of how they were originally placed",
+            "正在取消所有未平仓订单，无论它们最初是如何下达的",
         )
         self._eclient.reqGlobalCancel()
 
     async def get_open_orders(self, account_id: str) -> list[IBOrder]:
         """
-        Retrieve a list of open orders for a specific account. Once the request is
-        completed, openOrderEnd() will be called.
+        检索特定账户的未平仓订单列表。请求完成后，将调用 openOrderEnd()。
 
-        The behavior depends on the `fetch_all_open_orders` configuration:
-        - If True: Uses reqAllOpenOrders() to fetch orders from all API clients,
-          TWS/IB Gateway GUI, and other trading interfaces
-        - If False: Uses reqOpenOrders() to fetch only orders from the current
-          client ID session
+        其行为取决于 `fetch_all_open_orders` 配置：
+        - 如果为 True：使用 reqAllOpenOrders() 从所有 API 客户端、TWS/IB Gateway GUI
+          和其他交易界面获取订单。
+        - 如果为 False：使用 reqOpenOrders() 仅获取当前客户端 ID 会话的订单。
 
-        Parameters
+        参数
         ----------
         account_id : str
-            The account identifier for which to retrieve open orders.
+            检索未平仓订单的账户标识符。
 
-        Returns
+        返回
         -------
         list[IBOrder]
-            List of open orders filtered by the specified account_id.
+            按指定账户 ID 过滤的未平仓订单列表。
 
         """
-        self._log.debug(f"Requesting open orders for {account_id}")
+        self._log.debug(f"正在请求 {account_id} 的未结订单")
         name = "OpenOrders"
 
         if not (request := self._requests.get(name=name)):
-            # Choose the appropriate handler based on configuration
+            # 根据配置选择合适的处理程序
             if self._fetch_all_open_orders:
                 handle = self._eclient.reqAllOpenOrders
             else:
@@ -163,27 +158,27 @@ class InteractiveBrokersClientOrderMixin(BaseMixin):
         execution_filter: ExecutionFilter | None = None,
     ) -> list[dict]:
         """
-        Retrieve execution reports for a specific account.
+        检索特定账户的成交执行报告。
 
-        Parameters
+        参数
         ----------
         account_id : str
-            The account identifier for which to retrieve executions.
-        execution_filter : ExecutionFilter, optional
-            Filter criteria for executions. If None, a default filter for the account will be used.
+            检索成交记录的账户标识符。
+        execution_filter : ExecutionFilter, 可选
+            成交记录的过滤标准。如果为 None，将使用该账户的默认过滤器。
 
-        Returns
+        返回
         -------
         list[dict]
-            List of execution details with associated contracts and commission reports.
-            Each dict contains 'execution', 'contract', and 'commission_report' keys.
+            包含关联合约和佣金报告的成交详情列表。
+            每个字典包含 'execution'、'contract' 和 'commission_report' 键。
 
         """
-        self._log.debug(f"Requesting executions for {account_id}")
+        self._log.debug(f"正在请求 {account_id} 的成交记录")
         name = f"Executions-{account_id}"
 
         if not (request := self._requests.get(name=name)):
-            # Create execution filter if not provided
+            # 如果未提供，则创建成交过滤器
             if execution_filter is None:
                 execution_filter = ExecutionFilter()
                 execution_filter.acctCode = account_id
@@ -197,7 +192,7 @@ class InteractiveBrokersClientOrderMixin(BaseMixin):
                     reqId=req_id,
                     execFilter=execution_filter,
                 ),
-                cancel=lambda: None,  # No cancel method for executions
+                cancel=lambda: None,  # 成交详情请求没有取消方法
             )
 
             if not request:
@@ -205,11 +200,11 @@ class InteractiveBrokersClientOrderMixin(BaseMixin):
 
             request.handle()
 
-        # Wait for execution details to be collected
+        # 等待收集成交详情
         execution_details: list[dict] | None = await self._await_request(request, 30)
 
         if execution_details:
-            # Filter by account if needed (in case filter didn't work perfectly)
+            # 如果需要，按账户过滤（以防过滤器工作不完美）
             filtered_executions = [
                 exec_detail
                 for exec_detail in execution_details
@@ -223,9 +218,9 @@ class InteractiveBrokersClientOrderMixin(BaseMixin):
 
     def next_order_id(self) -> int:
         """
-        Retrieve the next valid order ID to be used for a new order.
+        检索用于新订单的下一个有效订单 ID。
 
-        Returns
+        返回
         -------
         int
 
@@ -238,25 +233,24 @@ class InteractiveBrokersClientOrderMixin(BaseMixin):
 
     async def process_next_valid_id(self, *, order_id: int) -> None:
         """
-        Receive the next valid order id.
+        接收下一个有效订单 ID。
 
-        Will be invoked automatically upon successful API client connection,
-        or after call to EClient::reqIds
-        Important: the next valid order ID is only valid at the time it is received.
+        在 API 客户端成功连接后，或者调用 EClient::reqIds 后自动调用。
+        重要提示：下一个有效订单 ID 仅在收到时有效。
 
         """
         self._next_valid_order_id = max(self._next_valid_order_id, order_id, 101)
         self._log.debug(
-            f"Next valid order id set: {self._next_valid_order_id}, accounts: {self.accounts()}",
+            f"下一个有效订单 ID 已设置：{self._next_valid_order_id}，账户列表：{self.accounts()}",
         )
 
-        # Set connection flag once we have next valid order id AND accounts
+        # 一旦有了下一个有效订单 ID 且账户信息已就位，就设置连接标志
         if (
             self._next_valid_order_id >= 0
             and self.accounts()
             and not self._is_ib_connected.is_set()
         ):
-            self._log.debug("`_is_ib_connected` set by `nextValidId`", LogColor.BLUE)
+            self._log.debug(f"在 `nextValidId` 中设置了 `_is_ib_connected` 标志", LogColor.BLUE)
             self._is_ib_connected.set()
 
     async def process_open_order(
@@ -268,25 +262,25 @@ class InteractiveBrokersClientOrderMixin(BaseMixin):
         order_state: IBOrderState,
     ) -> None:
         """
-        Feed in currently open orders.
+        传入当前的未平仓订单。
         """
         order.contract = IBContract(**contract.__dict__)
         order.order_state = order_state
         order.orderRef = order.orderRef.rsplit(":", 1)[0]
 
-        # Handle response to on-demand request
+        # 处理按需发起的请求响应
         if request := self._requests.get(name="OpenOrders"):
             request.result.append(order)
 
-            # Validate and add reverse mapping, if not exists
+            # 验证并添加反向映射（如果不存在）
             venue_order_id = get_venue_order_id(order.orderId, order.permId)
             if order_ref := self._order_id_to_order_ref.get(venue_order_id):
                 if not (
                     order_ref.account_id == order.account and order_ref.order_id == order.orderRef
                 ):
                     self._log.warning(
-                        f"Discrepancy found in order, expected {order_ref}, "
-                        f"was (account={order.account}, order_id={order.orderRef}",
+                        f"在订单中发现不一致，预期为 {order_ref}，"
+                        f"实际为 (account={order.account}, order_id={order.orderRef})",
                     )
             else:
                 self._order_id_to_order_ref[venue_order_id] = AccountOrderRef(
@@ -295,7 +289,7 @@ class InteractiveBrokersClientOrderMixin(BaseMixin):
                 )
             return
 
-        # Handle event based response
+        # 处理基于事件的回调响应
         name = f"openOrder-{order.account}"
 
         if handler := self._event_subscriptions.get(name, None):
@@ -307,7 +301,7 @@ class InteractiveBrokersClientOrderMixin(BaseMixin):
 
     async def process_open_order_end(self) -> None:
         """
-        Notifies the end of the open orders' reception.
+        通知未平仓订单接收结束。
         """
         if request := self._requests.get(name="OpenOrders"):
             self._end_request(request.req_id)
@@ -328,9 +322,9 @@ class InteractiveBrokersClientOrderMixin(BaseMixin):
         mkt_cap_price: float,
     ) -> None:
         """
-        Get the up-to-date information of an order every time it changes.
+        每次订单发生变化时，获取该订单的最新信息。
 
-        Note: Often there are duplicate orderStatus messages.
+        注意：经常会有重复的 orderStatus 消息。
 
         """
         venue_order_id = get_venue_order_id(order_id, perm_id)
@@ -357,7 +351,7 @@ class InteractiveBrokersClientOrderMixin(BaseMixin):
         execution: Execution,
     ) -> None:
         """
-        Provide the executions that happened in the prior 24 hours.
+        提供过去 24 小时内发生的成交执行。
         """
         if not (cache := self._exec_id_details.get(execution.execId, None)):
             self._exec_id_details[execution.execId] = {}
@@ -368,7 +362,7 @@ class InteractiveBrokersClientOrderMixin(BaseMixin):
         cache["order_ref"] = execution.orderRef.rsplit(":", 1)[0]
         cache["req_id"] = req_id
 
-        # Check if this is for a get_executions request
+        # 检查这是否是为了 get_executions 请求发出的响应
         execution_request_name = f"Executions-{execution.acctNumber}"
 
         if (
@@ -376,16 +370,16 @@ class InteractiveBrokersClientOrderMixin(BaseMixin):
             and request.req_id == req_id
             and cache.get("commission_report")
         ):
-            # Add complete execution detail to request result
+            # 将完整的成交详情添加到请求结果中
             execution_detail = {
                 "execution": cache["execution"],
                 "contract": cache["contract"],
                 "commission_report": cache["commission_report"],
             }
             request.result.append(execution_detail)
-            # Don't remove from cache yet, wait for execDetailsEnd
+            # 暂时不要从缓存中移除，等待 execDetailsEnd
 
-        # Handle event-based response for live executions
+        # 处理实时成交的基于事件的回调响应
         name = f"execDetails-{execution.acctNumber}"
         if (handler := self._event_subscriptions.get(name, None)) and cache.get(
             "commission_report",
@@ -397,7 +391,7 @@ class InteractiveBrokersClientOrderMixin(BaseMixin):
                 contract=cache["contract"],
             )
 
-            # Only remove from cache if not part of a request
+            # 只有当不属于某个请求时，才从缓存中移除
             if not self._requests.get(name=execution_request_name):
                 self._exec_id_details.pop(execution.execId, None)
 
@@ -407,7 +401,7 @@ class InteractiveBrokersClientOrderMixin(BaseMixin):
         commission_report: CommissionAndFeesReport,
     ) -> None:
         """
-        Provide the CommissionAndFeesReport of an Execution.
+        提供某个 Execution（成交执行）的佣金和费用报告。
         """
         if not (cache := self._exec_id_details.get(commission_report.execId, None)):
             self._exec_id_details[commission_report.execId] = {}
@@ -416,21 +410,21 @@ class InteractiveBrokersClientOrderMixin(BaseMixin):
         cache["commission_report"] = commission_report
 
         if cache.get("execution") and (account := getattr(cache["execution"], "acctNumber", None)):
-            # Check if this is for a get_executions request
+            # 检查这是否是为了 get_executions 请求发出的响应
             execution_request_name = f"Executions-{account}"
             if request := self._requests.get(name=execution_request_name):
                 req_id = cache.get("req_id")
                 if req_id == request.req_id:
-                    # Add complete execution detail to request result
+                    # 将完整的成交详情添加到请求结果中
                     execution_detail = {
                         "execution": cache["execution"],
                         "contract": cache["contract"],
                         "commission_report": cache["commission_report"],
                     }
                     request.result.append(execution_detail)
-                    # Don't remove from cache yet, wait for execDetailsEnd
+                    # 暂时不要从缓存中移除，等待 execDetailsEnd
 
-            # Handle event-based response for live executions
+            # 处理实时成交的基于事件的回调响应
             name = f"execDetails-{account}"
             if handler := self._event_subscriptions.get(name, None):
                 handler(
@@ -440,14 +434,14 @@ class InteractiveBrokersClientOrderMixin(BaseMixin):
                     contract=cache.get("contract"),
                 )
 
-                # Only remove from cache if not part of a request
+                # 只有当不属于某个请求时，才从缓存中移除
                 if not self._requests.get(name=execution_request_name):
                     self._exec_id_details.pop(commission_report.execId, None)
 
     async def process_exec_details_end(self, req_id: int) -> None:
         """
-        Process when all executions have been sent for a request.
+        处理请求的所有成交已发送完毕的情况。
         """
-        # End the request if it exists
+        # 如果请求存在，则结束该请求
         if self._requests.get(req_id=req_id):
             self._end_request(req_id)

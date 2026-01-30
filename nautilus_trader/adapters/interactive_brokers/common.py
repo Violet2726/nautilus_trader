@@ -34,7 +34,7 @@ IB_CLIENT_ID: Final[ClientId] = ClientId(IB)
 
 class ContractId(int):
     """
-    ContractId type.
+    ContractId（合约 ID）类型。
     """
 
 
@@ -55,7 +55,7 @@ TickTypeMapping = {
 
 class ComboLeg(NautilusConfig, frozen=True, omit_defaults=True, repr_omit_defaults=True):
     """
-    Class representing a leg within combo orders.
+    表示组合订单（combo orders）中一条腿（leg）的类。
     """
 
     conId: int = 0
@@ -63,7 +63,7 @@ class ComboLeg(NautilusConfig, frozen=True, omit_defaults=True, repr_omit_defaul
     action: str = ""  # Literal["BUY", "SELL"]
     exchange: str = ""
     openClose: int = 0  # LegOpenClose enum values
-    # for stock legs when doing short sale
+    # 用于做空时的股票腿
     shortSaleSlot: int = 0
     designatedLocation: str = ""
     exemptCode: int = -1
@@ -71,7 +71,7 @@ class ComboLeg(NautilusConfig, frozen=True, omit_defaults=True, repr_omit_defaul
 
 class DeltaNeutralContract(NautilusConfig, frozen=True, repr_omit_defaults=True):
     """
-    Delta-Neutral Contract.
+    Delta 中性（Delta-Neutral）合约。
     """
 
     conId: int = 0
@@ -81,33 +81,32 @@ class DeltaNeutralContract(NautilusConfig, frozen=True, repr_omit_defaults=True)
 
 class IBContract(NautilusConfig, frozen=True, repr_omit_defaults=True):
     """
-    Class describing an instrument's definition with additional fields for
-    options/futures.
+    描述工具定义的类，包含期权/期货的额外字段。
 
-    Parameters
+    参数
     ----------
     secType: str
-        Security Type of the contract i.e STK, OPT, FUT, CONTFUT
+        合约的安全类型（Security Type），例如 STK, OPT, FUT, CONTFUT。
     exchange: str
-        Exchange where security is traded. Will be SMART for Stocks.
+        工具交易的交易所。对于股票，通常为 SMART。
     primaryExchange: str
-        Exchange where security is registered. Applies to Stocks.
+        工具注册的交易所。适用于股票。
     symbol: str
-        Unique Symbol registered in Exchange.
-    build_options_chain: bool (default: None)
-        Search for full option chain
-    build_futures_chain: bool (default: None)
-        Search for full futures chain
-    options_chain_exchange: str (default : None)
-        optional exchange for options chain, in place of underlying exchange
-    min_expiry_days: int (default: None)
-        Filters the options_chain and futures_chain which are expiring after number of days specified.
-    max_expiry_days: int (default: None)
-        Filters the options_chain and futures_chain which are expiring before number of days specified.
-    lastTradeDateOrContractMonth: str (%Y%m%d or %Y%m) (default: '')
-        Filters the options_chain and futures_chain specific for this expiry date
-    lastTradeDate: str (default: '')
-        The contract last trading day.
+        在交易所注册的唯一代码。
+    build_options_chain: bool (默认: None)
+        是否搜索完整的期权链。
+    build_futures_chain: bool (默认: None)
+        是否搜索完整的期货链。
+    options_chain_exchange: str (默认: None)
+        期权链的可选交易所，用于替换底层工具的交易所。
+    min_expiry_days: int (默认: None)
+        过滤到期天数不少于指定天数的期权链和期货链。
+    max_expiry_days: int (默认: None)
+        过滤到期天数不多于指定天数的期权链和期货链。
+    lastTradeDateOrContractMonth: str (%Y%m%d 或 %Y%m) (默认: '')
+        过滤特定到期日期的期权链和期货链。
+    lastTradeDate: str (默认: '')
+        合约的最后交易日。
 
     """
 
@@ -133,31 +132,31 @@ class IBContract(NautilusConfig, frozen=True, repr_omit_defaults=True):
     currency: str = ""
     tradingClass: str = ""
 
-    # options and futures
+    # 期权与期货 (Options and Futures)
     lastTradeDateOrContractMonth: str = ""
     lastTradeDate: str = ""
     multiplier: str = ""
 
-    # options
+    # 期权 (Options)
     strike: float | str = ""
     right: str = ""
 
-    # If set to true, contract details requests and historical data queries can be performed pertaining
-    # to expired futures contracts. Expired options or other instrument types are not available.
+    # 如果设置为 True，则可以进行与已过期期货合约相关的合约详情请求和历史数据查询。
+    # 已过期的期权或其他工具类型不可用。
     includeExpired: bool = False
 
-    # common
+    # 通用 (Common)
     secIdType: str = ""
     secId: str = ""
     description: str = ""
     issuerId: str = ""
 
-    # combos
+    # 组合 (Combos)
     comboLegsDescrip: str = ""
     comboLegs: list[ComboLeg] | None = None
     deltaNeutralContract: DeltaNeutralContract | None = None
 
-    # nautilus specific parameters
+    # Nautilus 特定参数 (Nautilus specific parameters)
     build_futures_chain: bool | None = None
     build_options_chain: bool | None = None
     options_chain_exchange: str | None = None
@@ -167,41 +166,41 @@ class IBContract(NautilusConfig, frozen=True, repr_omit_defaults=True):
 
 class IBOrderTags(NautilusConfig, frozen=True, repr_omit_defaults=True):
     """
-    Used to attach to Nautilus Order Tags for IB specific order parameters.
+    用于附加到 Nautilus 订单标签（Order Tags），以包含 IB 特定的订单参数。
     """
 
-    # Pre-order and post-order Margin analysis with commission
+    # 包含佣金的盘前（Pre-order）和盘后（post-order）保证金分析
     whatIf: bool = False
 
-    # Order Group conditions (One)
-    ocaGroup: str = ""  # one cancels all group name
+    # 订单组（Order Group）条件 (One)
+    ocaGroup: str = ""  # OCA（One Cancels All）组名
     ocaType: int = 0  # 1 = CANCEL_WITH_BLOCK, 2 = REDUCE_WITH_BLOCK, 3 = REDUCE_NON_BLOCK
 
-    # Order Group conditions (All)
+    # 订单组条件 (All)
     allOrNone: bool = False
 
-    # Time conditions
-    activeStartTime: str = ""  # for GTC orders, Format: "%Y%m%d %H:%M:%S %Z"
-    activeStopTime: str = ""  # for GTC orders, Format: "%Y%m%d %H:%M:%S %Z"
-    goodAfterTime: str = ""  # Format: "%Y%m%d %H:%M:%S %Z"
+    # 时间条件
+    activeStartTime: str = ""  # 用于 GTC 订单，格式："%Y%m%d %H:%M:%S %Z"
+    activeStopTime: str = ""  # 用于 GTC 订单，格式："%Y%m%d %H:%M:%S %Z"
+    goodAfterTime: str = ""  # 格式："%Y%m%d %H:%M:%S %Z"
 
-    # extended order fields
-    blockOrder = False  # If set to true, specifies that the order is an ISE Block order.
+    # 扩展订单字段
+    blockOrder = False  # 如果设置为 True，指定该订单为 ISE Block 订单。
     sweepToFill = False
     outsideRth: bool = False
 
-    # If set to true, the order will not be visible when viewing the market depth.
-    # This option only applies to orders routed to the NASDAQ exchange.
+    # 如果设置为 True，在查看市场深度时，该订单将不可见。
+    # 此选项仅适用于路由到 NASDAQ 交易所的订单。
     hidden: bool = False
 
-    # Order conditions
-    conditions: list[dict] = []  # List of condition dictionaries
+    # 订单条件
+    conditions: list[dict] = []  # 条件字典列表
     conditionsCancelOrder: bool = (
-        False  # True = cancel order when condition met, False = transmit order
+        False  # True = 当条件满足时取消订单, False = 传输订单
     )
 
-    # Smart combo routing parameters (for combo orders)
-    NonGuaranteed: bool = False  # True = non-guaranteed combo order, False = guaranteed combo order
+    # 智能组合路由参数（用于组合订单）
+    NonGuaranteed: bool = False  # True = 非保证组合订单, False = 保证组合订单
 
     @property
     def value(self):
@@ -213,10 +212,9 @@ class IBOrderTags(NautilusConfig, frozen=True, repr_omit_defaults=True):
 
 class IBContractDetails(NautilusConfig, frozen=True, repr_omit_defaults=True):
     """
-    ContractDetails class to be used internally in Nautilus for ease of
-    encoding/decoding.
+    ContractDetails 类，在 Nautilus 内部使用，以便于编码/解码。
 
-    Reference: https://ibkrcampus.com/campus/ibkr-api-page/twsapi-ref/#contract-pub-func
+    参考资料：https://ibkrcampus.com/campus/ibkr-api-page/twsapi-ref/#contract-pub-func
 
     """
 
@@ -237,7 +235,7 @@ class IBContractDetails(NautilusConfig, frozen=True, repr_omit_defaults=True):
     liquidHours: str = ""
     evRule: str = ""
     evMultiplier: float = 0
-    mdSizeMultiplier: int = 1  # obsolete
+    mdSizeMultiplier: int = 1  # 已废弃
     aggGroup: int = 0
     underSymbol: str = ""
     underSecType: str = ""
@@ -250,7 +248,7 @@ class IBContractDetails(NautilusConfig, frozen=True, repr_omit_defaults=True):
     sizeIncrement: Decimal = UNSET_DECIMAL
     suggestedSizeIncrement: Decimal = UNSET_DECIMAL
 
-    # BOND values
+    # 债券 (BOND) 数值
     cusip: str = ""
     ratings: str = ""
     descAppend: str = ""
@@ -267,7 +265,7 @@ class IBContractDetails(NautilusConfig, frozen=True, repr_omit_defaults=True):
     nextOptionPartial: bool = False
     notes: str = ""
 
-    # FUND values
+    # 基金 (FUND) 数值
     fundName: str = ""
     fundFamily: str = ""
     fundType: str = ""
@@ -302,25 +300,25 @@ def dict_to_contract_details(dict_details: dict) -> IBContractDetails:
         ]
         details_copy["secIdList"] = tag_values
 
-    # Deserialize Decimal fields from strings back to Decimal objects
-    # These fields are known to be Decimal type in IBContractDetails
+    # 将 Decimal 字段从字符串反序列化回 Decimal 对象。
+    # 在 IBContractDetails 中已知这些字段为 Decimal 类型。
     decimal_fields = ["minSize", "sizeIncrement", "suggestedSizeIncrement"]
     for field in decimal_fields:
         if field in details_copy and isinstance(details_copy[field], str):
             try:
                 decimal_value = Decimal(details_copy[field])
 
-                # Check if this is the UNSET_DECIMAL value
+                # 检查这是否是 UNSET_DECIMAL 值
                 if decimal_value == UNSET_DECIMAL:
                     details_copy[field] = UNSET_DECIMAL
                 else:
                     details_copy[field] = decimal_value
             except (ValueError, TypeError):
-                # If conversion fails, keep the original value
+                # 如果转换失败，保留原始值
                 pass
 
-    # Deserialize Enum fields from their values back to Enum members
-    # These fields are known to be Enum type in IBContractDetails
+    # 将 Enum 字段从它们的值反序列化回 Enum 成员。
+    # 在 IBContractDetails 中已知这些字段为 Enum 类型。
     if "fundDistributionPolicyIndicator" in details_copy:
         details_copy["fundDistributionPolicyIndicator"] = _deserialize_enum_from_value(
             FundDistributionPolicyIndicator,
@@ -338,19 +336,19 @@ def dict_to_contract_details(dict_details: dict) -> IBContractDetails:
 
 def _deserialize_enum_from_value(enum_class, value):
     """
-    Convert an enum value (tuple or string) back to the enum member.
+    将枚举值（元组或字符串）转换回枚举成员。
     """
     if value is None:
         return None
-
-    # If already an enum member, return as-is
+ 
+    # 如果已经是枚举成员，则按原样返回
     if isinstance(value, enum_class):
         return value
-
-    # Try to find enum member by matching value
+ 
+    # 尝试通过匹配值来查找枚举成员
     for member in enum_class:
         if member.value == value:
             return member
-
-    # If not found, return the original value (might be invalid)
+ 
+    # 如果未找到，返回原始值（可能无效）
     return value

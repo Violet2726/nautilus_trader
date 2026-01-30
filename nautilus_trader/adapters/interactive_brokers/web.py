@@ -26,7 +26,7 @@ from nautilus_trader.core.nautilus_pyo3.network import http_get
 
 class ProductClass(enum.Enum):
     """
-    Interactive Brokers Web ProductClass.
+    Interactive Brokers 网络产品类别。
     """
 
     ETFS = "ETF"
@@ -38,7 +38,7 @@ class ProductClass(enum.Enum):
 
 class Exchange(enum.Enum):
     """
-    Interactive Brokers Exchange.
+    Interactive Brokers 交易所。
     """
 
     AEB = "aeb"
@@ -127,13 +127,13 @@ class Exchange(enum.Enum):
 
 class Product(NamedTuple):
     """
-    Interactive Brokers Web Product.
+    Interactive Brokers 网络产品。
     """
 
-    ib_symbol: Any  # TODO: More specific type
-    description: Any  # TODO: More specific type
-    native_symbol: Any  # TODO: More specific type
-    currency: Any  # TODO: More specific type
+    ib_symbol: Any  # 待办：更具体的类型
+    description: Any  # 待办：更具体的类型
+    native_symbol: Any  # 待办：更具体的类型
+    currency: Any  # 待办：更具体的类型
 
 
 def _parse_products(table: _Element) -> Generator:
@@ -156,11 +156,10 @@ def load_product_list(
     debug: bool = False,
 ) -> Generator:
     """
-    Load all instruments for a given `exchange` and `product_class` via the Interactive
-    Brokers web interface.
-
+    通过 Interactive Brokers 网络界面加载给定 `exchange` 和 `product_class` 的所有工具。
+ 
     >>> products = load_product_list(exchange=Exchange.NYSE, product_class=ProductClass.STOCKS)
-
+ 
     """
     url = "https://www.interactivebrokers.com/en/index.php"
     params = {
@@ -176,8 +175,8 @@ def load_product_list(
         params.update({"page": str(page)})
 
         if debug:
-            print(f"Requesting instruments using {params=}")
-
+            print(f"正在使用 {params=} 请求工具")
+ 
         response = http_get(url, params=params, timeout_secs=30)
         tree = fromstring(response.body)
         tables = tree.xpath('//table[@class="table table-striped table-bordered"]')
@@ -194,5 +193,5 @@ def load_product_list(
         if not products:
             break
 
-        print(f"Found {len(products)} products for {page=}")
+        print(f"为页码 {page=} 找到了 {len(products)} 个产品")
         yield from products

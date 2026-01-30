@@ -42,7 +42,7 @@ MAP_TIME_IN_FORCE: dict[int, str] = {
     TimeInForce.AT_THE_OPEN: "OPG",
     TimeInForce.AT_THE_CLOSE: "DAY",
     TimeInForce.FOK: "FOK",
-    # unsupported: 'DTC',
+    # 不支持: 'DTC',
 }
 
 MAP_ORDER_ACTION: dict[int, str] = {
@@ -71,7 +71,7 @@ MAP_ORDER_TYPE: dict[int | tuple[int, int], str] = {
 
 
 MAP_ORDER_FIELDS: set[tuple[str, str, Callable]] = {
-    # ref: (nautilus_order_field, ib_order_field, value_fn)
+    # 参考: (nautilus_order_field, ib_order_field, value_fn)
     ("client_order_id", "orderRef", lambda x: x.value),
     ("display_qty", "displaySize", lambda x: x.as_double()),
     ("expire_time", "goodTillDate", lambda x: x.strftime("%Y%m%d %H:%M:%S %Z")),
@@ -102,10 +102,10 @@ MAP_ORDER_STATUS = {
 
 
 def timestring_to_timestamp(timestring: str) -> pd.Timestamp:
-    # Support string conversion not supported directly by pd.to_datetime
+    # 支持 pd.to_datetime 并不直接支持的字符串转换
     # 20230223 00:43:36 America/New_York
     # 20230223 00:43:36 Universal
-    # When the tz is Universal, and mode is live (not paper) and only in this case, IB can also send it with this format : "20250225-15:15:00"
+    # 当时区为 Universal 且处于实盘（非模拟盘）模式时，IB 也可能发送这种格式："20250225-15:15:00"
     if " " in timestring:
         dt, tz = timestring.rsplit(" ", 1)
     else:

@@ -32,23 +32,20 @@ from nautilus_trader.common.enums import LogColor
 
 class InteractiveBrokersClientConnectionMixin(BaseMixin):
     """
-    Manages the connection to TWS/Gateway for the InteractiveBrokersClient.
+    管理 InteractiveBrokersClient 与 TWS/Gateway 的连接。
 
-    This class is responsible for establishing and maintaining the socket connection,
-    handling server communication, monitoring the connection's health, and managing
-    reconnections. When a connection is established and the client finishes initializing,
-    the `_is_ib_connected` event is set, and if the connection is lost, the
-    `_is_ib_connected` event is cleared.
+    该类负责建立和维护套接字连接、处理服务器通信、监控连接健康状况以及管理
+    自动重连。当连接建立且客户端完成初始化时，会设置 `_is_ib_connected` 事件；
+    如果连接丢失，则会清除 `_is_ib_connected` 事件。
 
     """
 
     async def _connect(self) -> None:
         """
-        Establish the socket connection with TWS/Gateway.
+        建立与 TWS/Gateway 的套接字连接。
 
-        This initializes the connection, connects the socket, sends and receives version
-        information, and then sets a flag that the connection has been successfully
-        established.
+        此方法负责初始化连接参数、连接套接字、发送和接收版本信息，然后设置连接
+        已成功建立的标志。
 
         """
         try:
@@ -64,12 +61,12 @@ class InteractiveBrokersClientConnectionMixin(BaseMixin):
             self._eclient.setConnState(EClient.CONNECTED)
             conn_time_str = self._msgspec_decoding_hook(self._eclient.connTime)
             self._log.info(
-                f"Connected to Interactive Brokers (v{self._eclient.serverVersion_}) "
-                f"at {conn_time_str} from {self._host}:{self._port} "
-                f"with client id: {self._client_id}",
+                f"已连接到 Interactive Brokers (版本: {self._eclient.serverVersion_})，"
+                f"连接时间：{conn_time_str}，地址：{self._host}:{self._port}，"
+                f"客户端 ID：{self._client_id}",
             )
         except ConnectionError:
-            self._log.error("Connection failed")
+            self._log.error("连接失败")
             if self._eclient.wrapper:
                 self._eclient.wrapper.error(
                     NO_VALID_ID,
@@ -78,7 +75,7 @@ class InteractiveBrokersClientConnectionMixin(BaseMixin):
                     CONNECT_FAIL.msg(),
                 )
         except TimeoutError:
-            self._log.warning("Connection timeout")
+            self._log.warning("连接超时")
             if self._eclient.wrapper:
                 self._eclient.wrapper.error(
                     NO_VALID_ID,
@@ -87,9 +84,9 @@ class InteractiveBrokersClientConnectionMixin(BaseMixin):
                     CONNECT_FAIL.msg(),
                 )
         except asyncio.CancelledError:
-            self._log.info("Connection cancelled")
+            self._log.info("连接已取消")
         except Exception as e:
-            self._log.exception("Connection failed", e)
+            self._log.exception("连接失败", e)
             if self._eclient.wrapper:
                 self._eclient.wrapper.error(
                     NO_VALID_ID,
@@ -100,7 +97,7 @@ class InteractiveBrokersClientConnectionMixin(BaseMixin):
 
     def _msgspec_decoding_hook(self, byte_data: bytes) -> str:
         """
-        Decode connection time from the server for possible more languages.
+        对来自服务器的连接时间进行解码。
         """
         for enc in ["utf-8", "gbk", "latin-1", "cp1252"]:
             try:
@@ -111,32 +108,32 @@ class InteractiveBrokersClientConnectionMixin(BaseMixin):
 
     async def _disconnect(self) -> None:
         """
-        Disconnect from TWS/Gateway and clear the `_is_ib_connected` flag.
+        断开与 TWS/Gateway 的连接并清除 `_is_ib_connected` 标志。
         """
         try:
             self._eclient.disconnect()
 
             if self._is_ib_connected.is_set():
-                self._log.debug("`_is_ib_connected` unset by `_disconnect`", LogColor.BLUE)
+                self._log.debug("在 `_disconnect` 中取消了 `_is_ib_connected` 状态", LogColor.BLUE)
                 self._is_ib_connected.clear()
 
-            self._log.info("Disconnected from Interactive Brokers API")
+            self._log.info("已断开与 Interactive Brokers API 的连接")
         except Exception as e:
-            self._log.exception("Disconnection failed", e)
+            self._log.exception("断开连接失败", e)
 
     async def _handle_reconnect(self) -> None:
         """
-        Attempt to reconnect to TWS/Gateway.
+        尝试重新连接到 TWS/Gateway。
         """
         self._reset()
         self._resume()
 
     def _initialize_connection_params(self) -> None:
         """
-        Initialize the connection parameters before attempting to connect.
+        在尝试连接之前初始化连接参数。
 
-        Sets up the host, port, and client ID for the EClient instance and increments
-        the connection attempt counter. Logs the attempt information.
+        设置 EClient 实例的主机、端口和客户端 ID，并递增连接尝试计数器。记录
+        尝试连接的相关信息。
 
         """
         self._eclient.reset()
@@ -146,15 +143,14 @@ class InteractiveBrokersClientConnectionMixin(BaseMixin):
 
     async def _connect_socket(self) -> None:
         """
-        Connect the socket to TWS / Gateway and change the connection state to
-        CONNECTING.
+        将套接字连接到 TWS / Gateway，并将连接状态更改为 CONNECTING。
 
-        It is an asynchronous method that runs within the event loop executor.
+        这是一个在事件循环执行器中运行的异步方法。
 
         """
         self._eclient.conn = Connection(self._host, self._port)
         self._log.info(
-            f"Connecting to {self._host}:{self._port} with client id: {self._client_id}",
+            f"正在连接到 {self._host}:{self._port}，客户端 ID：{self._client_id}",
         )
         await asyncio.to_thread(self._connect_socket_safe)
 
@@ -162,15 +158,14 @@ class InteractiveBrokersClientConnectionMixin(BaseMixin):
         try:
             self._eclient.conn.connect()
         except Exception:
-            raise ConnectionError("Failed to connect to TWS/Gateway.")
+            raise ConnectionError("连接 TWS/Gateway 失败。")
 
     async def _send_version_info(self) -> None:
         """
-        Send the API version information to TWS / Gateway.
+        向 TWS / Gateway 发送 API 版本信息。
 
-        Constructs and sends a message containing the API version prefix and the version
-        range supported by the client. This is part of the initial handshake process
-        with the server.
+        构建并发送包含 API 版本前缀和客户端支持的版本范围的消息。这是与服务器
+        进行初始握手过程的一部分。
 
         """
         v100prefix = "API\0"
@@ -185,15 +180,14 @@ class InteractiveBrokersClientConnectionMixin(BaseMixin):
 
     async def _receive_server_info(self) -> None:
         """
-        Receive and process the server version information.
+        接收并处理服务器版本信息。
 
-        Waits for the server to send its version information and connection time.
-        Retries receiving this information up to a specified number of attempts.
+        等待服务器发送其版本信息和连接时间。在指定的尝试次数内重试接收此信息。
 
-        Raises
+        引发
         ------
         ConnectionError
-            If the server version information is not received within the allotted retries.
+            如果在分配的重试次数内未收到服务器版本信息。
 
         """
         retries_remaining = 5
@@ -206,7 +200,7 @@ class InteractiveBrokersClientConnectionMixin(BaseMixin):
                 _, msg, _ = comm.read_msg(buf)
                 fields.extend(comm.read_fields(msg))
             else:
-                self._log.debug("Received empty buffer")
+                self._log.debug("接收到空缓冲区")
 
             if len(fields) == 2:
                 self._process_server_version(fields)
@@ -214,27 +208,26 @@ class InteractiveBrokersClientConnectionMixin(BaseMixin):
 
             retries_remaining -= 1
             self._log.warning(
-                "Failed to receive server version information, "
-                f"retries remaining: {retries_remaining}",
+                "获取服务器版本信息失败，"
+                f"剩余重试次数：{retries_remaining}",
             )
             await asyncio.sleep(1)
 
         if retries_remaining == 0:
             raise ConnectionError(
-                "Max retry attempts reached. Failed to receive server version information.",
+                "已达到最大重试次数。无法接收服务器版本信息。",
             )
             self._log.info("")
 
     def _process_server_version(self, fields: list[str]) -> None:
         """
-        Process and log the server version information. Extracts and sets the server
-        version and connection time from the received fields. Logs the server version
-        and connection time.
+        处理并记录服务器版本信息。从接收到的字段中提取并设置服务器版本和连接
+        时间。记录服务器版本和连接时间。
 
-        Parameters
+        参数
         ----------
         fields : list[str]
-            The fields containing server version and connection time.
+            包含服务器版本和连接时间的字段。
 
         """
         server_version, conn_time = int(fields[0]), fields[1]
@@ -244,16 +237,16 @@ class InteractiveBrokersClientConnectionMixin(BaseMixin):
 
     def process_connection_closed(self) -> None:
         """
-        Indicate the API connection has closed.
+        指示 API 连接已关闭。
 
-        Following a API <-> TWS broken socket connection, this function is not called
-        automatically but must be triggered by API client code.
+        在 API 与 TWS 之间的套接字连接断开后，此函数不会自动调用，而必须由 API
+        客户端代码触发。
 
         """
         for future in self._requests.get_futures():
             if not future.done():
-                future.set_exception(ConnectionError("Socket disconnected."))
+                future.set_exception(ConnectionError("套接字已断开。"))
 
         if self._is_ib_connected.is_set():
-            self._log.debug("`_is_ib_connected` unset by `connectionClosed`", LogColor.BLUE)
+            self._log.debug("由 `connectionClosed` 取消了 `_is_ib_connected` 状态", LogColor.BLUE)
             self._is_ib_connected.clear()

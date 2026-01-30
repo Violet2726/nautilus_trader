@@ -56,48 +56,46 @@ def get_cached_ib_client(
     fetch_all_open_orders: bool = False,
 ) -> InteractiveBrokersClient:
     """
-    Retrieve or create a cached InteractiveBrokersClient using the provided key.
+    根据提供的键获取或创建一个缓存的 InteractiveBrokersClient。
 
-    Should a keyed client already exist within the cache, the function will return this instance. It's important
-    to note that the key comprises a combination of the host, port, and client_id.
+    如果缓存中已存在具有相应键的客户端，该函数将返回该实例。注意，该键由 host、port 
+    和 client_id 组合而成。
 
-    When using DockerizedIBGatewayConfig, multiple gateways can be created and cached based on their trading_mode.
+    当使用 DockerizedIBGatewayConfig 时，可以根据 trading_mode 创建并缓存多个网关。
 
-    Parameters
+    参数
     ----------
     loop: asyncio.AbstractEventLoop,
-        loop
+        事件循环
     msgbus: MessageBus,
-        msgbus
+        消息总线
     cache: Cache,
-        cache
+        缓存
     clock: LiveClock,
-        clock
+        时钟
     host: str
-        The IB host to connect to. This is optional if using DockerizedIBGatewayConfig, but is required otherwise.
+        要连接的 IB 主机地址。如果使用 DockerizedIBGatewayConfig，此参数可选，否则必填。
     port: int
-        The IB port to connect to. This is optional if using DockerizedIBGatewayConfig, but is required otherwise.
+        要连接的 IB 端口。如果使用 DockerizedIBGatewayConfig，此参数可选，否则必填。
     client_id: int
-        The unique session identifier for the TWS or Gateway.A single host can support multiple connections;
-        however, each must use a different client_id.
-    dockerized_gateway: DockerizedIBGatewayConfig, optional
-        The configuration for the dockerized gateway.If this is provided, Nautilus will oversee the docker
-        environment, facilitating the operation of the IB Gateway within. Multiple gateways can be created
-        based on trading_mode.
-    fetch_all_open_orders : bool, default False
-        If True, uses reqAllOpenOrders to fetch orders from all API clients and TWS GUI.
-        If False, uses reqOpenOrders to fetch only orders from current client ID session.
+        TWS 或 Gateway 的唯一会话标识符。单个主机可以支持多个连接，但每个连接必须使用不同的 client_id。
+    dockerized_gateway: DockerizedIBGatewayConfig, 可选
+        Docker 化网关的配置。如果提供此参数，Nautilus 将监管 Docker 环境，并在其中运行 
+        IB Gateway。可以根据 trading_mode 创建多个网关。
+    fetch_all_open_orders : bool, 默认 False
+        如果为 True，使用 reqAllOpenOrders 从所有 API 客户端和 TWS GUI 获取订单。
+        如果为 False，使用 reqOpenOrders 仅获取当前客户端 ID 会话的订单。
 
-    Returns
+    返回
     -------
     InteractiveBrokersClient
 
     """
     if dockerized_gateway:
         PyCondition.equal(host, "127.0.0.1", "host", "127.0.0.1")
-        PyCondition.none(port, "Ensure `port` is set to None when using DockerizedIBGatewayConfig.")
+        PyCondition.none(port, "确保在使用 DockerizedIBGatewayConfig 时将 `port` 设置为 None。")
 
-        # Create a unique key for the gateway based on its trading_mode
+        # 根据 trading_mode 为网关创建一个唯一的键
         gateway_key = (dockerized_gateway.trading_mode,)
 
         if gateway_key not in GATEWAYS:
@@ -110,9 +108,9 @@ def get_cached_ib_client(
     else:
         PyCondition.not_none(
             host,
-            "Please provide the `host` IP address for the IB TWS or Gateway.",
+            "请提供 IB TWS 或 Gateway 的 `host` IP 地址。",
         )
-        PyCondition.not_none(port, "Please provide the `port` for the IB TWS or Gateway.")
+        PyCondition.not_none(port, "请提供 IB TWS 或 Gateway 的 `port` 端口。")
 
     client_key: tuple = (host, port, client_id)
 
@@ -130,9 +128,8 @@ def get_cached_ib_client(
         client.start()
         IB_CLIENTS[client_key] = client
     elif fetch_all_open_orders:
-        # Upgrade existing client to fetch all open orders if requested
-        # This handles the case where data client is created first (without the flag)
-        # and exec client is created later (with the flag)
+        # 如果有要求，将现有客户端升级为获取所有未结订单
+        # 这处理了先创建行情客户端（未设置标志），后创建执行客户端（设置了标志）的情况
         IB_CLIENTS[client_key]._fetch_all_open_orders = True
 
     return IB_CLIENTS[client_key]
@@ -144,30 +141,30 @@ def get_cached_interactive_brokers_instrument_provider(
     config: InteractiveBrokersInstrumentProviderConfig,
 ) -> InteractiveBrokersInstrumentProvider:
     """
-    Cache and return a InteractiveBrokersInstrumentProvider.
+    缓存并返回一个 InteractiveBrokersInstrumentProvider。
 
-    If a cached provider already exists, then that cached provider will be returned.
-    The cache key is based on the client connection parameters and config hash.
+    如果已存在缓存的提供者，则返回该缓存的提供者。
+    缓存键基于客户端连接参数和配置哈希。
 
-    Parameters
+    参数
     ----------
     client : InteractiveBrokersClient
-        The client for the instrument provider.
+        工具提供者的客户端。
     clock : LiveClock
-        The clock for the provider.
+        提供者的时钟。
     config: InteractiveBrokersInstrumentProviderConfig
-        The instrument provider config
+        工具提供者配置
 
-    Returns
+    返回
     -------
     InteractiveBrokersInstrumentProvider
 
     """
     global IB_INSTRUMENT_PROVIDERS
 
-    # Create a cache key based on client connection info and config
-    # We use the client's connection parameters rather than the client object itself
-    # to ensure consistent caching across different client instances with same connection
+    # 基于客户端连接信息和配置创建一个缓存键
+    # 我们使用客户端的连接参数而不是客户端对象本身，
+    # 以确保连接相同的不同客户端实例之间具有一致的缓存。
     client_key = (client._host, client._port, client._client_id)
     provider_key = (client_key, hash(config))
 
@@ -180,7 +177,7 @@ def get_cached_interactive_brokers_instrument_provider(
 
 class InteractiveBrokersLiveDataClientFactory(LiveDataClientFactory):
     """
-    Provides a InteractiveBrokers live data client factory.
+    提供 InteractiveBrokers 实时行情客户端工厂。
     """
 
     @staticmethod
@@ -193,24 +190,24 @@ class InteractiveBrokersLiveDataClientFactory(LiveDataClientFactory):
         clock: LiveClock,
     ) -> InteractiveBrokersDataClient:
         """
-        Create a new InteractiveBrokers data client.
+        创建一个新的 InteractiveBrokers 行情客户端。
 
-        Parameters
+        参数
         ----------
         loop : asyncio.AbstractEventLoop
-            The event loop for the client.
+            客户端的事件循环。
         name : str
-            The custom client ID.
+            自定义客户端 ID。
         config : dict
-            The configuration dictionary.
+            配置字典。
         msgbus : MessageBus
-            The message bus for the client.
+            客户端的消息总线。
         cache : Cache
-            The cache for the client.
+            客户端的缓存。
         clock : LiveClock
-            The clock for the client.
+            客户端的时钟。
 
-        Returns
+        返回
         -------
         InteractiveBrokersDataClient
 
@@ -226,14 +223,14 @@ class InteractiveBrokersLiveDataClientFactory(LiveDataClientFactory):
             dockerized_gateway=config.dockerized_gateway,
         )
 
-        # Get instrument provider singleton
+        # 获取工具提供者单例
         provider = get_cached_interactive_brokers_instrument_provider(
             client=client,
             clock=clock,
             config=config.instrument_provider,
         )
 
-        # Create client
+        # 创建客户端
         data_client = InteractiveBrokersDataClient(
             loop=loop,
             client=client,
@@ -253,7 +250,7 @@ class InteractiveBrokersLiveDataClientFactory(LiveDataClientFactory):
 
 class InteractiveBrokersLiveExecClientFactory(LiveExecClientFactory):
     """
-    Provides a InteractiveBrokers live execution client factory.
+    提供 InteractiveBrokers 实时执行客户端工厂。
     """
 
     @staticmethod
@@ -266,24 +263,24 @@ class InteractiveBrokersLiveExecClientFactory(LiveExecClientFactory):
         clock: LiveClock,
     ) -> InteractiveBrokersExecutionClient:
         """
-        Create a new InteractiveBrokers execution client.
+        创建一个新的 InteractiveBrokers 执行客户端。
 
-        Parameters
+        参数
         ----------
         loop : asyncio.AbstractEventLoop
-            The event loop for the client.
+            客户端的事件循环。
         name : str
-            The custom client ID.
+            自定义客户端 ID。
         config : dict[str, object]
-            The configuration for the client.
+            客户端配置。
         msgbus : MessageBus
-            The message bus for the client.
+            客户端的消息总线。
         cache : Cache
-            The cache for the client.
+            客户端的缓存。
         clock : LiveClock
-            The clock for the client.
+            客户端的时钟。
 
-        Returns
+        返回
         -------
         InteractiveBrokersSpotExecutionClient
 
@@ -300,26 +297,26 @@ class InteractiveBrokersLiveExecClientFactory(LiveExecClientFactory):
             fetch_all_open_orders=config.fetch_all_open_orders,
         )
 
-        # Get instrument provider singleton
+        # 获取工具提供者单例
         provider = get_cached_interactive_brokers_instrument_provider(
             client=client,
             clock=clock,
             config=config.instrument_provider,
         )
 
-        # Set account ID
+        # 设置账户 ID
         ib_account = config.account_id or os.environ.get("TWS_ACCOUNT")
         assert ib_account, (
-            f"Must pass `{config.__class__.__name__}.account_id` or set `TWS_ACCOUNT` env var."
+            f"必须传递 `{config.__class__.__name__}.account_id` 或设置 `TWS_ACCOUNT` 环境变量。"
         )
 
-        # Use name if provided, otherwise use account_id issuer from the account string
-        # This allows multiple IB execution clients with different names/accounts
-        # The account_issuer will be used as the client_id and allows routing by account_id
+        # 如果提供了名称则使用名称，否则从账户字符串中使用 account_id 的 issuer
+        # 这允许具有不同名称/账户的多个 IB 执行客户端
+        # account_issuer 将被用作 client_id，并允许按 account_id 进行路由
         account_issuer = name or IB_VENUE.value
         account_id = AccountId(f"{account_issuer}-{ib_account}")
 
-        # Create client
+        # 创建客户端
         exec_client = InteractiveBrokersExecutionClient(
             loop=loop,
             client=client,

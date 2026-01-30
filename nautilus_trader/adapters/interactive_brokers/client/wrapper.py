@@ -69,7 +69,7 @@ class InteractiveBrokersEWrapper(EWrapper):
 
     def logAnswer(self, fnName, fnParams) -> None:
         """
-        Override the logging for EWrapper.logAnswer.
+        覆盖 EWrapper.logAnswer 的日志记录。
         """
         if "self" in fnParams:
             prms = dict(fnParams)
@@ -88,8 +88,7 @@ class InteractiveBrokersEWrapper(EWrapper):
         advancedOrderRejectJson="",
     ) -> None:
         """
-        Call this event in response to an error in communication or when TWS needs to
-        send a message to the client.
+        当发生通信错误或 TWS 需要向客户端发送消息时，调用此事件。
         """
         self.logAnswer(current_fn_name(), vars())
         task = partial(
@@ -107,27 +106,25 @@ class InteractiveBrokersEWrapper(EWrapper):
 
     def connectAck(self) -> None:
         """
-        Invoke this callback to signify the completion of a successful connection.
+        调用此回调以表示成功建立连接。
         """
         self.logAnswer(current_fn_name(), vars())
 
     def marketDataType(self, reqId: TickerId, marketDataType: int) -> None:
         """
-        Receives notification when the market data type changes.
+        当市场数据类型发生变化时接收通知。
 
-        This method is called when TWS sends a marketDataType(type) callback to the API,
-        where type is set to Frozen or RealTime, to announce that market data has been
-        switched between frozen and real-time. This notification occurs only when market
-        data switches between real-time and frozen. The marketDataType() callback accepts
-        a reqId parameter and is sent per every subscription because different contracts
-        can generally trade on a different schedule.
+        当 TWS 向 API 发送 marketDataType(type) 回调且 type 设置为 Frozen（冻结）
+        或 RealTime（实时）时，将调用此方法，以告知市场数据已在冻结和实时之间切换。
+        此通知仅在市场数据在这两种状态之间切换时发生。marketDataType() 回调接受 
+        reqId 参数，并为每个订阅发送一次，因为不同的合约通常遵循不同的交易时间表。
 
-        Parameters
+        参数
         ----------
         reqId : TickerId
-            The request's identifier.
+            请求的标识符。
         marketDataType : int
-            The type of market data being received. Possible values are 1 for real-time streaming, 2 for frozen market data.
+            接收到的市场数据类型。可能的值包括：1 表示实时流式数据，2 表示冻结的市场数据。
 
         """
         self.logAnswer(current_fn_name(), vars())
@@ -146,18 +143,18 @@ class InteractiveBrokersEWrapper(EWrapper):
         attrib: TickAttrib,
     ) -> None:
         """
-        Market data tick price callback.
+        市场数据行情价格（Tick Price）回调。
 
-        Parameters
+        参数
         ----------
         reqId : TickerId
-            The request's identifier.
+            请求的标识符。
         tickType : TickType
-            The type of tick being received.
+            收到的行情类型。
         price : float
-            The price of the tick.
+            行情价格。
         attrib : TickAttrib
-            The tick's attributes.
+            行情属性。
 
         """
         self.logAnswer(current_fn_name(), vars())
@@ -172,19 +169,19 @@ class InteractiveBrokersEWrapper(EWrapper):
 
     def tickSize(self, reqId: TickerId, tickType: TickType, size: Decimal) -> None:
         """
-        Handle tick size-related market data.
+        处理与行情大小（Tick Size）相关的市场数据。
 
-        This method is responsible for handling all size-related ticks from the market data.
-        Each tick represents a change in the market size for a specific type of data.
+        此方法负责处理来自市场数据的所有与大小（成交量/深度）相关的行情。
+        每个行情代表特定类型数据的市场大小变化。
 
-        Parameters
+        参数
         ----------
         reqId : TickerId
-            The request's identifier.
+            请求的标识符。
         tickType : TickType
-            The type of tick being received.
+            收到的行情类型。
         size : Decimal
-            The size of the tick.
+            行情大小。
 
         """
         self.logAnswer(current_fn_name(), vars())
@@ -198,8 +195,7 @@ class InteractiveBrokersEWrapper(EWrapper):
 
     def tickSnapshotEnd(self, reqId: int) -> None:
         """
-        When requesting market data snapshots, this market will indicate the snapshot
-        reception is finished.
+        请求市场数据快照时，此方法将指示快照接收已完成。
         """
         self.logAnswer(current_fn_name(), vars())
 
@@ -222,29 +218,28 @@ class InteractiveBrokersEWrapper(EWrapper):
         dividendsToLastTradeDate: float,
     ) -> None:
         """
-        Market data callback for Exchange for Physical.
+        现货换期货（Exchange for Physical, EFP）的市场数据回调。
 
-        Parameters
+        参数
         ----------
         reqId : TickerId
-            The request's identifier.
+            请求的标识符。
         tickType : TickType
-            The type of tick being received.
+            收到的行情类型。
         basisPoints : float
-            Annualized basis points, representative of the financing rate that can be directly be
-            compared to broker rates.
+            年化基点，代表可以与经纪商利率直接比较的融资利率。
         formattedBasisPoints : str
-            Annualized basis points as a formatted string depicting them in percentage form.
+            格式化为百分比形式的年化基点字符串。
         totalDividends : float
-            The total dividends.
+            总股息。
         holdDays : int
-            The number of hold days until the lastTradeDate of the EFP.
+            持有天数，直到 EFP 的 lastTradeDate（最后交易日）。
         futureLastTradeDate : str
-            The expiration date of the single stock future.
+            单只股票期货的到期日。
         dividendImpact : float
-            The dividend impact upon the annualized basis points interest rate.
+            股息对年化基点利率的影响。
         dividendsToLastTradeDate : float
-            The dividends expected until the expiration of the single stock future.
+            单只股票期货到期前预计的股息。
 
         """
         self.logAnswer(current_fn_name(), vars())
@@ -264,35 +259,35 @@ class InteractiveBrokersEWrapper(EWrapper):
         mktCapPrice: float,
     ) -> None:
         """
-        Call this event whenever the status of an order changes. Also, fire it after
-        reconnecting to TWS if the client has any open orders.
+        每当订单状态发生变化时调用此事件。此外，如果客户端有任何未平仓订单，
+        在重新连接到 TWS 后也会触发此事件。
 
-        Parameters
+        参数
         ----------
         orderId: OrderId
-            The order ID that was specified previously in the call to placeOrder().
+            之前在调用 placeOrder() 时指定的订单 ID。
         status: str
-            The order status. Possible values include:
-            PendingSubmit, PendingCancel, PreSubmitted, Submitted, Cancelled, Filled, Inactive.
+            订单状态。可能的值包括：
+            PendingSubmit, PendingCancel, PreSubmitted, Submitted, Cancelled, Filled, Inactive。
         filled: int
-            Specifies the number of shares that have been executed.
+            指定已成交的股数。
         remaining: int
-            Specifies the number of shares still outstanding.
+            指定尚未成交的股数。
         avgFillPrice: float
-            The average price of the shares that have been executed.
+            已成交股份的平均价格。
         permId: int
-            The TWS id used to identify orders. Remains the same over TWS sessions.
+            用于标识订单的 TWS ID。在不同的 TWS 会话中保持不变。
         parentId: int
-            The order ID of the parent order, used for bracket and auto trailing stop orders.
+            父订单的订单 ID，用于 parent 衍生订单和自动跟踪止损订单。
         lastFillPrice: float
-            The last price of the shares that have been executed.
+            最后一次成交的价格。
         clientId: int
-            The ID of the client (or TWS) that placed the order.
+            下达该订单的客户端（或 TWS）的 ID。
         whyHeld: str
-            This field is used to identify an order held when TWS is trying to locate shares for a short sell.
-            The value used to indicate this is 'locate'.
+            当 TWS 正在尝试查找用于融券卖出的股票时，此字段用于标识暂持订单。
+            用于表示此情况的值为 'locate'。
         mktCapPrice: float
-            The price at which the market cap price is calculated.
+            计算市值价格（market cap price）时的价格。
 
         """
         self.logAnswer(current_fn_name(), vars())
@@ -320,18 +315,18 @@ class InteractiveBrokersEWrapper(EWrapper):
         orderState: OrderState,
     ) -> None:
         """
-        Call this function to feed in open orders.
+        调用此函数以传入未平仓订单。
 
-        Parameters
+        参数
         ----------
         orderId: OrderId
-            The order ID assigned by TWS. Use to cancel or update TWS order.
+            由 TWS 分配的订单 ID。用于取消或更新 TWS 订单。
         contract: Contract
-            The Contract class attributes describe the contract.
+            Contract 类的属性描述了合约信息。
         order: Order
-            The Order class gives the details of the open order.
+            Order 类给出了未平仓订单的详情。
         orderState: OrderState
-            The orderState class includes attributes Used for both pre and post trade margin and commission data.
+            orderState 类包含了交易前和交易后的保证金及佣金数据等属性。
 
         """
         self.logAnswer(current_fn_name(), vars())
@@ -346,7 +341,7 @@ class InteractiveBrokersEWrapper(EWrapper):
 
     def openOrderEnd(self) -> None:
         """
-        Call this at the end of a given request for open orders.
+        在针对未平仓订单的给定请求结束时调用此方法。
         """
         self.logAnswer(current_fn_name(), vars())
         self._client.submit_to_msg_handler_queue(
@@ -355,8 +350,7 @@ class InteractiveBrokersEWrapper(EWrapper):
 
     def connectionClosed(self) -> None:
         """
-        Call this function when TWS closes the socket connection with the ActiveX
-        control, or when TWS is shut down.
+        当 TWS 关闭与 ActiveX 控件的套接字连接，或者当 TWS 关闭时，调用此函数。
         """
         self.logAnswer(current_fn_name(), vars())
         self._client.process_connection_closed()
@@ -369,8 +363,7 @@ class InteractiveBrokersEWrapper(EWrapper):
         accountName: str,
     ) -> None:
         """
-        Call this function only when ReqAccountUpdates on EEClientSocket object has been
-        called.
+        仅在 EEClientSocket 对象上调用了 ReqAccountUpdates 后，才调用此函数。
         """
         self.logAnswer(current_fn_name(), vars())
 
@@ -386,8 +379,7 @@ class InteractiveBrokersEWrapper(EWrapper):
         accountName: str,
     ) -> None:
         """
-        Call this function only when reqAccountUpdates on EEClientSocket object has been
-        called.
+        仅在 EEClientSocket 对象上调用了 reqAccountUpdates 后，才调用此函数。
         """
         self.logAnswer(current_fn_name(), vars())
 
@@ -396,13 +388,13 @@ class InteractiveBrokersEWrapper(EWrapper):
 
     def accountDownloadEnd(self, accountName: str) -> None:
         """
-        Call this after a batch updateAccountValue() and updatePortfolio() is sent.
+        在批量发送 updateAccountValue() 和 updatePortfolio() 后调用此方法。
         """
         self.logAnswer(current_fn_name(), vars())
 
     def nextValidId(self, orderId: int) -> None:
         """
-        Receives next valid order id.
+        接收下一个有效订单 ID。
         """
         self.logAnswer(current_fn_name(), vars())
         task = partial(
@@ -413,11 +405,10 @@ class InteractiveBrokersEWrapper(EWrapper):
 
     def contractDetails(self, reqId: int, contractDetails: ContractDetails) -> None:
         """
-        Receives the full contract's definitions.
+        接收完整的合约定义。
 
-        This method will return all
-        contracts matching the requested via EEClientSocket::reqContractDetails.
-        For example, one can obtain the whole option chain with it.
+        此方法将返回所有通过 EEClientSocket::reqContractDetails 请求匹配的合约。
+        例如，可以通过它获取整个期权链。
 
         """
         self.logAnswer(current_fn_name(), vars())
@@ -430,16 +421,15 @@ class InteractiveBrokersEWrapper(EWrapper):
 
     def bondContractDetails(self, reqId: int, contractDetails: ContractDetails) -> None:
         """
-        Call this function when the reqContractDetails function has been called for
-        bonds.
+        当针对债券调用了 reqContractDetails 函数时，调用此函数。
         """
         self.logAnswer(current_fn_name(), vars())
 
     def contractDetailsEnd(self, reqId: int) -> None:
         """
-        Call this function once all contract details for a given request are received.
+        一旦收到给定请求的所有合约详情，即调用此函数。
 
-        This helps to define the end of an option chain.
+        这有助于定义期权链的结束。
 
         """
         self.logAnswer(current_fn_name(), vars())
@@ -451,8 +441,7 @@ class InteractiveBrokersEWrapper(EWrapper):
 
     def execDetails(self, reqId: int, contract: Contract, execution: Execution) -> None:
         """
-        Fire this event when the reqExecutions() function is invoked or when an order is
-        filled.
+        当调用 reqExecutions() 函数或订单成交时，触发此事件。
         """
         self.logAnswer(current_fn_name(), vars())
         task = partial(
@@ -465,8 +454,7 @@ class InteractiveBrokersEWrapper(EWrapper):
 
     def execDetailsEnd(self, reqId: int) -> None:
         """
-        Call this function once all executions have been sent to a client in response to
-        reqExecutions().
+        响应 reqExecutions() 时，一旦所有成交执行都已经发送并返回，即调用此函数。
         """
         self.logAnswer(current_fn_name(), vars())
         task = partial(
@@ -485,25 +473,25 @@ class InteractiveBrokersEWrapper(EWrapper):
         size: Decimal,
     ) -> None:
         """
-        Return the order book.
+        返回订单簿。
 
-        Parameters
+        参数
         ----------
         reqId : TickerId
-            The request's identifier.
+            请求的标识符。
         position : int
-            The order book's row being updated.
+            正在更新的订单簿行。
         operation : int
-            How to refresh the row:
-            - 0: insert (insert this new order into the row identified by 'position')
-            - 1: update (update the existing order in the row identified by 'position')
-            - 2: delete (delete the existing order at the row identified by 'position').
+            如何刷新该行：
+            - 0: insert（在 'position' 标识的行中插入此新订单）
+            - 1: update（更新 'position' 标识的行中的现有订单）
+            - 2: delete（删除 'position' 标识的行中的现有订单）。
         side : int
-            0 for ask, 1 for bid.
+            0 表示 ask（卖出），1 表示 bid（买入）。
         price : float
-            The order's price.
+            订单价格。
         size : Decimal
-            The order's size.
+            订单大小。
 
         """
         self.logAnswer(current_fn_name(), vars())
@@ -520,30 +508,30 @@ class InteractiveBrokersEWrapper(EWrapper):
         isSmartDepth: bool,
     ) -> None:
         """
-        Return the order book.
+        返回订单簿。
 
-        Parameters
+        参数
         ----------
         reqId : TickerId
-            The request's identifier.
+            请求的标识符。
         position : int
-            The order book's row being updated.
+            正在更新的订单簿行。
         marketMaker : str
-            The exchange holding the order if isSmartDepth is True,
-            otherwise the MPID of the market maker.
+            如果 isSmartDepth 为 True，则为持有订单的交易所；
+            否则为做市商的 MPID。
         operation : int
-            How to refresh the row:
-            - 0: insert (insert this new order into the row identified by 'position')
-            - 1: update (update the existing order in the row identified by 'position')
-            - 2: delete (delete the existing order at the row identified by 'position')
+            如何刷新该行：
+            - 0: insert（在 'position' 标识的行中插入此新订单）
+            - 1: update（更新 'position' 标识的行中的现有订单）
+            - 2: delete（删除 'position' 标识的行中的现有订单）
         side : int
-            0 for ask, 1 for bid.
+            0 表示 ask（卖出），1 表示 bid（买入）。
         price : float
-            The order's price.
+            订单价格。
         size : Decimal
-            The order's size.
+            订单大小。
         isSmartDepth : bool
-            Is SMART Depth request.
+            是否为 SMART 深度请求。
 
         """
         self.logAnswer(current_fn_name(), vars())
@@ -569,28 +557,28 @@ class InteractiveBrokersEWrapper(EWrapper):
         originExch: str,
     ) -> None:
         """
-        Provide IB's bulletins.
+        提供 IB 的公告（bulletins）。
 
-        Parameters
+        参数
         ----------
         msgId: int
-            The bulletin's identifier.
+            公告的标识符。
         msgType: int
-            One of:
-            - 1: Regular news bulletin
-            - 2: Exchange no longer available for trading
-            - 3: Exchange is available for trading
+            以下之一：
+            - 1: 常规新闻公告
+            - 2: 交易所不再提供交易
+            - 3: 交易所可供交易
         newsMessage: str
-            The message.
+            消息内容。
         originExch: str
-            The exchange where the message comes from.
+            消息来源交易所。
 
         """
         self.logAnswer(current_fn_name(), vars())
 
     def managedAccounts(self, accountsList: str) -> None:
         """
-        Receives a comma-separated string with the managed account ids.
+        接收包含受管理账户 ID 的逗号分隔字符串。
         """
         self.logAnswer(current_fn_name(), vars())
         task = partial(
@@ -601,31 +589,30 @@ class InteractiveBrokersEWrapper(EWrapper):
 
     def receiveFA(self, faData: FaDataType, cxml: str) -> None:
         """
-        Receives the Financial Advisor's configuration available in the TWS.
+        接收 TWS 中可用的财务顾问（Financial Advisor）配置。
 
-        Parameters
+        参数
         ----------
         faData : str
-            One of the following:
-            - Groups: Offer traders a way to create a group of accounts and apply a single allocation method
-            to all accounts in the group.
-            - Account Aliases: Let you easily identify the accounts by meaningful names rather than account numbers.
+            以下之一：
+            - Groups（组）：为交易者提供一种创建账户组并对组内所有账户应用单一分配方法的方式。
+            - Account Aliases（账户别名）：让你可以通过有意义的名称而不是账号来轻松识别账户。
         cxml : str
-            The XML-formatted configuration.
+            XML 格式的配置。
 
         """
         self.logAnswer(current_fn_name(), vars())
 
     def historicalData(self, reqId: int, bar: BarData) -> None:
         """
-        Return the requested historical data bars.
+        返回请求的历史数据 K 线。
 
-        Parameters
+        参数
         ----------
         reqId : int
-            The request's identifier.
+            请求的标识符。
         bar : BarData
-            The bar's data.
+            K 线数据。
 
         """
         self.logAnswer(current_fn_name(), vars())
@@ -638,7 +625,7 @@ class InteractiveBrokersEWrapper(EWrapper):
 
     def historicalDataEnd(self, reqId: int, start: str, end: str) -> None:
         """
-        Mark the end of the reception of historical bars.
+        标记历史 K 线数据接收结束。
         """
         self.logAnswer(current_fn_name(), vars())
         task = partial(
@@ -651,12 +638,12 @@ class InteractiveBrokersEWrapper(EWrapper):
 
     def scannerParameters(self, xml: str) -> None:
         """
-        Provide the XML-formatted parameters available to create a market scanner.
+        提供可用于创建市场扫描仪（market scanner）的 XML 格式参数。
 
-        Parameters
+        参数
         ----------
         xml : str
-            The XML-formatted string with the available parameters.
+            包含可用参数的 XML 格式字符串。
 
         """
         self.logAnswer(current_fn_name(), vars())
@@ -672,36 +659,36 @@ class InteractiveBrokersEWrapper(EWrapper):
         legsStr: str,
     ) -> None:
         """
-        Provide the data resulting from the market scanner request.
+        提供市场扫描仪请求导致的数据。
 
-        Parameters
+        参数
         ----------
         reqId : int
-            The request's identifier.
+            请求的标识符。
         rank : int
-            The ranking within the response of this bar.
+            此 K 线在响应中的排名。
         contractDetails : ContractDetails
-            The data's ContractDetails.
+            该数据的 ContractDetails。
         distance : str
-            According to query.
+            基于查询。
         benchmark : str
-            According to query.
+            基于查询。
         projection : str
-            According to query.
+            基于查询。
         legsStr : str
-            Describes the combo legs when the scanner is returning EFP.
+            当扫描仪返回 EFP 时，描述组合腿（combo legs）。
 
         """
         self.logAnswer(current_fn_name(), vars())
 
     def scannerDataEnd(self, reqId: int) -> None:
         """
-        Indicate that scanner data reception has terminated.
+        指示扫描仪数据接收已终止。
 
-        Parameters
+        参数
         ----------
         reqId : int
-            The request's identifier.
+            请求的标识符。
 
         """
         self.logAnswer(current_fn_name(), vars())
@@ -719,28 +706,28 @@ class InteractiveBrokersEWrapper(EWrapper):
         count: int,
     ) -> None:
         """
-        Update real-time 5-second bars.
+        更新实时 5 秒 K 线。
 
-        Parameters
+        参数
         ----------
         reqId : int
-            The request's identifier.
+            请求的标识符。
         time : int
-            Start of the bar in Unix (or 'epoch') time.
+            K 线的开始时间，Unix（或 'epoch'）时间。
         open_ : float
-            The bar's open value.
+            K 线的开盘价。
         high : float
-            The bar's high value.
+            K 线的最高价。
         low : float
-            The bar's low value.
+            K 线的最低价。
         close : float
-            The bar's closing value.
+            K 线的收盘价。
         volume : int
-            The bar's traded volume if available.
+            该 K 线的交易量（如果可用）。
         wap : float
-            The bar's Weighted Average Price.
+            加权平均价格（Weighted Average Price）。
         count : int
-            The number of trades during the bar's timespan (only available for TRADES).
+            该 K 线时段内的交易次数（仅适用于成交记录 TRADES）。
 
         """
         self.logAnswer(current_fn_name(), vars())
@@ -760,17 +747,16 @@ class InteractiveBrokersEWrapper(EWrapper):
 
     def currentTime(self, time: int) -> None:
         """
-        Obtain the IB server's system time by calling this method as a result of
-        invoking `reqCurrentTime`.
+        通过调用 `reqCurrentTime` 方法来获取 IB 服务器的系统时间。
         """
         self.logAnswer(current_fn_name(), vars())
 
     def fundamentalData(self, reqId: TickerId, data: str) -> None:
         """
-        Call this function to receive fundamental market data.
+        调用此函数以接收基本面市场数据（fundamental market data）。
 
-        Ensure that the appropriate market data subscription is set up in Account
-        Management before attempting to receive this data.
+        在尝试接收此数据之前，请确保已在账户管理（Account Management）中设置了
+        相应的市场数据订阅。
 
         """
         self.logAnswer(current_fn_name(), vars())
@@ -781,12 +767,11 @@ class InteractiveBrokersEWrapper(EWrapper):
         deltaNeutralContract: DeltaNeutralContract,
     ) -> None:
         """
-        When accepting a Delta-Neutral RFQ (request for quote), the server sends a
-        deltaNeutralValidation() message with the DeltaNeutralContract structure.
+        当接受 Delta 中性报价请求（Delta-Neutral RFQ）时，服务器会发送一条包含 
+        DeltaNeutralContract 结构的 deltaNeutralValidation() 消息。
 
-        If the delta and price fields are empty in the original request, the
-        confirmation will contain the current values from the server. These values are
-        locked when the RFQ is processed and remain locked until the RFQ is canceled.
+        如果原始请求中的 delta 和价格字段为空，确认信息将包含来自服务器的当前值。
+        这些值在处理 RFQ 时被锁定，直到 RFQ 被取消。
 
         """
         self.logAnswer(current_fn_name(), vars())
@@ -814,8 +799,7 @@ class InteractiveBrokersEWrapper(EWrapper):
         avgCost: float,
     ) -> None:
         """
-        Return real-time positions for all accounts in response to the reqPositions()
-        method.
+        响应 reqPositions() 方法，返回所有账户的实时持仓。
         """
         self.logAnswer(current_fn_name(), vars())
         task = partial(
@@ -829,8 +813,7 @@ class InteractiveBrokersEWrapper(EWrapper):
 
     def positionEnd(self) -> None:
         """
-        Call this once all position data for a given request has been received, serving
-        as an end marker for the position() data.
+        一旦收到给定请求的所有持仓数据即调用此方法，作为 position() 数据的结束标记。
         """
         self.logAnswer(current_fn_name(), vars())
         self._client.submit_to_msg_handler_queue(
@@ -846,8 +829,7 @@ class InteractiveBrokersEWrapper(EWrapper):
         currency: str,
     ) -> None:
         """
-        Return the data from the TWS Account Window Summary tab in response to
-        reqAccountSummary().
+        响应 reqAccountSummary()，返回 TWS 账户窗口“Summary”（摘要）选项卡中的数据。
         """
         self.logAnswer(current_fn_name(), vars())
         task = partial(
@@ -862,8 +844,7 @@ class InteractiveBrokersEWrapper(EWrapper):
 
     def accountSummaryEnd(self, reqId: int) -> None:
         """
-        Call this method when all account summary data for a given request has been
-        received.
+        当收到了给定请求的所有账户摘要数据时，调用此方法。
         """
         self.logAnswer(current_fn_name(), vars())
 
@@ -878,36 +859,34 @@ class InteractiveBrokersEWrapper(EWrapper):
 
     def displayGroupList(self, reqId: int, groups: str) -> None:
         """
-        Receive a one-time response callback to queryDisplayGroups().
+        接收对 queryDisplayGroups() 的一次性响应回调。
 
-        Parameters
+        参数
         ----------
         reqId : int
-            The requestId specified in queryDisplayGroups().
+            在 queryDisplayGroups() 中指定的请求 ID。
         groups : str
-            A list of integers representing visible group IDs separated by the '|' character, sorted by most
-            used group first. This list remains unchanged during the TWS session (i.e., users cannot add new
-            groups; sorting can change).
+            以 '|' 字符分隔的可见组 ID 列表，按最常用组排序。
+            此列表在 TWS 会话期间保持不变（即用户无法添加新组；但排序可能会变）。
 
         """
         self.logAnswer(current_fn_name(), vars())
 
     def displayGroupUpdated(self, reqId: int, contractInfo: str) -> None:
         """
-        Receive a notification from TWS to the API client after subscribing to group
-        events via subscribeToGroupEvents(). This notification will be resent if the
-        chosen contract in the subscribed display group changes.
+        通过 subscribeToGroupEvents() 订阅组事件后，接收从 TWS 发送到 API 客户端的通知。
+        如果订阅的显示组中选择的合约发生变化，将重新发送此通知。
 
-        Parameters
+        参数
         ----------
         reqId : int
-            The requestId specified in subscribeToGroupEvents().
+            在 subscribeToGroupEvents() 中指定的请求 ID。
         contractInfo : str
-            The encoded value uniquely representing the contract in IB. Possible values include:
-            - 'none': Empty selection.
-            - 'contractID@exchange': For any non-combination contract.
-                                     Examples: '8314@SMART' for IBM SMART; '8314@ARCA' for IBM @ARCA.
-            - 'combo': If any combo is selected.
+            在 IB 中唯一表示该合约的编码值。可能的值包括：
+            - 'none': 未选择。
+            - 'contractID@exchange': 适用于任何非组合合约。
+                                     示例：IBM SMART 为 '8314@SMART'；IBM @ARCA 为 '8314@ARCA'。
+            - 'combo': 如果选择了任何组合合约。
 
         """
         self.logAnswer(current_fn_name(), vars())
@@ -922,15 +901,13 @@ class InteractiveBrokersEWrapper(EWrapper):
         avgCost: float,
     ) -> None:
         """
-        Retrieve the position for a specific account or model, mirroring the position()
-        function.
+        检索特定账户或模型的持仓，类似于 position() 函数。
         """
         self.logAnswer(current_fn_name(), vars())
 
     def positionMultiEnd(self, reqId: int) -> None:
         """
-        Terminate the position for a specific account or model, akin to the
-        positionEnd() function.
+        终止特定账户或模型的持仓接收，类似于 positionEnd() 函数。
         """
         self.logAnswer(current_fn_name(), vars())
 
@@ -944,15 +921,13 @@ class InteractiveBrokersEWrapper(EWrapper):
         currency: str,
     ) -> None:
         """
-        Update the value for a specific account or model, similar to the
-        updateAccountValue() function.
+        更新特定账户或模型的值，类似于 updateAccountValue() 函数。
         """
         self.logAnswer(current_fn_name(), vars())
 
     def accountUpdateMultiEnd(self, reqId: int) -> None:
         """
-        Download data for a specific account or model, resembling accountDownloadEnd()
-        functionality.
+        下载特定账户或模型的数据，类似于 accountDownloadEnd() 的功能。
         """
         self.logAnswer(current_fn_name(), vars())
 
@@ -971,11 +946,9 @@ class InteractiveBrokersEWrapper(EWrapper):
         undPrice: float,
     ) -> None:
         """
-        Invoke this function in response to market movements in an option or its
-        underlier.
+        当下达期权或其标的资产的市场变动做出响应时，调用此函数。
 
-        Receive TWS's option model volatilities, prices, and deltas, as well as the
-        present value of dividends expected on the option's underlier.
+        接收 TWS 的期权模型波动率、价格和 Delta 值，以及期权标的资产预期的股息现值。
 
         """
         self.logAnswer(current_fn_name(), vars())
@@ -991,27 +964,27 @@ class InteractiveBrokersEWrapper(EWrapper):
         strikes: SetOfFloat,
     ) -> None:
         """
-        Return the option chain for an underlying on a specified exchange.
+        返回某个交易所在特定标的上的期权链。
 
-        This is triggered by a call to `reqSecDefOptParams`. If multiple exchanges are specified in
-        `reqSecDefOptParams`, there will be multiple callbacks to `securityDefinitionOptionParameter`.
+        这是由调用 `reqSecDefOptParams` 触发的。如果在 `reqSecDefOptParams` 中
+        指定了多个交易所，则会有多次 `securityDefinitionOptionParameter` 回调。
 
-        Parameters
+        参数
         ----------
         reqId : int
-            ID of the request that initiated the callback.
+            启动回调的请求 ID。
         exchange : str
-            The exchange for which the option chain is requested.
+            请求期权链的交易所。
         underlyingConId : int
-            The conID of the underlying security.
+            标的证券的 conID。
         tradingClass : str
-            The option trading class.
+            期权交易分类。
         multiplier : str
-            The option multiplier.
+            期权乘数。
         expirations : list[str]
-            A list of expiry dates for the options of this underlying on this exchange.
+            该交易所在该标的上的期权到期日列表。
         strikes : list[float]
-            A list of possible strikes for options of this underlying on this exchange.
+            该交易所在该标的上的期权可能行权价列表。
 
         """
         self.logAnswer(current_fn_name(), vars())
@@ -1029,13 +1002,12 @@ class InteractiveBrokersEWrapper(EWrapper):
 
     def securityDefinitionOptionParameterEnd(self, reqId: int) -> None:
         """
-        Invoke this after all callbacks to securityDefinitionOptionParameter have been
-        completed.
+        在所有 securityDefinitionOptionParameter 回调完成后调用。
 
-        Parameters
+        参数
         ----------
         reqId : int
-            The ID used in the initial call to `securityDefinitionOptionParameter`.
+            初始调用 `securityDefinitionOptionParameter` 时使用的 ID。
 
         """
         self.logAnswer(current_fn_name(), vars())
@@ -1047,23 +1019,21 @@ class InteractiveBrokersEWrapper(EWrapper):
 
     def softDollarTiers(self, reqId: int, tiers: list) -> None:
         """
-        Invoke this upon receiving Soft Dollar Tier configuration information.
+        在收到软美元层级（Soft Dollar Tier）配置信息时调用。
 
-        Call this method when Soft Dollar Tier configuration details are received.
-
-        Parameters
+        参数
         ----------
         reqId : int
-            The request ID used in the call to `EEClient::reqSoftDollarTiers`.
+            在调用 `EEClient::reqSoftDollarTiers` 时使用的请求 ID。
         tiers : list[SoftDollarTier]
-            A list containing all Soft Dollar Tier information.
+            包含所有软美元层级信息的列表。
 
         """
         self.logAnswer(current_fn_name(), vars())
 
     def familyCodes(self, familyCodes: ListOfFamilyCode) -> None:
         """
-        Return an array of family codes.
+        返回家族代码（family codes）数组。
         """
         self.logAnswer(current_fn_name(), vars())
 
@@ -1073,7 +1043,7 @@ class InteractiveBrokersEWrapper(EWrapper):
         contractDescriptions: ListOfContractDescription,
     ) -> None:
         """
-        Return an array of sample contract descriptions.
+        返回样本合约描述数组。
         """
         self.logAnswer(current_fn_name(), vars())
         task = partial(
@@ -1085,7 +1055,7 @@ class InteractiveBrokersEWrapper(EWrapper):
 
     def mktDepthExchanges(self, depthMktDataDescriptions: ListOfDepthExchanges) -> None:
         """
-        Return an array of exchanges that provide depth data to UpdateMktDepthL2.
+        返回为 UpdateMktDepthL2 提供深度数据的交易所数组。
         """
         self.logAnswer(current_fn_name(), vars())
 
@@ -1099,13 +1069,13 @@ class InteractiveBrokersEWrapper(EWrapper):
         extraData: str,
     ) -> None:
         """
-        Return news headlines.
+        返回新闻标题。
         """
         self.logAnswer(current_fn_name(), vars())
 
     def smartComponents(self, reqId: int, smartComponentMap: SmartComponentMap) -> None:
         """
-        Return exchange component mapping.
+        返回交易所组件映射。
         """
         self.logAnswer(current_fn_name(), vars())
 
@@ -1117,19 +1087,19 @@ class InteractiveBrokersEWrapper(EWrapper):
         snapshotPermissions: int,
     ) -> None:
         """
-        Return the exchange map for a specific contract.
+        返回特定合约的交易参数（Exchange map）。
         """
         self.logAnswer(current_fn_name(), vars())
 
     def newsProviders(self, newsProviders: ListOfNewsProviders) -> None:
         """
-        Return available and subscribed API news providers.
+        返回可用且已订阅的 API 新闻提供商。
         """
         self.logAnswer(current_fn_name(), vars())
 
     def newsArticle(self, requestId: int, articleType: int, articleText: str) -> None:
         """
-        Return the body of a news article.
+        返回新闻文章的正文。
         """
         self.logAnswer(current_fn_name(), vars())
 
@@ -1142,32 +1112,31 @@ class InteractiveBrokersEWrapper(EWrapper):
         headline: str,
     ) -> None:
         """
-        Return historical news headlines.
+        返回历史新闻标题。
         """
         self.logAnswer(current_fn_name(), vars())
 
     def historicalNewsEnd(self, requestId: int, hasMore: bool) -> None:
         """
-        Signals end of historical news.
+        表示历史新闻结束。
         """
         self.logAnswer(current_fn_name(), vars())
 
     def headTimestamp(self, reqId: int, headTimestamp: str) -> None:
         """
-        Return the earliest available data for a specific type of data for a given
-        contract.
+        返回给定合约特定类型数据的最早可用时间戳。
         """
         self.logAnswer(current_fn_name(), vars())
 
     def histogramData(self, reqId: int, items: HistogramData) -> None:
         """
-        Return histogram data for a contract.
+        返回合约的柱状图（histogram）数据。
         """
         self.logAnswer(current_fn_name(), vars())
 
     def historicalDataUpdate(self, reqId: int, bar: BarData) -> None:
         """
-        Return updates in real time when keepUpToDate is set to True.
+        当 keepUpToDate 设置为 True 时，返回实时更新。
         """
         self.logAnswer(current_fn_name(), vars())
         task = partial(
@@ -1179,25 +1148,25 @@ class InteractiveBrokersEWrapper(EWrapper):
 
     def rerouteMktDataReq(self, reqId: int, conId: int, exchange: str) -> None:
         """
-        Return rerouted CFD contract information for a market data request.
+        返回市场数据请求在重新路由后的 CFD 合约信息。
         """
         self.logAnswer(current_fn_name(), vars())
 
     def rerouteMktDepthReq(self, reqId: int, conId: int, exchange: str) -> None:
         """
-        Return rerouted CFD contract information for a market depth request.
+        返回市场深度请求在重新路由后的 CFD 合约信息。
         """
         self.logAnswer(current_fn_name(), vars())
 
     def marketRule(self, marketRuleId: int, priceIncrements: ListOfPriceIncrements) -> None:
         """
-        Return the minimum price increment structure for a specific market rule ID.
+        返回特定市场规则 ID 的最小价格变动结构。
         """
         self.logAnswer(current_fn_name(), vars())
 
     def pnl(self, reqId: int, dailyPnL: float, unrealizedPnL: float, realizedPnL: float) -> None:
         """
-        Return the daily Profit and Loss (PnL) for the account.
+        返回账户的当日盈亏 (PnL)。
         """
         self.logAnswer(current_fn_name(), vars())
 
@@ -1211,13 +1180,13 @@ class InteractiveBrokersEWrapper(EWrapper):
         value: float,
     ) -> None:
         """
-        Return the daily Profit and Loss (PnL) for a single position in the account.
+        返回账户中单个持仓的当日盈亏 (PnL)。
         """
         self.logAnswer(current_fn_name(), vars())
 
     def historicalTicks(self, reqId: int, ticks: ListOfHistoricalTick, done: bool) -> None:
         """
-        Return historical tick data when whatToShow is set to MIDPOINT.
+        当 whatToShow 设置为 MIDPOINT 时，返回历史逐笔成交（tick）数据。
         """
         self.logAnswer(current_fn_name(), vars())
         task = partial(
@@ -1235,7 +1204,7 @@ class InteractiveBrokersEWrapper(EWrapper):
         done: bool,
     ) -> None:
         """
-        Return historical tick data when whatToShow is set to BID_ASK.
+        当 whatToShow 设置为 BID_ASK 时，返回历史逐笔成交（tick）数据。
         """
         self.logAnswer(current_fn_name(), vars())
         task = partial(
@@ -1248,7 +1217,7 @@ class InteractiveBrokersEWrapper(EWrapper):
 
     def historicalTicksLast(self, reqId: int, ticks: ListOfHistoricalTickLast, done: bool) -> None:
         """
-        Return historical tick data when whatToShow is set to TRADES.
+        当 whatToShow 设置为 TRADES 时，返回历史逐笔成交（tick）数据。
         """
         self.logAnswer(current_fn_name(), vars())
         task = partial(
@@ -1271,7 +1240,7 @@ class InteractiveBrokersEWrapper(EWrapper):
         specialConditions: str,
     ) -> None:
         """
-        Return tick-by-tick data for tickType set to "Last" or "AllLast".
+        当 tickType 设置为 "Last" 或 "AllLast" 时，返回逐笔成交数据。
         """
         self.logAnswer(current_fn_name(), vars())
         task = partial(
@@ -1298,7 +1267,7 @@ class InteractiveBrokersEWrapper(EWrapper):
         tickAttribBidAsk: TickAttribBidAsk,
     ) -> None:
         """
-        Return tick-by-tick data for tickType set to "BidAsk".
+        当 tickType 设置为 "BidAsk" 时，返回逐笔成交数据。
         """
         self.logAnswer(current_fn_name(), vars())
         task = partial(
@@ -1315,43 +1284,41 @@ class InteractiveBrokersEWrapper(EWrapper):
 
     def tickByTickMidPoint(self, reqId: int, time: int, midPoint: float) -> None:
         """
-        Return tick-by-tick data for tickType set to "MidPoint".
+        当 tickType 设置为 "MidPoint" 时，返回逐笔成交数据。
         """
         self.logAnswer(current_fn_name(), vars())
 
     def orderBound(self, permId: int, clientId: int, orderId: int) -> None:
         """
-        Return the orderBound notification.
+        返回 orderBound 通知。
         """
         self.logAnswer(current_fn_name(), vars())
 
     def completedOrder(self, contract: Contract, order: Order, orderState: OrderState) -> None:
         """
-        Feed in completed orders.
+        传入已完成订单。
 
-        Call this function to provide information on completed orders.
-
-        Parameters
+        参数
         ----------
         contract : Contract
-            Describes the contract with attributes of the Contract class.
+            使用 Contract 类的属性描述合约。
         order : Order
-            Details of the completed order, as defined by the Order class.
+            由 Order 类定义的已完成订单详情。
         orderState : OrderState
-            Includes status details of the completed order, as specified in the OrderState class.
+            包含 OrderState 类中指定的已完成订单状态详情。
 
         """
         self.logAnswer(current_fn_name(), vars())
 
     def completedOrdersEnd(self) -> None:
         """
-        Invoke this upon completing a request for completed orders.
+        在完成已完成订单的请求时调用。
         """
         self.logAnswer(current_fn_name(), vars())
 
     def replaceFAEnd(self, reqId: int, text: str) -> None:
         """
-        Invoke this at the completion of a Financial Advisor (FA) replacement operation.
+        在财务顾问 (FA) 替换操作完成时调用。
         """
         self.logAnswer(current_fn_name(), vars())
 
@@ -1370,12 +1337,12 @@ class InteractiveBrokersEWrapper(EWrapper):
         sessions: ListOfHistoricalSessions,
     ) -> None:
         """
-        Return historical schedule for historical data request with whatToShow=SCHEDULE.
+        当 whatToShow=SCHEDULE 时，返回历史数据请求的历史时间表。
         """
         self.logAnswer(current_fn_name(), vars())
 
     def userInfo(self, reqId: int, whiteBrandingId: str) -> None:
         """
-        Return user info.
+        返回用户信息。
         """
         self.logAnswer(current_fn_name(), vars())

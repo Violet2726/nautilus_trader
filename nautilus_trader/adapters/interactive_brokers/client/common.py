@@ -47,20 +47,19 @@ class AccountOrderRef(NamedTuple):
 
 def get_venue_order_id(order_id: int, perm_id: int) -> VenueOrderId:
     """
-    Get venue order ID, using permId for external orders (orderId=0).
+    获取交易所订单 ID。对于外部订单（orderId=0），使用 permId。
 
-    IB assigns orderId=0 to external orders (placed via TWS or other clients) and
-    completed orders. Since multiple orders can have orderId=0, we use the unique
-    permId to identify them.
+    IB 将 orderId=0 分配给外部订单（通过 TWS 或其他客户端下达的订单）以及已完成
+    的订单。由于可能有多个订单的 orderId 均为 0，我们使用唯一的 permId 来标识它们。
 
-    Parameters
+    参数
     ----------
     order_id : int
-        The IB order ID.
+        IB 订单 ID。
     perm_id : int
-        The permanent order ID (unique across all orders).
+        永久订单 ID（在所有订单中唯一）。
 
-    Returns
+    返回
     -------
     VenueOrderId
 
@@ -79,7 +78,7 @@ class IBPosition(NamedTuple):
 
 class Request(msgspec.Struct, frozen=True):
     """
-    Container for Data request details.
+    数据请求详情的容器。
     """
 
     req_id: Annotated[int, msgspec.Meta(gt=0)]
@@ -95,7 +94,7 @@ class Request(msgspec.Struct, frozen=True):
 
 class Subscription(msgspec.Struct, frozen=True):
     """
-    Container for Subscription details.
+    订阅详情的容器。
     """
 
     req_id: Annotated[int, msgspec.Meta(gt=0)]
@@ -110,8 +109,7 @@ class Subscription(msgspec.Struct, frozen=True):
 
 class Base(ABC):
     """
-    Abstract base class to maintain Request Id mapping for subscriptions and data
-    requests.
+    维护订阅和数据请求的请求 ID（Request Id）映射的抽象基类。
     """
 
     def __init__(self) -> None:
@@ -124,14 +122,14 @@ class Base(ABC):
 
     def _name_to_req_id(self, name: Any) -> int | None:
         """
-        Map a given name to its corresponding request ID.
+        将给定名称映射到其对应的请求 ID。
 
-        Parameters
+        参数
         ----------
         name : Any
-            The name to find the corresponding request ID for.
+            要查找其对应请求 ID 的名称。
 
-        Returns
+        返回
         -------
         str
 
@@ -144,27 +142,27 @@ class Base(ABC):
 
     def _validation_check(self, req_id: int, name: Any) -> None:
         """
-        Validate that the provided request ID and name are not already in use.
+        验证提供的请求 ID 和名称是否尚未被使用。
 
-        Parameters
+        参数
         ----------
         req_id : int
-            The request ID to validate.
+            要验证的请求 ID。
         name : Any
-            The name to validate.
+            要验证的名称。
 
-        Raises
+        引发
         ------
         KeyError
-            If the request ID or name is already in use.
+            如果请求 ID 或名称已被使用。
 
         """
         if req_id in self._req_id_to_name:
             existing = self.get(req_id=req_id)
-            raise KeyError(f"Duplicate entry for {req_id=} not allowed, existing entry: {existing}")
+            raise KeyError(f"不允许重复输入 {req_id=}，现有条目：{existing}")
         if name in self._req_id_to_name.values():
             existing = self.get(name=name)
-            raise KeyError(f"Duplicate entry for {name=} not allowed, existing entry: {existing}")
+            raise KeyError(f"不允许重复输入 {name=}，现有条目：{existing}")
 
     def add_req_id(
         self,
@@ -174,19 +172,18 @@ class Base(ABC):
         cancel: Callable,
     ) -> None:
         """
-        Add a new request ID along with associated name, handle, and cancel callback to
-        the mappings.
+        向映射中添加新的请求 ID 及其关联的名称、处理函数和取消回调。
 
-        Parameters
+        参数
         ----------
         req_id : int
-            The request ID to add.
+            要添加的请求 ID。
         name : str | tuple
-            The name associated with the request ID.
+            与请求 ID 关联的名称。
         handle : Callable
-            The handler function for the request.
+            请求的处理函数。
         cancel : Callable
-            The cancel callback function for the request.
+            请求的取消回调函数。
 
         """
         self._validation_check(req_id, name)
@@ -196,12 +193,12 @@ class Base(ABC):
 
     def remove_req_id(self, req_id: int) -> None:
         """
-        Remove a request ID and its associated mappings from the class.
+        从此类中移除请求 ID 及其关联的映射。
 
-        Parameters
+        参数
         ----------
         req_id : int
-            The request ID to remove.
+            要移除的请求 ID。
 
         """
         self._req_id_to_name.pop(req_id, None)
@@ -214,22 +211,21 @@ class Base(ABC):
         name: InstrumentId | (BarType | str) | None = None,
     ) -> None:
         """
-        Remove a request ID and its associated mappings, identified either by request ID
-        or name.
+        通过请求 ID 或名称移除请求 ID 及其关联的映射。
 
-        Parameters
+        参数
         ----------
-        req_id : int, optional
-            The request ID to remove. If None, name is used to determine the request ID.
-        name : InstrumentId | (BarType | str), optional
-            The name associated with the request ID.
+        req_id : int, 可选
+            要移除的请求 ID。如果为 None，则使用名称来确定请求 ID。
+        name : InstrumentId | (BarType | str), 可选
+            与请求 ID 关联的名称。
 
         """
         if req_id is None:
             req_id = self._name_to_req_id(name)
 
             if req_id is None:
-                return  # If no matching req_id is found, exit the method
+                return  # 如果找不到匹配的 req_id，则退出方法
 
         self._req_id_to_name.pop(req_id, None)
         self._req_id_to_handle.pop(req_id, None)
@@ -237,10 +233,9 @@ class Base(ABC):
 
     def get_all(self) -> list[Request | Subscription]:
         """
-        Retrieve all stored mappings as a list of their respective request or
-        subscription objects.
+        检索所有存储的映射，并以各自的请求或订阅对象列表形式返回。
 
-        Returns
+        返回
         -------
         list[Request | Subscription]
 
@@ -259,17 +254,16 @@ class Base(ABC):
         name: str | tuple | None = None,
     ) -> Request | Subscription | None:
         """
-        Abstract method to retrieve a Request or Subscription object based on the
-        request ID or name.
+        根据请求 ID 或名称检索 Request 或 Subscription 对象的抽象方法。
 
-        Parameters
+        参数
         ----------
         req_id : int
-            The request ID of the object to retrieve. If None, name is used.
-        name : str | tuple, optional
-            The name associated with the request ID.
+            要检索的对象的请求 ID。如果为 None，则使用名称。
+        name : str | tuple, 可选
+            与请求 ID 关联的名称。
 
-        Returns
+        返回
         -------
         Request | Subscription | ``None``
 
@@ -278,8 +272,7 @@ class Base(ABC):
 
 class Subscriptions(Base):
     """
-    Manages and stores Subscriptions which are identified and accessed using request
-    IDs.
+    管理和存储通过请求 ID 标识和访问的订阅。
     """
 
     def __init__(self) -> None:
@@ -294,23 +287,22 @@ class Subscriptions(Base):
         cancel: Callable = lambda: None,
     ) -> Subscription | None:
         """
-        Add a new subscription with the given request ID, name, handle, and optional
-        cancel callback. This method stores the subscription details and initializes its
-        'last' value to None. If a subscription with the given request ID already
-        exists, it is overwritten.
+        添加具有给定请求 ID、名称、处理函数和可选取消回调的新订阅。
+        此方法存储订阅详情并将其“last”值初始化为 None。如果已存在具有给定请求
+        ID 的订阅，它将被覆盖。
 
-        Parameters
+        参数
         ----------
         req_id : int
-            The request ID for the new subscription.
+            新订阅的请求 ID。
         name : str | tuple
-            The name associated with the subscription.
+            与订阅关联的名称。
         handle : Callable
-            The handler function for the subscription.
-        cancel : Callable, optional
-            The cancel callback function for the subscription. Defaults to a no-op lambda.
+            订阅的处理函数。
+        cancel : Callable, 可选
+            订阅的取消回调函数。默认为空操作（no-op）的 lambda。
 
-        Returns
+        返回
         -------
         Subscription | ``None``
 
@@ -322,17 +314,16 @@ class Subscriptions(Base):
 
     def remove(self, req_id: int | None = None, name: str | tuple | None = None) -> None:
         """
-        Remove a subscription identified by either its request ID or name. If the
-        subscription is identified by name, the corresponding request ID is first
-        determined. If neither req_id nor name is provided, or if the specified
-        subscription is not found, no action is taken.
+        移除通过请求 ID 或名称标识的订阅。如果通过名称标识订阅，则首先确定对应
+        的请求 ID。如果既未提供 req_id 也未提供 name，或者找不到指定的订阅，
+        则不执行任何操作。
 
-        Parameters
+        参数
         ----------
-        req_id : int, optional
-            The request ID of the subscription to remove. If None, name is used.
-        name : str | tuple, optional
-            The name of the subscription to remove.
+        req_id : int, 可选
+            要移除的订阅的请求 ID。如果为 None，则使用名称。
+        name : str | tuple, 可选
+            要移除的订阅的名称。
 
         """
         if not req_id:
@@ -348,16 +339,16 @@ class Subscriptions(Base):
         name: str | tuple | None = None,
     ) -> Subscription | None:
         """
-        Retrieve a Subscription based on the request ID or name.
+        根据请求 ID 或名称检索订阅。
 
-        Parameters
+        参数
         ----------
-        req_id : int, optional
-            The request ID of the subscription to retrieve. If None, name is used.
-        name : str | tuple, optional
-            The name associated with the request ID.
+        req_id : int, 可选
+            要检索的订阅的请求 ID。如果为 None，则使用名称。
+        name : str | tuple, 可选
+            与请求 ID 关联的名称。
 
-        Returns
+        返回
         -------
         Subscription | ``None``
 
@@ -378,14 +369,14 @@ class Subscriptions(Base):
 
     def update_last(self, req_id: int, value: Any) -> None:
         """
-        Update the 'last' value for a given subscription.
+        更新给定订阅的“last”值。
 
-        Parameters
+        参数
         ----------
         req_id : int
-            The request ID of the subscription to update.
+            要更新的订阅的请求 ID。
         value : Any
-            The new value to set as the 'last' value for the subscription.
+            要设置为该订阅“last”值的新值。
 
         """
         self._req_id_to_last[req_id] = value
@@ -393,10 +384,9 @@ class Subscriptions(Base):
 
 class Requests(Base):
     """
-    Manages and stores data requests, inheriting common functionalities from the Base
-    class.
+    管理和存储数据请求，继承自 Base 类的通用功能。
 
-    Requests are identified and accessed using request IDs.
+    请求通过请求 ID 标识和访问。
 
     """
 
@@ -407,9 +397,9 @@ class Requests(Base):
 
     def get_futures(self) -> list[asyncio.Future]:
         """
-        Retrieve all asyncio Futures associated with the stored requests.
+        检索与存储的请求关联的所有 asyncio Future。
 
-        Returns
+        返回
         -------
         list[asyncio.Future]
 
@@ -424,23 +414,22 @@ class Requests(Base):
         cancel: Callable = lambda: None,
     ) -> Request | None:
         """
-        Add a new data request with the specified request ID, name, handle, and an
-        optional cancel callback. This method stores the data request details and
-        initializes its future and result. If a data request with the given request ID
-        already exists, it is overwritten.
+        添加具有指定请求 ID、名称、处理函数和可选取消回调的新数据请求。
+        此方法存储数据请求详情并初始化其 future 和 result。如果已存在具有
+        给定请求 ID 的数据请求，它将被覆盖。
 
-        Parameters
+        参数
         ----------
         req_id : int
-            The request ID for the new data request.
+            新数据请求的请求 ID。
         name : str | tuple
-            The name associated with the data request.
+            与数据请求关联的名称。
         handle : Callable
-            The handler function for the data request.
-        cancel : Callable, optional
-            The cancel callback function for the data request. Defaults to a no-op lambda.
+            数据请求的处理函数。
+        cancel : Callable, 可选
+            数据请求的取消回调函数。默认为空操作（no-op）的 lambda。
 
-        Returns
+        返回
         -------
         Request | ``None``
 
@@ -453,18 +442,16 @@ class Requests(Base):
 
     def remove(self, req_id: int | None = None, name: str | tuple | None = None) -> None:
         """
-        Remove a data request identified by either its request ID or name. This method
-        removes the data request details from the internal storage. If the data request
-        is identified by name, the corresponding request ID is first determined. If
-        neither req_id nor name is provided, or if the specified data request is not
-        found, no action is taken.
+        移除通过请求 ID 或名称标识的数据请求。此方法从内部存储中移除数据请求
+        详情。如果通过名称标识数据请求，则首先确定对应的请求 ID。如果既未提供
+        req_id 也未提供 name，或者找不到指定的数据请求，则不执行任何操作。
 
-        Parameters
+        参数
         ----------
-        req_id : int, optional
-            The request ID of the data request to remove. If None, name is used.
-        name : str | tuple, optional
-            The name of the data request to remove.
+        req_id : int, 可选
+            要移除的数据请求的请求 ID。如果为 None，则使用名称。
+        name : str | tuple, 可选
+            要移除的数据请求的名称。
 
         """
         if not req_id:
@@ -481,16 +468,16 @@ class Requests(Base):
         name: str | tuple | None = None,
     ) -> Request | None:
         """
-        Retrieve a Request based on the request ID or name.
+        根据请求 ID 或名称检索 Request。
 
-        Parameters
+        参数
         ----------
-        req_id : int, optional
-            The request ID of the request to retrieve. If None, name is used.
-        name : str | tuple, optional
-            The name associated with the request ID.
+        req_id : int, 可选
+            要检索的请求的请求 ID。如果为 None，则使用名称。
+        name : str | tuple, 可选
+            与请求 ID 关联的名称。
 
-        Returns
+        返回
         -------
         Request | ``None``
 
@@ -513,7 +500,7 @@ class Requests(Base):
 
 class BaseMixin:
     """
-    Provide type hints for InteractiveBrokerClient Mixins.
+    为 InteractiveBrokerClient Mixins 提供类型提示。
     """
 
     # Client
@@ -528,7 +515,7 @@ class BaseMixin:
     _client_id: int
     _requests: Requests
     _instrument_provider: (
-        Any  # InteractiveBrokersInstrumentProvider | None - Will be set by data/execution client
+        Any  # InteractiveBrokersInstrumentProvider | None - 将由数据/执行客户端设置
     )
     _subscriptions: Subscriptions
     _event_subscriptions: dict[str, Callable]
@@ -572,18 +559,18 @@ class BaseMixin:
 
 class IBKRBookLevel(msgspec.Struct, frozen=True):
     """
-    Single price level in the order book.
+    订单簿中的单个价格层级。
 
-    Attributes
+    属性
     ----------
     price : float
-        Price at this level.
+        此层级的价格。
     size : Decimal
-        Total size/quantity at this price.
+        此价格下的总数量。
     side : OrderSide
-        Side of the order at this price.
+        此价格下的订单方向。
     market_maker : str
-        Market maker identifier providing this quote.
+        提供此报价的做市商标识符。
 
     """
 

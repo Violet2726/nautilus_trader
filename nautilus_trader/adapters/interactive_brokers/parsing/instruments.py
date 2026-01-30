@@ -55,140 +55,160 @@ from nautilus_trader.model.objects import Quantity
 
 
 VENUE_MEMBERS: dict[str, list[str]] = {
-    # ICE Endex
-    "NDEX": ["ENDEX"],  # ICE Endex
+    # ICE Endex 交易所
+    "NDEX": ["ENDEX"],  # ICE Endex 交易所
     # CME Group Exchanges - Includes related index exchanges
     "XCME": [
         "CME",
-    ],  # Chicago Mercantile Exchange (Floor/ClearPort might use this; for ES, RTY, NKD futures etc.)
-    "XCEC": ["CME"],  # CME Crypto (related to CME)
-    "XFXS": ["CME"],  # CME FX Link, FX Spot (related to CME)
+    ],  # 芝加哥商品交易所 (芝商所) (场内/ClearPort 可能会使用此代码；用于 ES, RTY, NKD 期货等)
+    "XCEC": ["CME"],  # CME 加密货币 (与 CME 相关)
+    "XFXS": ["CME"],  # CME 外汇链接, 外汇现货 (与 CME 相关)
     # Chicago Board of Trade Segments
     "XCBT": [
         "CBOT",
-    ],  # Chicago Board of Trade (Floor/ClearPort might use this; for ZN, ZB, ZS futures etc.)
-    "CBCM": ["CBOT"],  # CBOT Commodities (specific segment, related to CBOT)
+    ],  # 芝加哥期货交易所 (场内/ClearPort 可能会使用此代码；用于 ZN, ZB, ZS 期货等)
+    "CBCM": ["CBOT"],  # CBOT 大宗商品 (特定细分市场，与 CBOT 相关)
     # New York Mercantile Exchange Segments
     "XNYM": [
         "NYMEX",
-    ],  # New York Mercantile Exchange (Floor/ClearPort might use this; for CL, NG futures etc.)
-    "NYUM": ["NYMEX"],  # NYMEX Metals (specific segment, related to NYMEX)
-    # ICE Futures US (formerly NYBOT)
-    "IFUS": ["NYBOT"],  # ICE Futures US (IBKR uses NYBOT for this; for CC, KC, SB futures etc.)
-    # GLBX, Name used by databento
+    ],  # 纽约商业交易所 (场内/ClearPort 可能会使用此代码；用于 CL, NG 期货等)
+    "NYUM": ["NYMEX"],  # NYMEX 金属 (特定细分市场，与 NYMEX 相关)
+    # ICE 美国期货交易所 (前身为 NYBOT)
+    "IFUS": ["NYBOT"],  # ICE 美国期货交易所 (IBKR 对此使用 NYBOT 代码；用于 CC, KC, SB 期货等)
+    # GLBX，databento 使用的名称
     "GLBX": [
         "CBOT",
         "CME",
         "NYBOT",
         "NYMEX",
-    ],  # CME Group Globex (Parent MIC for electronic trading on these exchanges)
+    ],  # CME 集团 Globex (这些交易所进行电子交易的父级 MIC)
     # US Major Exchanges & Index Venues
-    "XNAS": ["NASDAQ"],  # Nasdaq Stock Market (for IXIC, NDX indices)
-    "XNYS": ["NYSE"],  # New York Stock Exchange (for NYA index)
-    "ARCX": ["ARCA"],  # NYSE Arca
-    "BATS": ["BATS"],  # Cboe BZX Exchange U.S. (formerly BATS)
-    "IEXG": ["IEX"],  # Investors Exchange
+    "XNAS": ["NASDAQ"],  # 纳斯达克证券市场 (用于 IXIC, NDX 指数)
+    "XNYS": ["NYSE"],  # 纽约证券交易所 (用于 NYA 指数)
+    "ARCX": ["ARCA"],  # 纽约证券交易所 Arca (NYSE Arca)
+    "BATS": ["BATS"],  # Cboe BZX 美国交易所 (前身为 BATS)
+    "IEXG": ["IEX"],  # Investors Exchange (IEX 交易所)
     "XCBO": [
         "CBOE",
-    ],  # Cboe Options Exchange (for SPX, RUT options and indices like SPX.IND, RUT.IND)
-    "XCBF": ["CFE"],  # Cboe Futures Exchange (IBKR uses CFE, e.g., for VIX futures)
-    # Canadian Exchanges
-    "XTSE": ["TSX"],  # Toronto Stock Exchange (for GSPTSE index)
-    # ICE Europe Exchanges
+    ],  # Cboe 期权交易所 (用于 SPX, RUT 期权及如 SPX.IND, RUT.IND 等指数)
+    "XCBF": ["CFE"],  # Cboe 期货交易所 (IBKR 使用 CFE，例如用于 VIX 期货)
+    # 加拿大交易所
+    "XTSE": ["TSX"],  # 多伦多证券交易所 (用于 GSPTSE 指数)
+    # ICE 欧洲交易所
     "IFEU": [
         "ICEEU",
         "ICEEUSOFT",
         "IPE",
-    ],  # ICE Futures Europe (IBKR uses for products on this exchange: ICEEU (general), ICEEUSOFT (softs), IPE (energy))
-    # European Exchanges
-    "XLON": ["LSE"],  # London Stock Exchange (for UKX, FTMC indices)
-    "XPAR": ["SBF"],  # Euronext Paris (IBKR uses SBF) (for FCHI index)
-    "XETR": ["IBIS"],  # Deutsche Börse Xetra (IBKR uses IBIS for Xetra)
+    ],  # ICE 欧洲期货交易所 (IBKR 对此交易所的产品使用以下代码：ICEEU (通用), ICEEUSOFT (软商品), IPE (能源))
+    # 欧洲交易所
+    "XLON": ["LSE"],  # 伦敦证券交易所 (用于 UKX, FTMC 指数)
+    "XPAR": ["SBF"],  # 泛欧交易所巴黎分部 (IBKR 使用 SBF) (用于 FCHI 指数)
+    "XETR": ["IBIS"],  # 德意志交易所 Xetra (IBKR 对 Xetra 使用 IBIS 代码)
     "XEUR": [
         "DTB",
         "EUREX",
         "SOFFEX",
-    ],  # Eurex (IBKR uses SOFFEX/DTB/EUREX; SOFFEX was precursor. For STOXX50E, GDAXI derivatives and index reference)
-    "XAMS": ["AEB"],  # Euronext Amsterdam (IBKR uses AEB) (for AEX index)
-    "XBRU": ["EBS"],  # Euronext Brussels Equities (IBKR uses EBS)
+    ],  # Eurex 交易所 (IBKR 使用 SOFFEX/DTB/EUREX 代码；SOFFEX 是前身。用于 STOXX50E, GDAXI 衍生品及指数参考)
+    "XAMS": ["AEB"],  # 泛欧交易所阿姆斯特丹分部 (IBKR 使用 AEB) (用于 AEX 指数)
+    "XBRU": ["EBS"],  # 泛欧交易所布鲁塞尔股票分部 (IBKR 使用 EBS)
     "XBRD": [
         "BELFOX",
-    ],  # Euronext Brussels Derivatives (IBKR uses BELFOX) - XBRD is MIC for "EURONEXT BRUSSELS - DERIVATIVES MARKET"
-    "XLIS": ["BVLP"],  # Euronext Lisbon (IBKR uses BVLP)
-    "XDUB": ["IRE"],  # Euronext Dublin (IBKR uses IRE)
-    "XOSL": ["OSL"],  # Euronext Oslo (Oslo Børs) (IBKR uses OSL)
+    ],  # 泛欧交易所布鲁塞尔衍生品分部 (IBKR 使用 BELFOX) - XBRD 是 "泛欧交易所布鲁塞尔 - 衍生品市场" 的 MIC 代码
+    "XLIS": ["BVLP"],  # 泛欧交易所里斯本分部 (IBKR 使用 BVLP)
+    "XDUB": ["IRE"],  # 泛欧交易所都柏林分部 (IBKR 使用 IRE)
+    "XOSL": ["OSL"],  # 泛欧交易所奥斯陆分部 (奥斯陆证券交易所) (IBKR 使用 OSL)
     "XSWX": [
         "EBS",
         "SIX",
         "SWX",
-    ],  # SIX Swiss Exchange (IBKR uses SWX for equities; EBS old IBKR code. For SSMI index)
+    ],  # 瑞士证券交易所 (IBKR 对股票使用 SWX 代码；EBS 是旧的 IBKR 代码。用于 SSMI 指数)
     "XSVX": [
         "VRTX",
-    ],  # SIX Swiss Exchange Derivatives (IBKR uses VRTX) - XSVX is MIC for "SIX SWISS EXCHANGE - DERIVATIVES MARKET"
+    ],  # 瑞士证券交易所衍生品分部 (IBKR 使用 VRTX) - XSVX 是 "瑞士证券交易所 - 衍生品市场" 的 MIC 代码
     "XMIL": [
         "BIT",
         "BVME",
         "IDEM",
-    ],  # Borsa Italiana (Euronext Milan) (IBKR uses BIT; BVME for equities, IDEM for derivatives. For FTMIB index)
+    ],  # 意大利证券交易所 (泛欧交易所米兰分部) (IBKR 使用 BIT 代码；BVME 用于股票，IDEM 用于衍生品。用于 FTMIB 指数)
     "XMAD": [
         "MDRD",
         "BME",
-    ],  # Bolsas y Mercados Españoles (BME) - Madrid (IBKR uses MDRD; BME also used. For IBEX index)
+    ],  # 西班牙证券交易所 (BME) - 马德里 (IBKR 使用 MDRD 代码；也使用 BME。用于 IBEX 指数)
     "DXEX": [
         "BATEEN",
-    ],  # Cboe Europe Equities - Netherlands (IBKR uses BATEEN) - DXEX is MIC for Cboe NL (post-Brexit main Cboe Europe venue)
-    "XWBO": ["WBAG"],  # Wiener Börse (Vienna Stock Exchange) (IBKR uses WBAG)
-    "XBUD": ["BUX"],  # Budapest Stock Exchange (IBKR uses BUX)
-    "XPRA": ["PRA"],  # Prague Stock Exchange (IBKR uses PRA)
-    "XWAR": ["WSE"],  # Warsaw Stock Exchange (IBKR uses WSE)
-    "XIST": ["ISE"],  # Bursa Istanbul (IBKR often uses ISE for Istanbul Stock Exchange equities)
+    ],  # Cboe 欧洲股票 - 荷兰 (IBKR 使用 BATEEN 代码) - DXEX 是 Cboe NL 的 MIC 代码 (英国脱欧后 Cboe 欧洲的主要交易场所)
+    "XSWX": [
+        "EBS",
+        "SIX",
+        "SWX",
+    ],  # 瑞士证券交易所 (IBKR 对股票使用 SWX 代码；EBS 是旧的 IBKR 代码。用于 SSMI 指数)
+    "XSVX": [
+        "VRTX",
+    ],  # 瑞士证券交易所衍生品分部 (IBKR 使用 VRTX) - XSVX 是 "瑞士证券交易所 - 衍生品市场" 的 MIC 代码
+    "XMIL": [
+        "BIT",
+        "BVME",
+        "IDEM",
+    ],  # 意大利证券交易所 (泛欧交易所米兰分部) (IBKR 使用 BIT 代码；BVME 用于股票，IDEM 用于衍生品。用于 FTMIB 指数)
+    "XMAD": [
+        "MDRD",
+        "BME",
+    ],  # 西班牙证券交易所 (BME) - 马德里 (IBKR 使用 MDRD 代码；也使用 BME。用于 IBEX 指数)
+    "DXEX": [
+        "BATEEN",
+    ],  # Cboe 欧洲股票 - 荷兰 (IBKR 使用 BATEEN 代码) - DXEX 是 Cboe NL 的 MIC 代码 (英国脱欧后 Cboe 欧洲的主要交易场所)
+    "XWBO": ["WBAG"],  # 维也纳证券交易所 (IBKR 使用 WBAG)
+    "XBUD": ["BUX"],  # 布达佩斯证券交易所 (IBKR 使用 BUX)
+    "XPRA": ["PRA"],  # 布拉格证券交易所 (IBKR 使用 PRA)
+    "XWAR": ["WSE"],  # 华沙证券交易所 (IBKR 使用 WSE)
+    "XIST": ["ISE"],  # 伊斯坦布尔证券交易所 (IBKR 通常对伊斯坦布尔证券交易所的股票使用 ISE 代码)
     # Nasdaq Nordic Exchanges
-    "XSTO": ["SFB"],  # Nasdaq Stockholm (IBKR uses SFB)
-    "XCSE": ["KFB"],  # Nasdaq Copenhagen (IBKR uses KFB)
-    "XHEL": ["HMB"],  # Nasdaq Helsinki (IBKR uses HMB)
-    "XICE": ["ISB"],  # Nasdaq Iceland (IBKR uses ISB)
+    "XSTO": ["SFB"],  # 纳斯达克斯德哥尔摩交易所 (IBKR 使用 SFB)
+    "XCSE": ["KFB"],  # 纳斯达克哥本哈根交易所 (IBKR 使用 KFB)
+    "XHEL": ["HMB"],  # 纳斯达克赫尔辛基交易所 (IBKR 使用 HMB)
+    "XICE": ["ISB"],  # 纳斯达克冰岛交易所 (IBKR 使用 ISB)
     # Asia-Pacific Exchanges
-    "XASX": ["ASX"],  # Australian Securities Exchange (for S&P/ASX 200 - AXJO index)
-    "XHKG": ["SEHK"],  # Stock Exchange of Hong Kong (Equities) (IBKR uses SEHK)
-    "XHKF": ["HKFE"],  # Hong Kong Futures Exchange (for H S I derivatives and index reference)
-    "XSES": ["SGX"],  # Singapore Exchange (for STI index and some international derivatives)
+    "XASX": ["ASX"],  # 澳大利亚证券交易所 (用于 S&P/ASX 200 - AXJO 指数)
+    "XHKG": ["SEHK"],  # 香港证券交易所 (股票) (IBKR 使用 SEHK)
+    "XHKF": ["HKFE"],  # 香港期货交易所 (用于恒生指数衍生品及指数参考)
+    "XSES": ["SGX"],  # 新加坡交易所 (用于 STI 指数和一些国际衍生品)
     "XOSE": [
         "OSE.JPN",
-    ],  # Osaka Exchange (IBKR uses OSE.JPN) (for N225 derivatives and index reference)
+    ],  # 大阪交易所 (IBKR 使用 OSE.JPN) (用于 N225 衍生品及指数参考)
     "XTKS": [
         "TSEJ",
         "TSE.JPN",
-    ],  # Tokyo Stock Exchange (IBKR uses TSEJ for equities; TSE.JPN for TOPX index)
+    ],  # 东京证券交易所 (IBKR 对股票使用 TSEJ 代码；对 TOPX 指数使用 TSE.JPN)
     "XKRX": [
         "KSE",
         "KRX",
-    ],  # Korea Exchange (IBKR uses KSE for equities; KRX relevant for KOSPI - KS11 index)
+    ],  # 韩国交易所 (IBKR 对股票使用 KSE 代码；KRX 与 KOSPI - KS11 指数相关)
     "XTAI": [
         "TASE",
         "TWSE",
-    ],  # Taiwan Stock Exchange (MIC XTAI. IBKR uses TASE for Taiwan equities; TWSE also relevant for
-    # TAIEX - TWII index. Note: XTAE is Tel Aviv's MIC)
+    ],  # 台湾证券交易所 (MIC XTAI。IBKR 对台湾股票使用 TASE 代码；TWSE 也与
+    # TAIEX - TWII 指数相关。注意：XTAE 是特拉维夫的 MIC 代码)
     "XSHG": [
         "SEHKNTL",
         "SSE",
-    ],  # Shanghai Stock Exchange (IBKR uses SEHKNTL for Stock Connect Northbound; SSE for SSEC index direct reference)
-    "XSHE": ["SEHKSZSE"],  # Shenzhen Stock Exchange (Stock Connect Northbound) (IBKR uses SEHKSZSE)
-    "XNSE": ["NSE"],  # National Stock Exchange of India (IBKR uses NSE) (for NIFTY 50 - NSEI index)
-    "XBOM": ["BSE"],  # Bombay Stock Exchange (IBKR uses BSE) (for SENSEX - BSESN index)
-    # Other Derivatives Exchanges
-    "XSFE": ["SNFE"],  # Sydney Futures Exchange (now ASX 24, IBKR uses SNFE)
-    "XMEX": ["MEXDER"],  # Mexican Derivatives Exchange
-    # African, Middle Eastern, South American Exchanges
+    ],  # 上海证券交易所 (IBKR 对沪股通使用 SEHKNTL；对上证综指 SSEC 指数直接参考使用 SSE)
+    "XSHE": ["SEHKSZSE"],  # 深圳证券交易所 (深股通) (IBKR 使用 SEHKSZSE)
+    "XNSE": ["NSE"],  # 印度国家证券交易所 (IBKR 使用 NSE) (用于 NIFTY 50 - NSEI 指数)
+    "XBOM": ["BSE"],  # 孟买证券交易所 (IBKR 使用 BSE) (用于 SENSEX - BSESN 指数)
+    # 其他衍生品交易所
+    "XSFE": ["SNFE"],  # 悉尼期货交易所 (现为 ASX 24，IBKR 使用 SNFE)
+    "XMEX": ["MEXDER"],  # 墨西哥衍生品交易所
+    # 非洲、中东、南美交易所
     "XJSE": [
         "JSE",
-    ],  # Johannesburg Stock Exchange (IBKR uses JSE) (for FTSE/JSE All Share - JALSH index)
-    "XBOG": ["BVC"],  # Bolsa de Valores de Colombia (IBKR uses BVC)
+    ],  # 约翰内斯堡证券交易所 (IBKR 使用 JSE) (用于 FTSE/JSE All Share - JALSH 指数)
+    "XBOG": ["BVC"],  # 哥伦比亚证券交易所 (IBKR 使用 BVC)
     "XTAE": [
-        "TASE",  # Tel Aviv Stock Exchange (MIC XTAE. IBKR uses TASE for Tel Aviv equities; note XTAI is Taiwan)
+        "TASE",  # 特拉维夫证券交易所 (MIC XTAE。IBKR 对特拉维夫股票使用 TASE 代码；注意 XTAI 是台湾)
     ],
     "BVMF": [
         "BVMF",
-    ],  # B3 - Brasil Bolsa Balcão (IBKR uses BVMF; for IBOVESPA - BVSP index. BVMF is also the MIC)
+    ],  # B3 - 巴西证券交易所 (IBKR 使用 BVMF；用于 IBOVESPA - BVSP 指数。BVMF 也是 MIC 代码)
 }
 
 FUTURES_MONTH_TO_CODE: dict[str, str] = {
@@ -230,13 +250,13 @@ VENUES_FUT = [
     "OSE.JPN",  # JP
     "SNFE",  # AU
     "SOFFEX",  # CH
-    "VRTX",  # Global
+    "VRTX",  # 全球 (Global)
 ]
 VENUES_CASH = ["IDEALPRO"]
 VENUES_CRYPTO = ["PAXOS"]
 VENUES_OPT = ["SMART"]
-VENUES_CFD = ["IBCFD"]  # self named, in fact mapping to "SMART" when parsing
-VENUES_CMDTY = ["IBCMDTY"]  # self named, in fact mapping to "SMART" when parsing
+VENUES_CFD = ["IBCFD"]  # 自定义名称，解析时实际上映射到 "SMART"
+VENUES_CMDTY = ["IBCMDTY"]  # 自定义名称，解析时实际上映射到 "SMART"
 
 RE_CASH = re.compile(r"^(?P<symbol>[A-Z]{3})\/(?P<currency>[A-Z]{3})$")  # "EUR/USD"
 RE_CFD_CASH = re.compile(r"^(?P<symbol>[A-Z]{3})\.(?P<currency>[A-Z]{3})$")  # "EUR.USD"
@@ -276,12 +296,12 @@ def sec_type_to_asset_class(sec_type: str) -> AssetClass:
         "FUT": "INDEX",
     }
 
-    # Handle empty or None sec_type
+    # 处理空或 None 的 sec_type
     if not sec_type:
-        return AssetClass.EQUITY  # Default to EQUITY
-
+        return AssetClass.EQUITY  # 默认为 EQUITY (股票)
+ 
     mapped_value = mapping.get(sec_type, sec_type)
-    # If the mapped value is still not a valid AssetClass, default to EQUITY
+    # 如果映射后的值仍不是有效的 AssetClass，则默认为 EQUITY
     try:
         return asset_class_from_str(mapped_value)
     except Exception:
@@ -343,7 +363,7 @@ def parse_instrument(  # noqa: C901
                 instrument_id=instrument_id,
             )
     else:
-        raise ValueError(f"Unknown {security_type=}")
+        raise ValueError(f"未知的 {security_type=}")
 
 
 def parse_equity_contract(
@@ -373,7 +393,7 @@ def _extract_isin(contract_details: IBContractDetails) -> int:
             if tag_value.tag == "ISIN":
                 return tag_value.value
 
-    raise ValueError("No ISIN found")
+    raise ValueError("未找到 ISIN")
 
 
 def parse_index_contract(
@@ -405,12 +425,12 @@ def parse_futures_contract(
     price_precision: int = _tick_size_to_precision(contract_details.minTick)
     timestamp = time.time_ns()
     expiration = expiry_timestring_to_datetime(contract_details)
-    activation = expiration - pd.Timedelta(days=90)  # TODO: Make this more accurate
+    activation = expiration - pd.Timedelta(days=90)  # 待办：使其更准确
     raw_symbol = (
         contract_details.contract.localSymbol
         if contract_details.contract.secType == "FUT"
         else contract_details.contract.symbol
-    )  # symbol for CONTFUT
+    )  # 对于 CONTFUT 的证券代码
 
     return FuturesContract(
         instrument_id=instrument_id,
@@ -442,9 +462,9 @@ def parse_option_contract(
         "P": OptionKind.PUT,
     }[contract_details.contract.right]
     expiration = expiry_timestring_to_datetime(contract_details)
-    activation = expiration - pd.Timedelta(days=90)  # TODO: Make this more accurate
-
-    # For options, the multiplier represents the lot size (e.g., 100 shares per contract)
+    activation = expiration - pd.Timedelta(days=90)  # 待办：使其更准确
+ 
+    # 对于期权，乘数代表手数 (例如，每张合约 100 股)
     multiplier = Quantity.from_str(contract_details.contract.multiplier)
 
     return OptionContract(
@@ -455,7 +475,7 @@ def parse_option_contract(
         price_precision=price_precision,
         price_increment=Price(contract_details.minTick, price_precision),
         multiplier=multiplier,
-        lot_size=multiplier,  # For options, lot size equals multiplier
+        lot_size=multiplier,  # 对于期权，手数等于乘数
         underlying=contract_details.underSymbol,
         strike_price=Price(contract_details.contract.strike, price_precision),
         activation_ns=activation.value,
@@ -651,27 +671,26 @@ def parse_option_spread(
     instrument_id: InstrumentId,
 ) -> OptionSpread:
     """
-    Parse an option spread from BAG contract contract_details.
-
-    Uses only information available from the contract contract_details. For asset class
-    and other properties, uses the same information as would be used for individual
-    option legs.
-
+    根据 IB BAG 合约详情解析期权组合。
+ 
+    仅使用合约详情中可用的信息。对于资产类别和其他属性，
+    使用与单个期权腿相同的信息。
+ 
     """
     price_precision: int = _tick_size_to_precision(contract_details.minTick)
     timestamp = time.time_ns()
 
-    # Extract underlying symbol from contract contract_details
+    # 从合约详情中提取标的证券代码
     underlying = contract_details.underSymbol or contract_details.contract.symbol or "UNKNOWN"
-
-    # Determine asset class from underlying security type
+ 
+    # 根据标的证券类型确定资产类别
     asset_class = (
         sec_type_to_asset_class(contract_details.underSecType)
         if contract_details.underSecType
         else AssetClass.EQUITY
     )
 
-    # For options, the multiplier represents the lot size (e.g., 100 shares per contract)
+    # 对于期权，乘数代表手数 (例如，每张合约 100 股)
     multiplier = Quantity.from_str(contract_details.contract.multiplier or "100")
 
     return OptionSpread(
@@ -684,11 +703,11 @@ def parse_option_spread(
         price_precision=price_precision,
         price_increment=Price(contract_details.minTick, price_precision),
         multiplier=multiplier,
-        lot_size=multiplier,  # For options, lot size equals multiplier
+        lot_size=multiplier,  # 对于期权，手数等于乘数
         underlying=underlying,
         strategy_type="SPREAD",
-        activation_ns=0,  # BAG contracts don't have single expiration dates
-        expiration_ns=0,  # BAG contracts don't have single expiration dates
+        activation_ns=0,  # BAG 合约没有单一的激活日期
+        expiration_ns=0,  # BAG 合约没有单一的到期日期
         ts_event=timestamp,
         ts_init=timestamp,
         info=contract_details_to_dict(contract_details),
@@ -701,54 +720,54 @@ def parse_option_spread_instrument_id(
     clock_timestamp_ns: int | None = None,
 ) -> OptionSpread:
     """
-    Parse a spread instrument ID into an OptionSpread instrument.
-
-    Uses contract contract_details from the first leg to determine spread properties.
-    This ensures consistency with how individual option contracts are handled.
-
+    将组合工具 ID 解析为 OptionSpread (期权组合) 工具。
+ 
+    使用第一条腿的合约详情来确定组合属性。
+    这确保了与单个期权合约处理方式的一致性。
+ 
     Parameters
     ----------
     instrument_id : InstrumentId
-        The spread instrument ID to parse.
+        要解析的组合工具 ID。
     leg_contract_details : list[tuple[IBContractDetails, int]]
-        List of (contract_details, ratio) tuples for the spread legs.
-        Contract contract_details will be used for instrument properties.
-    clock_timestamp_ns : int | None, optional
-        Clock timestamp in nanoseconds. If not provided, current time is used.
-
+        组合腿的 (contract_details, ratio) 元组列表。
+        合约详情将用于确定工具属性。
+    clock_timestamp_ns : int | None, 可选
+        以纳秒为单位的时钟时间戳。如果不提供，则使用当前时间。
+ 
     Returns
     -------
     OptionSpread
-        The parsed option spread instrument.
-
+        解析后的期权组合工具。
+ 
     Raises
     ------
     ValueError
-        If the instrument ID cannot be parsed as a spread or no leg contract contract_details provided.
-
+        如果工具 ID 无法被解析为组合，或者未提供腿合约详情。
+ 
     """
     try:
         if not leg_contract_details:
-            raise ValueError("leg_contract_details must be provided")
-
-        # Use contract contract_details from first leg
+            raise ValueError("必须提供 leg_contract_details")
+ 
+        # 使用第一条腿的合约详情
         first_details, _ = leg_contract_details[0]
         first_contract = first_details.contract
 
-        # Extract all properties from the first leg contract contract_details
+        # 从第一条腿的合约详情中提取所有属性
         currency = Currency.from_str(first_contract.currency)
         underlying = first_details.underSymbol or first_contract.symbol
-
-        # Use contract multiplier
+ 
+        # 使用合约乘数
         multiplier = Quantity.from_str(str(first_contract.multiplier))
 
-        # Determine asset class based on security type
+        # 根据证券类型确定资产类别
         if first_contract.secType == "FOP":
-            asset_class = AssetClass.INDEX  # Futures options
+            asset_class = AssetClass.INDEX  # 期货期权
         else:  # OPT
-            asset_class = AssetClass.EQUITY  # Equity options
+            asset_class = AssetClass.EQUITY  # 股票期权
 
-        # Read price increment from contract contract_details
+        # 从合约详情中读取价格增量
         min_tick = min(leg_details.minTick for leg_details, _ in leg_contract_details)
         price_increment = Price(
             min_tick,
@@ -756,14 +775,14 @@ def parse_option_spread_instrument_id(
         )
         price_precision = _tick_size_to_precision(min_tick)
 
-        # Use provided timestamp or current time
+        # 使用提供的时间戳或当前时间
         timestamp = clock_timestamp_ns if clock_timestamp_ns is not None else time.time_ns()
-
-        # For options spreads, lot size equals multiplier (same as individual option contracts)
+ 
+        # 对于期权组合，手数等于乘数 (与单个期权合约相同)
         lot_size = multiplier
-
-        # Create info dict with contract contract_details for the first leg
-        # This is needed for the data client to create subscription contracts
+ 
+        # 为第一条腿创建包含合约详情的 info 字典
+        # 这对于数据客户端创建订阅合约是必需的
         info = {
             "contract": {
                 "secType": first_contract.secType,
@@ -784,21 +803,21 @@ def parse_option_spread_instrument_id(
             lot_size=lot_size,
             underlying=underlying,
             strategy_type="SPREAD",
-            activation_ns=0,  # Spreads don't have single activation dates
-            expiration_ns=0,  # Spreads don't have single expiration dates
+            activation_ns=0,  # 组合没有单一的激活日期
+            expiration_ns=0,  # 组合没有单一的到期日期
             ts_event=timestamp,
             ts_init=timestamp,
             info=info,
         )
     except Exception as e:
-        raise ValueError(f"Failed to parse spread instrument ID {instrument_id}: {e}") from e
+        raise ValueError(f"解析组合工具 ID {instrument_id} 失败: {e}") from e
 
 
 def _has_futures(
     contract: IBContract,
     contract_details_map: dict[int, IBContractDetails] | None = None,
 ) -> bool:
-    # Check if a BAG contract contains at least one future leg.
+    # 检查 BAG 合约是否包含至少一个期货腿。
     if not contract.comboLegs or not contract_details_map:
         return False
 
@@ -816,27 +835,26 @@ def parse_futures_spread(
     instrument_id: InstrumentId,
 ) -> FuturesSpread:
     """
-    Parse a futures spread from BAG contract contract_details.
-
-    Uses only information available from the contract contract_details. For asset class
-    and other properties, uses the same information as would be used for individual
-    futures legs.
-
+    根据 IB BAG 合约详情解析期货组合。
+ 
+    仅使用合约详情中可用的信息。对于资产类别和其他属性，
+    使用与单个期货腿相同的信息。
+ 
     """
     price_precision: int = _tick_size_to_precision(contract_details.minTick)
     timestamp = time.time_ns()
 
-    # Extract underlying symbol from contract contract_details
+    # 从合约详情中提取标的证券代码
     underlying = contract_details.underSymbol or contract_details.contract.symbol or "UNKNOWN"
-
-    # Determine asset class from underlying security type
+ 
+    # 根据标的证券类型确定资产类别
     asset_class = (
         sec_type_to_asset_class(contract_details.underSecType)
         if contract_details.underSecType
         else AssetClass.INDEX
     )
 
-    # For futures, the multiplier is typically 1 or the contract multiplier
+    # 对于期货，乘数通常为 1 或合约乘数
     multiplier = Quantity.from_str(contract_details.contract.multiplier or "1")
 
     return FuturesSpread(
@@ -849,11 +867,11 @@ def parse_futures_spread(
         price_precision=price_precision,
         price_increment=Price(contract_details.minTick, price_precision),
         multiplier=multiplier,
-        lot_size=Quantity.from_int(1),  # For futures, lot size is typically 1
+        lot_size=Quantity.from_int(1),  # 对于期货，手数通常为 1
         underlying=underlying,
         strategy_type="SPREAD",
-        activation_ns=0,  # BAG contracts don't have single expiration dates
-        expiration_ns=0,  # BAG contracts don't have single expiration dates
+        activation_ns=0,  # BAG 合约没有单一的激活日期
+        expiration_ns=0,  # BAG 合约没有单一的到期日期
         ts_event=timestamp,
         ts_init=timestamp,
         info=contract_details_to_dict(contract_details),
@@ -866,51 +884,51 @@ def parse_futures_spread_instrument_id(
     clock_timestamp_ns: int | None = None,
 ) -> FuturesSpread:
     """
-    Parse a spread instrument ID into a FuturesSpread instrument.
-
-    Uses contract contract_details from the first leg to determine spread properties.
-    This ensures consistency with how individual futures contracts are handled.
-
+    将组合工具 ID 解析为 FuturesSpread (期货组合) 工具。
+ 
+    使用第一条腿的合约详情来确定组合属性。
+    这确保了与单个期货合约处理方式的一致性。
+ 
     Parameters
     ----------
     instrument_id : InstrumentId
-        The spread instrument ID to parse.
+        要解析的组合工具 ID。
     leg_contract_details : list[tuple[IBContractDetails, int]]
-        List of (contract_details, ratio) tuples for the spread legs.
-        Contract contract_details will be used for instrument properties.
-    clock_timestamp_ns : int | None, optional
-        Clock timestamp in nanoseconds. If not provided, current time is used.
-
+        组合腿的 (contract_details, ratio) 元组列表。
+        合约详情将用于确定工具属性。
+    clock_timestamp_ns : int | None, 可选
+        以纳秒为单位的时钟时间戳。如果不提供，则使用当前时间。
+ 
     Returns
     -------
     FuturesSpread
-        The parsed futures spread instrument.
-
+        解析后的期货组合工具。
+ 
     Raises
     ------
     ValueError
-        If the instrument ID cannot be parsed as a spread or no leg contract contract_details provided.
-
+        如果工具 ID 无法被解析为组合，或者未提供腿合约详情。
+ 
     """
     try:
         if not leg_contract_details:
-            raise ValueError("leg_contract_details must be provided")
-
-        # Use contract contract_details from first leg
+            raise ValueError("必须提供 leg_contract_details")
+ 
+        # 使用第一条腿的合约详情
         first_details, _ = leg_contract_details[0]
         first_contract = first_details.contract
 
-        # Extract all properties from the first leg contract contract_details
+        # 从第一条腿的合约详情中提取所有属性
         currency = Currency.from_str(first_contract.currency)
         underlying = first_details.underSymbol or first_contract.symbol
-
-        # Use contract multiplier
+ 
+        # 使用合约乘数
         multiplier = Quantity.from_str(str(first_contract.multiplier))
 
-        # Determine asset class based on security type
+        # 根据证券类型确定资产类别
         asset_class = sec_type_to_asset_class(first_contract.secType)
-
-        # Read price increment from contract contract_details
+ 
+        # 从合约详情中读取价格增量
         min_tick = min(leg_details.minTick for leg_details, _ in leg_contract_details)
         price_increment = Price(
             min_tick,
@@ -918,14 +936,14 @@ def parse_futures_spread_instrument_id(
         )
         price_precision = _tick_size_to_precision(min_tick)
 
-        # Use provided timestamp or current time
+        # 使用提供的时间戳或当前时间
         timestamp = clock_timestamp_ns if clock_timestamp_ns is not None else time.time_ns()
-
-        # For futures spreads, lot size is typically 1
+ 
+        # 对于期货组合，手数通常为 1
         lot_size = Quantity.from_int(1)
-
-        # Create info dict with contract contract_details for the first leg
-        # This is needed for the data client to create subscription contracts
+ 
+        # 为第一条腿创建包含合约详情的 info 字典
+        # 这对于数据客户端创建订阅合约是必需的
         info = {
             "contract": {
                 "secType": first_contract.secType,
@@ -946,15 +964,15 @@ def parse_futures_spread_instrument_id(
             lot_size=lot_size,
             underlying=underlying,
             strategy_type="SPREAD",
-            activation_ns=0,  # Spreads don't have single activation dates
-            expiration_ns=0,  # Spreads don't have single expiration dates
+            activation_ns=0,  # 组合没有单一的激活日期
+            expiration_ns=0,  # 组合没有单一的到期日期
             ts_event=timestamp,
             ts_init=timestamp,
             info=info,
         )
     except Exception as e:
         raise ValueError(
-            f"Failed to parse futures spread instrument ID {instrument_id}: {e}",
+            f"解析期货组合工具 ID {instrument_id} 失败: {e}",
         ) from e
 
 
@@ -967,16 +985,16 @@ def contract_details_to_dict(contract_details: IBContractDetails) -> dict:
             tag_value.tag: tag_value.value for tag_value in dict_details["secIdList"]
         }
 
-    # Serialize Decimal and Enum objects for JSON compatibility
+    # 为 JSON 兼容性序列化 Decimal 和 Enum 对象
     result = _serialize_for_json(dict_details)
-
-    # Type cast: we know this is a dict because we passed a dict
+ 
+    # 类型转换：我们知道这是一个字典，因为我们传入了一个字典
     return cast(dict[str, Any], result)
 
 
 def _serialize_for_json(obj: object) -> object:
     """
-    Recursively convert Decimal objects and Enum objects to JSON-serializable types.
+    递归地将 Decimal 对象和 Enum 对象转换为可 JSON 序列化的类型。
     """
     if obj is None:
         return None
@@ -1028,7 +1046,7 @@ def ib_contract_to_instrument_id(
     elif symbology_method == SymbologyMethod.IB_RAW:
         return ib_contract_to_instrument_id_raw_symbology(contract, venue)
     else:
-        raise NotImplementedError(f"{symbology_method} not implemented")
+        raise NotImplementedError(f"{symbology_method} 尚未实现")
 
 
 def ib_contract_to_instrument_id_simplified_symbology(  # noqa: C901 (too complex)
@@ -1076,7 +1094,7 @@ def ib_contract_to_instrument_id_simplified_symbology(  # noqa: C901 (too comple
     if symbol:
         return InstrumentId(Symbol(symbol), Venue(venue))
 
-    raise ValueError(f"Unknown {contract=}")
+    raise ValueError(f"未知的 {contract=}")
 
 
 def bag_contract_to_instrument_id(
@@ -1085,60 +1103,60 @@ def bag_contract_to_instrument_id(
     contract_details_map: dict[int, IBContractDetails] | None = None,
 ) -> InstrumentId:
     """
-    Create a spread instrument ID from a BAG contract.
-
-    This is the reverse operation of _create_bag_contract_from_spread.
-    It converts an IB BAG contract back to a Nautilus option spread instrument ID.
-
+    从 BAG 合约创建组合工具 ID。
+ 
+    这是 _create_bag_contract_from_spread 的反向操作。
+    它将 IB BAG 合约转换回 Nautilus 期权组合工具 ID。
+ 
     Parameters
     ----------
     contract : IBContract
-        The BAG contract with comboLegs representing the spread
+        包含代表组合的 comboLegs 的 BAG 合约
     venue : str
-        The venue for the instrument ID
+        工具 ID 的交易场所
     contract_details_map : dict[int, IBContractDetails] | None
-        Map of contract IDs (conIds) to their contract contract_details for leg resolution
-
+        合约 ID (conIds) 到其合约详情的映射，用于腿的解析
+ 
     Returns
     -------
     InstrumentId
-        A spread instrument ID created with new_generic_spread_id()
-
+        使用 new_generic_spread_id() 创建的组合工具 ID
+ 
     """
     try:
         if not contract.comboLegs:
-            raise ValueError("BAG contract has no combo legs")
+            raise ValueError("BAG 合约没有组合腿 (combo legs)")
 
-        # Convert combo legs to instrument ID tuples
+        # 将组合腿转换为工具 ID 元组
         leg_tuples = []
 
         for combo_leg in contract.comboLegs:
-            # Get the contract contract_details for this leg using conId
+            # 使用 conId 获取这条腿的合约详情
             if contract_details_map and combo_leg.conId in contract_details_map:
                 leg_contract_details = contract_details_map[combo_leg.conId]
                 leg_contract = leg_contract_details.contract
-
-                # Create instrument ID from the leg contract
+ 
+                # 从腿合约创建工具 ID
                 leg_instrument_id = ib_contract_to_instrument_id_simplified_symbology(
                     leg_contract,
                     venue,
                 )
             else:
                 raise ValueError(
-                    f"Cannot resolve leg instrument ID for conId {combo_leg.conId}. "
-                    f"Contract contract_details map not provided or incomplete.",
+                    f"无法解析 conId {combo_leg.conId} 的腿工具 ID。"
+                    f"未提供合约详情映射或映射不完整。",
                 )
-
-            # Determine ratio (positive for BUY, negative for SELL)
+ 
+            # 确定比例 (BUY 为正, SELL 为负)
             ratio = combo_leg.ratio if combo_leg.action == "BUY" else -combo_leg.ratio
-
+ 
             leg_tuples.append((leg_instrument_id, ratio))
-
-        # Create the spread instrument ID
+ 
+        # 创建组合工具 ID
         return new_generic_spread_id(leg_tuples)
-
+ 
     except Exception as e:
-        raise ValueError(f"Failed to create spread instrument ID from BAG contract {contract}: {e}")
+        raise ValueError(f"从 BAG 合约 {contract} 创建组合工具 ID 失败: {e}")
 
 
 def ib_contract_to_instrument_id_raw_symbology(
@@ -1170,7 +1188,7 @@ def instrument_id_to_ib_contract(
     elif symbology_method == SymbologyMethod.IB_RAW:
         return instrument_id_to_ib_contract_raw_symbology(instrument_id)
     else:
-        raise NotImplementedError(f"{symbology_method} not implemented")
+        raise NotImplementedError(f"{symbology_method} 尚未实现")
 
 
 def instrument_id_to_ib_contract_simplified_symbology(  # noqa: C901 (too complex)
@@ -1218,7 +1236,7 @@ def instrument_id_to_ib_contract_simplified_symbology(  # noqa: C901 (too comple
                 localSymbol=f"{m['symbol']}{m['month']}{m['year']} {m['right']}{m['strike']}",
             )
         else:
-            raise ValueError(f"Cannot parse {instrument_id}, use 2-digit year for FUT and FOP")
+            raise ValueError(f"无法解析 {instrument_id}，FUT 和 FOP 请使用 2 位年份代码")
     elif exchange in VENUES_CFD:
         if m := RE_CASH.match(instrument_id.symbol.value):
             return IBContract(
@@ -1246,7 +1264,7 @@ def instrument_id_to_ib_contract_simplified_symbology(  # noqa: C901 (too comple
             localSymbol=instrument_id.symbol.value[1:],
         )
 
-    # Default to Stock
+    # 默认为股票 (Stock)
     return IBContract(
         secType="STK",
         exchange="SMART",
@@ -1261,33 +1279,33 @@ def instrument_id_to_bag_contract(
     contract_details_map: dict[InstrumentId, IBContractDetails] | None = None,
 ) -> IBContract:
     try:
-        # Parse the spread ID back to individual legs
+        # 将组合 ID 解析回单个腿
         leg_tuples = generic_spread_id_to_list(instrument_id)
-
+ 
         if not leg_tuples:
-            raise ValueError("Spread instrument ID has no legs")
-
-        # Create combo legs for the BAG contract
+            raise ValueError("组合工具 ID 没有腿")
+ 
+        # 为 BAG 合约创建组合腿
         combo_legs = []
-
+ 
         for leg_instrument_id, ratio in leg_tuples:
-            # Get the contract contract_details for this leg to extract conId
+            # 获取这条腿的合约详情以提取 conId
             if contract_details_map and leg_instrument_id in contract_details_map:
                 contract_details = contract_details_map[leg_instrument_id]
                 con_id = contract_details.contract.conId
                 currency = contract_details.contract.currency
             else:
-                # If we don't have contract contract_details, we can't create a valid BAG contract
+                # 如果我们没有合约详情，就无法创建一个有效的 BAG 合约
                 raise ValueError(
-                    f"Contract contract_details not found for leg {leg_instrument_id}. "
-                    f"Ensure all legs are loaded in the instrument provider before creating spread.",
+                    f"未找到腿 {leg_instrument_id} 的合约详情。"
+                    f"在创建组合之前，请确保所有腿都已加载到工具提供者中。",
                 )
-
-            # Determine action based on ratio (positive = BUY, negative = SELL)
+ 
+            # 根据比例确定动作 (正数 = BUY, 负数 = SELL)
             action = "BUY" if ratio > 0 else "SELL"
             abs_ratio = abs(ratio)
-
-            # Create a combo leg with the actual conId
+ 
+            # 使用实际的 conId 创建组合腿
             combo_leg = ComboLeg(
                 conId=con_id,
                 ratio=abs_ratio,
@@ -1295,17 +1313,17 @@ def instrument_id_to_bag_contract(
                 exchange=exchange,
             )
             combo_legs.append(combo_leg)
-
-        # Create the BAG contract
+ 
+        # 创建 BAG 合约
         return IBContract(
             secType="BAG",
             exchange=exchange,
             currency=currency,
             comboLegs=combo_legs,
-            comboLegsDescrip=f"Spread: {instrument_id.symbol.value}",
+            comboLegsDescrip=f"组合: {instrument_id.symbol.value}",
         )
     except Exception as e:
-        raise ValueError(f"Failed to create BAG contract from spread {instrument_id}: {e}")
+        raise ValueError(f"从组合 {instrument_id} 创建 BAG 合约失败: {e}")
 
 
 def instrument_id_to_ib_contract_raw_symbology(instrument_id: InstrumentId) -> IBContract:
@@ -1323,7 +1341,7 @@ def instrument_id_to_ib_contract_raw_symbology(instrument_id: InstrumentId) -> I
         return IBContract(
             secType=security_type,
             exchange="SMART",
-            localSymbol=local_symbol,  # by IB is a cfd's local symbol of STK with a "n" as tail, e.g. "NVDAn". "
+            localSymbol=local_symbol,  # 在 IB 中，这是股票 CFD 的本地证券代码，末尾带有一个 "n"，例如 "NVDAn"。
         )
     elif security_type == "CMDTY":
         return IBContract(

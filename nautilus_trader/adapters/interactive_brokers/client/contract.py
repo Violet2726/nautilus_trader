@@ -27,24 +27,24 @@ from nautilus_trader.adapters.interactive_brokers.common import IBContractDetail
 
 class InteractiveBrokersClientContractMixin(BaseMixin):
     """
-    Handles contracts (instruments) for the InteractiveBrokersClient.
+    处理 InteractiveBrokersClient 的合约（证券/资产）。
 
-    This class provides methods to request contract details, matching contracts, and
-    option chains. The InteractiveBrokersInstrumentProvider class uses methods defined
-    in this class to request the data it needs.
+    此类提供请求合约详情、匹配合约以及期权链的方法。
+    InteractiveBrokersInstrumentProvider 类使用此类中定义的方法来请求其需要的
+    数据。
 
     """
 
     async def get_contract_details(self, contract: IBContract) -> list[IBContractDetails] | None:
         """
-        Request details for a specific contract.
+        请求特定合约的详情。
 
-        Parameters
+        参数
         ----------
         contract : IBContract
-            The contract for which details are requested.
+            请求详情的合约。
 
-        Returns
+        返回
         -------
         IBContractDetails | ``None``
 
@@ -74,14 +74,14 @@ class InteractiveBrokersClientContractMixin(BaseMixin):
 
     async def get_matching_contracts(self, pattern: str) -> list[IBContract] | None:
         """
-        Request contracts matching a specific pattern.
+        请求与特定模式匹配的合约。
 
-        Parameters
+        参数
         ----------
         pattern : str
-            The pattern to match for contract symbols.
+            用于匹配合约代码（symbol）的模式。
 
-        Returns
+        返回
         -------
         list[IBContract] | ``None``
 
@@ -107,19 +107,19 @@ class InteractiveBrokersClientContractMixin(BaseMixin):
 
             return await self._await_request(request, 20)
         else:
-            self._log.info(f"Request already exist for {request}")
+            self._log.info(f"请求已存在于 {request}")
             return None
 
     async def get_option_chains(self, underlying: IBContract) -> Any | None:
         """
-        Request option chains for a specific underlying contract.
+        请求特定标的合约的期权链。
 
-        Parameters
+        参数
         ----------
         underlying : IBContract
-            The underlying contract for which option chains are requested.
+            请求其期权链的标的合约。
 
-        Returns
+        返回
         -------
         list[IBContractDetails] | ``None``
 
@@ -148,7 +148,7 @@ class InteractiveBrokersClientContractMixin(BaseMixin):
 
             return await self._await_request(request, 20)
         else:
-            self._log.info(f"Request already exist for {request}")
+            self._log.info(f"请求已存在于 {request}")
             return None
 
     async def process_contract_details(
@@ -158,9 +158,8 @@ class InteractiveBrokersClientContractMixin(BaseMixin):
         contract_details: ContractDetails,
     ) -> None:
         """
-        Receive the full contract's definitions This method will return all
-        contracts matching the requested via EClientSocket::reqContractDetails.
-        For example, one can obtain the whole option chain with it.
+        接收完整的合约定义。此方法将返回所有通过 EClientSocket::reqContractDetails 
+        请求匹配的合约。例如，可以通过它获取整个期权链。
         """
         if not (request := self._requests.get(req_id=req_id)):
             return
@@ -169,8 +168,7 @@ class InteractiveBrokersClientContractMixin(BaseMixin):
 
     async def process_contract_details_end(self, *, req_id: int) -> None:
         """
-        After all contracts matching the request were returned, this method will mark
-        the end of their reception.
+        在所有与请求匹配的合约都返回后，此方法将标记接收结束。
         """
         self._end_request(req_id)
 
@@ -186,17 +184,16 @@ class InteractiveBrokersClientContractMixin(BaseMixin):
         strikes: SetOfFloat,
     ) -> None:
         """
-        Return the option chain for an underlying on an exchange specified in
-        reqSecDefOptParams There will be multiple callbacks to
-        securityDefinitionOptionParameter if multiple exchanges are specified in
-        reqSecDefOptParams.
+        由于 reqSecDefOptParams 请求，返回某个交易所在特定标的上的期权链。
+        如果在 reqSecDefOptParams 中指定了多个交易所，则会有多次 
+        securityDefinitionOptionParameter 回调。
         """
         if request := self._requests.get(req_id=req_id):
             request.result.append((exchange, expirations))
 
     async def process_security_definition_option_parameter_end(self, *, req_id: int) -> None:
         """
-        Call when all callbacks to securityDefinitionOptionParameter are complete.
+        当所有 securityDefinitionOptionParameter 回调完成时调用。
         """
         self._end_request(req_id)
 
@@ -207,7 +204,7 @@ class InteractiveBrokersClientContractMixin(BaseMixin):
         contract_descriptions: list,
     ) -> None:
         """
-        Return an array of sample contract descriptions.
+        返回一个样本合约描述数组。
         """
         if request := self._requests.get(req_id=req_id):
             for contract_description in contract_descriptions:

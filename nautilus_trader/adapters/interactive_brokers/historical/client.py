@@ -58,7 +58,7 @@ from nautilus_trader.serialization.serializer import MsgSpecSerializer
 
 class HistoricInteractiveBrokersClient:
     """
-    Provides a means of requesting historical market data for backtesting.
+    提供回测所需的历史行情数据请求方法。
     """
 
     def __init__(
@@ -94,18 +94,18 @@ class HistoricInteractiveBrokersClient:
                 instance_id=UUID4(),
                 serializer=MsgSpecSerializer(
                     encoding=msgspec.msgpack if encoding == "msgpack" else msgspec.json,
-                    timestamps_as_str=True,  # Hardcoded for now
+                    timestamps_as_str=True,  # 目前为硬编码
                     timestamps_as_iso8601=cache_config.timestamps_as_iso8601,
                 ),
                 config=cache_config,
             )
         else:
             raise ValueError(
-                f"Unrecognized `cache_config.database.type`, was '{cache_config.database.type}'. "
-                "The only database type currently supported is 'redis', if you don't want a cache database backing "
-                "then you can pass `None` for the `cache_config.database`",
+                f"无法识别的 `cache_config.database.type`：'{cache_config.database.type}'。 "
+                "目前仅支持 'redis' 数据库类型。如果您不想使用缓存数据库，"
+                "可以为 `cache_config.database` 传递 `None`。",
             )
-
+ 
         self._client = InteractiveBrokersClient(
             loop=loop,
             msgbus=msgbus,
@@ -116,8 +116,8 @@ class HistoricInteractiveBrokersClient:
             client_id=client_id,
         )
         self._client.start()
-
-        # Store instrument provider config and create provider once
+ 
+        # 存储工具提供者配置并仅创建一次提供者
         if instrument_provider_config is None:
             instrument_provider_config = InteractiveBrokersInstrumentProviderConfig()
 
@@ -142,7 +142,7 @@ class HistoricInteractiveBrokersClient:
         )
 
     async def connect(self) -> None:
-        # Connect client
+        # 连接客户端
         await self._data_client._connect()
 
     async def request_instruments(
@@ -151,33 +151,33 @@ class HistoricInteractiveBrokersClient:
         contracts: list[IBContract] | None = None,
     ) -> list[Instrument]:
         """
-        Return Instruments given a list of IBContracts and/or InstrumentId strings.
-
+        根据 IB 合约列表和/或 InstrumentId 字符串列表返回工具 (Instruments)。
+ 
         Parameters
         ----------
-        instrument_ids : list[str | InstrumentId], default 'None'
-            Instrument IDs (e.g. AAPL.NASDAQ) defining which instruments to retrieve.
-            Can be strings or InstrumentId objects.
-        contracts : list[IBContract], default 'None'
-            IBContracts defining which instruments to retrieve.
-
+        instrument_ids : list[str | InstrumentId], 默认 'None'
+            定义要检索哪些工具的工具 ID（例如 AAPL.NASDAQ）。
+            可以是字符串或 InstrumentId 对象。
+        contracts : list[IBContract], 默认 'None'
+            定义要检索哪些工具的 IB 合约。
+ 
         Returns
         -------
         list[Instrument]
-
+ 
         """
-        # Convert string instrument_ids to InstrumentId objects
+        # 将字符串类型的 instrument_ids 转换为 InstrumentId 对象
         converted_instrument_ids = [
             InstrumentId.from_str(instrument_id)
             if isinstance(instrument_id, str)
             else instrument_id
             for instrument_id in (instrument_ids or [])
         ]
-
+ 
         await self._data_client.instrument_provider.load_ids_async(
             converted_instrument_ids + (contracts or []),
         )
-
+ 
         return list(self._data_client.instrument_provider._instruments.values())
 
     async def request_bars(
@@ -193,67 +193,66 @@ class HistoricInteractiveBrokersClient:
         timeout: int = 120,
     ) -> list[Bar]:
         """
-        Return Bars for one or more bar specifications for a list of IBContracts and/or
-        InstrumentId strings.
-
+        根据 IB 合约列表和/或 InstrumentId 字符串列表，返回一个或多个 K 线规范 (BarSpecifications) 的 K 线 (Bars)。
+ 
         Parameters
         ----------
         bar_specifications : list[str]
-            BarSpecifications represented as strings defining which bars to retrieve.
-            (e.g. '1-HOUR-LAST', '5-MINUTE-MID')
+            表示为字符串的 K 线规范，定义要检索哪些 K 线。
+            （例如：'1-HOUR-LAST', '5-MINUTE-MID'）
         start_date_time : datetime.datetime
-            The start date time for the bars. If provided, duration is derived.
+            K 线的开始日期时间。如果提供，则会自动推导出时长 (duration)。
         end_date_time : datetime.datetime
-            The end date time for the bars.
-            Note that for continuous futures (CONTFUT), the downloaded data is always up to now.
+            K 线的结束日期时间。
+            注意：对于连续期货 (CONTFUT)，下载的数据始终截至目前。
         tz_name : str
-            The timezone to use. (e.g. 'America/New_York', 'UTC')
+            要使用的时区。（例如：'America/New_York', 'UTC'）
         duration : str
-            The amount of time to go back from the end_date_time.
-            Valid values follow the pattern of an integer followed by S|D|W|M|Y
-            for seconds, days, weeks, months, or years respectively.
-        contracts : list[IBContract], default 'None'
-            IBContracts defining which bars to retrieve.
-        instrument_ids : list[str | InstrumentId], default 'None'
-            Instrument IDs (e.g. AAPL.NASDAQ) defining which bars to retrieve.
-            Can be strings or InstrumentId objects.
-        use_rth : bool, default 'True'
-            Whether to use regular trading hours.
-        timeout : int, default 120
-            The timeout (seconds) for each request.
-
+            从 end_date_time 向前追溯的时间量。
+            有效值遵循整数后跟 S|D|W|M|Y 的模式，
+            分别代表秒、天、周、月或年。
+        contracts : list[IBContract], 默认 'None'
+            定义要检索哪些 K 线的 IB 合约。
+        instrument_ids : list[str | InstrumentId], 默认 'None'
+            定义要检索哪些 K 线的工具 ID（例如 AAPL.NASDAQ）。
+            可以是字符串或 InstrumentId 对象。
+        use_rth : bool, 默认 'True'
+            是否使用常规交易时间 (Regular Trading Hours)。
+        timeout : int, 默认 120
+            每个请求的超时时间（秒）。
+ 
         Returns
         -------
         list[Bar]
-
+ 
         """
-        # Perform all necessary validations (merged from _prepare_request_bars_parameters)
+        # 执行所有必要的验证（从 _prepare_request_bars_parameters 合并而来）
         if start_date_time and duration:
-            raise ValueError("Either start_date_time or duration should be provided, not both.")
+            raise ValueError("应提供 start_date_time 或 duration 其中之一，不能两者都提供。")
 
-        # Adjust start and end time based on the timezone
+        # 根据时区调整开始和结束时间
         if start_date_time:
             start_date_time = pd.Timestamp(start_date_time, tz=tz_name).tz_convert("UTC")
-
+ 
         end_date_time = pd.Timestamp(end_date_time, tz=tz_name).tz_convert("UTC")
 
         if start_date_time and start_date_time >= end_date_time:
-            raise ValueError("Start date must be before end date.")
+            raise ValueError("开始日期必须早于结束日期。")
 
         if duration:
             pattern = r"^\d+\s[SDWMY]$"
-
+ 
             if not re.match(pattern, duration):
-                raise ValueError("duration must be in format: 'int S|D|W|M|Y'")
+                raise ValueError("duration 必须符合格式：'int S|D|W|M|Y'")
 
-        # Prepare contracts and instrument_ids
+        # 准备合约和工具 ID
         contracts = contracts or []
         instrument_ids = instrument_ids or []
 
         if not contracts and not instrument_ids:
-            raise ValueError("Either contracts or instrument_ids must be provided")
+            raise ValueError("必须提供 contracts 或 instrument_ids 其中之一")
 
-        # Convert instrument_id strings or InstrumentId objects to IBContracts
+        # 将 instrument_id 字符串或 InstrumentId 对象转换为 IB 合约
         contracts.extend(
             [
                 await self._data_client.instrument_provider.instrument_id_to_ib_contract(
@@ -265,7 +264,7 @@ class HistoricInteractiveBrokersClient:
             ],
         )
 
-        # Ensure instruments are fetched and cached
+        # 确保工具已被获取并缓存
         await self._fetch_instruments_if_not_cached(contracts)
         data: list[Bar] = []
 
@@ -313,60 +312,59 @@ class HistoricInteractiveBrokersClient:
         limit: int = 0,
     ) -> list[TradeTick | QuoteTick]:
         """
-        Return TradeTicks or QuoteTicks for one or more bar specifications for a list of
-        IBContracts and/or InstrumentId strings.
-
+        根据 IB 合约列表和/或 InstrumentId 字符串列表，返回一个或多个工具的成交逐笔数据 (TradeTicks) 或报价逐笔数据 (QuoteTicks)。
+ 
         Parameters
         ----------
         tick_type : Literal["TRADES", "BID_ASK"]
-            The type of ticks to retrieve.
+            要检索的逐笔数据类型。
         start_date_time : datetime.date
-            The start date for the ticks.
+            逐笔数据的开始日期。
         end_date_time : datetime.date
-            The end date for the ticks.
+            逐笔数据的结束日期。
         tz_name : str
-            The timezone to use. (e.g. 'America/New_York', 'UTC')
-        contracts : list[IBContract], default 'None'
-            IBContracts defining which ticks to retrieve.
-        instrument_ids : list[str | InstrumentId], default 'None'
-            Instrument IDs (e.g. AAPL.NASDAQ) defining which ticks to retrieve.
-            Can be strings or InstrumentId objects.
-        use_rth : bool, default 'True'
-            Whether to use regular trading hours.
-        timeout : int, default 60
-            The timeout (seconds) for each request.
-        limit : int, default 0
-            Maximum number of ticks to retrieve. If 0, no limit is applied.
-
+            要使用的时区。（例如：'America/New_York', 'UTC'）
+        contracts : list[IBContract], 默认 'None'
+            定义要检索哪些逐笔数据的 IB 合约。
+        instrument_ids : list[str | InstrumentId], 默认 'None'
+            定义要检索哪些逐笔数据的工具 ID（例如 AAPL.NASDAQ）。
+            可以是字符串或 InstrumentId 对象。
+        use_rth : bool, 默认 'True'
+            是否使用常规交易时间。
+        timeout : int, 默认 60
+            每个请求的超时时间（秒）。
+        limit : int, 默认 0
+            要检索的最大逐笔数据数量。如果为 0，则不应用限制。
+ 
         Returns
         -------
         list[TradeTick | QuoteTick]
-
+ 
         """
         if tick_type not in ["TRADES", "BID_ASK"]:
             raise ValueError(
-                "tick_type must be one of: 'TRADES' (for TradeTicks), 'BID_ASK' (for QuoteTicks)",
+                "tick_type 必须是以下之一：'TRADES'（用于 TradeTicks），'BID_ASK'（用于 QuoteTicks）",
             )
-
+ 
         if start_date_time >= end_date_time:
-            raise ValueError("Start date must be before end date.")
+            raise ValueError("开始日期必须早于结束日期。")
 
         start_date_time = pd.Timestamp(start_date_time, tz=tz_name).tz_convert("UTC")
         end_date_time = pd.Timestamp(end_date_time, tz=tz_name).tz_convert("UTC")
 
         if (end_date_time - start_date_time) > pd.Timedelta(days=1):
             self.log.warning(
-                "Requesting tick data for more than 1 day may take a long time, particularly for liquid instruments. "
-                "You may want to consider sourcing tick data elsewhere",
+                "请求超过 1 天的逐笔数据可能需要很长时间，特别是对于流动性好的工具。 "
+                "您可能需要考虑从其他地方获取逐笔数据",
             )
 
         contracts = contracts or []
         instrument_ids = instrument_ids or []
 
         if not contracts and not instrument_ids:
-            raise ValueError("Either contracts or instrument_ids must be provided")
+            raise ValueError("必须提供 contracts 或 instrument_ids 其中之一")
 
-        # Convert instrument_id strings or InstrumentId objects to IBContracts
+        # 将 instrument_id 字符串或 InstrumentId 对象转换为 IB 合约
         contracts.extend(
             [
                 await self._data_client.instrument_provider.instrument_id_to_ib_contract(
@@ -378,7 +376,7 @@ class HistoricInteractiveBrokersClient:
             ],
         )
 
-        # Ensure instruments are fetched and cached
+        # 确保工具已被获取并缓存
         await self._fetch_instruments_if_not_cached(contracts)
         data: list[TradeTick | QuoteTick] = []
 
@@ -411,18 +409,17 @@ class HistoricInteractiveBrokersClient:
         contracts: list[IBContract],
     ) -> None:
         """
-        Fetch and cache Instruments for the given IBContracts if they are not already
-        cached.
-
+        如果给定的 IB 合约尚未缓存，则为其获取并缓存工具 (Instruments)。
+ 
         Parameters
         ----------
         contracts : list[IBContract]
-            A list of IBContracts to fetch Instruments for.
-
+            要获取工具的 IB 合约列表。
+ 
         Returns
         -------
         None
-
+ 
         """
         for contract in contracts:
             venue = self._data_client.instrument_provider.determine_venue_from_contract(contract)
@@ -433,7 +430,7 @@ class HistoricInteractiveBrokersClient:
             )
 
             if not self._client._cache.instrument(instrument_id):
-                self.log.info(f"Fetching Instrument for: {instrument_id}")
+                self.log.info(f"正在获取工具：{instrument_id}")
                 await self.request_instruments(
                     contracts=[contract],
                 )

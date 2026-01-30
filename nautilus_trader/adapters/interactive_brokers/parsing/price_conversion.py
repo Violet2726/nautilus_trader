@@ -13,12 +13,12 @@
 #  limitations under the License.
 # -------------------------------------------------------------------------------------------------
 """
-Price conversion utilities for Interactive Brokers adapter.
-
-Interactive Brokers uses a price magnifier field in contract details to scale prices.
-All prices received from IB need to be divided by the price magnifier to get the real
-price. All prices sent to IB need to be multiplied by the price magnifier.
-
+Interactive Brokers 适配器的价格转换实用程序。
+ 
+Interactive Brokers 在合约详情中使用价格乘数 (price magnifier) 字段来缩放价格。
+所有从 IB 接收的价格都需要除以价格乘数才能得到真实价格。
+所有发送到 IB 的价格都需要乘以价格乘数。
+ 
 """
 
 from nautilus_trader.model.identifiers import InstrumentId
@@ -26,20 +26,20 @@ from nautilus_trader.model.identifiers import InstrumentId
 
 def ib_price_to_nautilus_price(ib_price: float, price_magnifier: int) -> float:
     """
-    Convert an Interactive Brokers price to a Nautilus price.
-
+    将 Interactive Brokers 的价格转换为 Nautilus 的价格。
+ 
     Parameters
     ----------
     ib_price : float
-        The price received from Interactive Brokers.
+        从 Interactive Brokers 接收的价格。
     price_magnifier : int
-        The price magnifier from the contract details.
-
+        合约详情中的价格乘数。
+ 
     Returns
     -------
     float
-        The real price for use in Nautilus.
-
+        用于 Nautilus 的真实价格。
+ 
     """
     if price_magnifier <= 0:
         return ib_price
@@ -49,20 +49,20 @@ def ib_price_to_nautilus_price(ib_price: float, price_magnifier: int) -> float:
 
 def nautilus_price_to_ib_price(nautilus_price: float, price_magnifier: int) -> float:
     """
-    Convert a Nautilus price to an Interactive Brokers price.
-
+    将 Nautilus 的价格转换为 Interactive Brokers 的价格。
+ 
     Parameters
     ----------
     nautilus_price : float
-        The price from Nautilus to send to Interactive Brokers.
+        要发送到 Interactive Brokers 的 Nautilus 价格。
     price_magnifier : int
-        The price magnifier from the contract details.
-
+        合约详情中的价格乘数。
+ 
     Returns
     -------
     float
-        The scaled price for sending to Interactive Brokers.
-
+        发送到 Interactive Brokers 的缩放后价格。
+ 
     """
     if price_magnifier <= 0:
         return nautilus_price
@@ -75,20 +75,20 @@ def get_price_magnifier_for_instrument(
     instrument_provider,
 ) -> int:
     """
-    Get the price magnifier for an instrument.
-
+    获取工具的价格乘数。
+ 
     Parameters
     ----------
     instrument_id : InstrumentId
-        The instrument identifier.
+        工具标识符。
     instrument_provider : InteractiveBrokersInstrumentProvider | None
-        The instrument provider to get contract details from.
-
+        用于获取合约详情的工具提供者。
+ 
     Returns
     -------
     int
-        The price magnifier, defaults to 1 if not found or provider is None.
-
+        价格乘数，如果未找到或提供者为 None，则默认为 1。
+ 
     """
     if instrument_provider is None:
         return 1

@@ -36,7 +36,7 @@ class ContainerStatus(IntEnum):
 
 class DockerizedIBGateway:
     """
-    A class to manage starting an Interactive Brokers Gateway docker container.
+    用于管理启动 Interactive Brokers Gateway Docker 容器的类。
     """
 
     CONTAINER_NAME: ClassVar[str] = "nautilus-ib-gateway"
@@ -50,12 +50,12 @@ class DockerizedIBGateway:
 
         password = config.password or os.getenv("TWS_PASSWORD")
         if self.username is None:
-            self.log.error("`username` not set nor available in env `TWS_USERNAME`")
-            raise ValueError("`username` not set nor available in env `TWS_USERNAME`")
+            self.log.error("未设置 `username`，且环境变量 `TWS_USERNAME` 中也不可用")
+            raise ValueError("未设置 `username`，且环境变量 `TWS_USERNAME` 中也不可用")
 
         if password is None:
-            self.log.error("`password` not set nor available in env `TWS_PASSWORD`")
-            raise ValueError("`password` not set nor available in env `TWS_PASSWORD`")
+            self.log.error("未设置 `password`，且环境变量 `TWS_PASSWORD` 中也不可用")
+            raise ValueError("未设置 `password`，且环境变量 `TWS_PASSWORD` 中也不可用")
 
         self.password = SecureString(password, name="tws_password")
 
@@ -73,7 +73,7 @@ class DockerizedIBGateway:
             self._docker_module = docker
         except ImportError as e:
             raise RuntimeError(
-                "Docker required for Gateway, install via `pip install docker`",
+                "网关需要 Docker，请通过 `pip install docker` 安装",
             ) from e
 
         self._docker = docker.from_env()
@@ -85,16 +85,15 @@ class DockerizedIBGateway:
     @property
     def container_name(self) -> str:
         """
-        Return the name of the Docker container for the IB Gateway instance.
-
+        返回 IB Gateway 实例的 Docker 容器名称。
+ 
         Returns
         -------
         str
-            The container name, which is constructed using the base container name and the trading mode
-            corresponding to the current trading mode.
-
-            e.g. "nautilus-ib-gateway-paper" or "nautilus-ib-gateway-live"
-
+            容器名称，由基础容器名称和对应于当前交易模式的交易模式构建而成。
+ 
+            例如："nautilus-ib-gateway-paper" 或 "nautilus-ib-gateway-live"
+ 
         """
         return f"{self.CONTAINER_NAME}-{self.trading_mode}"
 
@@ -133,13 +132,13 @@ class DockerizedIBGateway:
 
     def start(self, wait: int | None = None) -> None:
         """
-        Start the gateway.
-
+        启动网关 (Gateway)。
+ 
         Parameters
         ----------
         wait : int, optional
-            The seconds to wait until container is ready.
-
+            等待容器就绪的秒数。
+ 
         """
         broken_statuses = (
             ContainerStatus.NOT_LOGGED_IN,
@@ -147,19 +146,19 @@ class DockerizedIBGateway:
             ContainerStatus.CONTAINER_CREATED,
             ContainerStatus.UNKNOWN,
         )
-        self.log.info("Ensuring gateway is running")
+        self.log.info("正在确保网关运行中")
         status = self.container_status
 
         if status == ContainerStatus.NO_CONTAINER:
-            self.log.debug("No container, starting")
+            self.log.debug("无容器，正在启动")
         elif status in broken_statuses:
-            self.log.debug(f"{status=}, removing existing container")
+            self.log.debug(f"{status=}, 正在移除现有容器")
             self.stop()
         elif status in (ContainerStatus.READY, ContainerStatus.CONTAINER_STARTING):
-            self.log.info(f"{status=}, using existing container")
+            self.log.info(f"{status=}, 使用现有容器")
             return
-
-        self.log.debug("Starting new container")
+ 
+        self.log.debug("正在启动新容器")
 
         ports = {
             str(self.PORTS_EXTERNAL[self.trading_mode]): (self.host, self.port),
@@ -182,26 +181,26 @@ class DockerizedIBGateway:
                 "READ_ONLY_API": {True: "yes", False: "no"}[self.read_only_api],
             },
         )
-        self.log.info(f"Container `{self.container_name}` starting, waiting for ready")
+        self.log.info(f"容器 `{self.container_name}` 正在启动，等待就绪")
 
         for _ in range(wait or self.timeout):
             if self.is_logged_in(container=self._container):
                 break
 
-            self.log.debug("Waiting for IB Gateway to start")
+            self.log.debug("正在等待 IB Gateway 启动")
             sleep(1)
         else:
-            raise RuntimeError(f"Gateway `{self.container_name}` not ready")
-
+            raise RuntimeError(f"网关 `{self.container_name}` 未就绪")
+ 
         self.log.info(
-            f"Gateway `{self.container_name}` ready. VNC port is {self.vnc_port}",
+            f"网关 `{self.container_name}` 已就绪。VNC 端口为 {self.vnc_port}",
         )
 
     def safe_start(self, wait: int | None = None) -> None:
         try:
             self.start(wait=wait)
         except self._docker_module.errors.APIError as e:
-            raise RuntimeError("Container already exists") from e
+            raise RuntimeError("容器已存在") from e
 
     def stop(self) -> None:
         if self.container:
@@ -215,7 +214,7 @@ class DockerizedIBGateway:
         try:
             self.stop()
         except Exception as e:
-            print(f"Error stopping container: {e}", file=sys.stderr)
+            print(f"停止容器时出错：{e}", file=sys.stderr)
 
 
 # -- Exceptions -----------------------------------------------------------------------------------

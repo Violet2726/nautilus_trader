@@ -49,7 +49,7 @@ from nautilus_trader.model.instruments import Instrument
 
 class InteractiveBrokersInstrumentProvider(InstrumentProvider):
     """
-    Provides a means of loading `Instrument` objects through Interactive Brokers.
+    提供通过 Interactive Brokers 加载 `Instrument` 对象的方法。
     """
 
     def __init__(
@@ -59,21 +59,21 @@ class InteractiveBrokersInstrumentProvider(InstrumentProvider):
         config: InteractiveBrokersInstrumentProviderConfig,
     ) -> None:
         """
-        Initialize a new instance of the ``InteractiveBrokersInstrumentProvider`` class.
-
+        初始化 ``InteractiveBrokersInstrumentProvider`` 类的新实例。
+ 
         Parameters
         ----------
         client : InteractiveBrokersClient
-            The Interactive Brokers client.
+            Interactive Brokers 客户端。
         clock : Clock
-            The clock for the provider.
+            提供者的时钟。
         config : InteractiveBrokersInstrumentProviderConfig
-            The instrument provider config
-
+            工具提供者配置。
+ 
         """
         super().__init__(config=config)
 
-        # Configuration
+        # 配置
         self._load_contracts_on_start = (
             set(config.load_contracts) if config.load_contracts is not None else None
         )
@@ -85,7 +85,7 @@ class InteractiveBrokersInstrumentProvider(InstrumentProvider):
         self._convert_exchange_to_mic_venue = config.convert_exchange_to_mic_venue
         self._symbol_to_mic_venue = config.symbol_to_mic_venue
         self._filter_sec_types = set(config.filter_sec_types)
-        # TODO: If cache_validity_days > 0 and Catalog is provided
+        # 待办: 如果 cache_validity_days > 0 且提供了 Catalog
 
         self._client = client
         self._clock = clock
@@ -96,12 +96,12 @@ class InteractiveBrokersInstrumentProvider(InstrumentProvider):
 
     async def initialize(self, reload: bool = False) -> None:
         await super().initialize(reload)
-
-        # Trigger contract loading only if `load_ids_on_start` is False and `load_contracts_on_start` is True
+ 
+        # 仅当 `load_ids_on_start` 为 False 且 `load_contracts_on_start` 为 True 时触发合约加载
         if not self._load_ids_on_start and self._load_contracts_on_start:
             self._loaded = False
             self._loading = True
-            await self.load_all_async()  # Load all instruments passed as config at startup
+            await self.load_all_async()  # 加载启动时作为配置传递的所有工具
             self._loading = False
             self._loaded = True
 
@@ -111,101 +111,101 @@ class InteractiveBrokersInstrumentProvider(InstrumentProvider):
     @property
     def filter_sec_types(self) -> set[str]:
         """
-        Return the set of filtered security types.
+        返回已过滤的证券类型集合。
         """
         return self._filter_sec_types
 
     async def get_instrument(self, contract: IBContract) -> Instrument | None:
         if self._is_filtered_sec_type(contract.secType):
             self._log.warning(
-                f"Skipping filtered {contract.secType=} for contract {contract}",
+                f"跳过合约 {contract} 已过滤的 {contract.secType=}",
             )
             return None
 
         contract_id = contract.conId
         instrument_id = self.contract_id_to_instrument_id.get(contract_id)
 
-        # Check if we already have this instrument
+        # 检查是否已有该工具
         if instrument_id:
             instrument = self.find(instrument_id)
             if instrument is not None:
                 return instrument
-
-        # Special handling for BAG contracts
+ 
+        # 对 BAG 合约的特殊处理
         if contract.secType == "BAG":
             return await self._load_bag_contract(contract)
-
-        # For non-BAG contracts, use regular loading
+ 
+        # 对于非 BAG 合约，使用常规加载
         instrument_ids = await self.load_with_return_async(contract)
         if instrument_ids is None:
-            self._log.error(f"Failed to load instrument for contract {contract}")
-            raise ValueError(f"Instrument not found for contract {contract}")
-
+            self._log.error(f"无法为合约 {contract} 加载工具")
+            raise ValueError(f"未找到合约 {contract} 的工具")
+ 
         instrument = self.find(instrument_ids[0])
         if instrument is None:
-            self._log.error(f"Failed to load instrument for contract {contract}")
-            raise ValueError(f"Instrument not found for contract {contract}")
+            self._log.error(f"无法为合约 {contract} 加载工具")
+            raise ValueError(f"未找到合约 {contract} 的工具")
 
         return instrument
 
     async def _load_bag_contract(self, bag_contract: IBContract) -> Instrument:
-        # Load a BAG contract instrument from an existing IB BAG contract (e.g., from order information).
-        # Loads each leg instrument, creates spread ID, queries BAG details for tick size, and creates spread instrument.
+        # 从现有的 IB BAG 合约（例如，来自订单信息）加载 BAG 合约工具。
+        # 加载每个腿（leg）工具，创建组合 ID，查询 BAG 详情以获取最小报价单位，并创建组合工具。
         if bag_contract.secType != "BAG" or not bag_contract.comboLegs:
-            raise ValueError(f"Invalid BAG contract: {bag_contract}")
-
+            raise ValueError(f"无效的 BAG 合约: {bag_contract}")
+ 
         try:
-            self._log.info(f"Loading BAG contract: {bag_contract}")
-
-            # First, load all individual leg instruments and collect their details
+            self._log.info(f"正在加载 BAG 合约: {bag_contract}")
+ 
+            # 首先，加载所有单个腿工具并收集其详细信息
             leg_contract_details = []
             leg_tuples = []
             for combo_leg in bag_contract.comboLegs:
-                # Create a more complete leg contract using information from the combo leg
+                # 使用来自组合腿的信息创建一个更完整的腿合约
                 leg_contract = IBContract(
                     conId=combo_leg.conId,
                     exchange=combo_leg.exchange,
-                    # Use the underlying symbol and currency from the BAG contract
+                    # 使用来自 BAG 合约的基础证券代码和货币
                     symbol=bag_contract.symbol,
                     currency=bag_contract.currency,
                 )
                 leg_instrument = await self.get_instrument(leg_contract)
                 leg_instrument_id = leg_instrument.id
-
-                # Get the contract details for this leg
+ 
+                # 获取此腿的合约详情
                 if leg_instrument_id not in self.contract_details:
-                    raise ValueError(f"Contract details not found for leg {leg_instrument_id}")
-
+                    raise ValueError(f"未找到腿 {leg_instrument_id} 的合约详情")
+ 
                 leg_details = self.contract_details[leg_instrument_id]
-
-                # Determine ratio (positive for BUY, negative for SELL)
+ 
+                # 确定比例（BUY 为正，SELL 为负）
                 ratio = combo_leg.ratio if combo_leg.action == "BUY" else -combo_leg.ratio
                 leg_contract_details.append((leg_details, ratio))
                 leg_tuples.append((leg_instrument_id, ratio))
-
-            # Create instrument ID directly from the loaded leg instrument IDs
+ 
+            # 直接从加载的腿工具 ID 创建工具 ID
             instrument_id = new_generic_spread_id(leg_tuples)
-
-            # Create BAG contract (IB doesn't support contract details for BAG contracts)
+ 
+            # 创建 BAG 合约（IB 不支持 BAG 合约的合约详情）
             bag_contract = await self._create_bag_contract(
                 leg_contract_details,
                 instrument_id,
                 bag_contract,
                 bag_contract.exchange,
             )
-
-            # Use the common spread creation logic
+ 
+            # 使用通用的价差创建逻辑
             spread_instrument = self._create_spread_instrument(
                 instrument_id,
                 leg_contract_details,
                 bag_contract,
             )
-
+ 
             return spread_instrument
-
+ 
         except Exception as e:
-            self._log.error(f"Failed to load BAG contract: {e}")
-            raise ValueError(f"Failed to load BAG contract: {e}") from e
+            self._log.error(f"加载 BAG 合约失败: {e}")
+            raise ValueError(f"加载 BAG 合约失败: {e}") from e
 
     async def instrument_id_to_ib_contract(
         self,
@@ -270,8 +270,7 @@ class InteractiveBrokersInstrumentProvider(InstrumentProvider):
         filters: dict | None = None,
     ) -> list[InstrumentId]:
         """
-        Load instruments for the given IDs and return the instrument IDs of successfully
-        loaded instruments.
+        加载给定 ID 的工具，并返回成功加载工具的工具 ID。
         """
         loaded_instrument_ids = []
         for instrument_id in instrument_ids:
@@ -281,7 +280,7 @@ class InteractiveBrokersInstrumentProvider(InstrumentProvider):
             )
             if loaded_ids:
                 loaded_instrument_ids.extend(loaded_ids)
-
+ 
         return loaded_instrument_ids
 
     async def load_async(
@@ -297,17 +296,17 @@ class InteractiveBrokersInstrumentProvider(InstrumentProvider):
         filters: dict | None = None,
     ) -> list[InstrumentId] | None:
         """
-        Search and load the instrument for the given IBContract.
-
-        This is the original implementation that returns values.
-
+        搜索并加载给定 IBContract 的工具。
+ 
+        这是返回值的原始实现。
+ 
         """
         contract_details: list | None = None
         if isinstance(instrument_id, InstrumentId):
             venue = instrument_id.venue.value
 
             if await self.fetch_instrument_id(instrument_id, filters):
-                return [instrument_id]  # Return the instrument ID if successfully fetched
+                return [instrument_id]  # 如果成功获取，则返回工具 ID
             else:
                 return None
         elif isinstance(instrument_id, IBContract):
@@ -318,7 +317,7 @@ class InteractiveBrokersInstrumentProvider(InstrumentProvider):
                 full_contract = contract_details[0].contract
                 venue = self.determine_venue_from_contract(full_contract)
         else:
-            self._log.error(f"Expected InstrumentId or IBContract, received {instrument_id}")
+            self._log.error(f"预期为 InstrumentId 或 IBContract，收到了 {instrument_id}")
             return None
 
         force_instrument_update = (
@@ -328,9 +327,9 @@ class InteractiveBrokersInstrumentProvider(InstrumentProvider):
             return self._process_contract_details(contract_details, venue, force_instrument_update)
         else:
             self._log.error(
-                f"Unable to resolve contract details for {instrument_id!r}. "
-                f"If you believe the InstrumentId or IBContract is correct, please verify its tradability "
-                f"in TWS (Trader Workstation) for Interactive Brokers.",
+                f"无法解析 {instrument_id!r} 的合约详情。"
+                f"如果您认为 InstrumentId 或 IBContract 是正确的，请验证其在 "
+                f"Interactive Brokers 的 TWS (Trader Workstation) 中的可交易性。",
             )
             return None
 
@@ -342,7 +341,7 @@ class InteractiveBrokersInstrumentProvider(InstrumentProvider):
         if instrument_id in self.contract:
             return True
 
-        # Handle spread instruments specially
+        # 对价差工具进行特殊处理
         if is_generic_spread_id(instrument_id):
             return await self._fetch_spread_instrument(instrument_id, filters)
 
@@ -351,7 +350,7 @@ class InteractiveBrokersInstrumentProvider(InstrumentProvider):
             filters.get("force_instrument_update", False) if filters else False
         )
 
-        # We try to quickly build the contract details if they are already present in an instrument
+        # 尝试快速构建合约详情（如果它们已存在于工具中）
         if (
             (instrument := self._client._cache.instrument(instrument_id))
             and not force_instrument_update
@@ -360,10 +359,10 @@ class InteractiveBrokersInstrumentProvider(InstrumentProvider):
         ):
             converted_contract_details = dict_to_contract_details(instrument.info)
             processed_ids = self._process_contract_details([converted_contract_details], venue)
-
-            return bool(processed_ids)  # Return True if any instruments were processed
-
-        # VENUE_MEMBERS associates a MIC venue to several possible IB exchanges
+ 
+            return bool(processed_ids)  # 如果处理了任何工具，则返回 True
+ 
+        # VENUE_MEMBERS 将一个 MIC 交易场所关联到多个可能的 IB 交易所
         possible_exchanges = VENUE_MEMBERS.get(venue, [venue])
         try:
             for exchange in possible_exchanges:
@@ -373,9 +372,9 @@ class InteractiveBrokersInstrumentProvider(InstrumentProvider):
                     symbology_method=self.config.symbology_method,
                     contract_details_map=self.contract_details,
                 )
-
-                self._log.info(f"Attempting to find instrument for {contract=}")
-
+ 
+                self._log.info(f"正在尝试查找工具 {contract=}")
+ 
                 contract_details: list = await self.get_contract_details(contract)
                 if contract_details:
                     processed_ids = self._process_contract_details(
@@ -383,7 +382,7 @@ class InteractiveBrokersInstrumentProvider(InstrumentProvider):
                         venue,
                         force_instrument_update,
                     )
-                    return bool(processed_ids)  # Return True if any instruments were processed
+                    return bool(processed_ids)  # 如果处理了任何工具，则返回 True
         except ValueError as e:
             self._log.error(str(e))
 
@@ -394,57 +393,56 @@ class InteractiveBrokersInstrumentProvider(InstrumentProvider):
         spread_instrument_id: InstrumentId,
         filters: dict | None = None,
     ) -> bool:
-        # Fetch a spread instrument by parsing its ID, loading individual legs, creating BAG contract,
-        # querying BAG details for tick size, and creating the spread instrument.
+        # 通过解析其 ID、加载单个腿、创建 BAG 合约、查询 BAG 详情以获取报价单位，并创建价差工具来获取价差工具。
         try:
-            # Parse the spread ID to get individual legs
+            # 解析价差 ID 以获取单个腿
             leg_tuples = generic_spread_id_to_list(spread_instrument_id)
             if not leg_tuples:
-                self._log.error(f"Spread instrument {spread_instrument_id} has no legs")
+                self._log.error(f"价差工具 {spread_instrument_id} 没有腿")
                 return False
-
+ 
             self._log.info(
-                f"Loading spread instrument {spread_instrument_id} with {len(leg_tuples)} legs",
+                f"正在加载具有 {len(leg_tuples)} 个腿的价差工具 {spread_instrument_id}",
             )
-
-            # First, load all individual leg instruments to get their contract details
+ 
+            # 首先，加载所有单个腿工具以获取其合约详情
             leg_contract_details = []
             for leg_instrument_id, ratio in leg_tuples:
-                self._log.info(f"Loading leg instrument: {leg_instrument_id} (ratio: {ratio})")
-
-                # Load the individual leg instrument
+                self._log.info(f"正在加载腿工具：{leg_instrument_id} (比例: {ratio})")
+ 
+                # 加载单个腿工具
                 leg_loaded = await self.fetch_instrument_id(leg_instrument_id, filters)
                 if not leg_loaded:
-                    self._log.error(f"Failed to load leg instrument: {leg_instrument_id}")
+                    self._log.error(f"加载腿工具失败：{leg_instrument_id}")
                     return False
-
-                # Get the contract details for this leg
+ 
+                # 获取此腿的合约详情
                 if leg_instrument_id not in self.contract_details:
                     self._log.error(
-                        f"Leg instrument {leg_instrument_id} not found in contract details",
+                        f"在合约详情中未找到腿工具 {leg_instrument_id}",
                     )
                     return False
-
+ 
                 leg_details = self.contract_details[leg_instrument_id]
                 leg_contract_details.append((leg_details, ratio))
-
+ 
             exchange = filters.get("exchange", "") if filters else ""
             bag_contract = await self._create_bag_contract(
                 leg_contract_details,
                 spread_instrument_id,
                 exchange=exchange,
             )
-
-            # Use the common spread creation logic
+ 
+            # 使用通用的价差创建逻辑
             self._create_spread_instrument(
                 spread_instrument_id,
                 leg_contract_details,
                 bag_contract,
             )
-
+ 
             return True
         except Exception as e:
-            self._log.error(f"Failed to fetch spread instrument {spread_instrument_id}: {e}")
+            self._log.error(f"获取价差工具 {spread_instrument_id} 失败: {e}")
             return False
 
     async def _create_bag_contract(
@@ -454,7 +452,7 @@ class InteractiveBrokersInstrumentProvider(InstrumentProvider):
         bag_contract: IBContract | None = None,
         exchange: str = "",
     ) -> IBContract:
-        # Create BAG contract from leg details
+        # 从腿详情创建 BAG 合约
         if bag_contract is None:
             combo_legs = []
             for leg_details, ratio in leg_contract_details:
@@ -467,15 +465,15 @@ class InteractiveBrokersInstrumentProvider(InstrumentProvider):
                     exchange=leg_details.contract.exchange,
                 )
                 combo_legs.append(combo_leg)
-
-            # Use the underlying symbol from the first leg
+ 
+            # 使用第一个腿的基础证券代码
             first_contract = leg_contract_details[0][0].contract
             underlying_symbol = getattr(first_contract, "symbol", "ES")
-
-            # Use SMART unless exchange is explicitly provided
+ 
+            # 除非明确提供交易所，否则使用 SMART
             if not exchange:
                 exchange = "SMART"
-
+ 
             bag_contract = IBContract(
                 secType="BAG",
                 symbol=underlying_symbol,
@@ -483,10 +481,10 @@ class InteractiveBrokersInstrumentProvider(InstrumentProvider):
                 currency=first_contract.currency,
                 comboLegs=combo_legs,
                 comboLegsDescrip=(
-                    f"Spread: {instrument_id.symbol.value}" if instrument_id else "Spread"
+                    f"价差: {instrument_id.symbol.value}" if instrument_id else "价差"
                 ),
             )
-
+ 
         return bag_contract
 
     def _create_spread_instrument(
@@ -495,16 +493,16 @@ class InteractiveBrokersInstrumentProvider(InstrumentProvider):
         leg_contract_details: list[tuple[IBContractDetails, int]],
         bag_contract: IBContract,
     ) -> Instrument:
-        # Create spread instrument (OptionSpread or FuturesSpread) from leg details.
-        # Determines type based on leg security types, uses first leg's minTick for tick size
-        # (IB doesn't support contract details for BAG contracts).
-        # Check if any leg is a future
+        # 从腿详情创建价差工具（OptionSpread 或 FuturesSpread）。
+        # 根据腿的证券类型确定类型，使用第一个腿的 minTick 作为报价单位
+        # (IB 不支持 BAG 合约的合约详情)。
+        # 检查是否有任何腿是期货
         has_future = any(
             leg_details.contract.secType in ("FUT", "CONTFUT")
             for leg_details, _ in leg_contract_details
         )
 
-        # Create the spread instrument
+        # 创建价差工具
         if has_future:
             spread_instrument = parse_futures_spread_instrument_id(
                 instrument_id,
@@ -518,19 +516,19 @@ class InteractiveBrokersInstrumentProvider(InstrumentProvider):
                 self._clock.timestamp_ns(),
             )
 
-        # Add to provider
+        # 添加到提供程序
         self.add(spread_instrument)
 
-        # Add to client cache as well
+        # 同时添加到客户端缓存
         if not self._client._cache.instrument(spread_instrument.id):
             self._client._cache.add_instrument(spread_instrument)
 
-        # Store the contract mapping
+        # 存储合约映射
         self.contract[instrument_id] = bag_contract
         self.contract_id_to_instrument_id[bag_contract.conId] = instrument_id
-
-        self._log.info(f"Successfully created spread instrument: {spread_instrument}")
-
+ 
+        self._log.info(f"成功创建价差工具：{spread_instrument}")
+ 
         return spread_instrument
 
     async def get_contract_details(
@@ -540,18 +538,18 @@ class InteractiveBrokersInstrumentProvider(InstrumentProvider):
         try:
             details = await self._client.get_contract_details(contract=contract)
             if not details:
-                self._log.debug(f"No contract details returned for {contract}")
+                self._log.debug(f"未返回 {contract} 的合约详情")
                 return []
-
+ 
             [qualified] = details
             self._log.info(
-                f"Contract qualified for {qualified.contract.localSymbol}."
+                f"合约已限定为 {qualified.contract.localSymbol}。"
                 f"{qualified.contract.primaryExchange or qualified.contract.exchange} "
-                f"with ConId={qualified.contract.conId}",
+                f"ConId={qualified.contract.conId}",
             )
-            self._log.debug(f"Got {details=}")
+            self._log.debug(f"获取到 {details=}")
         except ValueError as e:
-            self._log.debug(f"No contract details found for the given kwargs {contract}, {e}")
+            self._log.debug(f"在给定的参数 {contract} 中未找到合约详情, {e}")
             return []
 
         min_expiry_days = contract.min_expiry_days or self._min_expiry_days or 0
@@ -565,14 +563,14 @@ class InteractiveBrokersInstrumentProvider(InstrumentProvider):
             contract.secType == "CONTFUT"
             and (contract.build_futures_chain or contract.build_options_chain)
         ) or (self._build_futures_chain or self._build_options_chain):
-            # Return Underlying contract details with Future Chains
+            # 返回具有期货链的底层合约详情
             future_chain_details = await self.get_future_chain_details(qualified.contract)
             details.extend(future_chain_details)
-
+ 
         if (
             contract.secType in ["STK", "CONTFUT", "FUT", "IND"] and contract.build_options_chain
         ) or self._build_options_chain:
-            # Return Underlying contract details with Option Chains, including for the Future Chains if apply
+            # 返回具有期权链的底层合约详情，如果适用，也包括期货链
             for detail in set(details):
                 if detail.contract.secType == "CONTFUT":
                     continue
@@ -596,7 +594,7 @@ class InteractiveBrokersInstrumentProvider(InstrumentProvider):
         return details
 
     async def get_future_chain_details(self, underlying: IBContract) -> list[ContractDetails]:
-        self._log.info(f"Building futures chain for {underlying.symbol}.{underlying.exchange}")
+        self._log.info(f"正在为 {underlying.symbol}.{underlying.exchange} 构建期货链")
         details = await self._client.get_contract_details(
             IBContract(
                 secType="FUT",
@@ -606,8 +604,8 @@ class InteractiveBrokersInstrumentProvider(InstrumentProvider):
                 includeExpired=True,
             ),
         )
-        self._log.debug(f"Got {details=}")
-
+        self._log.debug(f"获取到 {details=}")
+ 
         return details
 
     async def get_option_chain_details_by_range(
@@ -620,7 +618,7 @@ class InteractiveBrokersInstrumentProvider(InstrumentProvider):
         chains = await self._client.get_option_chains(underlying)
         if not chains:
             self._log.warning(
-                f"No option chains available for {underlying.symbol}.{underlying.exchange} with expiry {underlying.lastTradeDateOrContractMonth}",
+                f"对于 {underlying.symbol}.{underlying.exchange} 且到期日为 {underlying.lastTradeDateOrContractMonth} 的合约，没有可用的期权链",
             )
             return []
 
@@ -657,46 +655,45 @@ class InteractiveBrokersInstrumentProvider(InstrumentProvider):
 
         if not option_details_result:
             self._log.warning(
-                f"No option contracts found for {underlying.symbol} expiring on {last_trading_date}",
+                f"未找到 {underlying.symbol} 在 {last_trading_date} 到期的期权合约",
             )
             return []
-
-        # Handle both single list and nested list cases
+ 
+        # 处理单列表和嵌套列表的情况
         if len(option_details_result) == 1 and isinstance(option_details_result[0], list):
             option_details = option_details_result[0]
         else:
             option_details = option_details_result  # type: ignore[assignment]
-
+ 
         if option_details is None:
             self._log.warning(
-                f"Option details is None for {underlying.symbol} expiring on {last_trading_date}",
+                f"对于 {underlying.symbol} 在 {last_trading_date} 到期的期权详情为 None",
             )
             return []
-
+ 
         option_details = [d for d in option_details if d.underConId == underlying.conId]  # type: ignore[assignment]
         self._log.info(
-            f"Received {len(option_details)} Option Contracts for "
-            f"{underlying.symbol}.{underlying.primaryExchange or underlying.exchange} expiring on {last_trading_date}",
+            f"收到了 {len(option_details)} 个 {underlying.symbol}.{underlying.primaryExchange or underlying.exchange} "
+            f"在 {last_trading_date} 到期的期权合约",
         )
-        self._log.debug(f"Got {option_details=}")
+        self._log.debug(f"获取到 {option_details=}")
 
         return option_details
 
     def determine_venue_from_contract(self, contract: IBContract) -> str:  # noqa: C901
         """
-        Determine the venue for a contract using the instrument provider configuration
-        logic.
-
+        根据工具提供者配置逻辑确定合约的交易场所。
+ 
         Parameters
         ----------
         contract : IBContract
-            The contract to determine the venue for.
-
+            要确定交易场所的合约。
+ 
         Returns
         -------
         str
-            The determined venue.
-
+            确定的交易场所。
+ 
         """
         if contract.secType == "CFD":
             return "IBCFD"
@@ -704,7 +701,7 @@ class InteractiveBrokersInstrumentProvider(InstrumentProvider):
         if contract.secType == "CMDTY":
             return "IBCMDTY"
 
-        # Use the exchange from the contract
+        # 使用合约中的交易所
         if contract.exchange == "SMART" and contract.primaryExchange:
             exchange = contract.primaryExchange
         else:
@@ -712,21 +709,21 @@ class InteractiveBrokersInstrumentProvider(InstrumentProvider):
         venue = None
 
         if self._convert_exchange_to_mic_venue:
-            # Check symbol-specific venue mapping first
+            # 首先检查特定证券代码的交易场所映射
             if self._symbol_to_mic_venue:
                 for symbol_prefix, symbol_venue in self._symbol_to_mic_venue.items():
                     if contract.symbol.startswith(symbol_prefix):
                         venue = symbol_venue
                         break
-
-            # If no symbol-specific mapping found, use VENUE_MEMBERS mapping
+ 
+            # 如果未找到特定证券代码的映射，使用 VENUE_MEMBERS 映射
             if not venue:
                 for venue_member, exchanges in VENUE_MEMBERS.items():
                     if exchange in exchanges:
                         venue = venue_member
                         break
-
-        # Fall back to using the exchange as venue
+ 
+        # 回退到使用交易所作为交易场所
         if not venue:
             venue = exchange
 
@@ -739,23 +736,22 @@ class InteractiveBrokersInstrumentProvider(InstrumentProvider):
         force_instrument_update: bool = False,
     ) -> list[InstrumentId]:
         """
-        Process contract details and return the instrument IDs of successfully processed
-        contracts.
-
+        处理合约详情，并返回成功处理的合约的工具 ID。
+ 
         Parameters
         ----------
         contract_details : list[ContractDetails]
-            The contract details to process.
+            要处理的合约详情。
         venue : str
-            The venue for the contracts.
+            合约的交易场所。
         force_instrument_update : bool, optional
-            Whether to force update existing instruments.
-
+            是否强制更新现有工具。
+ 
         Returns
         -------
         list[InstrumentId]
-            The instrument IDs of successfully processed contracts.
-
+            成功处理的合约的工具 ID。
+ 
         """
         processed_instrument_ids = []
         for details in copy.deepcopy(contract_details):
@@ -768,11 +764,11 @@ class InteractiveBrokersInstrumentProvider(InstrumentProvider):
             sec_type = details.contract.secType
             if self._is_filtered_sec_type(sec_type):
                 self._log.warning(
-                    f"Skipping filtered {sec_type=} for contract {details.contract}",
+                    f"正在跳过合约 {details.contract} 的已过滤 {sec_type=}",
                 )
                 continue
-
-            self._log.debug(f"Attempting to create instrument from {details}")
+ 
+            self._log.debug(f"正在尝试从 {details} 创建工具")
 
             try:
                 instrument: Instrument = parse_instrument(
@@ -781,7 +777,7 @@ class InteractiveBrokersInstrumentProvider(InstrumentProvider):
                     self.config.symbology_method,
                 )
             except ValueError as e:
-                self._log.error(f"{self.config.symbology_method=} failed to parse {details=}, {e}")
+                self._log.error(f"{self.config.symbology_method=} 解析 {details=} 失败, {e}")
                 continue
 
             if self.config.filter_callable is not None:
@@ -789,7 +785,7 @@ class InteractiveBrokersInstrumentProvider(InstrumentProvider):
                 if not filter_callable(instrument):
                     continue
 
-            self._log.info(f"Adding {instrument=} from InteractiveBrokersInstrumentProvider")
+            self._log.info(f"正在从 InteractiveBrokersInstrumentProvider 添加 {instrument=}")
 
             self.add(instrument)
 
@@ -800,7 +796,7 @@ class InteractiveBrokersInstrumentProvider(InstrumentProvider):
             self.contract_details[instrument.id] = details
             self.contract_id_to_instrument_id[details.contract.conId] = instrument.id
 
-            # Add to the list of successfully processed instrument IDs
+            # 添加到成功处理的工具 ID 列表
             processed_instrument_ids.append(instrument.id)
 
         return processed_instrument_ids

@@ -34,29 +34,28 @@ class SymbologyMethod(Enum):
 
 class DockerizedIBGatewayConfig(NautilusConfig, frozen=True):
     """
-    Configuration for `DockerizedIBGateway` setup when working with containerized
-    installations.
+    在使用容器化安装时，用于 `DockerizedIBGateway` 设置的配置。
 
-    Parameters
+    参数
     ----------
-    username : str, optional
-        The Interactive Brokers account username.
-        If ``None`` then will source the `TWS_USERNAME` environment variable.
-    password : str, optional
-        The Interactive Brokers account password.
-        If ``None`` then will source the `TWS_PASSWORD` environment variable.
+    username : str, 可选
+        Interactive Brokers 账户用户名。
+        如果为 ``None``，将从 `TWS_USERNAME` 环境变量中获取。
+    password : str, 可选
+        Interactive Brokers 账户密码。
+        如果为 ``None``，将从 `TWS_PASSWORD` 环境变量中获取。
     trading_mode: str
-        ``paper`` or ``live``.
-    read_only_api: bool, optional, default True
-        If True, no order execution is allowed. Set read_only_api=False to allow executing live orders.
-    timeout: int, optional
-        The timeout (seconds) for trying to launch IBG docker container when start=True.
-    container_image: str, optional
-        The reference to the container image used by the IB Gateway.
-    vnc_port: int | None, optional, default None
-        The VNC port for the container. Set to None to disable VNC access.
-        The VNC server provides remote desktop access to the IB Gateway interface.
-        Examples: 5900, 5901, 5902, etc.
+        ``paper``（模拟）或 ``live``（实盘）。
+    read_only_api: bool, 可选, 默认 True
+        如果为 True，则不允许订单执行。设置 read_only_api=False 以允许执行实盘订单。
+    timeout: int, 可选
+        当 start=True 时，尝试启动 IBG Docker 容器的超时时间（秒）。
+    container_image: str, 可选
+        IB Gateway 使用的容器镜像引用。
+    vnc_port: int | None, 可选, 默认 None
+        容器的 VNC 端口。设置为 None 以禁用 VNC 访问。
+        VNC 服务器提供对 IB Gateway 界面的远程桌面访问。
+        示例：5900, 5901, 5902 等。
 
     """
 
@@ -87,59 +86,54 @@ class DockerizedIBGatewayConfig(NautilusConfig, frozen=True):
 
 class InteractiveBrokersInstrumentProviderConfig(InstrumentProviderConfig, frozen=True):
     """
-    Configuration for instances of `InteractiveBrokersInstrumentProvider`.
+    `InteractiveBrokersInstrumentProvider` 实例的配置。
 
-    Specify either `load_ids`, `load_contracts`, or both to dictate which instruments the system loads upon start.
-    It should be noted that the `InteractiveBrokersInstrumentProviderConfig` isn't limited to the instruments
-    initially loaded. Instruments can be dynamically requested and loaded at runtime as needed.
+    指定 `load_ids`、`load_contracts` 或两者，以确定系统启动时加载哪些工具。
+    需要注意的是，`InteractiveBrokersInstrumentProviderConfig` 并不限于初始加载的工具。
+    工具可以在运行时根据需要动态请求和加载。
 
-    Parameters
+    参数
     ----------
-    load_all : bool, default False
-        Note: Loading all instruments isn't supported by the InteractiveBrokersInstrumentProvider.
-        As such, this parameter is not applicable.
-    load_ids : FrozenSet[InstrumentId], optional
-        A frozenset of `InstrumentId` instances that should be loaded during startup. These represent the specific
-        instruments that the provider should initially load.
-    load_contracts: FrozenSet[IBContract], optional
-        A frozenset of `IBContract` objects that are loaded during the initial startup.These specific contracts
-        correspond to the instruments that the  provider preloads. It's important to note that while the `load_ids`
-        option can be used for loading individual instruments, using `load_contracts` allows for a more versatile
-        loading of several related instruments like Futures and Options that share the same underlying asset.
-    symbology_method : SymbologyMethod, optional
-        Specifies the symbology format used for identifying financial instruments. The available options are:
-        - IB_RAW: Uses the raw symbology format provided by Interactive Brokers. Instrument symbols follow a detailed
-        format such as `localSymbol=secType.exchange` (e.g., `EUR.USD=CASH.IDEALPRO`).
-        While this format may lack visual clarity, it is robust and supports instruments from any region,
-        especially those with non-standard symbology where simplified parsing may fail.
-        - IB_SIMPLIFIED: Adopts a simplified symbology format specific to Interactive Brokers which uses Venue acronym.
-        Instrument symbols use a cleaner notation, such as `ESZ28.CME` or `EUR/USD.IDEALPRO`.
-        This format prioritizes ease of readability and usability and is default.
-    build_options_chain: bool (default: None)
-        Search for full option chain. Global setting for all applicable instruments.
-    build_futures_chain: bool (default: None)
-        Search for full futures chain. Global setting for all applicable instruments.
-    min_expiry_days: int (default: None)
-        Filters the options_chain and futures_chain which are expiring after specified number of days.
-        Global setting for all applicable instruments.
-    max_expiry_days: int (default: None)
-        Filters the options_chain and futures_chain which are expiring before specified number of days.
-        Global setting for all applicable instruments.
-    convert_exchange_to_mic_venue: bool (default: False)
-        Whether to convert IB exchanges to MIC venues when converting an IB contract to an instrument id.
-    symbol_to_mic_venue: dict, optional
-        A dictionary to override the default MIC venue conversion.
-        A key is a symbol prefix (for example ES for all futures and options on it), the value is the MIC venue to use.
-    cache_validity_days: int (default: None)
-        Default None, will request fresh pull upon starting of TradingNode [only once].
-        Setting value will pull the instruments at specified interval, useful when TradingNode runs for many days.
-        Example: value set to 1, InstrumentProvider will make fresh pull every day even if TradingNode is not restarted.
-    pickle_path: str (default: None)
-        If provided valid path, will store the ContractDetails as pickle, and use during cache_validity period.
-    filter_sec_types: FrozenSet[str], optional
-        A set of IB `secType` values which should be ignored by the provider. Any contract whose
-        `secType` matches one of these entries will be skipped with a warning before reconciliation is
-        attempted. Use this to opt out from assets that are not yet supported (for example `WAR` or `IOPT`).
+    load_all : bool, 默认 False
+        注意：InteractiveBrokersInstrumentProvider 不支持加载所有工具。
+        因此，此参数不适用。
+    load_ids : FrozenSet[InstrumentId], 可选
+        应在启动期间加载的 `InstrumentId` 实例的冻结集合。这些代表提供者最初应加载的特定工具。
+    load_contracts: FrozenSet[IBContract], 可选
+        应在初始启动期间加载的 `IBContract` 对象的冻结集合。这些特定合约对应于提供者预加载的工具。
+        需要注意的是，虽然 `load_ids` 选项可用于加载单个工具，但使用 `load_contracts` 
+        可以更灵活地加载共享相同底层资产的多个相关工具，如期货和期权。
+    symbology_method : SymbologyMethod, 可选
+        指定用于识别金融工具的代码方法（symbology format）。可用选项有：
+        - IB_RAW：使用 Interactive Brokers 提供的原始代码格式。工具代码遵循详细格式，
+        如 `localSymbol=secType.exchange`（例如 `EUR.USD=CASH.IDEALPRO`）。
+        虽然此格式可能缺乏视觉清晰度，但它非常稳健，支持来自任何地区的工具，尤其是那些代码不标准、
+        简化解析可能会失败的工具。
+        - IB_SIMPLIFIED：采用特定于 Interactive Brokers 的简化代码格式，使用交易所缩写。
+        工具代码使用更简洁的记号，如 `ESZ28.CME` 或 `EUR/USD.IDEALPRO`。
+        此格式优先考虑易读性和可用性，是默认选项。
+    build_options_chain: bool (默认: None)
+        搜索完整期权链。所有适用工具的全局设置。
+    build_futures_chain: bool (默认: None)
+        搜索完整期货链。所有适用工具的全局设置。
+    min_expiry_days: int (默认: None)
+        过滤到期天数不少于指定天数的期权链和期货链。所有适用工具的全局设置。
+    max_expiry_days: int (默认: None)
+        过滤到期天数不多于指定天数的期权链和期货链。所有适用工具的全局设置。
+    convert_exchange_to_mic_venue: bool (默认: False)
+        在将 IB 合约转换为工具 ID 时，是否将 IB 交易所转换为 MIC 交易所（MIC venues）。
+    symbol_to_mic_venue: dict, 可选
+        用于覆盖默认 MIC 交易所转换的字典。
+        键是代码前缀（例如 ES 代表其所有期货和期权），值是要使用的 MIC 交易所。
+    cache_validity_days: int (默认: None)
+        默认为 None，将在 TradingNode 启动时请求新鲜拉取 [仅一次]。
+        设置该值将在指定间隔拉取工具，适用于 TradingNode 运行多天的情况。
+        示例：值设置为 1，即使 TradingNode 没有重启，InstrumentProvider 也会每天进行新鲜拉取。
+    pickle_path: str (默认: None)
+        如果提供了有效路径，将把 ContractDetails 存储为 pickle 文件，并在缓存有效期内使用。
+    filter_sec_types: FrozenSet[str], 可选
+        提供者应忽略的 IB `secType` 值集合。任何 `secType` 与其中一项匹配的合约都将被跳过，
+        并在尝试对账之前发出警告。使用此选项可排除尚不支持的资产（例如 `WAR` 或 `IOPT`）。
 
     """
 
@@ -197,33 +191,33 @@ class InteractiveBrokersInstrumentProviderConfig(InstrumentProviderConfig, froze
 
 class InteractiveBrokersDataClientConfig(LiveDataClientConfig, frozen=True):
     """
-    Configuration for ``InteractiveBrokersDataClient`` instances.
+    ``InteractiveBrokersDataClient`` 实例的配置。
 
-    Parameters
+    参数
     ----------
-    ibg_host : str, default "127.0.0.1"
-        The hostname or ip address for the IB Gateway (IBG) or Trader Workstation (TWS).
-    ibg_port : int, default None
-        The port for the gateway server. ("paper"/"live" defaults: IBG 4002/4001; TWS 7497/7496)
-    ibg_client_id: int, default 1
-        The client_id to be passed into connect call.
+    ibg_host : str, 默认 "127.0.0.1"
+        IB Gateway (IBG) 或 Trader Workstation (TWS) 的主机名或 IP 地址。
+    ibg_port : int, 默认 None
+        网关服务器的端口。（“模拟/实盘”默认值：IBG 4002/4001；TWS 7497/7496）
+    ibg_client_id: int, 默认 1
+        要传递给连接调用的 client_id。
     use_regular_trading_hours : bool
-        If True, will request data for Regular Trading Hours only.
-        Only applies to bar data - will have no effect on trade or tick data feeds.
-        Usually used for 'STK' security type. Check with InteractiveBrokers for RTH Info.
-    market_data_type : IBMarketDataTypeEnum, default REALTIME
-        Set which IBMarketDataTypeEnum to be used by InteractiveBrokersClient.
-        Configure `IBMarketDataTypeEnum.DELAYED_FROZEN` to use with account without data subscription.
+        如果为 True，将仅请求常规交易时段（RTH）的数据。
+        仅适用于 K 线数据 - 对成交或逐笔行情数据流无影响。
+        通常用于 'STK' 安全类型。请咨询 InteractiveBrokers 获取 RTH 信息。
+    market_data_type : IBMarketDataTypeEnum, 默认 REALTIME
+        设置 InteractiveBrokersClient 使用的 IBMarketDataTypeEnum。
+        对于没有数据订阅的账户，请配置 `IBMarketDataTypeEnum.DELAYED_FROZEN`。
     ignore_quote_tick_size_updates : bool
-        If set to True, the QuoteTick subscription will exclude ticks where only the size has changed but not the price.
-        This can help reduce the volume of tick data. When set to False (the default), QuoteTick updates will include
-        all updates, including those where only the size has changed.
-    dockerized_gateway : DockerizedIBGatewayConfig, Optional
-        The client's gateway container configuration.
-    connection_timeout : int, default 300
-        The timeout (seconds) to wait for the client connection to be established.
-    request_timeout : int, default 60
-        The timeout (seconds) to wait for a historical data response.
+        如果设置为 True，QuoteTick 订阅将排除仅大小发生变化而价格未变化的行情更新。
+        这有助于减少行情数据量。当设置为 False（默认值）时，QuoteTick 更新将包含所有更新，
+        包括仅大小发生变化的更新。
+    dockerized_gateway : DockerizedIBGatewayConfig, 可选
+        客户端的网关容器配置。
+    connection_timeout : int, 默认 300
+        等待客户端建立连接的超时时间（秒）。
+    request_timeout : int, 默认 60
+        等待历史数据响应的超时时间（秒）。
 
     """
 
@@ -244,31 +238,31 @@ class InteractiveBrokersDataClientConfig(LiveDataClientConfig, frozen=True):
 
 class InteractiveBrokersExecClientConfig(LiveExecClientConfig, frozen=True):
     """
-    Configuration for ``InteractiveBrokersExecClient`` instances.
+    ``InteractiveBrokersExecClient`` 实例的配置。
 
-    Parameters
+    参数
     ----------
-    ibg_host : str, default "127.0.0.1"
-        The hostname or ip address for the IB Gateway (IBG) or Trader Workstation (TWS).
+    ibg_host : str, 默认 "127.0.0.1"
+        IB Gateway (IBG) 或 Trader Workstation (TWS) 的主机名或 IP 地址。
     ibg_port : int
-        The port for the gateway server. ("paper"/"live" defaults: IBG 4002/4001; TWS 7497/7496)
-    ibg_client_id: int, default 1
-        The client_id to be passed into connect call.
+        网关服务器的端口。（“模拟/实盘”默认值：IBG 4002/4001；TWS 7497/7496）
+    ibg_client_id: int, 默认 1
+        要传递给连接调用的 client_id。
     account_id : str
-        Represents the account_id for the Interactive Brokers to which the TWS/Gateway is logged in.
-        It's crucial that the account_id aligns with the account for which the TWS/Gateway is logged in.
-        If the account_id is `None`, the system will fallback to use the `TWS_ACCOUNT` from environment variable.
-    dockerized_gateway : DockerizedIBGatewayConfig, Optional
-        The client's gateway container configuration.
-    connection_timeout : int, default 300
-        The timeout (seconds) to wait for the client connection to be established.
-    fetch_all_open_orders : bool, default False
-        If True, uses reqAllOpenOrders to fetch orders from all API clients and TWS GUI.
-        If False, uses reqOpenOrders to fetch only orders from current client ID session.
-        Note: When using reqAllOpenOrders with client ID 0, it can see orders from all
-        sources including TWS GUI, but cannot see orders from other non-zero client IDs.
-    track_option_exercise_from_position_update : bool, default False
-        If True, subscribes to real-time position updates to track option exercises.
+        表示 TWS/Gateway 登录的 Interactive Brokers 账户 ID。
+        account_id 必须与 TWS/Gateway 登录的账户一致，这一点至关重要。
+        如果 account_id 为 `None`，系统将回退使用环境变量中的 `TWS_ACCOUNT`。
+    dockerized_gateway : DockerizedIBGatewayConfig, 可选
+        客户端的网关容器配置。
+    connection_timeout : int, 默认 300
+        等待客户端建立连接的超时时间（秒）。
+    fetch_all_open_orders : bool, 默认 False
+        如果为 True，使用 reqAllOpenOrders 获取来自所有 API 客户端和 TWS GUI 的订单。
+        如果为 False，使用 reqOpenOrders 仅获取来自当前客户端 ID 会话的订单。
+        注意：当使用客户端 ID 0 调用 reqAllOpenOrders 时，可以看到来自所有来源
+        （包括 TWS GUI）的订单，但看不到来自其他非零客户端 ID 的订单。
+    track_option_exercise_from_position_update : bool, 默认 False
+        如果为 True，订阅实时持仓更新以跟踪期权行权。
 
     """
 

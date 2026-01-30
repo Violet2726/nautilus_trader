@@ -58,28 +58,26 @@ from nautilus_trader.model.enums import OrderSide
 from nautilus_trader.model.identifiers import InstrumentId
 
 
-# Used to invalidate abnormal tick sizes that can signal data issues
+# 用于使可能暗示数据问题的异常行情大小无效
 MAX_VALID_TICK_SIZE = Decimal("1e12")
 
 
 class InteractiveBrokersClientMarketDataMixin(BaseMixin):
     """
-    Handles market data requests, subscriptions and data processing for the
-    InteractiveBrokersClient.
+    为 InteractiveBrokersClient 处理市场数据请求、订阅和数据处理。
 
-    This class handles real-time and historical market data subscription management,
-    including subscribing and unsubscribing to ticks, bars, and other market data types.
-    It processes and formats the received data to be compatible with the Nautilus
-    Trader.
+    此类处理实时和历史市场数据订阅管理，包括对行情（ticks）、K 线（bars）以及其他
+    市场数据类型的订阅和取消订阅。它对接收到的数据进行处理和格式化，以使其与 
+    Nautilus Trader 兼容。
 
     """
 
-    _order_book_depth: ClassVar[dict[int, int]] = {}  # reqId -> depth
-    _order_books_initialized: ClassVar[dict[int, bool]] = {}  # reqId -> initialized
+    _order_book_depth: ClassVar[dict[int, int]] = {}  # reqId -> 深度
+    _order_books_initialized: ClassVar[dict[int, bool]] = {}  # reqId -> 是否已初始化
 
-    # Instance variables that will be available when mixed into InteractiveBrokersClient
+    # 混合到 InteractiveBrokersClient 时可用的实例变量
     _subscription_tick_data: dict[int, dict[int, Any]]
-    _subscription_start_times: dict[int, int]  # reqId -> start_ns (for bar filtering)
+    _subscription_start_times: dict[int, int]  # reqId -> start_ns (用于 K 线过滤)
 
     _order_books: ClassVar[dict[int, dict[str, dict[int, IBKRBookLevel]]]] = {}
     """
@@ -98,16 +96,15 @@ class InteractiveBrokersClientMarketDataMixin(BaseMixin):
 
     async def set_market_data_type(self, market_data_type: MarketDataTypeEnum) -> None:
         """
-        Set the market data type for data subscriptions. This method configures the type
-        of market data (live, delayed, etc.) to be used for subsequent data requests.
+        设置数据订阅的市场数据类型。此方法配置用于后续数据请求的市场数据类型（实时、延时等）。
 
-        Parameters
+        参数
         ----------
         market_data_type : MarketDataTypeEnum
-            The market data type to be set
+            要设置的市场数据类型。
 
         """
-        self._log.info(f"Setting Market DataType to {MarketDataTypeEnum.toStr(market_data_type)}")
+        self._log.info(f"将市场数据类型设置为 {MarketDataTypeEnum.toStr(market_data_type)}")
         self._eclient.reqMarketDataType(market_data_type)
 
     async def _subscribe(
@@ -119,32 +116,30 @@ class InteractiveBrokersClientMarketDataMixin(BaseMixin):
         **kwargs: Any,
     ) -> Subscription:
         """
-        Manage the subscription and unsubscription process for market data. This
-        internal method is responsible for handling the logic to subscribe or
-        unsubscribe to different market data types (ticks, bars, etc.). It uses the
-        provided subscription and cancellation methods to control the data flow.
+        管理市场数据的订阅和取消订阅过程。此内部方法负责处理对不同市场数据类型（行情、K 线等）
+        进行订阅或取消订阅的逻辑。它使用提供的订阅和取消订阅方法来控制数据流。
 
-        Parameters
+        参数
         ----------
         name : Any
-            A unique identifier for the subscription.
+            订阅的唯一标识符。
         subscription_method : Callable
-            The method to call for subscribing to market data.
+            订阅市场数据时调用的方法。
         cancellation_method : Callable
-            The method to call for unsubscribing from market data.
+            取消订阅市场数据时调用的方法。
         *args
-            Variable length argument list for the subscription method.
+            传递给订阅方法的变长参数列表。
         **kwargs
-            Arbitrary keyword arguments for the subscription method.
+            传递给订阅方法的变长关键字参数。
 
-        Returns
+        返回
         -------
         Subscription
 
         """
         if not (subscription := self._subscriptions.get(name=name)):
             self._log.info(
-                f"Creating and registering a new Subscription instance for {name}",
+                f"正在为 {name} 创建并注册新的 Subscription 实例",
             )
             req_id = self._next_req_id()
 
@@ -161,7 +156,7 @@ class InteractiveBrokersClientMarketDataMixin(BaseMixin):
                     self._order_book_depth[req_id] = args[1]
                     self._order_books_initialized[req_id] = False
 
-            # Add subscription
+            # 添加订阅
             subscription = self._subscriptions.add(
                 req_id=req_id,
                 name=name,
@@ -169,14 +164,14 @@ class InteractiveBrokersClientMarketDataMixin(BaseMixin):
                 cancel=functools.partial(cancellation_method, req_id),
             )
 
-            # Intentionally skipping the call to historical request handler
+            # 故意跳过历史请求处理程序的调用
             if subscription_method != self.subscribe_historical_bars:
                 if iscoroutinefunction(subscription.handle):
                     await subscription.handle()
                 else:
                     subscription.handle()
         else:
-            self._log.info(f"Reusing existing Subscription instance for {subscription}")
+            self._log.info(f"复用 {subscription} 的现有 Subscription 实例")
 
         return subscription
 
@@ -188,21 +183,19 @@ class InteractiveBrokersClientMarketDataMixin(BaseMixin):
         **kwargs: Any,
     ) -> None:
         """
-        Manage the unsubscription process for market data. This internal method is
-        responsible for handling the logic to unsubscribe to different market data types
-        (ticks, bars, etc.). It uses the provided cancellation method to control the
-        data flow.
+        管理市场数据的取消订阅过程。此内部方法负责处理对不同市场数据类型（行情、K 线等）
+        取消订阅的逻辑。它使用提供的取消订阅方法来控制数据流。
 
-        Parameters
+        参数
         ----------
         cancellation_method : Callable
-            The method to call for unsubscribing from market data.
+            取消订阅市场数据时调用的方法。
         name : Any
-            A unique identifier for the subscription.
+            订阅的唯一标识符。
         *args
-            Variable length argument list for the subscription method.
+            传递给订阅方法的变长参数列表。
         **kwargs
-            Arbitrary keyword arguments for the subscription method.
+            传递给订阅方法的变长关键字参数。
 
         """
         if subscription := self._subscriptions.get(name=name):
@@ -210,9 +203,9 @@ class InteractiveBrokersClientMarketDataMixin(BaseMixin):
             self._subscriptions.remove(req_id)
             self._subscription_tick_data.pop(req_id, None)
             cancellation_method(req_id, *args, **kwargs)
-            self._log.debug(f"Unsubscribed from {subscription}")
+            self._log.debug(f"已取消订阅 {subscription}")
         else:
-            self._log.debug(f"Subscription doesn't exist for {name}")
+            self._log.debug(f"订阅 {name} 不存在")
 
     async def subscribe_ticks(
         self,
@@ -222,19 +215,18 @@ class InteractiveBrokersClientMarketDataMixin(BaseMixin):
         ignore_size: bool,
     ) -> None:
         """
-        Subscribe to tick data for a specified instrument.
+        订阅指定工具的逐笔行情（tick）数据。
 
-        Parameters
+        参数
         ----------
         instrument_id : InstrumentId
-            The identifier of the instrument for which to subscribe.
+            要订阅的工具标识符。
         contract : IBContract
-            The contract details for the instrument.
+            该工具的合约详情。
         tick_type : str
-            The type of tick data to subscribe to.
+            要订阅的行情数据类型。
         ignore_size : bool
-            Omit updates that reflect only changes in size, and not price.
-            Applicable to Bid_Ask data requests.
+            是否省略仅反映大小变化而不反映价格变化的更新。适用于 Bid_Ask 数据请求。
 
         """
         name = (str(instrument_id), tick_type)
@@ -250,14 +242,14 @@ class InteractiveBrokersClientMarketDataMixin(BaseMixin):
 
     async def unsubscribe_ticks(self, instrument_id: InstrumentId, tick_type: str) -> None:
         """
-        Unsubscribes from tick data for a specified instrument.
+        取消订阅指定工具的行情数据。
 
-        Parameters
+        参数
         ----------
         instrument_id : InstrumentId
-            The identifier of the instrument for which to unsubscribe.
+            要取消订阅的工具标识符。
         tick_type : str
-            The type of tick data to unsubscribe from.
+            要取消订阅的行情数据类型。
 
         """
         name = (str(instrument_id), tick_type)
@@ -270,18 +262,18 @@ class InteractiveBrokersClientMarketDataMixin(BaseMixin):
         generic_tick_list: str = "",
     ) -> None:
         """
-        Subscribe to market data for a specified instrument using reqMktData. This
-        method is used for BAG (spread) contracts that don't support reqTickByTickData.
+        使用 reqMktData 订阅指定工具的市场数据。此方法用于不支持 reqTickByTickData 
+        的 BAG（组合价差）合约。
 
-        Parameters
+        参数
         ----------
         instrument_id : InstrumentId
-            The identifier of the instrument for which to subscribe.
+            要订阅的工具标识符。
         contract : IBContract
-            The contract details for the instrument.
+            该工具的合约详情。
         generic_tick_list : str
-            A comma-separated list of generic tick types to request.
-            Empty string for basic bid/ask data.
+            以逗号分隔的通用行情类型请求列表。
+            空字符串表示基本买入/卖出（bid/ask）数据。
 
         """
         name = (str(instrument_id), "market_data")
@@ -298,12 +290,12 @@ class InteractiveBrokersClientMarketDataMixin(BaseMixin):
 
     async def unsubscribe_market_data(self, instrument_id: InstrumentId) -> None:
         """
-        Unsubscribes from market data for a specified instrument.
+        取消订阅指定工具的市场数据。
 
-        Parameters
+        参数
         ----------
         instrument_id : InstrumentId
-            The identifier of the instrument for which to unsubscribe.
+            要取消订阅的工具标识符。
 
         """
         name = (str(instrument_id), "market_data")
@@ -317,21 +309,20 @@ class InteractiveBrokersClientMarketDataMixin(BaseMixin):
         is_smart_depth: bool = True,
     ) -> None:
         """
-        Subscribe to order book data for a specified instrument.
+        订阅指定工具的订单簿数据。
 
-        Parameters
+        参数
         ----------
         instrument_id : InstrumentId
-            The identifier of the instrument for which to subscribe.
+            要订阅的工具标识符。
         contract : IBContract
-            The contract details for the instrument.
+            该工具的合约详情。
         depth : int
-            The number of rows on each side of the order book.
+            订单簿每侧的行数。
         is_smart_depth : bool
-            Flag indicates that this is smart depth request.
-            If the isSmartDepth boolean (available with API v974+) is True,
-            the marketMaker field will indicate the exchange from which the quote originates.
-            Otherwise it indicates the MPID of a market maker.
+            指示这是否为 SMART 深度请求。
+            如果 isSmartDepth 为 True（在 API v974+ 中可用），则 marketMaker 
+            字段将指明报价来自的交易所；否则指明做市商的 MPID。
 
         """
         name = (str(instrument_id), "order_book")
@@ -351,19 +342,16 @@ class InteractiveBrokersClientMarketDataMixin(BaseMixin):
         is_smart_depth: bool = True,
     ) -> None:
         """
-        Unsubscribes from order book data for a specified instrument.
+        取消订阅指定工具的订单簿数据。
 
-        Parameters
+        参数
         ----------
         instrument_id : InstrumentId
-            The identifier of the instrument for which to unsubscribe.
-        depth : int
-            The number of rows on each side of the order book.
+            要取消订阅的工具标识符。
         is_smart_depth : bool
-            Flag indicates that this is smart depth request.
-            If the isSmartDepth boolean (available with API v974+) is True,
-            the marketMaker field will indicate the exchange from which the quote originates.
-            Otherwise it indicates the MPID of a market maker.
+            指示这是否为 SMART 深度请求。
+            如果 isSmartDepth 为 True（在 API v974+ 中可用），则 marketMaker 
+            字段将指明报价来自的交易所；否则指明做市商的 MPID。
 
         """
         name = (str(instrument_id), "order_book")
@@ -380,16 +368,16 @@ class InteractiveBrokersClientMarketDataMixin(BaseMixin):
         use_rth: bool,
     ) -> None:
         """
-        Subscribe to real-time bar data for a specified bar type.
+        订阅指定 K 线类型的实时 K 线数据。
 
-        Parameters
+        参数
         ----------
         bar_type : BarType
-            The type of bar to subscribe to.
+            要订阅的 K 线类型。
         contract : IBContract
-            The Interactive Brokers contract details for the instrument.
+            Interactive Brokers 的该工具合约详情。
         use_rth : bool
-            Whether to use regular trading hours (RTH) only.
+            是否仅使用常规交易时段 (RTH)。
 
         """
         name = str(bar_type)
@@ -406,12 +394,12 @@ class InteractiveBrokersClientMarketDataMixin(BaseMixin):
 
     async def unsubscribe_realtime_bars(self, bar_type: BarType) -> None:
         """
-        Unsubscribes from real-time bar data for a specified bar type.
+        取消订阅指定 K 线类型的实时 K 线数据。
 
-        Parameters
+        参数
         ----------
         bar_type : BarType
-            The type of bar to unsubscribe from.
+            要取消订阅的 K 线类型。
 
         """
         name = str(bar_type)
@@ -426,41 +414,40 @@ class InteractiveBrokersClientMarketDataMixin(BaseMixin):
         params: dict,
     ) -> None:
         """
-        Subscribe to historical bar data for a specified bar type and contract. It
-        allows configuration for regular trading hours and handling of revised bars.
+        订阅指定 K 线类型和合约的历史 K 线数据。允许配置常规交易时段和已修订 K 线（revised bars）的处理。
 
-        Parameters
+        参数
         ----------
         bar_type : BarType
-            The type of bar to subscribe to.
+            要订阅的 K 线类型。
         contract : IBContract
-            The Interactive Brokers contract details for the instrument.
+            Interactive Brokers 的该工具合约详情。
         use_rth : bool
-            Whether to use regular trading hours (RTH) only.
+            是否仅使用常规交易时段 (RTH)。
         handle_revised_bars : bool
-            Whether to handle revised bars or not.
+            是否处理已修订的 K 线。
         params : dict
-            A dictionary of optional parameters.
+            可选参数字典。
 
         """
         name = str(bar_type)
         now = self._clock.timestamp_ns()
         start = params.pop("start_ns", None)
 
-        # A minimum number of bars needs to be requested so bars start to be received
-        # We then consider only bars which ts_init is after start
+        # 需要请求最少数量的 K 线，以便开始接收 K 线数据
+        # 然后我们仅考虑初始化时间戳（ts_init）晚于 start 的 K 线
         if start is not None:
             duration_str = timedelta_to_duration_str(
                 max(
                     pd.Timedelta(now - start, "ns"),
                     pd.Timedelta(bar_type.spec.timedelta.total_seconds() * 300, "sec"),
-                ),  # Download at least approx 300 bars
+                ),  # 至少下载约 300 根 K 线
             )
         else:
             start = now
             duration_str = timedelta_to_duration_str(
                 pd.Timedelta(bar_type.spec.timedelta.total_seconds() * 300, "sec"),
-            )  # Download approx 300 bars
+            )  # 下载约 300 根 K 线
 
         if "first_start_ns" not in params:
             params["first_start_ns"] = start
@@ -476,14 +463,14 @@ class InteractiveBrokersClientMarketDataMixin(BaseMixin):
             params=params,
         )
 
-        # In order to get missed bars after a disconnection
+        # 为了在断开连接后获取缺失的 K 线
         if (
             self._last_disconnection_ns is not None
             and self._last_disconnection_ns > params["first_start_ns"]
         ):
             start = self._last_disconnection_ns
 
-        # Store start time separately for bar filtering (not part of resubscription handle)
+        # 将开始时间单独存储用于 K 线过滤（不属于重新订阅的处理范围）
         self._subscription_start_times[subscription.req_id] = start
 
         bar_size_setting: str = bar_spec_to_bar_size(bar_type.spec)
@@ -502,17 +489,17 @@ class InteractiveBrokersClientMarketDataMixin(BaseMixin):
 
     async def unsubscribe_historical_bars(self, bar_type: BarType) -> None:
         """
-        Unsubscribe from historical bar data for a specified bar type.
+        取消订阅指定 K 线类型的历史 K 线数据。
 
-        Parameters
+        参数
         ----------
         bar_type : BarType
-            The type of bar to unsubscribe from.
+            要取消订阅的 K 线类型。
 
         """
         name = str(bar_type)
 
-        # Clean up stored start time before unsubscribing
+        # 在取消订阅前清理存储的开始时间
         subscription = self._subscriptions.get(name=name)
         if subscription:
             self._subscription_start_times.pop(subscription.req_id, None)
@@ -529,29 +516,29 @@ class InteractiveBrokersClientMarketDataMixin(BaseMixin):
         timeout: int = 60,
     ) -> list[Bar]:
         """
-        Request and retrieve historical bar data for a specified bar type.
+        请求并检索指定 K 线类型的历史 K 线数据。
 
-        Parameters
+        参数
         ----------
         bar_type : BarType
-            The type of bar for which historical data is requested.
+            请求历史数据的 K 线类型。
         contract : IBContract
-            The Interactive Brokers contract details for the instrument.
+            Interactive Brokers 的该工具合约详情。
         use_rth : bool
-            Whether to use regular trading hours (RTH) only for the data.
+            是否仅在数据中使用常规交易时段 (RTH)。
         end_date_time : pd.Timestamp
-            The end time for the historical data request as a pandas Timestamp.
+            历史数据请求的结束时间，格式为 pandas Timestamp。
         duration : str
-            The duration for which historical data is requested, formatted as a string.
+            请求历史数据的持续时间，格式为字符串。
         timeout : int, optional
-            The maximum time in seconds to wait for the historical data response.
+            等待历史数据响应的最大时间（秒）。
 
-        Returns
+        返回
         -------
         list[Bar]
 
         """
-        # Ensure the requested `end_date_time` is in UTC and set formatDate=2 to ensure returned dates are in UTC.
+        # 确保请求的 `end_date_time` 为 UTC，并设置 formatDate=2 以确保返回的日期也是 UTC。
         if end_date_time.tzinfo is None:
             end_date_time = end_date_time.replace(tzinfo=ZoneInfo("UTC"))
         else:
@@ -592,7 +579,7 @@ class InteractiveBrokersClientMarketDataMixin(BaseMixin):
 
             return await self._await_request(request, timeout, default_value=[])
         else:
-            self._log.info(f"Request already exist for {request}")
+            self._log.info(f"请求已存在于 {request}")
             return []
 
     async def get_historical_ticks(
@@ -606,28 +593,26 @@ class InteractiveBrokersClientMarketDataMixin(BaseMixin):
         timeout: int = 60,
     ) -> list[QuoteTick | TradeTick] | None:
         """
-        Request and retrieve historical tick data for a specified contract and tick
-        type.
+        请求并检索指定合约和行情类型的历史逐笔行情数据。
 
-        Parameters
+        参数
         ----------
         instrument_id : InstrumentId
-            The identifier of the instrument for which to request historical ticks.
+            请求历史行情的工具标识符。
         contract : IBContract
-            The Interactive Brokers contract details for the instrument.
+            Interactive Brokers 的该工具合约详情。
         tick_type : str
-            The type of tick data to request (e.g., 'BID_ASK', 'TRADES').
+            请求的行情数据类型（例如 'BID_ASK', 'TRADES'）。
         start_date_time : pd.Timestamp | str, optional
-            The start time for the historical data request. Can be a pandas Timestamp
-            or a string formatted as 'YYYYMMDD HH:MM:SS [TZ]'.
+            历史数据请求的开始时间。可以是 pandas Timestamp 或格式为 'YYYYMMDD HH:MM:SS [TZ]' 的字符串。
         end_date_time : pd.Timestamp | str, optional
-            The end time for the historical data request. Same format as start_date_time.
+            历史数据请求的结束时间。格式与 start_date_time 相同。
         use_rth : bool, optional
-            Whether to use regular trading hours (RTH) only for the data.
+            是否仅在数据中使用常规交易时段 (RTH)。
         timeout : int, optional
-            The maximum time in seconds to wait for the historical data response.
+            等待历史数据响应的最大时间（秒）。
 
-        Returns
+        返回
         -------
         list[QuoteTick | TradeTick] | ``None``
 
@@ -667,20 +652,19 @@ class InteractiveBrokersClientMarketDataMixin(BaseMixin):
 
             return await self._await_request(request, timeout)
         else:
-            self._log.info(f"Request already exist for {request}")
+            self._log.info(f"请求 {request} 已存在")
 
             return None
 
     async def process_market_data_type(self, *, req_id: int, market_data_type: int) -> None:
         """
-        Return the market data type (real-time, frozen, delayed, delayed-frozen)
-        of ticker sent by EClientSocket::reqMktData when TWS switches from real-time
-        to frozen and back and from delayed to delayed-frozen and back.
+        当 TWS 从实时切换到冻结再切换回实时，以及从延时切换到延时冻结再切换回延时时，
+        返回由 EClientSocket::reqMktData 发送的代码的市场数据类型（实时、冻结、延时、延时冻结）。
         """
         if market_data_type == MarketDataTypeEnum.REALTIME:
-            self._log.debug(f"Market DataType is {MarketDataTypeEnum.toStr(market_data_type)}")
+            self._log.debug(f"市场数据类型为 {MarketDataTypeEnum.toStr(market_data_type)}")
         else:
-            self._log.warning(f"Market DataType is {MarketDataTypeEnum.toStr(market_data_type)}")
+            self._log.warning(f"市场数据类型为 {MarketDataTypeEnum.toStr(market_data_type)}")
 
     async def process_tick_by_tick_bid_ask(
         self,
@@ -694,7 +678,7 @@ class InteractiveBrokersClientMarketDataMixin(BaseMixin):
         tick_attrib_bid_ask: TickAttribBidAsk,
     ) -> None:
         """
-        Return "BidAsk" tick-by-tick real-time tick data.
+        返回 "BidAsk" 逐笔实时行情数据。
         """
         if not (subscription := self._subscriptions.get(req_id=req_id)):
             return
@@ -736,12 +720,12 @@ class InteractiveBrokersClientMarketDataMixin(BaseMixin):
         special_conditions: str,
     ) -> None:
         """
-        Return "Last" or "AllLast" (trades) tick-by-tick real-time tick.
+        返回 "Last" 或 "AllLast"（成交）逐笔实时行情。
         """
         if not (subscription := self._subscriptions.get(req_id=req_id)):
             return
 
-        # Halted tick
+        # 停牌行情
         if price == 0 and size == 0 and tick_attrib_last.pastLimit:
             return
 
@@ -777,27 +761,27 @@ class InteractiveBrokersClientMarketDataMixin(BaseMixin):
         attrib: Any,
     ) -> None:
         """
-        Process tick price data from reqMktData for spread instruments.
+        处理来自 reqMktData 的价差（spread）工具的行情价格数据。
         """
         if not (subscription := self._subscriptions.get(req_id=req_id)):
             return
 
-        # Store the price data for this subscription
+        # 存储此订阅的价格数据
         if req_id not in self._subscription_tick_data:
             self._subscription_tick_data[req_id] = {}
 
-        # Skip invalid price in most cases (IB uses -1.0 to indicate unavailable/invalid prices)
-        # But option spreads can have negative prices, in this case the size of a quote will invalidate the quote
+        # 大多数情况下忽略无效价格（IB 使用 -1.0 表示不可用/无效价格）
+        # 但期权价差可能具有负价格，在这种情况下，报价的大小将使该报价无效
         if price == -1.0 and self._subscription_tick_data[req_id].get(tick_type, 0.0) > 0.0:
             self._log.warning(
-                f"Ignoring invalid tick price: {price} for req_id={req_id}, tick_type={tick_type}",
+                f"忽略无效的行情价格：{price}，针对 req_id={req_id}，tick_type={tick_type}",
             )
             return
 
-        # IB tick types: 0=BID_SIZE, 1=BID_PRICE, 2=ASK_PRICE, 3=ASK_SIZE
+        # IB 行情类型：0=BID_SIZE, 1=BID_PRICE, 2=ASK_PRICE, 3=ASK_SIZE
         self._subscription_tick_data[req_id][tick_type] = price
 
-        # Check if we have both bid and ask prices to create a quote tick
+        # 检查是否同时拥有买入和卖出价格以创建报价行情
         await self._try_create_quote_tick_from_market_data(subscription, req_id)
 
     async def process_tick_size(
@@ -808,27 +792,27 @@ class InteractiveBrokersClientMarketDataMixin(BaseMixin):
         size: Decimal,
     ) -> None:
         """
-        Process tick size data from reqMktData for spread instruments.
+        处理来自 reqMktData 的价差工具的行情大小数据。
         """
         if not (subscription := self._subscriptions.get(req_id=req_id)):
             return
 
-        # Skip invalid sizes (negative or extremely large values)
-        # IB may send invalid sizes when prices are invalid
+        # 跳过无效的大小（负值或极大值）
+        # IB 可能会在价格无效时发送无效的大小
         if size < 0 or size > MAX_VALID_TICK_SIZE:
             self._log.warning(
-                f"Ignoring invalid tick size: {size} for req_id={req_id}, tick_type={tick_type}",
+                f"忽略无效的行情大小：{size}，针对 req_id={req_id}, tick_type={tick_type}",
             )
             return
 
-        # Store the size data for this subscription
+        # 存储此订阅的大小数据
         if req_id not in self._subscription_tick_data:
             self._subscription_tick_data[req_id] = {}
 
-        # IB tick types: 0=BID_SIZE, 1=BID_PRICE, 2=ASK_PRICE, 3=ASK_SIZE
+        # IB 行情类型：0=BID_SIZE, 1=BID_PRICE, 2=ASK_PRICE, 3=ASK_SIZE
         self._subscription_tick_data[req_id][tick_type] = int(size)
 
-        # Check if we have both bid and ask data to create a quote tick
+        # 检查是否同时拥有买入和卖出数据以创建报价行情
         await self._try_create_quote_tick_from_market_data(subscription, req_id)
 
     async def _try_create_quote_tick_from_market_data(
@@ -837,27 +821,27 @@ class InteractiveBrokersClientMarketDataMixin(BaseMixin):
         req_id: int,
     ) -> None:
         """
-        Try to create a QuoteTick from accumulated market data.
+        尝试从累积的市场数据中创建 QuoteTick（报价行情）。
         """
         if req_id not in self._subscription_tick_data:
             return
 
         tick_data = self._subscription_tick_data[req_id]
 
-        # IB tick types: 0=BID_SIZE, 1=BID_PRICE, 2=ASK_PRICE, 3=ASK_SIZE
+        # IB 行情类型：0=BID_SIZE, 1=BID_PRICE, 2=ASK_PRICE, 3=ASK_SIZE
         bid_size = tick_data.get(0)
         bid_price = tick_data.get(1)
         ask_price = tick_data.get(2)
         ask_size = tick_data.get(3)
 
-        # Validate that both prices are present and valid (positive)
+        # 验证价格是否都存在且有效（正值）
         if (
             bid_price is not None
             and ask_price is not None
             and bid_size is not None
             and ask_size is not None
         ):
-            # Create quote tick
+            # 创建报价行情
             instrument_id = InstrumentId.from_str(subscription.name[0])
             instrument = self._cache.instrument(instrument_id)
             ts_event = self._clock.timestamp_ns()
@@ -895,7 +879,7 @@ class InteractiveBrokersClientMarketDataMixin(BaseMixin):
         count: int,
     ) -> None:
         """
-        Update real-time 5 second bars.
+        更新实时 5 秒 K 线。
         """
         if not (subscription := self._subscriptions.get(req_id=req_id)):
             return
@@ -913,8 +897,8 @@ class InteractiveBrokersClientMarketDataMixin(BaseMixin):
         converted_low = ib_price_to_nautilus_price(low, price_magnifier)
         converted_close = ib_price_to_nautilus_price(close, price_magnifier)
 
-        # Validate bar data integrity BEFORE creating Bar object
-        # IB sometimes sends corrupt data during extended hours
+        # 在创建 Bar 对象之前验证 K 线数据的完整性
+        # IB 有时会在盘后交易期间发送损坏的数据
         if not self._validate_bar_prices(
             bar_type=bar_type,
             open_price=converted_open,
@@ -934,17 +918,17 @@ class InteractiveBrokersClientMarketDataMixin(BaseMixin):
             volume=instrument.make_qty(0 if volume == -1 else volume),
             ts_event=pd.Timestamp.fromtimestamp(time, tz=pytz.utc).value,
             ts_init=self._clock.timestamp_ns(),
-            is_revision=False,
+            is_revision=False,  # 是否为修订 K 线
         )
 
         await self._handle_data(bar)
 
     async def process_historical_data(self, *, req_id: int, bar: BarData) -> None:
         """
-        Return the requested historical data bars.
+        返回请求的历史数据 K 线。
         """
         if request := self._requests.get(req_id=req_id):
-            bar_type = request.name[0]
+            bar_type = request.name[0]  # K 线类型
             bar = await self._ib_bar_to_nautilus_bar(
                 bar_type=bar_type,
                 bar=bar,
@@ -954,7 +938,7 @@ class InteractiveBrokersClientMarketDataMixin(BaseMixin):
             if bar:
                 request.result.append(bar)
         elif subscription := self._subscriptions.get(req_id=req_id):
-            # Get start time from stored subscription start times
+            # 从存储的订阅开始时间中获取开始时间
             start = self._subscription_start_times.get(req_id)
 
             bar = await self._process_bar_data(
@@ -968,23 +952,21 @@ class InteractiveBrokersClientMarketDataMixin(BaseMixin):
             if bar:
                 await self._handle_data(bar)
         else:
-            self._log.debug(f"Received {bar=} on {req_id=}")
+            self._log.debug(f"在 {req_id=} 上收到 {bar=}")
             return
 
     async def process_historical_data_end(self, *, req_id: int, start: str, end: str) -> None:
         """
-        Mark the end of receiving historical bars.
+        标记历史 K 线接收结束。
         """
         self._end_request(req_id)
 
     async def process_historical_data_update(self, *, req_id: int, bar: BarData) -> None:
         """
-        Receive bars in real-time if keepUpToDate is set as True in reqHistoricalData.
+        如果在 reqHistoricalData 中将 keepUpToDate 设置为 True，则实时接收 K 线。
 
-        Similar to realTimeBars function, except returned data is a composite of
-        historical data and real time data that is equivalent to TWS chart functionality
-        to keep charts up to date. Returned bars are successfully updated using real-
-        time data.
+        类似于 realTimeBars 函数，但返回的数据是历史数据和实时数据的组合，相当于 
+        TWS 用于保持图表更新的功能。返回的 K 线是使用实时数据成功更新的。
 
         """
         if not (subscription := self._subscriptions.get(req_id=req_id)):
@@ -999,7 +981,7 @@ class InteractiveBrokersClientMarketDataMixin(BaseMixin):
             handle_revised_bars=subscription.handle.keywords.get("handle_revised_bars", False),
         ):
             if bar.is_single_price() and bar.open.as_double() == 0:
-                self._log.debug(f"Ignoring Zero priced {bar=}")
+                self._log.debug(f"忽略价格为 0 的 {bar=}")
             else:
                 await self._handle_data(bar)
 
@@ -1011,7 +993,7 @@ class InteractiveBrokersClientMarketDataMixin(BaseMixin):
         done: bool,
     ) -> None:
         """
-        Return the requested historic bid/ask ticks.
+        返回请求的历史买入/卖出行情。
         """
         if not done:
             return
@@ -1045,7 +1027,7 @@ class InteractiveBrokersClientMarketDataMixin(BaseMixin):
 
     async def process_historical_ticks_last(self, *, req_id: int, ticks: list, done: bool) -> None:
         """
-        Return the requested historic trades.
+        返回请求的历史成交记录。
         """
         if not done:
             return
@@ -1054,7 +1036,7 @@ class InteractiveBrokersClientMarketDataMixin(BaseMixin):
 
     async def process_historical_ticks(self, *, req_id: int, ticks: list, done: bool) -> None:
         """
-        Return the requested historic ticks.
+        返回请求的历史行情。
         """
         if not done:
             return
@@ -1063,27 +1045,26 @@ class InteractiveBrokersClientMarketDataMixin(BaseMixin):
 
     async def get_price(self, contract, tick_type="MidPoint"):
         """
-        Request market data for a specific contract and tick type.
+        请求特定合约和行情类型的市场数据。
 
-        This method requests market data from Interactive Brokers for the given
-        contract and tick type, waits for the response, and returns the result.
+        此方法向 Interactive Brokers 请求给定合约和行情类型的市场数据，等待响应并返回结果。
 
-        Parameters
+        参数
         ----------
         contract : IBContract
-            The contract details for which market data is requested.
+            请求市场数据的合约详情。
         tick_type : str, optional
-            The type of tick data to request (default is "MidPoint").
+            要请求的行情数据类型（默认为 "MidPoint"）。
 
-        Returns
+        返回
         -------
         Any
-            The market data result.
+            市场数据结果。
 
-        Raises
+        异常
         ------
         asyncio.TimeoutError
-            If the request times out.
+            如果请求超时。
 
         """
         req_id = self._next_req_id()
@@ -1107,43 +1088,42 @@ class InteractiveBrokersClientMarketDataMixin(BaseMixin):
 
     async def _schedule_bar_completion_timeout(self, bar_type_str: str, bar: BarData) -> None:
         """
-        Schedule a timeout to publish a bar after its period ends.
+        在 K 线周期结束后调度一个超时任务以发布该 K 线。
 
-        This ensures bars are published when their time period is complete,
-        rather than waiting for the next bar to arrive. This is especially
-        important for EOD bars and provides more timely bar delivery.
+        这确保了 K 线在其时间周期完成后立即发布，而不是等待下一个 K 线到来。
+        这对于收盘（EOD）K 线尤为重要，并能提供更及时的 K 线交付。
 
-        Parameters
+        参数
         ----------
         bar_type_str : str
-            The string representation of the bar type.
+            K 线类型的字符串表示。
         bar : BarData
-            The bar data to potentially publish after timeout.
+            超时后可能发布的 K 线数据。
 
         """
-        # Cancel any existing timeout task for this bar type
+        # 为此 K 线类型取消任何现有的超时任务
         if bar_type_str in self._bar_timeout_tasks:
             self._bar_timeout_tasks[bar_type_str].cancel()
 
-        # Calculate when this bar period should end
+        # 计算该 K 线周期应在何时结束
         bar_type = BarType.from_str(bar_type_str)
         bar_duration_seconds = bar_type.spec.timedelta.total_seconds()
 
-        # Add a small buffer (1 seconds) after the bar period ends to ensure it's complete
+        # 在 K 线周期结束后增加一个小的缓冲（1 秒）以确保其已完成
         timeout_seconds = bar_duration_seconds + 1.0
 
         async def completion_handler():
             try:
                 await asyncio.sleep(timeout_seconds)
 
-                # Check if this bar is still the current bar (hasn't been superseded)
-                current_bar = self._bar_type_to_last_bar.get(bar_type_str)
+                # 检查此 K 线是否仍为当前 K 线（未被取代）
+                current_bar = self._bar_type_to_last_bar.get(bar_type_str)  # 当前 K 线
 
                 if current_bar and int(current_bar.date) == int(bar.date):
-                    self._log.debug(f"Publishing bar after period completion for {bar_type_str}")
+                    self._log.debug(f"K 线周期完成后发布 K 线：{bar_type_str}")
                     ts_init = self._clock.timestamp_ns()
 
-                    # Convert the bar to Nautilus format
+                    # 将 K 线转换为 Nautilus 格式
                     nautilus_bar = await self._ib_bar_to_nautilus_bar(
                         bar_type=bar_type,
                         bar=current_bar,
@@ -1151,20 +1131,20 @@ class InteractiveBrokersClientMarketDataMixin(BaseMixin):
                         is_revision=False,
                     )
 
-                    # Handle the bar
+                    # 处理 K 线数据
                     if nautilus_bar and not (
                         nautilus_bar.is_single_price() and nautilus_bar.open.as_double() == 0
                     ):
                         await self._handle_data(nautilus_bar)
 
             except asyncio.CancelledError:
-                # Task was cancelled, which is expected when a new bar arrives
+                # 任务被取消，这在有新 K 线到来时是预期的
                 pass
             finally:
-                # Clean up the task reference
+                # 清理任务引用
                 self._bar_timeout_tasks.pop(bar_type_str, None)
 
-        # Create and store the timeout task
+        # 创建并存储超时任务
         task = asyncio.create_task(completion_handler())
         self._bar_timeout_tasks[bar_type_str] = task
 
@@ -1177,29 +1157,29 @@ class InteractiveBrokersClientMarketDataMixin(BaseMixin):
         start: int | None = None,
     ) -> Bar | None:
         """
-        Process received bar data and convert it into NautilusTrader's Bar format. This
-        method determines whether the bar is new or a revision of an existing bar and
-        converts the bar data to the NautilusTrader's format.
+        处理接收到的 K 线数据并将其转换为 NautilusTrader 的 Bar 格式。
+        此方法确定该 K 线是新 K 线还是对现有 K 线进行的修订，并将 K 线数据转换为 
+        NautilusTrader 的格式。
 
-        Parameters
+        参数
         ----------
         bar_type_str : str
-            The string representation of the bar type.
+            K 线类型的字符串表示。
         bar : BarData
-            The bar data received from Interactive Brokers.
+            从 Interactive Brokers 接收到的 K 线数据。
         handle_revised_bars : bool
-            Indicates whether revised bars should be handled or not.
+            指示是否应处理修订后的 K 线。
         historical : bool | None, optional
-            Indicates whether the bar data is historical. Defaults to False.
+            指示 K 线数据是否为历史数据。默认为 False。
         start: int, optional
-            The start time of a subscription in ns.
+            订阅的开始时间（纳秒）。
 
-        Returns
+        返回
         -------
         Bar | ``None``
 
         """
-        previous_bar = self._bar_type_to_last_bar.get(bar_type_str)
+        previous_bar = self._bar_type_to_last_bar.get(bar_type_str)  # 上一根 K 线
         previous_ts = 0 if not previous_bar else int(previous_bar.date)
         current_ts = int(bar.date)
 
@@ -1208,37 +1188,35 @@ class InteractiveBrokersClientMarketDataMixin(BaseMixin):
         elif current_ts == previous_ts:
             is_new_bar = False
         else:
-            return None  # Out of sync
+            return None  # 同步冲突
 
         self._bar_type_to_last_bar[bar_type_str] = bar
         bar_type: BarType = BarType.from_str(bar_type_str)
         bar_ts_init = await self._ib_bar_to_ts_init(bar, bar_type)
 
         if start and bar_ts_init < start:
-            # Filtering bar out as it's historical data we don't want, see subscribe_historical_bars
+            # 过滤掉不需要的历史数据，参见 subscribe_historical_bars
             return None
 
         ts_init = self._clock.timestamp_ns()
 
         if not handle_revised_bars:
             if previous_bar and is_new_bar:
-                # New bar arrived - publish the previous (completed) bar immediately
-                # and schedule completion timeout for the current bar
+                # 新 K 线到达 - 立即发布上一个（已完成的）K 线，并为当前 K 线调度完成超时
                 await self._schedule_bar_completion_timeout(bar_type_str, bar)
                 bar = previous_bar
             else:
-                # First bar or same timestamp - schedule completion timeout
-                # but don't publish yet (wait for bar period to complete)
+                # 第一个 K 线或相同的时间戳 - 调度完成超时，但暂不发布（等待 K 线周期完成）
                 await self._schedule_bar_completion_timeout(bar_type_str, bar)
-                return None  # Wait for bar period to complete
+                return None  # 等待 K 线周期完成
 
             if historical:
                 ts_init = await self._ib_bar_to_ts_init(bar, bar_type)
 
                 if ts_init >= self._clock.timestamp_ns():
-                    return None  # The bar is incomplete
+                    return None  # K 线不完整
 
-        # Process the bar
+        # 处理 K 线数据
         return await self._ib_bar_to_nautilus_bar(
             bar_type=bar_type,
             bar=bar,
@@ -1248,15 +1226,15 @@ class InteractiveBrokersClientMarketDataMixin(BaseMixin):
 
     async def _process_trade_ticks(self, req_id: int, ticks: list[HistoricalTickLast]) -> None:
         """
-        Process received trade tick data, convert it to NautilusTrader TradeTick type,
-        and add it to the relevant request's result.
+        处理接收到的成交行情数据，将其转换为 NautilusTrader 的 TradeTick 类型，
+        并添加到相应请求的结果中。
 
-        Parameters
+        参数
         ----------
         req_id : int
-            The request identifier for which the trades are being processed.
+            正在处理成交记录的请求标识符。
         ticks : list
-            A list of trade tick data received from Interactive Brokers.
+            从 Interactive Brokers 接收到的成交行情数据列表。
 
         """
         if request := self._requests.get(req_id=req_id):
@@ -1292,14 +1270,13 @@ class InteractiveBrokersClientMarketDataMixin(BaseMixin):
 
     async def _handle_data(self, data: Data) -> None:
         """
-        Handle and forward processed data to the appropriate destination. This method is
-        a generic data handler that forwards processed market data, such as bars or
-        ticks, to the DataEngine.process message bus endpoint.
+        处理并向适当的目的地转发已处理的数据。此方法是一个通用的数据处理器，
+        负责将处理过的市场数据（如 K 线或行情）转发到 DataEngine.process 消息总线端点。
 
-        Parameters
+        参数
         ----------
         data : Data
-            The processed market data ready to be forwarded.
+            准备转发的处理后市场数据。
 
         """
         self._msgbus.send(endpoint="DataEngine.process", msg=data)
@@ -1312,23 +1289,23 @@ class InteractiveBrokersClientMarketDataMixin(BaseMixin):
         is_revision: bool = False,
     ) -> Bar | None:
         """
-        Convert Interactive Brokers bar data to NautilusTrader's bar type.
+        将 Interactive Brokers 的 K 线数据转换为 NautilusTrader 的 K 线类型。
 
-        Parameters
+        参数
         ----------
         bar_type : BarType
-            The type of the bar.
+            K 线的类型。
         bar : BarData
-            The bar data received from Interactive Brokers.
+            从 Interactive Brokers 接收到的 K 线数据。
         ts_init : int
-            The unix nanosecond timestamp representing the bar's initialization time.
+            表示 K 线初始化时间的 unix 纳秒时间戳。
         is_revision : bool, optional
-            Indicates whether the bar is a revision of an existing bar. Defaults to False.
+            指示该 K 线是否为对现有 K 线的修订。默认为 False。
 
-        Returns
+        返回
         -------
         Bar | None
-            The converted bar, or None if the bar data is invalid (e.g., low > open during extended hours).
+            转换后的 K 线；如果 K 线数据无效（例如盘后交易中 low > open），则返回 None。
 
         """
         instrument = self._cache.instrument(bar_type.instrument_id)
@@ -1336,10 +1313,9 @@ class InteractiveBrokersClientMarketDataMixin(BaseMixin):
         if not instrument:
             raise ValueError(f"No cached instrument for {bar_type.instrument_id}")
 
-        ts_event = await self._ib_bar_to_ts_event(bar, bar_type)
-        # used to be _convert_ib_bar_date_to_unix_nanos
+        ts_event = await self._ib_bar_to_ts_event(bar, bar_type)  # 曾为 _convert_ib_bar_date_to_unix_nanos
 
-        # Apply price magnifier conversion
+        # 应用价格乘数转换
         price_magnifier = (
             self._instrument_provider.get_price_magnifier(bar_type.instrument_id)
             if self._instrument_provider
@@ -1350,8 +1326,8 @@ class InteractiveBrokersClientMarketDataMixin(BaseMixin):
         converted_low = ib_price_to_nautilus_price(bar.low, price_magnifier)
         converted_close = ib_price_to_nautilus_price(bar.close, price_magnifier)
 
-        # Validate bar data integrity BEFORE creating Bar object
-        # IB sometimes sends corrupt data during extended hours
+        # 在创建 Bar 对象之前验证 K 线数据的完整性
+        # IB 有时会在盘后交易期间发送损坏的数据
         if not self._validate_bar_prices(
             bar_type=bar_type,
             open_price=converted_open,
@@ -1376,23 +1352,21 @@ class InteractiveBrokersClientMarketDataMixin(BaseMixin):
 
     async def _ib_bar_to_ts_event(self, bar: BarData, bar_type: BarType) -> int:
         """
-        Calculate the ts_event timestamp for a bar.
+        计算 K 线的 ts_event 时间戳。
 
-        This method computes the timestamp at which data event occurred, by adjusting
-        the provided bar's timestamp based on the bar type's duration. ts_event is set
-        to the start of the bar period.
+        此方法通过根据 K 线类型的持续时间调整提供的 K 线时间戳，来计算数据事件发生的时间戳。
+        ts_event 被设置为 K 线周期的开始时间。
 
-        Week/Month bars's date returned from IB represents ending date,
-        the start of bar period should be start of the week and month respectively
+        周/月 K 线从 IB 返回的日期代表结束日期，K 线周期的开始应当分别是周初和月初。
 
-        Parameters
+        参数
         ----------
         bar : BarData
-            The bar data to be used for the calculation.
+            用于计算的 K 线数据。
         bar_type : BarType
-            The type of the bar, which includes information about the bar's duration.
+            K 线的类型，包含有关 K 线持续时间的信息。
 
-        Returns
+        返回
         -------
         int
 
@@ -1415,20 +1389,19 @@ class InteractiveBrokersClientMarketDataMixin(BaseMixin):
 
     async def _ib_bar_to_ts_init(self, bar: BarData, bar_type: BarType) -> int:
         """
-        Calculate the initialization timestamp for a bar.
+        计算 K 线的初始化时间戳（ts_init）。
 
-        This method computes the timestamp at which a bar is initialized, by adjusting
-        the provided bar's timestamp based on the bar type's duration. ts_init is set
-        to the end of the bar period and not the start.
+        此方法通过根据 K 线类型的持续时间调整提供的 K 线时间戳，来计算 K 线初始化的时间戳。
+        ts_init 被设置为 K 线周期的结束时间，而不是开始时间。
 
-        Parameters
+        参数
         ----------
         bar : BarData
-            The bar data to be used for the calculation.
+            用于计算的 K 线数据。
         bar_type : BarType
-            The type of the bar, which includes information about the bar's duration.
+            K 线的类型，包含有关 K 线持续时间的信息。
 
-        Returns
+        返回
         -------
         int
 
@@ -1436,36 +1409,35 @@ class InteractiveBrokersClientMarketDataMixin(BaseMixin):
         ts = await self._convert_ib_bar_date_to_unix_nanos(bar, bar_type)
 
         if bar_type.spec.aggregation in [15, 16]:
-            # Week/Month bars's date represents ending date
+            # 周/月 K 线的日期代表结束日期
             return ts
         elif bar_type.spec.aggregation == 14:
-            # -1 to make day's bar ts_event and ts_init on the same day
+            # -1 使当日 K 线的 ts_event 和 ts_init 在同一天
             return ts + pd.Timedelta(bar_type.spec.timedelta).value - 1
         else:
             return ts + pd.Timedelta(bar_type.spec.timedelta).value
 
     async def _convert_ib_bar_date_to_unix_nanos(self, bar: BarData, bar_type: BarType) -> int:
         """
-        Convert the date from BarData to unix nanoseconds.
+        将 BarData 中的日期转换为 unix 纳秒。
 
-        If the bar type's aggregation is 14 - 16, the bar date is always returned in the
-        YYYYMMDD format from IB. For all other aggregations, the bar date is returned
-        in system time.
+        如果 K 线类型的聚合方式为 14 - 16，从 IB 返回的 K 线日期始终采用 YYYYMMDD 
+        格式。对于所有其他聚合方式，返回的 K 线日期为系统时间。
 
-        Parameters
+        参数
         ----------
         bar : BarData
-            The bar data containing the date to be converted.
+            包含要转换日期的 K 线数据。
         bar_type : BarType
-            The bar type that specifies the aggregation level.
+            指定聚合级别的 K 线类型。
 
-        Returns
+        返回
         -------
         int
 
         """
         if bar_type.spec.aggregation in [14, 15, 16]:
-            # Day/Week/Month bars are always returned with bar date in YYYYMMDD format
+            # 日/周/月 K 线返回的日期始终为 YYYYMMDD 格式
             ts = pd.to_datetime(bar.date, format="%Y%m%d", utc=True)
         else:
             ts = pd.Timestamp.fromtimestamp(int(bar.date), tz=pytz.utc)
@@ -1483,41 +1455,41 @@ class InteractiveBrokersClientMarketDataMixin(BaseMixin):
     ) -> bool:
         if high_price < open_price:
             self._log.warning(
-                f"Invalid bar from IB for {bar_type.instrument_id}: "
-                f"high ({high_price}) < open ({open_price}), "
-                f"{bar_identifier}, skipping bar",
+                f"来自 IB 的 {bar_type.instrument_id} K 线无效： "
+                f"最高价 ({high_price}) < 开盘价 ({open_price})， "
+                f"{bar_identifier}，跳过该 K 线",
             )
             return False
 
         if high_price < low_price:
             self._log.warning(
-                f"Invalid bar from IB for {bar_type.instrument_id}: "
-                f"high ({high_price}) < low ({low_price}), "
-                f"{bar_identifier}, skipping bar",
+                f"来自 IB 的 {bar_type.instrument_id} K 线无效： "
+                f"最高价 ({high_price}) < 最低价 ({low_price})， "
+                f"{bar_identifier}，跳过该 K 线",
             )
             return False
 
         if high_price < close_price:
             self._log.warning(
-                f"Invalid bar from IB for {bar_type.instrument_id}: "
-                f"high ({high_price}) < close ({close_price}), "
-                f"{bar_identifier}, skipping bar",
+                f"来自 IB 的 {bar_type.instrument_id} K 线无效： "
+                f"最高价 ({high_price}) < 收盘价 ({close_price})， "
+                f"{bar_identifier}，跳过该 K 线",
             )
             return False
 
         if low_price > close_price:
             self._log.warning(
-                f"Invalid bar from IB for {bar_type.instrument_id}: "
-                f"low ({low_price}) > close ({close_price}), "
-                f"{bar_identifier}, skipping bar",
+                f"来自 IB 的 {bar_type.instrument_id} K 线无效： "
+                f"最低价 ({low_price}) > 收盘价 ({close_price})， "
+                f"{bar_identifier}，跳过该 K 线",
             )
             return False
 
         if low_price > open_price:
             self._log.warning(
-                f"Invalid bar from IB for {bar_type.instrument_id}: "
-                f"low ({low_price}) > open ({open_price}), "
-                f"{bar_identifier}, skipping bar",
+                f"来自 IB 的 {bar_type.instrument_id} K 线无效： "
+                f"最低价 ({low_price}) > 开盘价 ({open_price})， "
+                f"{bar_identifier}，跳过该 K 线",
             )
             return False
 
@@ -1536,36 +1508,34 @@ class InteractiveBrokersClientMarketDataMixin(BaseMixin):
         is_smart_depth: bool,
     ) -> None:
         """
-        Return Market Depth (L2) real-time data.
+        返回市场深度 (L2) 实时数据。
 
-        Note
+        注意
         ----
-        IBKR's L2 depth data is updated based on position,
-        so we need to maintain a local order book indexed by position,
-        and then aggregate this order book by price.
+        IBKR 的 L2 深度数据是按位置（position）更新的，因此我们需要维护一个按位置
+        索引的本地订单簿，然后再按价格对该订单簿进行汇总（aggregate）。
 
-        Parameters
+        参数
         ----------
         req_id : TickerId
-            The request's identifier.
+            请求的标识符。
         position : int
-            The order book's row being updated.
+            正在更新的订单簿行。
         market_maker : str
-            The exchange holding the order if is_smart_depth is True,
-            otherwise the MPID of the market maker.
+            如果 is_smart_depth 为 True，则为持有订单的交易所；否则为做市商的 MPID。
         operation : int
-            How to refresh the row:
-            - 0: insert (insert this new order into the row identified by 'position')
-            - 1: update (update the existing order in the row identified by 'position')
-            - 2: delete (delete the existing order at the row identified by 'position')
+            如何刷新该行：
+            - 0: insert（在 'position' 标识的行中插入此新订单）
+            - 1: update（更新 'position' 标识的行中的现有订单）
+            - 2: delete（删除 'position' 标识的行中的现有订单）
         side : int
-            0 for ask, 1 for bid.
+            0 表示 ask（卖出），1 表示 bid（买入）。
         price : float
-            The order's price.
+            订单价格。
         size : Decimal
-            The order's size.
+            订单大小。
         is_smart_depth : bool
-            Is SMART Depth request.
+            是否为 SMART 深度请求。
 
         """
         if not (subscription := self._subscriptions.get(req_id=req_id)):
@@ -1575,19 +1545,19 @@ class InteractiveBrokersClientMarketDataMixin(BaseMixin):
         instrument = self._cache.instrument(instrument_id)
         ts_init = self._clock.timestamp_ns()
 
-        # Create new order book if it doesn't exist for this security
+        # 如果订单簿不存在，则为该证券创建一个新订单簿
         if req_id not in self._order_books:
             self._order_books[req_id] = {"bids": {}, "asks": {}}
 
         book: dict[str, dict[int, IBKRBookLevel]] = self._order_books[req_id]
 
-        # Select bid or ask side to update
+        # 选择要更新的出价或要价侧
         order_side = IB_SIDE[side]
         levels: dict[int, IBKRBookLevel] = (
             book["bids"] if order_side == OrderSide.BUY else book["asks"]
         )
 
-        # Update order book based on operation type
+        # 基于操作类型更新订单簿
         action = MKT_DEPTH_OPERATIONS[operation]
 
         if action in (BookAction.ADD, BookAction.UPDATE):
@@ -1600,9 +1570,8 @@ class InteractiveBrokersClientMarketDataMixin(BaseMixin):
         elif action == BookAction.DELETE:
             levels.pop(position, None)
 
-        # Check if the order book is initialized
-        # For low-liquidity stocks, the set depth requirement may not be satisfied,
-        # so temporarily disable the initialization check handling
+        # 检查订单簿是否已初始化
+        # 对于低流动性股票，设定的深度要求可能无法满足，因此暂时禁用初始化检查处理
         # if not self._order_books_initialized.get(req_id, False):
         #     depth = self._order_book_depth[req_id]
         #     if len(book["bids"]) == depth and len(book["asks"]) == depth:
@@ -1610,7 +1579,7 @@ class InteractiveBrokersClientMarketDataMixin(BaseMixin):
         #     else:
         #         return
 
-        # Convert to OrderBookDeltas
+        # 转换为 OrderBookDeltas
         aggregated_book = self._aggregate_order_book_by_price(book)
 
         price_magnifier = (
@@ -1623,7 +1592,7 @@ class InteractiveBrokersClientMarketDataMixin(BaseMixin):
             OrderBookDelta.clear(
                 instrument_id,
                 sequence=0,
-                ts_event=ts_init,  # No event timestamp
+                ts_event=ts_init,  # 无事件时间戳
                 ts_init=ts_init,
             ),
         ]
@@ -1638,7 +1607,7 @@ class InteractiveBrokersClientMarketDataMixin(BaseMixin):
                     ),
                 ),
                 size=instrument.make_qty(level.size),
-                order_id=0,  # Not applicable for L2 data
+                order_id=0,  # 不适用于 L2 数据
             )
             for level in aggregated_book["bids"].values()
         ]
@@ -1653,7 +1622,7 @@ class InteractiveBrokersClientMarketDataMixin(BaseMixin):
                     ),
                 ),
                 size=instrument.make_qty(level.size),
-                order_id=0,  # Not applicable for L2 data
+                order_id=0,  # 不适用于 L2 数据
             )
             for level in aggregated_book["asks"].values()
         ]
@@ -1665,7 +1634,7 @@ class InteractiveBrokersClientMarketDataMixin(BaseMixin):
                 o,
                 flags=0,
                 sequence=0,
-                ts_event=ts_init,  # No event timestamp
+                ts_event=ts_init,  # 无事件时间戳
                 ts_init=ts_init,
             )
             for o in bids + asks
@@ -1678,17 +1647,17 @@ class InteractiveBrokersClientMarketDataMixin(BaseMixin):
         book: dict[str, dict[int, IBKRBookLevel]],
     ) -> dict[str, dict[float, IBKRBookLevel]]:
         """
-        Aggregate order book by price.
+        按价格对订单簿进行汇总。
 
-        Parameters
+        参数
         ----------
         book : dict[str, dict[int, IBKRBookLevel]]
-            The order book to be aggregated.
+            要汇总的订单簿。
 
-        Returns
+        返回
         -------
         dict[str, dict[float, IBKRBookLevel]]
-            The aggregated order book.
+            汇总后的订单簿。
 
         """
         aggregated_book: dict[str, dict[float, IBKRBookLevel]] = {}

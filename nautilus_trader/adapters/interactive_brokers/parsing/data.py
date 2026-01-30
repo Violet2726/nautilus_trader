@@ -34,7 +34,7 @@ MKT_DEPTH_OPERATIONS = {
 
 IB_SIDE = {1: OrderSide.BUY, 0: OrderSide.SELL}
 
-# TODO
+# 待办
 IB_TICK_TYPE = {
     1: "Last",
     2: "AllLast",
@@ -58,7 +58,7 @@ def what_to_show(bar_type: BarType) -> str:
 
 def generate_trade_id(ts_event: int, price: float, size: Decimal) -> TradeId:
     trade_id = TradeId(f"{int(nanos_to_secs(ts_event))}-{price}-{size}")
-    assert len(trade_id.value) < 36, f"TradeId too long, was {len(id.value)}"  # type: ignore
+    assert len(trade_id.value) < 36, f"TradeId 太长，长度为 {len(id.value)}"  # type: ignore
 
     return trade_id
 
@@ -81,7 +81,7 @@ def bar_spec_to_bar_size(bar_spec: BarSpecification) -> str:
         return f"{step} week"
     else:
         raise ValueError(
-            f"InteractiveBrokers doesn't support subscription for {bar_spec!r}",
+            f"InteractiveBrokers 不支持 {bar_spec!r} 的订阅",
         )
 
 

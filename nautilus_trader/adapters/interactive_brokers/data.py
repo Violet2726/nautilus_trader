@@ -70,29 +70,28 @@ from nautilus_trader.model.instruments.currency_pair import CurrencyPair
 
 class InteractiveBrokersDataClient(LiveMarketDataClient):
     """
-    Provides a data client for the InteractiveBrokers exchange by using the `Gateway` to
-    stream market data.
+    通过使用 `Gateway` 流式传输市场数据，为 InteractiveBrokers 交易所提供数据客户端。
 
-    Parameters
+    参数
     ----------
     loop : asyncio.AbstractEventLoop
-        The event loop for the client.
+        客户端的事件循环。
     client : InteractiveBrokersClient
-        The nautilus InteractiveBrokersClient using ibapi.
+        使用 ibapi 的 Nautilus InteractiveBrokersClient 实例。
     msgbus : MessageBus
-        The message bus for the client.
+        客户端的消息总线。
     cache : Cache
-        The cache for the client.
+        客户端的缓存。
     clock : LiveClock
-        The clock for the client.
+        客户端的时钟。
     instrument_provider : InteractiveBrokersInstrumentProvider
-        The instrument provider.
+        工具提供者。
     ibg_client_id : int
-        Client ID used to connect TWS/Gateway.
+        用于连接 TWS/Gateway 的客户端 ID。
     config : InteractiveBrokersDataClientConfig
-        Configuration for the client.
-    name : str, optional
-        The custom client ID.
+        客户端的配置。
+    name : str, 可选
+        自定义客户端 ID。
 
     """
 
@@ -133,54 +132,54 @@ class InteractiveBrokersDataClient(LiveMarketDataClient):
         return self._instrument_provider  # type: ignore
 
     async def _connect(self):
-        # Connect client
+        # 连接客户端
         await self._client.wait_until_ready(self._connection_timeout)
         self._client.registered_nautilus_clients.add(self.id)
-
-        # Set instrument provider on client for price magnifier access
+ 
+        # 在客户端上设置工具提供者，以便访问价格放大系数（price magnifier）
         self._client._instrument_provider = self._instrument_provider
 
-        # Set Market Data Type
+        # 设置行情数据类型
         await self._client.set_market_data_type(self._market_data_type)
 
-        # Load instruments based on config
+        # 根据配置加载工具
         await self.instrument_provider.initialize()
         for instrument in self._instrument_provider.list_all():
             self._handle_data(instrument)
 
     async def _disconnect(self):
         self._client.registered_nautilus_clients.discard(self.id)
-
+ 
         if self._client.is_running and self._client.registered_nautilus_clients == set():
             self._client.stop()
 
     async def _subscribe(self, command: SubscribeData) -> None:
-        raise NotImplementedError(  # pragma: no cover
-            "implement the `_subscribe` coroutine",  # pragma: no cover
+        raise NotImplementedError(
+            "请实现 `_subscribe` 协程",
         )
 
     async def _subscribe_instruments(self, command: SubscribeInstruments) -> None:
-        raise NotImplementedError(  # pragma: no cover
-            "implement the `_subscribe_instruments` coroutine",  # pragma: no cover
+        raise NotImplementedError(
+            "请实现 `_subscribe_instruments` 协程",
         )
 
     async def _subscribe_instrument(self, command: SubscribeInstrument) -> None:
-        raise NotImplementedError(  # pragma: no cover
-            "implement the `_subscribe_instrument` coroutine",  # pragma: no cover
+        raise NotImplementedError(
+            "请实现 `_subscribe_instrument` 协程",
         )
 
     async def _subscribe_order_book_deltas(self, command: SubscribeOrderBook) -> None:
         if command.book_type == BookType.L3_MBO:
             self._log.error(
-                "Cannot subscribe to order book deltas: "
-                "L3_MBO data is not published by Interactive Brokers. "
-                "Valid book types are L1_MBP, L2_MBP",
+                "无法订阅订单簿增量： "
+                "Interactive Brokers 不发布 L3_MBO 数据。 "
+                "有效的订单簿类型为 L1_MBP, L2_MBP",
             )
             return
 
         if not (instrument := self._cache.instrument(command.instrument_id)):
             self._log.error(
-                f"Cannot subscribe to order book deltas for {command.instrument_id}: instrument not found",
+                f"无法为 {command.instrument_id} 订阅订单簿增量：未找到该工具",
             )
             return
 
@@ -198,15 +197,15 @@ class InteractiveBrokersDataClient(LiveMarketDataClient):
         contract = self.instrument_provider.contract.get(command.instrument_id)
         if not contract:
             self._log.error(
-                f"Cannot subscribe to quotes for {command.instrument_id}: instrument not found",
+                f"无法为 {command.instrument_id} 订阅报价：未找到该工具",
             )
             return
 
-        # Use batch_quotes by default to avoid "Max number of tick-by-tick requests has been reached" error
+        # 默认使用 batch_quotes 以避免“已达到逐笔报价请求最大数量”错误
         batch_quotes = command.params.get("batch_quotes", True)
         if contract.secType == "BAG" or batch_quotes:
-            # For OptionSpread (BAG) instruments, always use reqMktData instead of reqTickByTickData
-            # as not supported for BAG contracts
+            # 对于期权组合 (BAG) 工具，始终使用 reqMktData 而不是 reqTickByTickData，
+            # 因为 BAG 合约不支持后者
             await self._client.subscribe_market_data(
                 instrument_id=command.instrument_id,
                 contract=contract,
@@ -223,13 +222,13 @@ class InteractiveBrokersDataClient(LiveMarketDataClient):
     async def _subscribe_trade_ticks(self, command: SubscribeTradeTicks) -> None:
         if not (instrument := self._cache.instrument(command.instrument_id)):
             self._log.error(
-                f"Cannot subscribe to trades for {command.instrument_id}: instrument not found",
+                f"无法为 {command.instrument_id} 订阅成交：未找到该工具",
             )
             return
 
         if isinstance(instrument, CurrencyPair):
             self._log.error(
-                "Interactive Brokers does not support trades for CurrencyPair instruments",
+                "Interactive Brokers 不支持货币对 (CurrencyPair) 工具的成交数据",
             )
             return
 
@@ -242,10 +241,10 @@ class InteractiveBrokersDataClient(LiveMarketDataClient):
 
     async def _subscribe_bars(self, command: SubscribeBars) -> None:
         contract = self.instrument_provider.contract.get(command.bar_type.instrument_id)
-
+ 
         if not contract:
             self._log.error(
-                f"Cannot subscribe to bars for {command.bar_type.instrument_id}: instrument not found",
+                f"无法为 {command.bar_type.instrument_id} 订阅 K 线：未找到该工具",
             )
             return
 
@@ -265,24 +264,24 @@ class InteractiveBrokersDataClient(LiveMarketDataClient):
             )
 
     async def _subscribe_instrument_status(self, command: SubscribeInstrumentStatus) -> None:
-        pass  # Subscribed as part of orderbook
+        pass  # 作为订单簿的一部分订阅
 
     async def _subscribe_instrument_close(self, command: SubscribeInstrumentClose) -> None:
-        pass  # Subscribed as part of orderbook
+        pass  # 作为订单簿的一部分订阅
 
     async def _unsubscribe(self, command: UnsubscribeData) -> None:
-        raise NotImplementedError(  # pragma: no cover
-            "implement the `_unsubscribe` coroutine",  # pragma: no cover
+        raise NotImplementedError(
+            "请实现 `_unsubscribe` 协程",
         )
 
     async def _unsubscribe_instruments(self, command: UnsubscribeInstruments) -> None:
-        raise NotImplementedError(  # pragma: no cover
-            "implement the `_unsubscribe_instruments` coroutine",  # pragma: no cover
+        raise NotImplementedError(
+            "请实现 `_unsubscribe_instruments` 协程",
         )
 
     async def _unsubscribe_instrument(self, command: UnsubscribeInstrument) -> None:
-        raise NotImplementedError(  # pragma: no cover
-            "implement the `_unsubscribe_instrument` coroutine",  # pragma: no cover
+        raise NotImplementedError(
+            "请实现 `_unsubscribe_instrument` 协程",
         )
 
     async def _unsubscribe_order_book_deltas(self, command: UnsubscribeOrderBook) -> None:
@@ -305,25 +304,25 @@ class InteractiveBrokersDataClient(LiveMarketDataClient):
             await self._client.unsubscribe_historical_bars(command.bar_type)
 
     async def _unsubscribe_instrument_status(self, command: UnsubscribeInstrumentStatus) -> None:
-        pass  # Subscribed as part of orderbook
+        pass  # 作为订单簿的一部分订阅
 
     async def _unsubscribe_instrument_close(self, command: UnsubscribeInstrumentClose) -> None:
-        pass  # Subscribed as part of orderbook
+        pass  # 作为订单簿的一部分订阅
 
     async def _request(self, request: RequestData) -> None:
-        raise NotImplementedError(  # pragma: no cover
-            "implement the `_request` coroutine",  # pragma: no cover
+        raise NotImplementedError(
+            "请实现 `_request` 协程",
         )
 
     async def _request_instrument(self, request: RequestInstrument) -> None:
         if request.start is not None:
             self._log.warning(
-                f"Requesting instrument {request.instrument_id} with specified `start` which has no effect",
+                f"请求具有指定 `start` 的工具 {request.instrument_id}，但这没有效果",
             )
-
+ 
         if request.end is not None:
             self._log.warning(
-                f"Requesting instrument {request.instrument_id} with specified `end` which has no effect",
+                f"请求具有指定 `end` 的工具 {request.instrument_id}，但这没有效果",
             )
 
         await self.instrument_provider.load_with_return_async(
@@ -334,7 +333,7 @@ class InteractiveBrokersDataClient(LiveMarketDataClient):
         if instrument := self.instrument_provider.find(request.instrument_id):
             self._handle_data(instrument)
         else:
-            self._log.warning(f"Instrument for {request.instrument_id} not available")
+            self._log.warning(f"{request.instrument_id} 的工具不可用")
             return
 
         self._handle_instrument(instrument, request.id, request.start, request.end, request.params)
@@ -343,7 +342,7 @@ class InteractiveBrokersDataClient(LiveMarketDataClient):
         loaded_instrument_ids: list[InstrumentId] = []
 
         if "ib_contracts" in request.params:
-            # We allow to pass IBContract parameters to build futures or option chains
+            # 我们允许传递 IBContract 参数来构建期货或期权链
             ib_contracts = [IBContract(**d) for d in request.params["ib_contracts"]]
             loaded_instrument_ids = await self.instrument_provider.load_ids_with_return_async(
                 ib_contracts,
@@ -359,10 +358,10 @@ class InteractiveBrokersDataClient(LiveMarketDataClient):
                         loaded_instruments.append(instrument)
                     else:
                         self._log.warning(
-                            f"Instrument {instrument_id} not found in cache after loading",
+                            f"加载后在缓存中未找到工具 {instrument_id}",
                         )
             else:
-                self._log.warning("No instrument IDs were returned from load_ids_async")
+                self._log.warning("load_ids_async 未返回任何工具 ID")
 
             self._handle_instruments(
                 venue=request.venue,
@@ -373,8 +372,8 @@ class InteractiveBrokersDataClient(LiveMarketDataClient):
                 params=request.params,
             )
             return
-
-        # We ensure existing instruments in the cache have their IB representations loaded as well in the adapter
+ 
+        # 我们确保适配器中也加载了缓存中现有工具的 IB 表示
         instruments = self._cache.instruments()
         instrument_ids = [instrument.id for instrument in instruments]
         loaded_instrument_ids = await self.instrument_provider.load_ids_with_return_async(
@@ -393,7 +392,7 @@ class InteractiveBrokersDataClient(LiveMarketDataClient):
     async def _request_quote_ticks(self, request: RequestQuoteTicks) -> None:
         if not (instrument := self._cache.instrument(request.instrument_id)):
             self._log.error(
-                f"Cannot request quotes for {request.instrument_id}, instrument not found",
+                f"无法请求 {request.instrument_id} 的报价，未找到工具",
             )
             return
 
@@ -410,7 +409,7 @@ class InteractiveBrokersDataClient(LiveMarketDataClient):
             timeout=self._request_timeout,
         )
         if not ticks:
-            self._log.warning(f"No quote tick data received for {request.instrument_id}")
+            self._log.warning(f"未收到 {request.instrument_id} 的报价数据")
             return
 
         self._handle_quote_ticks(
@@ -425,13 +424,13 @@ class InteractiveBrokersDataClient(LiveMarketDataClient):
     async def _request_trade_ticks(self, request: RequestTradeTicks) -> None:
         if not (instrument := self._cache.instrument(request.instrument_id)):
             self._log.error(
-                f"Cannot request trades for {request.instrument_id}: instrument not found",
+                f"无法请求 {request.instrument_id} 的成交：未找到工具",
             )
             return
 
         if isinstance(instrument, CurrencyPair):
             self._log.error(
-                "Interactive Brokers does not support trades for CurrencyPair instruments",
+                "Interactive Brokers 不支持货币对 (CurrencyPair) 工具的成交数据",
             )
             return
 
@@ -448,7 +447,7 @@ class InteractiveBrokersDataClient(LiveMarketDataClient):
             timeout=self._request_timeout,
         )
         if not ticks:
-            self._log.warning(f"No trades received for {request.instrument_id}")
+            self._log.warning(f"未收到 {request.instrument_id} 的成交数据")
             return
 
         self._handle_trade_ticks(
@@ -472,58 +471,57 @@ class InteractiveBrokersDataClient(LiveMarketDataClient):
         limit: int = 0,
     ) -> list[TradeTick | QuoteTick]:
         """
-        Retrieve historical ticks using pagination to handle large time ranges.
+        使用分页检索历史逐笔行情（ticks），以处理大时间范围的情况。
 
-        This method iterates backward from the end_date_time, requesting batches of ticks
-        until the start_date_time is reached or the limit is satisfied.
+        此方法从 end_date_time 开始向后迭代，请求成批的行情，直到达到 
+        start_date_time 或满足 limit 要求。
 
-        When both a time range and limit are specified, the method will stop when either
-        the start_date_time is reached or the limit is satisfied, whichever comes first.
-        If a limit is specified without a start_date_time boundary, pagination will
-        continue until the limit is reached or no more data is available.
+        当同时指定时间范围和限制（limit）时，方法将在达到 start_date_time 或
+        满足 limit 时停止，以先到者为准。如果仅指定了 limit 而没有 start_date_time 
+        边界，则分页将继续，直到达到 limit 或没有更多数据可用。
 
-        Parameters
+        参数
         ----------
         instrument_id : InstrumentId
-            The identifier of the instrument for which to retrieve ticks.
+            要检索行情的工具标识符。
         contract : IBContract
-            The Interactive Brokers contract details for the instrument.
+            该工具的 Interactive Brokers 合约详情。
         tick_type : str
-            The type of ticks to retrieve ("TRADES" or "BID_ASK").
+            要检索的行情类型（"TRADES" 或 "BID_ASK"）。
         start_date_time : pd.Timestamp
-            The start date time for the ticks.
+            行情的开始日期时间。
         end_date_time : pd.Timestamp
-            The end date time for the ticks.
-        limit : int, default 0
-            Maximum number of ticks to retrieve. If 0, no limit is applied.
-        use_rth : bool, default True
-            Whether to use regular trading hours.
-        timeout : int, default 60
-             The timeout (seconds) for each individual request.
+            行情的结束日期时间。
+        limit : int, 默认 0
+            要检索的最大行情数量。如果为 0，则不设限制。
+        use_rth : bool, 默认 True
+            是否使用常规交易时段（Regular Trading Hours）。
+        timeout : int, 默认 60
+             每个单独请求的超时时间（秒）。
 
-        Returns
+        返回
         -------
         list[TradeTick | QuoteTick]
-            A list of aggregated ticks sorted by initialization timestamp, filtered to
-            the requested time range and limited to the specified count if provided.
+            按初始化时间戳排序的汇总行情列表，已过滤到请求的时间范围，
+            如果提供了 limit，则限制为指定数量。
 
         """
         data: list[TradeTick | QuoteTick] = []
 
-        # Ensure UTC
+        # 确保使用 UTC
         start_date_time = time_object_to_dt(start_date_time)
         current_end_date_time = time_object_to_dt(end_date_time)
         start_date_time_nanos = dt_to_unix_nanos(start_date_time)
         end_date_time_nanos = dt_to_unix_nanos(end_date_time)
-
-        # Use 1 millisecond decrement to avoid duplicate/skipped ticks in high-frequency data
+ 
+        # 使用 1 毫秒的递减量，以避免高频数据中出现重复或跳过的逐笔行情
         TIMESTAMP_DECREMENT_NS = 1_000_000
 
         await self._client.wait_until_ready()
 
         while current_end_date_time > start_date_time and (limit == 0 or len(data) < limit):
             self._log.info(
-                f"{instrument_id}: Requesting {tick_type} ticks ending at {current_end_date_time}",
+                f"{instrument_id}: 正在请求时间截止到 {current_end_date_time} 的 {tick_type} 逐笔行情",
             )
 
             ticks = await self._client.get_historical_ticks(
@@ -535,16 +533,16 @@ class InteractiveBrokersDataClient(LiveMarketDataClient):
                 timeout=timeout,
             )
 
-            # Break early if no ticks returned (reached beginning of available data)
+            # 如果未返回任何行情，则提前中断（已达到可用数据的起点）
             if not ticks:
                 break
 
             self._log.info(
-                f"{instrument_id}: Number of {tick_type} ticks retrieved in batch: {len(ticks)}",
+                f"{instrument_id}: 批次中检索到的 {tick_type} 逐笔行情数量：{len(ticks)}",
             )
 
-            # Filter ticks to ensure they're within the requested time range
-            # When iterating backward, filter ticks before start_date_time
+            # 过滤行情以确保它们在请求的时间范围内
+            # 向后迭代时，过滤掉在 start_date_time 之前的行情
             filtered_ticks = [
                 tick
                 for tick in ticks
@@ -552,25 +550,25 @@ class InteractiveBrokersDataClient(LiveMarketDataClient):
             ]
 
             if not filtered_ticks:
-                # No ticks in this batch are within range, break to avoid infinite loop
+                # 批次中没有行情处于范围内，中断以避免死循环
                 break
 
-            # Find minimum timestamp from filtered ticks
+            # 从过滤后的逐笔行情中查找最小时间戳
             min_timestamp_nanos = min(tick.ts_init for tick in filtered_ticks)
 
-            # Update end_date_time to 1ms before the minimum timestamp to avoid duplicates
+            # 将 end_date_time 更新为最小时间戳之前的 1ms，以避免重复
             current_end_date_time = unix_nanos_to_dt(min_timestamp_nanos - TIMESTAMP_DECREMENT_NS)
 
             data.extend(filtered_ticks)
-            self._log.info(f"Total number of {tick_type} ticks in data: {len(data)}")
+            self._log.info(f"数据中的 {tick_type} 逐笔行情总数：{len(data)}")
 
-            # Break early if limit is reached
+            # 如果达到限制，则提前中断
             if limit > 0 and len(data) >= limit:
                 break
 
         sorted_data = sorted(data, key=lambda x: x.ts_init)
 
-        # Apply limit if specified (trim to most recent ticks)
+        # 如果指定了 limit，则应用限制（修剪为最近的行情）
         if limit > 0 and len(sorted_data) > limit:
             sorted_data = sorted_data[-limit:]
 
@@ -579,12 +577,12 @@ class InteractiveBrokersDataClient(LiveMarketDataClient):
     async def _request_bars(self, request: RequestBars) -> None:
         contract = self.instrument_provider.contract.get(request.bar_type.instrument_id)
         if not contract:
-            self._log.error(f"Cannot request {request.bar_type} bars: instrument not found")
+            self._log.error(f"无法请求 {request.bar_type} K 线：未找到工具")
             return
 
         if not request.bar_type.spec.is_time_aggregated():
             self._log.error(
-                f"Cannot request {request.bar_type} bars: only time bars are aggregated by Interactive Brokers",
+                f"无法请求 {request.bar_type} K 线：Interactive Brokers 仅通过时间聚合 K 线",
             )
             return
 
@@ -604,7 +602,7 @@ class InteractiveBrokersDataClient(LiveMarketDataClient):
             bars = list(set(bars))
             bars.sort(key=lambda x: x.ts_init)
 
-            # Apply limit if specified
+            # 如果指定了 limit，则应用限制
             limit = request.limit
             if limit > 0 and len(bars) > limit:
                 bars = bars[-limit:]
@@ -619,10 +617,10 @@ class InteractiveBrokersDataClient(LiveMarketDataClient):
             )
             status_msg = {"id": request.id, "status": "Success"}
         else:
-            self._log.warning(f"No bar data received for {request.bar_type}")
+            self._log.warning(f"未收到 {request.bar_type} 的 K 线数据")
             status_msg = {"id": request.id, "status": "Failed"}
 
-        # Publish Status event
+        # 发布状态事件
         self._msgbus.publish(
             topic=f"requests.{request.id}",
             msg=status_msg,
@@ -639,36 +637,35 @@ class InteractiveBrokersDataClient(LiveMarketDataClient):
         timeout: int = 60,
     ) -> list[Bar]:
         """
-        Retrieve historical bars in chunks to handle large duration requests.
+        分块检索历史 K 线，以处理大时长请求。
 
-        This method breaks down a large historical data request into smaller segments
-        (years, days, seconds) to comply with IB API limits and avoid timeouts. It iterates
-        through these segments and aggregates the results.
+        此方法将大型历史数据请求分解为较小的时段（年、天、秒），以符合 IB API 
+        的限制并避免超时。它遍历这些时段并汇总结果。
 
-        Parameters
+        参数
         ----------
         bar_type : BarType
-            The type of bar to retrieve.
+            要检索的 K 线类型。
         contract : IBContract
-             The Interactive Brokers contract details for the instrument.
+             该工具的 Interactive Brokers 合约详情。
         start_date_time : datetime.datetime
-             The start date time for the bars. If provided, duration is derived.
+             K 线的开始日期时间。如果提供，则推导时长（duration）。
         end_date_time : datetime.datetime
-             The end date time for the bars.
+             K 线的结束日期时间。
         duration : str
-             The amount of time to go back from the end_date_time.
-        use_rth : bool, default True
-             Whether to use regular trading hours.
-        timeout : int, default 60
-             The timeout (seconds) for each individual request segment.
+             从 end_date_time 向回溯的时间量。
+        use_rth : bool, 默认 True
+             是否使用常规交易时段。
+        timeout : int, 默认 60
+             每个单独请求时段的超时时间（秒）。
 
-        Returns
+        返回
         -------
         list[Bar]
-             A list of aggregated Bar objects sorted by initialization timestamp.
+             按初始化时间戳排序的汇总 Bar 对象列表。
 
         """
-        # Adjust start and end time based on the timezone
+        # 根据时区调整开始和结束时间
         if start_date_time:
             start_date_time = time_object_to_dt(start_date_time)
 
@@ -677,7 +674,7 @@ class InteractiveBrokersDataClient(LiveMarketDataClient):
 
         data: list[Bar] = []
 
-        # We need to calculate duration segments based on start/end or duration
+        # 我们需要根据开始/结束时间或时长来计算时长时段（duration segments）
         segments = self._calculate_duration_segments(
             start_date_time,
             end_date_time,
@@ -686,11 +683,11 @@ class InteractiveBrokersDataClient(LiveMarketDataClient):
 
         for segment_end_date_time, segment_duration in segments:
             self._log.info(
-                f"{bar_type.instrument_id}: Requesting historical bars: {bar_type} ending on '{segment_end_date_time}' "
-                f"with duration '{segment_duration}'",
+                f"{bar_type.instrument_id}: 正在请求历史 K 线：{bar_type}，截止日期为 '{segment_end_date_time}'，"
+                f"时长为 '{segment_duration}'",
             )
 
-            bars = await self._client.get_historical_bars(  # Changed self.get_historical_bars to self._client.get_historical_bars
+            bars = await self._client.get_historical_bars(
                 bar_type,
                 contract,
                 use_rth,
@@ -700,12 +697,12 @@ class InteractiveBrokersDataClient(LiveMarketDataClient):
             )
             if bars:
                 self._log.info(
-                    f"{bar_type.instrument_id}: Number of bars retrieved in batch: {len(bars)}",
+                    f"{bar_type.instrument_id}: 批次中检索到的 K 线数量：{len(bars)}",
                 )
                 data.extend(bars)
-                self._log.info(f"Total number of bars in data: {len(data)}")
+                self._log.info(f"数据中的 K 线总数：{len(data)}")
             else:
-                self._log.info(f"{bar_type.instrument_id}: No bars retrieved for: {bar_type}")
+                self._log.info(f"{bar_type.instrument_id}: 未检索到 {bar_type} 的 K 线数据")
 
         return sorted(data, key=lambda x: x.ts_init)
 
@@ -715,36 +712,30 @@ class InteractiveBrokersDataClient(LiveMarketDataClient):
         end_date: pd.Timestamp,
         duration: str | None,
     ) -> list[tuple[pd.Timestamp, str]]:
-        # Calculate the difference in years, days, and seconds between two dates for the
-        # purpose of requesting specific date ranges for historical bars.
+        # 计算两个日期之间在年、天和秒方面的差异，以便为历史 K 线请求特定的日期范围。
         #
-        # This function breaks down the time difference between two provided dates (start_date
-        # and end_date) into separate components: years, days, and seconds. It accounts for leap
-        # years in its calculation of years and considers detailed time components (hours, minutes,
-        # seconds) for precise calculation of seconds.
+        # 此函数将两个提供的日期（start_date 和 end_date）之间的时间差分解为不同的组成部分：年、天和秒。
+        # 在计算年时，它考虑了闰年，并考虑了详细的时间组成部分（小时、分钟、秒）以精确计算秒。
         #
-        # Each component of the time difference (years, days, seconds) is represented as a
-        # tuple in the returned list.
-        # The first element is the date that indicates the end point of that time segment
-        # when moving from start_date to end_date. For example, if the function calculates 1
-        # year, the date for the year entry will be the end date after 1 year has passed
-        # from start_date. This helps in understanding the progression of time from start_date
-        # to end_date in segmented intervals.
+        # 时间差的每个组成部分（年、天、秒）在返回的列表中表示为一个元组。
+        # 第一个元素是从 start_date 移动到 end_date 时，指示该时间段结束点的日期。
+        # 例如，如果函数计算出 1 年，则年份条目的日期将是 start_date 经过 1 年后的结束日期。
+        # 这有助于理解从 start_date 到 end_date 在分段间隔内的时间进展。
 
         if duration:
             return [(end_date, duration)]
 
         total_delta = end_date - start_date
 
-        # Calculate full years in the time delta
+        # 计算时间间隔中的整年数
         years = total_delta.days // 365
         minus_years_date = end_date - pd.Timedelta(days=365 * years)
 
-        # Calculate remaining days after subtracting full years
+        # 计算减去整年后的剩余天数
         days = (minus_years_date - start_date).days
         minus_days_date = minus_years_date - pd.Timedelta(days=days)
 
-        # Calculate remaining time in seconds
+        # 计算以秒为单位的剩余时间
         delta = minus_days_date - start_date
         subsecond = (
             1
