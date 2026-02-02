@@ -39,6 +39,7 @@ class TestAdapter:
                 sectors=[],
             )
         )
+
         
         # Create Client
         print(f"Creating Client with path: {MINIQMT_PATH}")

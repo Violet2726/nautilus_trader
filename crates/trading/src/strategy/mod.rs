@@ -654,6 +654,7 @@ pub trait Strategy: DataActor {
 
         if open_count > 0 {
             log::info!("正在取消 {open_count} 个活跃的{side_str} {instrument_id} 订单",);
+        }
 
         if inflight_count > 0 {
             log::info!(

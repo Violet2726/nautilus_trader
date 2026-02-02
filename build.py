@@ -613,7 +613,8 @@ if __name__ == "__main__":
         show_rustanalyzer_settings()
     else:
         print("\nStarting build...")
-        ts_start = dt.datetime.now(dt.UTC)
+        ts_start = dt.datetime.now(dt.timezone.utc)
         build()
-        print(f"Build time: {dt.datetime.now(dt.UTC) - ts_start}")
+        print(f"Build time: {dt.datetime.now(dt.timezone.utc) - ts_start}")
+
         print("\033[32m" + "Build completed" + "\033[0m")

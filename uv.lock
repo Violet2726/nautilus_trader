@@ -1641,6 +1641,9 @@ ib = [
 polymarket = [
     { name = "py-clob-client" },
 ]
+thinktrader = [
+    { name = "xtquant" },
+]
 visualization = [
     { name = "plotly" },
 ]
@@ -1702,8 +1705,9 @@ requires-dist = [
     { name = "tqdm", specifier = ">=4.67.2,<5.0.0" },
     { name = "uvloop", marker = "sys_platform != 'win32'", specifier = "==0.22.1,<1.0.0" },
     { name = "v4-proto", marker = "python_full_version < '3.14' and extra == 'dydx'", specifier = "==7.0.5" },
+    { name = "xtquant", marker = "extra == 'thinktrader'", specifier = ">=250516.1.1" },
 ]
-provides-extras = ["betfair", "ib", "docker", "dydx", "polymarket", "visualization"]
+provides-extras = ["betfair", "ib", "docker", "dydx", "polymarket", "thinktrader", "visualization"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -3119,6 +3123,21 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/aa/a3/4d310fa5f00863544e1d0f4de93bddec248499ccf97d4791bc3122c9d4f3/virtualenv-20.36.1.tar.gz", hash = "sha256:8befb5c81842c641f8ee658481e42641c68b5eab3521d8e092d18320902466ba", size = 6032239, upload-time = "2026-01-09T18:21:01.296Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/6a/2a/dc2228b2888f51192c7dc766106cd475f1b768c10caaf9727659726f7391/virtualenv-20.36.1-py3-none-any.whl", hash = "sha256:575a8d6b124ef88f6f51d56d656132389f961062a9177016a50e4f507bbcc19f", size = 6008258, upload-time = "2026-01-09T18:20:59.425Z" },
+]
+
+[[package]]
+name = "xtquant"
+version = "250516.1.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+    { name = "pandas" },
+    { name = "requests" },
+    { name = "tqdm" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/74/51/73b6dcc51ae95cc82484956d80787adf98152b57b838586d4cae373e04c8/xtquant-250516.1.1.tar.gz", hash = "sha256:c243466c7af9c6c11074d1fd00f66445d5d105b70ab498e79a2c5bf7b00f3f4a", size = 34562730, upload-time = "2025-06-11T12:03:48.103Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f4/23/3c8aa2d1130aa735285fb7e18a44d67ab71ba1162e545bd488b20457d57b/xtquant-250516.1.1-py3-none-any.whl", hash = "sha256:f8461b0a295fa9b13ead33acca8675f7961fe1b4488a319b5549853142a89014", size = 34704183, upload-time = "2025-06-11T12:03:38.674Z" },
 ]
 
 [[package]]
