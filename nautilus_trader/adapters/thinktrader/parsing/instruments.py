@@ -1,8 +1,8 @@
 from datetime import datetime
 from typing import Optional
 
-from nautilus_trader.model.instruments import Equity, FuturesContract, OptionsContract
-from nautilus_trader.model.identifiers import InstrumentId, Symbol
+from nautilus_trader.model.instruments import Equity, FuturesContract, OptionContract
+from nautilus_trader.model.identifiers import InstrumentId, Symbol, Venue
 from nautilus_trader.model.objects import Price, Quantity, Currency
 from nautilus_trader.model.enums import AssetClass, OptionKind
 
@@ -74,7 +74,7 @@ def parse_future(detail: dict, instrument_id: InstrumentId) -> FuturesContract:
     )
 
 
-def parse_option(detail: dict, instrument_id: InstrumentId) -> OptionsContract:
+def parse_option(detail: dict, instrument_id: InstrumentId) -> OptionContract:
     """解析期权合约"""
     price_tick = detail.get("PriceTick", 0.0001)
     price_precision = _get_precision(price_tick)
@@ -101,7 +101,7 @@ def parse_option(detail: dict, instrument_id: InstrumentId) -> OptionsContract:
         except ValueError:
             pass
     
-    return OptionsContract(
+    return OptionContract(
         instrument_id=instrument_id,
         raw_symbol=Symbol(detail.get("InstrumentID", "")),
         asset_class=AssetClass.EQUITY,  # 股票期权
@@ -131,12 +131,23 @@ def _get_precision(price_tick: float) -> int:
 
 
 def stock_code_to_instrument_id(stock_code: str) -> InstrumentId:
-    """将 XtQuant 代码转换为 InstrumentId"""
-    # 600000.SH -> 600000.THINKTRADER
+    """
+    将 XtQuant 代码转换为 InstrumentId
+    
+    例如: 
+    600000.SH -> 600000.SSE
+    000001.SZ -> 000001.SZSE
+    """
     parts = stock_code.split(".")
+    if len(parts) != 2:
+        # Fallback for unknown format
+        return InstrumentId(Symbol(stock_code), TT_VENUE)
+        
     symbol = parts[0]
-    # 可选: 使用 TT_VENUE 或根据市场使用不同 Venue
-    return InstrumentId(Symbol(symbol), TT_VENUE)
+    market = parts[1]
+    
+    venue_str = MARKET_TO_VENUE.get(market, TT_VENUE.value)
+    return InstrumentId(Symbol(symbol), Venue(venue_str))
 
 
 def instrument_id_to_stock_code(instrument_id: InstrumentId, cache=None) -> str:
@@ -155,15 +166,20 @@ def instrument_id_to_stock_code(instrument_id: InstrumentId, cache=None) -> str:
             market = VENUE_TO_MARKET.get(str(instrument.exchange), "SH")
             return f"{symbol}.{market}"
     
-    # 根据 symbol 首字符推断市场
+    # 尝试使用 Venue 映射
+    venue_str = instrument_id.venue.value
+    if venue_str in VENUE_TO_MARKET:
+        market = VENUE_TO_MARKET[venue_str]
+        return f"{symbol}.{market}"
+
+    # 作为后备，根据 symbol 首字符推断市场 (仅适用于股票)
     if symbol.startswith("6"):
         return f"{symbol}.SH"  # 上交所 A 股
     elif symbol.startswith(("0", "3")):
         return f"{symbol}.SZ"  # 深交所 A 股
     elif symbol.startswith("8") or symbol.startswith("4"):
         return f"{symbol}.BJ"  # 北交所
-    elif len(symbol) <= 4:
-        # 期货合约通常较短
-        return f"{symbol}.IF"  # 默认中金所，需要更复杂的判断
+    elif len(symbol) <= 4: # 简单的期货逻辑
+         return f"{symbol}.IF" 
     else:
-        return f"{symbol}.SH"  # 默认
+        return f"{symbol}.SH"  # 最后的默认值

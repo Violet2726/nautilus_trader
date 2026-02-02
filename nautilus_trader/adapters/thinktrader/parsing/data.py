@@ -55,6 +55,30 @@ STOCK_STATUS_MAP = {
     23: "POST_CLOSED",  # 盘后固定价格行情完毕
 }
 
+
+def xt_time_to_ns(time_val: int) -> int:
+    """
+    将 XtQuant 时间 (毫秒戳或 YYYYMMDDHHMMSS) 转换为纳秒时间戳
+    """
+    # 简单的启发式判断
+    # 2000 年的毫秒戳约为 946684800000 (12位)
+    # 2100 年的毫秒戳约为 4102444800000 (13位)
+    # YYYYMMDDHHMMSS 格式 (如 20230101000000) 是 14 位
+    
+    if time_val > 10_000_000_000_000: # 大于 13 位，假设是 YYYYMMDDHHMMSS 格式
+        from datetime import datetime
+        s = str(time_val)
+        try:
+            dt = datetime.strptime(s, "%Y%m%d%H%M%S")
+            return int(dt.timestamp() * 1_000_000_000)
+        except ValueError:
+             # Fallback: maybe it includes milliseconds?
+             return time_val * 1_000_000 # Assume ms as fallback
+    
+    # 默认假设为毫秒时间戳
+    return time_val * 1_000_000
+
+
 def parse_tick_to_quote_tick(
     instrument_id: InstrumentId,
     data: dict,
@@ -83,9 +107,7 @@ def parse_tick_to_quote_tick(
     bid_vol = int(bid_vols[0]) if bid_vols else 0
     ask_vol = int(ask_vols[0]) if ask_vols else 0
     
-    # time 是毫秒时间戳，需要转换为纳秒
-    # 注意：MiniQmt返回的时间戳有时是13位毫秒，有时可能是其他格式，需确保是数值
-    ts_event = int(data.get("time", 0)) * 1_000_000
+    ts_event = xt_time_to_ns(int(data.get("time", 0)))
     
     return QuoteTick(
         instrument_id=instrument_id,
@@ -113,7 +135,7 @@ def parse_tick_to_trade_tick(
     from nautilus_trader.model.identifiers import TradeId
     from nautilus_trader.model.enums import AggressorSide
     
-    ts_event = int(data.get("time", 0)) * 1_000_000
+    ts_event = xt_time_to_ns(int(data.get("time", 0)))
     
     return TradeTick(
         instrument_id=instrument_id,
@@ -141,7 +163,7 @@ def parse_kline_to_bar(
     - amount: 成交额
     - preClose: 前收价
     """
-    ts_event = int(data.get("time", 0)) * 1_000_000
+    ts_event = xt_time_to_ns(int(data.get("time", 0)))
     
     return Bar(
         bar_type=bar_type,

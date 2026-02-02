@@ -20,7 +20,7 @@ class ThinkTraderLiveDataClientFactory(LiveDataClientFactory):
         cache,
         clock,
     ) -> ThinkTraderDataClient:
-        logger = Logger(name, clock=clock)
+        logger = Logger(name)
         # Assuming account_id is not strictly needed for DataClient only but client needs it?
         # Actually standard ThinkTraderClient requires account_id.
         # But DataClientConfig doesn't seem to have account_id in my definion? 
@@ -84,7 +84,7 @@ class ThinkTraderLiveExecClientFactory(LiveExecClientFactory):
         cache,
         clock,
     ) -> ThinkTraderExecutionClient:
-        logger = Logger(name, clock=clock)
+        logger = Logger(name)
         
         client = ThinkTraderClient(
             loop=loop,

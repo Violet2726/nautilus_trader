@@ -31,7 +31,7 @@ STOCK_ORDER_TYPE_MAP = {
 # ============================================================================
 CREDIT_ORDER_TYPE_MAP = {
     "MARGIN_BUY": xtconstant.CREDIT_FIN_BUY,            # 融资买入
-    "MARGIN_SELL": xtconstant.CREDIT_DIRECT_SELL,       # 卖券还款
+    "MARGIN_SELL": xtconstant.CREDIT_SELL_SECU_REPAY,       # 卖券还款
     "SHORT_SELL": xtconstant.CREDIT_SLO_SELL,           # 融券卖出
     "BUY_TO_COVER": xtconstant.CREDIT_BUY_SECU_REPAY,   # 买券还券
     "BUY_COLLATERAL": xtconstant.CREDIT_BUY,            # 担保品买入
@@ -55,20 +55,20 @@ FUTURES_SIX_KEY_ORDER_TYPE_MAP = {
 # ============================================================================
 FUTURES_FOUR_KEY_ORDER_TYPE_MAP = {
     "OPEN_LONG": xtconstant.FUTURE_OPEN_LONG,       # 买开
-    "CLOSE_LONG": xtconstant.FUTURE_CLOSE_LONG,     # 卖平 (自动优先平昨)
+    "CLOSE_LONG": xtconstant.FUTURE_CLOSE_LONG_HISTORY_FIRST,     # 卖平 (自动优先平昨)
     "OPEN_SHORT": xtconstant.FUTURE_OPEN_SHORT,     # 卖开
-    "CLOSE_SHORT": xtconstant.FUTURE_CLOSE_SHORT,   # 买平 (自动优先平昨)
+    "CLOSE_SHORT": xtconstant.FUTURE_CLOSE_SHORT_HISTORY_FIRST,   # 买平 (自动优先平昨)
 }
 
 # ============================================================================
 # 期货委托类型映射 - 两键风格 (来源: API_NOTES 4.3)
 # ============================================================================
-FUTURES_TWO_KEY_ORDER_TYPE_MAP = {
-    "SMART_BUY": xtconstant.FUTURE_SMART_BUY,            # 智能买入 (自动判断开/平)
-    "SMART_SELL": xtconstant.FUTURE_SMART_SELL,          # 智能卖出 (自动判断开/平)
-    "SMART_BUY_TODAY": xtconstant.FUTURE_SMART_BUY_TODAY,   # 智能买入平今优先
-    "SMART_SELL_TODAY": xtconstant.FUTURE_SMART_SELL_TODAY, # 智能卖出平今优先
-}
+# FUTURES_TWO_KEY_ORDER_TYPE_MAP = {
+#     "SMART_BUY": xtconstant.FUTURE_SMART_BUY,            # 智能买入 (自动判断开/平)
+#     "SMART_SELL": xtconstant.FUTURE_SMART_SELL,          # 智能卖出 (自动判断开/平)
+#     "SMART_BUY_TODAY": xtconstant.FUTURE_SMART_BUY_TODAY,   # 智能买入平今优先
+#     "SMART_SELL_TODAY": xtconstant.FUTURE_SMART_SELL_TODAY, # 智能卖出平今优先
+# }
 
 # ============================================================================
 # 多空方向 (来源: API_NOTES 4.7)

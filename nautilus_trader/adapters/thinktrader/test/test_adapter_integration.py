@@ -7,10 +7,10 @@ import signal
 # sys.path.append(os.getcwd())  # Removed to avoid shadowing installed package
 
 from nautilus_trader.model.identifiers import InstrumentId, Symbol, Venue
-from nautilus_trader.live.msgbus import MessageBus
+from nautilus_trader.common.component import MessageBus
 from nautilus_trader.common.component import Logger
 from nautilus_trader.cache.cache import Cache
-from nautilus_trader.time.clock import LiveClock
+from nautilus_trader.common.component import LiveClock
 
 from nautilus_trader.adapters.thinktrader.config import (
     ThinkTraderDataClientConfig,
@@ -27,7 +27,9 @@ class TestAdapter:
     def __init__(self):
         self.loop = asyncio.get_event_loop()
         self.clock = LiveClock()
-        self.msgbus = MessageBus(tracer=None, clock=self.clock)
+        from nautilus_trader.model.identifiers import TraderId
+        self.trader_id = TraderId("TESTER-001")
+        self.msgbus = MessageBus(trader_id=self.trader_id, clock=self.clock)
         self.cache = Cache(database=None)
         
         # Configure
@@ -57,7 +59,17 @@ class TestAdapter:
         
         # 1. Connect
         print("Connecting...")
-        await self.client.connect()
+        self.client.connect()
+        
+        # Wait for connection or error
+        # In LiveDataClient, the task is added to self.client._tasks
+        while not self.client.is_connected:
+            # Check if any tasks failed
+            for task in list(self.client._tasks):
+                if task.done() and task.exception():
+                    print(f"❌ Connection task failed: {task.exception()}")
+                    return
+            await asyncio.sleep(0.1)
         print("Connected.")
         
         # 2. Load Instrument
@@ -118,8 +130,14 @@ class TestAdapter:
         print(f"MsgBus: {msg}")
 
 if __name__ == "__main__":
+    # Ensure consistent event loop
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    
     test = TestAdapter()
     try:
-        asyncio.run(test.run())
+        loop.run_until_complete(test.run())
     except KeyboardInterrupt:
         pass
+    finally:
+        loop.close()
