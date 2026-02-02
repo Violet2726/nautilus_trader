@@ -125,9 +125,12 @@ class BacktestVenueConfig(NautilusConfig, frozen=True):
         If borrowing is allowed for cash accounts (negative balances).
     frozen_account : bool, default False
         If the account for this exchange is frozen (balances will not change).
-    price_protection_points : int, default 0
+    price_protection_points : NonNegativeInt, default 0
         Defines an exchange-calculated price boundary (in points) to prevent
         marketable orders from executing at excessively aggressive prices.
+        For BUY orders: protection_price = ask + (points * price_increment).
+        For SELL orders: protection_price = bid - (points * price_increment).
+        Set to 0 to disable price protection.
 
     """
 
@@ -160,7 +163,7 @@ class BacktestVenueConfig(NautilusConfig, frozen=True):
     queue_position: bool = False
     allow_cash_borrowing: bool = False
     frozen_account: bool = False
-    price_protection_points: int = 0
+    price_protection_points: NonNegativeInt = 0
 
 
 class BacktestDataConfig(NautilusConfig, frozen=True):
@@ -202,6 +205,9 @@ class BacktestDataConfig(NautilusConfig, frozen=True):
     bar_types : list[BarType | str], optional
         The bar types for the data catalog query.
         Can be used if instrument_id is not specified.
+    optimize_file_loading : bool, default False
+        If True, registers entire directories with the query backend for efficient
+        loading. If False, registers each file individually (e.g. for precise file control).
 
     """
 
@@ -219,6 +225,7 @@ class BacktestDataConfig(NautilusConfig, frozen=True):
     bar_spec: str | None = None
     instrument_ids: list[str] | None = None
     bar_types: list[str] | None = None
+    optimize_file_loading: bool = False
 
     @property
     def data_type(self) -> type:
@@ -271,6 +278,7 @@ class BacktestDataConfig(NautilusConfig, frozen=True):
             "end": self.end_time,
             "filter_expr": parse_filters_expr(self.filter_expr),
             "metadata": self.metadata,
+            "optimize_file_loading": self.optimize_file_loading,
         }
 
     @property

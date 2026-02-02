@@ -1624,7 +1624,7 @@ class ParquetDataCatalog(BaseDataCatalog):
             start=start,
             end=end,
             where=where,
-            file=files,
+            files=files,
             **kwargs,
         )
         result = session.to_query_result()
@@ -1651,7 +1651,7 @@ class ParquetDataCatalog(BaseDataCatalog):
         where: str | None = None,
         session: DataBackendSession | None = None,
         files: list[str] | None = None,
-        optimize_file_loading: bool = True,
+        optimize_file_loading: bool = False,
         **kwargs: Any,
     ) -> DataBackendSession:
         """
@@ -1680,8 +1680,8 @@ class ParquetDataCatalog(BaseDataCatalog):
             performance optimization when the caller already knows which files exist.
             Note: With `optimize_file_loading=True`, the entire directory containing
             these files will be read by DataFusion, not just the specified files.
-        optimize_file_loading : bool, default True
-            If True (default), registers entire directories with DataFusion, which is
+        optimize_file_loading : bool, default False
+            If True, registers entire directories with DataFusion, which is
             more efficient for managing many files. If False, registers each file
             individually (needed for operations like consolidation where precise file
             control is required).

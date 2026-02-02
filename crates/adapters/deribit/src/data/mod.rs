@@ -66,7 +66,7 @@ use crate::{
     config::DeribitDataClientConfig,
     http::{
         client::DeribitHttpClient,
-        models::{DeribitCurrency, DeribitInstrumentKind},
+        models::{DeribitCurrency, DeribitProductType},
     },
     websocket::{
         auth::DERIBIT_DATA_SESSION_NAME, client::DeribitWebSocketClient,
@@ -357,20 +357,20 @@ impl DataClient for DeribitDataClient {
             return Ok(());
         }
 
-        // Fetch instruments for each configured instrument kind
-        let instrument_kinds = if self.config.instrument_kinds.is_empty() {
-            vec![DeribitInstrumentKind::Future]
+        // Fetch instruments for each configured product type
+        let product_types = if self.config.product_types.is_empty() {
+            vec![DeribitProductType::Future]
         } else {
-            self.config.instrument_kinds.clone()
+            self.config.product_types.clone()
         };
 
         let mut all_instruments = Vec::new();
-        for kind in &instrument_kinds {
+        for product_type in &product_types {
             let fetched = self
                 .http_client
-                .request_instruments(DeribitCurrency::ANY, Some(*kind))
+                .request_instruments(DeribitCurrency::ANY, Some(*product_type))
                 .await
-                .with_context(|| format!("failed to request instruments for {kind:?}"))?;
+                .with_context(|| format!("failed to request instruments for {product_type:?}"))?;
 
             // Cache in http client
             self.http_client.cache_instruments(fetched.clone());
@@ -1172,27 +1172,27 @@ impl DataClient for DeribitDataClient {
         let clock = self.clock;
         let venue = *DERIBIT_VENUE;
 
-        // Get instrument kinds from config, default to Future if empty
-        let instrument_kinds = if self.config.instrument_kinds.is_empty() {
-            vec![crate::http::models::DeribitInstrumentKind::Future]
+        // Get product types from config, default to Future if empty
+        let product_types = if self.config.product_types.is_empty() {
+            vec![crate::http::models::DeribitProductType::Future]
         } else {
-            self.config.instrument_kinds.clone()
+            self.config.product_types.clone()
         };
 
         get_runtime().spawn(async move {
             let mut all_instruments = Vec::new();
-            for kind in &instrument_kinds {
-                log::debug!("Requesting instruments for currency=ANY, kind={kind:?}");
+            for product_type in &product_types {
+                log::debug!("Requesting instruments for currency=ANY, product_type={product_type:?}");
 
                 match http_client
-                    .request_instruments(DeribitCurrency::ANY, Some(*kind))
+                    .request_instruments(DeribitCurrency::ANY, Some(*product_type))
                     .await
                 {
                     Ok(instruments) => {
                         log::info!(
                             "Fetched {} instruments for ANY/{:?}",
                             instruments.len(),
-                            kind
+                            product_type
                         );
 
                         for instrument in instruments {
@@ -1214,7 +1214,7 @@ impl DataClient for DeribitDataClient {
                         }
                     }
                     Err(e) => {
-                        log::error!("Failed to fetch instruments for ANY/{kind:?}: {e:?}");
+                        log::error!("Failed to fetch instruments for ANY/{product_type:?}: {e:?}");
                     }
                 }
             }
