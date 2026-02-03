@@ -105,7 +105,7 @@ class HistoricInteractiveBrokersClient:
                 "目前仅支持 'redis' 数据库类型。如果您不想使用缓存数据库，"
                 "可以为 `cache_config.database` 传递 `None`。",
             )
- 
+
         self._client = InteractiveBrokersClient(
             loop=loop,
             msgbus=msgbus,
@@ -116,7 +116,7 @@ class HistoricInteractiveBrokersClient:
             client_id=client_id,
         )
         self._client.start()
- 
+
         # 存储工具提供者配置并仅创建一次提供者
         if instrument_provider_config is None:
             instrument_provider_config = InteractiveBrokersInstrumentProviderConfig()
@@ -173,11 +173,11 @@ class HistoricInteractiveBrokersClient:
             else instrument_id
             for instrument_id in (instrument_ids or [])
         ]
- 
+
         await self._data_client.instrument_provider.load_ids_async(
             converted_instrument_ids + (contracts or []),
         )
- 
+
         return list(self._data_client.instrument_provider._instruments.values())
 
     async def request_bars(
@@ -233,7 +233,7 @@ class HistoricInteractiveBrokersClient:
         # 根据时区调整开始和结束时间
         if start_date_time:
             start_date_time = pd.Timestamp(start_date_time, tz=tz_name).tz_convert("UTC")
- 
+
         end_date_time = pd.Timestamp(end_date_time, tz=tz_name).tz_convert("UTC")
 
         if start_date_time and start_date_time >= end_date_time:
@@ -241,7 +241,7 @@ class HistoricInteractiveBrokersClient:
 
         if duration:
             pattern = r"^\d+\s[SDWMY]$"
- 
+
             if not re.match(pattern, duration):
                 raise ValueError("duration 必须符合格式：'int S|D|W|M|Y'")
 
@@ -345,7 +345,7 @@ class HistoricInteractiveBrokersClient:
             raise ValueError(
                 "tick_type 必须是以下之一：'TRADES'（用于 TradeTicks），'BID_ASK'（用于 QuoteTicks）",
             )
- 
+
         if start_date_time >= end_date_time:
             raise ValueError("开始日期必须早于结束日期。")
 

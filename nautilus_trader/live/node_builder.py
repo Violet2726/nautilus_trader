@@ -84,23 +84,23 @@ class TradingNodeBuilder:
 
     def add_data_client_factory(self, name: str, factory: type[LiveDataClientFactory]) -> None:
         """
-    向构建器添加给定的数据客户端工厂。
+        向构建器添加给定的数据客户端工厂。
 
-    参数
-    ----------
-    name : str
+        参数
+        ----------
+        name : str
         客户端的名称。
-    factory : type[LiveDataClientFactory]
+        factory : type[LiveDataClientFactory]
         要添加的工厂。
 
-    异常
-    ------
-    ValueError
+        异常
+        ------
+        ValueError
         如果 `name` 不是有效的字符串。
-    KeyError
+        KeyError
         如果 `name` 已经添加过。
 
-    """
+        """
         PyCondition.valid_string(name, "name")
         PyCondition.not_none(factory, "factory")
         PyCondition.not_in(name, self._data_factories, "name", "_data_factories")
@@ -113,23 +113,23 @@ class TradingNodeBuilder:
 
     def add_exec_client_factory(self, name: str, factory: type[LiveExecClientFactory]) -> None:
         """
-    向构建器添加给定的执行客户端工厂。
+        向构建器添加给定的执行客户端工厂。
 
-    参数
-    ----------
-    name : str
+        参数
+        ----------
+        name : str
         客户端的名称。
-    factory : type[LiveExecClientFactory]
+        factory : type[LiveExecClientFactory]
         要添加的工厂。
 
-    异常
-    ------
-    ValueError
+        异常
+        ------
+        ValueError
         如果 `name` 不是有效的字符串。
-    KeyError
+        KeyError
         如果 `name` 已经添加过。
 
-    """
+        """
         PyCondition.valid_string(name, "name")
         PyCondition.not_none(factory, "factory")
         PyCondition.not_in(name, self._exec_factories, "name", "_exec_factories")
@@ -145,14 +145,14 @@ class TradingNodeBuilder:
         config: dict[str, LiveDataClientConfig],
     ) -> None:
         """
-    使用给定的配置构建数据客户端。
+        使用给定的配置构建数据客户端。
 
-    参数
-    ----------
-    config : dict[str, ImportableConfig | LiveDataClientConfig]
+        参数
+        ----------
+        config : dict[str, ImportableConfig | LiveDataClientConfig]
         数据客户端的配置。
 
-    """
+        """
         PyCondition.not_none(config, "config")
 
         if not config and not self._data_engine.get_external_client_ids():
@@ -203,14 +203,14 @@ class TradingNodeBuilder:
         config: dict[str, LiveExecClientConfig],
     ) -> None:
         """
-    使用给定的配置构建执行客户端。
+        使用给定的配置构建执行客户端。
 
-    参数
-    ----------
-    config : dict[str, ImportableConfig | LiveExecClientConfig]
+        参数
+        ----------
+        config : dict[str, ImportableConfig | LiveExecClientConfig]
         执行客户端的配置。
 
-    """
+        """
         PyCondition.not_none(config, "config")
 
         if not config and not self._exec_engine.get_external_client_ids():

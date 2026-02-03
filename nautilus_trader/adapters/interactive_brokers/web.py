@@ -176,7 +176,7 @@ def load_product_list(
 
         if debug:
             print(f"正在使用 {params=} 请求工具")
- 
+
         response = http_get(url, params=params, timeout_secs=30)
         tree = fromstring(response.body)
         tables = tree.xpath('//table[@class="table table-striped table-bordered"]')

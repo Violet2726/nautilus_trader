@@ -299,7 +299,7 @@ def sec_type_to_asset_class(sec_type: str) -> AssetClass:
     # 处理空或 None 的 sec_type
     if not sec_type:
         return AssetClass.EQUITY  # 默认为 EQUITY (股票)
- 
+
     mapped_value = mapping.get(sec_type, sec_type)
     # 如果映射后的值仍不是有效的 AssetClass，则默认为 EQUITY
     try:
@@ -463,7 +463,7 @@ def parse_option_contract(
     }[contract_details.contract.right]
     expiration = expiry_timestring_to_datetime(contract_details)
     activation = expiration - pd.Timedelta(days=90)  # 待办：使其更准确
- 
+
     # 对于期权，乘数代表手数 (例如，每张合约 100 股)
     multiplier = Quantity.from_str(contract_details.contract.multiplier)
 
@@ -682,7 +682,7 @@ def parse_option_spread(
 
     # 从合约详情中提取标的证券代码
     underlying = contract_details.underSymbol or contract_details.contract.symbol or "UNKNOWN"
- 
+
     # 根据标的证券类型确定资产类别
     asset_class = (
         sec_type_to_asset_class(contract_details.underSecType)
@@ -749,7 +749,7 @@ def parse_option_spread_instrument_id(
     try:
         if not leg_contract_details:
             raise ValueError("必须提供 leg_contract_details")
- 
+
         # 使用第一条腿的合约详情
         first_details, _ = leg_contract_details[0]
         first_contract = first_details.contract
@@ -757,7 +757,7 @@ def parse_option_spread_instrument_id(
         # 从第一条腿的合约详情中提取所有属性
         currency = Currency.from_str(first_contract.currency)
         underlying = first_details.underSymbol or first_contract.symbol
- 
+
         # 使用合约乘数
         multiplier = Quantity.from_str(str(first_contract.multiplier))
 
@@ -777,10 +777,10 @@ def parse_option_spread_instrument_id(
 
         # 使用提供的时间戳或当前时间
         timestamp = clock_timestamp_ns if clock_timestamp_ns is not None else time.time_ns()
- 
+
         # 对于期权组合，手数等于乘数 (与单个期权合约相同)
         lot_size = multiplier
- 
+
         # 为第一条腿创建包含合约详情的 info 字典
         # 这对于数据客户端创建订阅合约是必需的
         info = {
@@ -846,7 +846,7 @@ def parse_futures_spread(
 
     # 从合约详情中提取标的证券代码
     underlying = contract_details.underSymbol or contract_details.contract.symbol or "UNKNOWN"
- 
+
     # 根据标的证券类型确定资产类别
     asset_class = (
         sec_type_to_asset_class(contract_details.underSecType)
@@ -913,7 +913,7 @@ def parse_futures_spread_instrument_id(
     try:
         if not leg_contract_details:
             raise ValueError("必须提供 leg_contract_details")
- 
+
         # 使用第一条腿的合约详情
         first_details, _ = leg_contract_details[0]
         first_contract = first_details.contract
@@ -921,13 +921,13 @@ def parse_futures_spread_instrument_id(
         # 从第一条腿的合约详情中提取所有属性
         currency = Currency.from_str(first_contract.currency)
         underlying = first_details.underSymbol or first_contract.symbol
- 
+
         # 使用合约乘数
         multiplier = Quantity.from_str(str(first_contract.multiplier))
 
         # 根据证券类型确定资产类别
         asset_class = sec_type_to_asset_class(first_contract.secType)
- 
+
         # 从合约详情中读取价格增量
         min_tick = min(leg_details.minTick for leg_details, _ in leg_contract_details)
         price_increment = Price(
@@ -938,10 +938,10 @@ def parse_futures_spread_instrument_id(
 
         # 使用提供的时间戳或当前时间
         timestamp = clock_timestamp_ns if clock_timestamp_ns is not None else time.time_ns()
- 
+
         # 对于期货组合，手数通常为 1
         lot_size = Quantity.from_int(1)
- 
+
         # 为第一条腿创建包含合约详情的 info 字典
         # 这对于数据客户端创建订阅合约是必需的
         info = {
@@ -987,7 +987,7 @@ def contract_details_to_dict(contract_details: IBContractDetails) -> dict:
 
     # 为 JSON 兼容性序列化 Decimal 和 Enum 对象
     result = _serialize_for_json(dict_details)
- 
+
     # 类型转换：我们知道这是一个字典，因为我们传入了一个字典
     return cast(dict[str, Any], result)
 
@@ -1135,7 +1135,7 @@ def bag_contract_to_instrument_id(
             if contract_details_map and combo_leg.conId in contract_details_map:
                 leg_contract_details = contract_details_map[combo_leg.conId]
                 leg_contract = leg_contract_details.contract
- 
+
                 # 从腿合约创建工具 ID
                 leg_instrument_id = ib_contract_to_instrument_id_simplified_symbology(
                     leg_contract,
@@ -1146,15 +1146,15 @@ def bag_contract_to_instrument_id(
                     f"无法解析 conId {combo_leg.conId} 的腿工具 ID。"
                     f"未提供合约详情映射或映射不完整。",
                 )
- 
+
             # 确定比例 (BUY 为正, SELL 为负)
             ratio = combo_leg.ratio if combo_leg.action == "BUY" else -combo_leg.ratio
- 
+
             leg_tuples.append((leg_instrument_id, ratio))
- 
+
         # 创建组合工具 ID
         return new_generic_spread_id(leg_tuples)
- 
+
     except Exception as e:
         raise ValueError(f"从 BAG 合约 {contract} 创建组合工具 ID 失败: {e}")
 
@@ -1281,13 +1281,13 @@ def instrument_id_to_bag_contract(
     try:
         # 将组合 ID 解析回单个腿
         leg_tuples = generic_spread_id_to_list(instrument_id)
- 
+
         if not leg_tuples:
             raise ValueError("组合工具 ID 没有腿")
- 
+
         # 为 BAG 合约创建组合腿
         combo_legs = []
- 
+
         for leg_instrument_id, ratio in leg_tuples:
             # 获取这条腿的合约详情以提取 conId
             if contract_details_map and leg_instrument_id in contract_details_map:
@@ -1300,11 +1300,11 @@ def instrument_id_to_bag_contract(
                     f"未找到腿 {leg_instrument_id} 的合约详情。"
                     f"在创建组合之前，请确保所有腿都已加载到工具提供者中。",
                 )
- 
+
             # 根据比例确定动作 (正数 = BUY, 负数 = SELL)
             action = "BUY" if ratio > 0 else "SELL"
             abs_ratio = abs(ratio)
- 
+
             # 使用实际的 conId 创建组合腿
             combo_leg = ComboLeg(
                 conId=con_id,
@@ -1313,7 +1313,7 @@ def instrument_id_to_bag_contract(
                 exchange=exchange,
             )
             combo_legs.append(combo_leg)
- 
+
         # 创建 BAG 合约
         return IBContract(
             secType="BAG",

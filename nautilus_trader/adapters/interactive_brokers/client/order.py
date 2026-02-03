@@ -250,7 +250,7 @@ class InteractiveBrokersClientOrderMixin(BaseMixin):
             and self.accounts()
             and not self._is_ib_connected.is_set()
         ):
-            self._log.debug(f"在 `nextValidId` 中设置了 `_is_ib_connected` 标志", LogColor.BLUE)
+            self._log.debug("在 `nextValidId` 中设置了 `_is_ib_connected` 标志", LogColor.BLUE)
             self._is_ib_connected.set()
 
     async def process_open_order(

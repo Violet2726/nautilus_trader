@@ -24,6 +24,27 @@ def _print_section(title: str) -> None:
     print("=" * 88)
 
 
+def _print_kv(key: str, value) -> None:
+    print(f"{key}: {value}")
+
+
+def _try_import_xtdata():
+    import importlib
+    import importlib.util
+
+    if importlib.util.find_spec("xtquant") is None:
+        pytest.skip("未安装 xtquant, 跳过真实行情测试")
+
+    return importlib.import_module("xtquant.xtdata")
+
+
+def _prepare_xtdata_data_dir(xtdata_module, data_dir: str) -> None:
+    xtdata_module.data_dir = data_dir
+    _print_kv("xtdata.data_dir", getattr(xtdata_module, "data_dir", None))
+
+
+
+
 @pytest.fixture
 def thinktrader_client(event_loop):
     client = ThinkTraderClient(
@@ -68,6 +89,9 @@ async def test_instrument_provider_initialize_loads_all_on_start():
 
     instruments = provider.list_all()
     assert len(instruments) == 2
+    _print_kv("sectors", config.sectors)
+    _print_kv("cache_instruments", config.cache_instruments)
+    _print_kv("client.get_stock_list 返回", client.get_stock_list.return_value)
     print(f"已加载工具数量: {len(instruments)}")
     print("样例工具[0]:", instruments[0].id)
     print("样例工具[1]:", instruments[1].id)
@@ -92,7 +116,8 @@ async def test_instrument_provider_initialize_reload_forces_reload():
     await provider.initialize(reload=True)
 
     provider.load_all_async.assert_called_once()
-    print("reload=True 已触发 load_all_async 调用。")
+    _print_kv("reload", True)
+    _print_kv("load_all_async 调用次数", provider.load_all_async.call_count)
 
 
 @pytest.mark.asyncio
@@ -111,6 +136,7 @@ async def test_subscribe_ticks_and_unsubscribe_ticks(thinktrader_client):
 
         subscribe_quote.assert_called_once()
         _, kwargs = subscribe_quote.call_args
+        _print_kv("subscribe_quote.call_args", subscribe_quote.call_args)
         assert kwargs["stock_code"] == stock_code
         assert kwargs["period"] == "tick"
         assert kwargs["count"] == 0
@@ -120,14 +146,18 @@ async def test_subscribe_ticks_and_unsubscribe_ticks(thinktrader_client):
         sub = thinktrader_client._subscriptions.get(name=name)
         assert sub is not None
         assert sub.req_id == 123
+        _print_kv("创建 Subscription", sub)
 
         await thinktrader_client.unsubscribe_ticks(instrument_id=instrument_id)
         unsubscribe_quote.assert_called_once_with(123)
         assert thinktrader_client._subscriptions.get(name=name) is None
+        _print_kv("unsubscribe_quote.call_args", unsubscribe_quote.call_args)
+        _print_kv("Subscription 已移除", True)
 
 
 @pytest.mark.asyncio
 async def test_subscribe_is_idempotent_by_name(thinktrader_client):
+    _print_section("订阅幂等: 相同 name 第二次订阅应复用 Subscription")
     instrument_id = InstrumentId.from_str("000001.SZSE")
     stock_code = "000001.SZ"
 
@@ -140,10 +170,14 @@ async def test_subscribe_is_idempotent_by_name(thinktrader_client):
         await thinktrader_client.subscribe_ticks(instrument_id=instrument_id, stock_code=stock_code)
         await thinktrader_client.subscribe_ticks(instrument_id=instrument_id, stock_code=stock_code)
         subscribe_quote.assert_called_once()
+        _print_kv("subscribe_quote.call_count", subscribe_quote.call_count)
+        name = (str(instrument_id), "tick")
+        _print_kv("Subscription 当前状态", thinktrader_client._subscriptions.get(name=name))
 
 
 @pytest.mark.asyncio
 async def test_subscribe_order_book_uses_l2quote_period(thinktrader_client):
+    _print_section("订阅 order_book: period 应为 l2quote")
     instrument_id = InstrumentId.from_str("000001.SZSE")
     stock_code = "000001.SZ"
 
@@ -155,11 +189,13 @@ async def test_subscribe_order_book_uses_l2quote_period(thinktrader_client):
     ):
         await thinktrader_client.subscribe_order_book(instrument_id=instrument_id, stock_code=stock_code)
         _, kwargs = subscribe_quote.call_args
+        _print_kv("subscribe_quote.call_args", subscribe_quote.call_args)
         assert kwargs["period"] == "l2quote"
 
 
 @pytest.mark.asyncio
 async def test_subscribe_tick_by_tick_periods(thinktrader_client):
+    _print_section("订阅 tick_by_tick: AllLast/l2transaction, BidAsk/l2order")
     instrument_id = InstrumentId.from_str("000001.SZSE")
     stock_code = "000001.SZ"
 
@@ -175,6 +211,7 @@ async def test_subscribe_tick_by_tick_periods(thinktrader_client):
             tick_type="AllLast",
         )
         _, kwargs = subscribe_quote.call_args
+        _print_kv("AllLast subscribe_quote.call_args", subscribe_quote.call_args)
         assert kwargs["period"] == "l2transaction"
 
     thinktrader_client._subscriptions = type(thinktrader_client._subscriptions)()
@@ -190,11 +227,13 @@ async def test_subscribe_tick_by_tick_periods(thinktrader_client):
             tick_type="BidAsk",
         )
         _, kwargs = subscribe_quote.call_args
+        _print_kv("BidAsk subscribe_quote.call_args", subscribe_quote.call_args)
         assert kwargs["period"] == "l2order"
 
 
 @pytest.mark.asyncio
 async def test_subscribe_realtime_bars_uses_bar_spec_period(thinktrader_client):
+    _print_section("订阅 realtime bars: bar_spec_to_period 映射")
     bar_type = BarType.from_str("000001.SZSE-1-MINUTE-LAST-EXTERNAL")
     stock_code = "000001.SZ"
 
@@ -206,6 +245,8 @@ async def test_subscribe_realtime_bars_uses_bar_spec_period(thinktrader_client):
     ):
         await thinktrader_client.subscribe_realtime_bars(bar_type=bar_type, stock_code=stock_code)
         _, kwargs = subscribe_quote.call_args
+        _print_kv("subscribe_quote.call_args", subscribe_quote.call_args)
+        _print_kv("bar_type", bar_type)
         assert kwargs["period"] == "1m"
 
 
@@ -233,6 +274,7 @@ async def test_get_historical_bars_calls_get_market_data(thinktrader_client):
         )
 
         assert result == expected_result
+        _print_kv("get_market_data.return_value", get_market_data.return_value)
         _, kwargs = get_market_data.call_args
         assert kwargs["stock_list"] == [stock_code]
         assert kwargs["period"] == "1m"
@@ -268,6 +310,7 @@ async def test_get_historical_ticks_calls_get_market_data(thinktrader_client):
         )
 
         assert result == expected_result
+        _print_kv("get_market_data.return_value", get_market_data.return_value)
         _, kwargs = get_market_data.call_args
         assert kwargs["stock_list"] == [stock_code]
         assert kwargs["period"] == "tick"
@@ -279,6 +322,7 @@ async def test_get_historical_ticks_calls_get_market_data(thinktrader_client):
 
 @pytest.mark.asyncio
 async def test_req_fundamental_data_returns_financial_and_detail(thinktrader_client):
+    _print_section("基本面数据: 财务数据与合约详情原始响应")
     instrument_id = InstrumentId.from_str("000001.SZSE")
     stock_code = "000001.SZ"
 
@@ -300,12 +344,16 @@ async def test_req_fundamental_data_returns_financial_and_detail(thinktrader_cli
         )
 
         assert result == {"financial": financial, "detail": detail}
+        _print_kv("xtdata.get_financial_data 原始返回", financial)
+        _print_kv("xtdata.get_instrument_detail 原始返回", detail)
+        _print_kv("适配器聚合后返回", result)
         get_financial_data.assert_called_once_with(stock_list=[stock_code], report_type="report_time")
         get_instrument_detail.assert_called_once_with(stock_code)
 
 
 @pytest.mark.asyncio
 async def test_get_price_reads_last_price_from_full_tick(thinktrader_client):
+    _print_section("实时价格: get_full_tick 原始响应与返回值")
     instrument_id = InstrumentId.from_str("000001.SZSE")
     stock_code = "000001.SZ"
 
@@ -316,24 +364,31 @@ async def test_get_price_reads_last_price_from_full_tick(thinktrader_client):
         result = await thinktrader_client.get_price(instrument_id=instrument_id, stock_code=stock_code)
         assert result == 12.34
         get_full_tick.assert_called_once_with([stock_code])
+        _print_kv("xtdata.get_full_tick 原始响应", get_full_tick.return_value)
+        _print_kv("适配器返回价格", result)
 
 
 @pytest.mark.asyncio
 async def test_on_quote_data_schedules_handle_quote_data(thinktrader_client):
+    _print_section("回调派发: _on_quote_data 应拆分 datas 并调度处理")
     thinktrader_client._handle_quote_data = Mock()
 
     datas = {"000001.SZ": [{"k": 1}, {"k": 2}]}
     name = ("000001.SZSE", "tick")
+    _print_kv("输入 datas", datas)
+    _print_kv("订阅 name", name)
     thinktrader_client._on_quote_data(datas, name=name)
 
     await asyncio.sleep(0)
 
     assert thinktrader_client._handle_quote_data.call_count == 2
+    _print_kv("调度处理次数", thinktrader_client._handle_quote_data.call_count)
     thinktrader_client._handle_quote_data.assert_any_call(name, "000001.SZ", {"k": 1})
     thinktrader_client._handle_quote_data.assert_any_call(name, "000001.SZ", {"k": 2})
 
 
 def test_handle_quote_data_tick_forwards_quote_and_trade(thinktrader_client):
+    _print_section("数据转发: tick 应转发 QuoteTick 与 TradeTick")
     seen = []
     thinktrader_client.register_event_handler("data", seen.append)
 
@@ -352,9 +407,11 @@ def test_handle_quote_data_tick_forwards_quote_and_trade(thinktrader_client):
         parse_quote.assert_called_once()
         parse_trade.assert_called_once()
         assert seen == [sentinel.quote, sentinel.trade]
+        _print_kv("转发数据列表", seen)
 
 
 def test_handle_quote_data_order_book_forwards_all_deltas(thinktrader_client):
+    _print_section("数据转发: order_book 应转发全部 OrderBookDelta")
     seen = []
     thinktrader_client.register_event_handler("data", seen.append)
 
@@ -368,9 +425,11 @@ def test_handle_quote_data_order_book_forwards_all_deltas(thinktrader_client):
         thinktrader_client._handle_quote_data(name, "000001.SZ", {"time": 0})
         parse_deltas.assert_called_once()
         assert seen == [sentinel.d1, sentinel.d2]
+        _print_kv("转发数据列表", seen)
 
 
 def test_handle_quote_data_l2order_forwards_delta(thinktrader_client):
+    _print_section("数据转发: l2order 应转发单条 OrderBookDelta")
     seen = []
     thinktrader_client.register_event_handler("data", seen.append)
 
@@ -384,9 +443,11 @@ def test_handle_quote_data_l2order_forwards_delta(thinktrader_client):
         thinktrader_client._handle_quote_data(name, "000001.SZ", {"time": 0})
         parse_delta.assert_called_once()
         assert seen == [sentinel.delta]
+        _print_kv("转发数据列表", seen)
 
 
 def test_handle_quote_data_l2transaction_forwards_trade_tick(thinktrader_client):
+    _print_section("数据转发: l2transaction 应转发 TradeTick")
     seen = []
     thinktrader_client.register_event_handler("data", seen.append)
 
@@ -400,9 +461,153 @@ def test_handle_quote_data_l2transaction_forwards_trade_tick(thinktrader_client)
         thinktrader_client._handle_quote_data(name, "000001.SZ", {"time": 0})
         parse_trade.assert_called_once()
         assert seen == [sentinel.trade]
+        _print_kv("转发数据列表", seen)
 
+
+@pytest.mark.asyncio
+async def test_xtdata_live_full_tick_output(event_loop):
+    _print_section("xtdata 实测: get_full_tick 原始响应与解析")
+    xtdata = _try_import_xtdata()
+
+    client = ThinkTraderClient(
+        loop=event_loop,
+        logger=Logger("ThinkTraderLive"),
+        miniqmt_path="D:\\中信证券QMT交易终端仿真\\userdata_mini",
+        session_id=1,
+        account_id="",
+    )
+    _prepare_xtdata_data_dir(xtdata, "D:\\中信证券QMT交易终端仿真\\userdata_mini")
+    client.configure_xtdata_data_dir("D:\\中信证券QMT交易终端仿真\\userdata_mini")
+    _print_kv("miniqmt_path", "D:\\中信证券QMT交易终端仿真\\userdata_mini")
+
+    instrument_id = InstrumentId.from_str("000001.SZSE")
+    stock_code = "000001.SZ"
+    _print_kv("instrument_id", instrument_id)
+    _print_kv("stock_code", stock_code)
+
+    raw = xtdata.get_full_tick([stock_code])
+    print("xtdata.get_full_tick 原始响应:", raw)
+
+    price = await client.get_price(instrument_id=instrument_id, stock_code=stock_code)
+    print(f"适配器解析后返回价格: {price}")
+
+    assert isinstance(raw, dict)
+
+
+@pytest.mark.asyncio
+async def test_xtdata_live_subscribe_tick_once_and_unsubscribe(event_loop):
+    _print_section("xtdata 实测: subscribe_quote(tick) 回调原始数据与取消订阅")
+    xtdata = _try_import_xtdata()
+    _prepare_xtdata_data_dir(xtdata, "D:\\中信证券QMT交易终端仿真\\userdata_mini")
+
+    stock_code = "000001.SZ"
+    _print_kv("stock_code", stock_code)
+
+    loop = event_loop
+    future = loop.create_future()
+
+    def on_tick(datas):
+        if future.done():
+            return
+        print("xtdata.subscribe_quote callback 原始参数:", datas)
+        loop.call_soon_threadsafe(future.set_result, datas)
+
+    seq = xtdata.subscribe_quote(
+        stock_code=stock_code,
+        period="tick",
+        count=0,
+        callback=on_tick,
+    )
+    _print_kv("subscribe_quote 返回 seq", seq)
+    assert isinstance(seq, int)
+    if seq <= 0:
+        pytest.skip("subscribe_quote 返回非正值, 可能未连接 MiniQmt 或无权限")
+
+    try:
+        try:
+            datas = await asyncio.wait_for(future, timeout=5.0)
+        except TimeoutError:
+            pytest.skip("等待 tick 回调超时, 可能当前无实时推送或未连接 MiniQmt")
+
+        _print_kv("回调数据类型", type(datas))
+        if isinstance(datas, dict):
+            _print_kv("回调 dict keys", list(datas.keys())[:10])
+            first_key = next(iter(datas.keys()), None)
+            if first_key is not None:
+                _print_kv("回调样例 stock_code", first_key)
+                _print_kv("回调样例 payload", datas[first_key])
+    finally:
+        xtdata.unsubscribe_quote(seq)
+        _print_kv("unsubscribe_quote 已调用", True)
+
+
+@pytest.mark.asyncio
+async def test_xtdata_live_get_market_data_tick_latest(event_loop):
+    _print_section("xtdata 实测: get_market_data(period=tick) 原始响应与样例")
+    xtdata = _try_import_xtdata()
+    _prepare_xtdata_data_dir(xtdata, "D:\\中信证券QMT交易终端仿真\\userdata_mini")
+
+    stock_code = "000001.SZ"
+    result = xtdata.get_market_data(
+        field_list=[],
+        stock_list=[stock_code],
+        period="tick",
+        start_time="",
+        end_time="",
+        count=10,
+    )
+    print("xtdata.get_market_data 原始响应:", result)
+
+    assert isinstance(result, dict)
+    data = result.get(stock_code)
+    _print_kv("result[stock_code] 类型", type(data))
+    if data is None:
+        pytest.skip("tick 返回为空, 可能本地无缓存且未收到订阅数据")
+
+    length = getattr(data, "shape", [len(data)])[0] if hasattr(data, "shape") else len(data)  # type: ignore[arg-type]
+    _print_kv("tick 记录数", length)
+    from contextlib import suppress
+
+    with suppress(Exception):
+        _print_kv("tick dtype.names", getattr(getattr(data, "dtype", None), "names", None))
+    with suppress(Exception):
+        _print_kv("tick 样例[0]", data[0])
+
+
+@pytest.mark.asyncio
+async def test_xtdata_live_get_market_data_1m_latest(event_loop):
+    _print_section("xtdata 实测: get_market_data(period=1m) 原始响应与 DataFrame 结构")
+    xtdata = _try_import_xtdata()
+    _prepare_xtdata_data_dir(xtdata, "D:\\中信证券QMT交易终端仿真\\userdata_mini")
+
+    stock_code = "000001.SZ"
+    result = xtdata.get_market_data(
+        field_list=["open", "high", "low", "close", "volume"],
+        stock_list=[stock_code],
+        period="1m",
+        start_time="",
+        end_time="",
+        count=10,
+        dividend_type="none",
+        fill_data=True,
+    )
+    print("xtdata.get_market_data 原始响应 keys:", list(result.keys()) if isinstance(result, dict) else type(result))
+    assert isinstance(result, dict)
+
+    for field in ("open", "high", "low", "close", "volume"):
+        df = result.get(field)
+        _print_kv(f"field={field} type", type(df))
+        if df is None:
+            continue
+        _print_kv(f"field={field} shape", getattr(df, "shape", None))
+        from contextlib import suppress
+
+        with suppress(Exception):
+            _print_kv(f"field={field} index_sample", list(getattr(df, "index", []))[:5])
+            _print_kv(f"field={field} columns_sample", list(getattr(df, "columns", []))[:5])
 
 def test_handle_quote_data_bar_type_string_forwards_bar(thinktrader_client):
+    _print_section("数据转发: bar_type 字符串应解析并转发 Bar")
     seen = []
     thinktrader_client.register_event_handler("data", seen.append)
 
@@ -416,6 +621,7 @@ def test_handle_quote_data_bar_type_string_forwards_bar(thinktrader_client):
         thinktrader_client._handle_quote_data(name, "000001.SZ", {"time": 0})
         parse_bar.assert_called_once()
         assert seen == [sentinel.bar]
+        _print_kv("转发数据列表", seen)
 
 
 @pytest.mark.asyncio
@@ -425,7 +631,9 @@ async def test_download_history_data_waits_for_finished(thinktrader_client):
         "nautilus_trader.adapters.thinktrader.client.market_data.xtdata.download_history_data2",
     ) as download_history_data2:
         def side_effect(*, callback, **_kwargs):
-            callback({"finished": True})
+            payload = {"finished": True}
+            print("download_history_data2 回调原始数据:", payload)
+            callback(payload)
 
         download_history_data2.side_effect = side_effect
 
@@ -435,17 +643,20 @@ async def test_download_history_data_waits_for_finished(thinktrader_client):
             start_time="20240101000000",
             end_time="20240102000000",
         )
-        print("download_history_data2 已触发 finished=True, 等待结束通过。")
+        _print_kv("download_history_data2.call_args", download_history_data2.call_args)
+        _print_kv("等待完成状态", True)
 
 
 @pytest.mark.asyncio
 async def test_unsubscribe_missing_subscription_does_not_call_xtdata(thinktrader_client):
+    _print_section("取消订阅: Subscription 不存在时不应调用 xtdata")
     instrument_id = InstrumentId.from_str("000001.SZSE")
     with patch(
         "nautilus_trader.adapters.thinktrader.client.market_data.xtdata.unsubscribe_quote",
     ) as unsubscribe_quote:
         await thinktrader_client.unsubscribe_ticks(instrument_id=instrument_id)
         unsubscribe_quote.assert_not_called()
+        _print_kv("unsubscribe_quote.call_count", unsubscribe_quote.call_count)
 
 
 @pytest.fixture
@@ -552,6 +763,14 @@ async def test_data_client_request_quote_ticks_parses_numpy_ticks(thinktrader_da
     await thinktrader_data_client._request_quote_ticks(request)
 
     assert len(seen) == 2
+    _print_kv("RequestQuoteTicks.instrument_id", request.instrument_id)
+    _print_kv("RequestQuoteTicks.start", request.start)
+    _print_kv("RequestQuoteTicks.end", request.end)
+    _print_kv("mock get_historical_ticks.return_value keys", list(thinktrader_data_client._client.get_historical_ticks.return_value.keys()))
+    _print_kv("mock tick ndarray dtype.names", arr.dtype.names)
+    _print_kv("mock tick ndarray[0]", arr[0])
+    _print_kv("download_history_data.await_args", thinktrader_data_client._client.download_history_data.await_args)
+    _print_kv("get_historical_ticks.await_args", thinktrader_data_client._client.get_historical_ticks.await_args)
     print(f"解析得到 QuoteTick 数量: {len(seen)}")
     print("样例 QuoteTick[0]:", seen[0])
     print("样例 QuoteTick[1]:", seen[1])
@@ -599,6 +818,13 @@ async def test_data_client_request_bars_parses_kline_fields(thinktrader_data_cli
     await thinktrader_data_client._request_bars(request)
 
     assert len(seen) == 2
+    _print_kv("RequestBars.bar_type", request.bar_type)
+    _print_kv("RequestBars.start", request.start)
+    _print_kv("RequestBars.end", request.end)
+    _print_kv("mock kline keys", list(data.keys()))
+    _print_kv("mock kline open.columns", list(data["open"].columns))
+    _print_kv("download_history_data.await_args", thinktrader_data_client._client.download_history_data.await_args)
+    _print_kv("get_historical_bars.await_args", thinktrader_data_client._client.get_historical_bars.await_args)
     print(f"解析得到 Bar 数量: {len(seen)}")
     print("样例 Bar[0]:", seen[0])
     print("样例 Bar[1]:", seen[1])
@@ -626,6 +852,7 @@ async def test_data_client_subscribe_and_unsubscribe_quote_ticks_calls_client_me
     )
     await thinktrader_data_client._subscribe_quote_ticks(sub)
     thinktrader_data_client._client.subscribe_market_data.assert_awaited_once()
+    _print_kv("subscribe_market_data.await_args", thinktrader_data_client._client.subscribe_market_data.await_args)
 
     unsub = UnsubscribeQuoteTicks(
         instrument_id=instrument_id,
@@ -637,6 +864,7 @@ async def test_data_client_subscribe_and_unsubscribe_quote_ticks_calls_client_me
     )
     await thinktrader_data_client._unsubscribe_quote_ticks(unsub)
     thinktrader_data_client._client.unsubscribe_market_data.assert_awaited_once_with(instrument_id)
+    _print_kv("unsubscribe_market_data.await_args", thinktrader_data_client._client.unsubscribe_market_data.await_args)
 
 
 @pytest.mark.asyncio
@@ -661,6 +889,7 @@ async def test_data_client_subscribe_and_unsubscribe_trade_ticks_calls_client_me
     )
     await thinktrader_data_client._subscribe_trade_ticks(sub)
     thinktrader_data_client._client.subscribe_tick_by_tick.assert_awaited_once()
+    _print_kv("subscribe_tick_by_tick.await_args", thinktrader_data_client._client.subscribe_tick_by_tick.await_args)
 
     unsub = UnsubscribeTradeTicks(
         instrument_id=instrument_id,
@@ -672,6 +901,7 @@ async def test_data_client_subscribe_and_unsubscribe_trade_ticks_calls_client_me
     )
     await thinktrader_data_client._unsubscribe_trade_ticks(unsub)
     thinktrader_data_client._client.unsubscribe_tick_by_tick.assert_awaited_once()
+    _print_kv("unsubscribe_tick_by_tick.await_args", thinktrader_data_client._client.unsubscribe_tick_by_tick.await_args)
 
 
 @pytest.mark.asyncio
@@ -696,6 +926,7 @@ async def test_data_client_subscribe_and_unsubscribe_bars_calls_client_methods(t
     )
     await thinktrader_data_client._subscribe_bars(sub)
     thinktrader_data_client._client.subscribe_realtime_bars.assert_awaited_once()
+    _print_kv("subscribe_realtime_bars.await_args", thinktrader_data_client._client.subscribe_realtime_bars.await_args)
 
     unsub = UnsubscribeBars(
         bar_type=bar_type,
@@ -707,3 +938,4 @@ async def test_data_client_subscribe_and_unsubscribe_bars_calls_client_methods(t
     )
     await thinktrader_data_client._unsubscribe_bars(unsub)
     thinktrader_data_client._client.unsubscribe_realtime_bars.assert_awaited_once_with(bar_type)
+    _print_kv("unsubscribe_realtime_bars.await_args", thinktrader_data_client._client.unsubscribe_realtime_bars.await_args)

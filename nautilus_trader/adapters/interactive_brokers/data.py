@@ -135,7 +135,7 @@ class InteractiveBrokersDataClient(LiveMarketDataClient):
         # 连接客户端
         await self._client.wait_until_ready(self._connection_timeout)
         self._client.registered_nautilus_clients.add(self.id)
- 
+
         # 在客户端上设置工具提供者，以便访问价格放大系数（price magnifier）
         self._client._instrument_provider = self._instrument_provider
 
@@ -149,7 +149,7 @@ class InteractiveBrokersDataClient(LiveMarketDataClient):
 
     async def _disconnect(self):
         self._client.registered_nautilus_clients.discard(self.id)
- 
+
         if self._client.is_running and self._client.registered_nautilus_clients == set():
             self._client.stop()
 
@@ -241,7 +241,7 @@ class InteractiveBrokersDataClient(LiveMarketDataClient):
 
     async def _subscribe_bars(self, command: SubscribeBars) -> None:
         contract = self.instrument_provider.contract.get(command.bar_type.instrument_id)
- 
+
         if not contract:
             self._log.error(
                 f"无法为 {command.bar_type.instrument_id} 订阅 K 线：未找到该工具",
@@ -319,7 +319,7 @@ class InteractiveBrokersDataClient(LiveMarketDataClient):
             self._log.warning(
                 f"请求具有指定 `start` 的工具 {request.instrument_id}，但这没有效果",
             )
- 
+
         if request.end is not None:
             self._log.warning(
                 f"请求具有指定 `end` 的工具 {request.instrument_id}，但这没有效果",
@@ -372,7 +372,7 @@ class InteractiveBrokersDataClient(LiveMarketDataClient):
                 params=request.params,
             )
             return
- 
+
         # 我们确保适配器中也加载了缓存中现有工具的 IB 表示
         instruments = self._cache.instruments()
         instrument_ids = [instrument.id for instrument in instruments]
@@ -513,7 +513,7 @@ class InteractiveBrokersDataClient(LiveMarketDataClient):
         current_end_date_time = time_object_to_dt(end_date_time)
         start_date_time_nanos = dt_to_unix_nanos(start_date_time)
         end_date_time_nanos = dt_to_unix_nanos(end_date_time)
- 
+
         # 使用 1 毫秒的递减量，以避免高频数据中出现重复或跳过的逐笔行情
         TIMESTAMP_DECREMENT_NS = 1_000_000
 

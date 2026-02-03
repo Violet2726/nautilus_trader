@@ -109,7 +109,7 @@ class InteractiveBrokersClient(
         self._port = port
         self._client_id = client_id
         self._fetch_all_open_orders = fetch_all_open_orders
- 
+
         # TWS API
         self._eclient: EClient = EClient(
             wrapper=InteractiveBrokersEWrapper(
@@ -117,11 +117,11 @@ class InteractiveBrokersClient(
                 client=self,
             ),
         )
- 
+
         # EClient 覆盖 (Overrides)
         self._eclient.sendMsg = self.sendMsg
         self._eclient.logRequest = self.logRequest
- 
+
         # 任务 (Tasks)
         self._connection_watchdog_task: asyncio.Task | None = None
         self._tws_incoming_msg_reader_task: asyncio.Task | None = None
@@ -129,29 +129,29 @@ class InteractiveBrokersClient(
         self._internal_msg_queue: asyncio.Queue = asyncio.Queue()
         self._msg_handler_processor_task: asyncio.Task | None = None
         self._msg_handler_task_queue: asyncio.Queue = asyncio.Queue()
- 
+
         # 事件标志 (Event flags)
         self._is_client_ready: asyncio.Event = asyncio.Event()
         self._is_ib_connected: asyncio.Event = asyncio.Event()
- 
+
         # 热缓存 (Hot caches)
         self.registered_nautilus_clients: set = set()
         self._event_subscriptions: dict[str, Callable] = {}
- 
+
         # 订阅 (Subscriptions)
         self._requests = Requests()
         self._subscriptions = Subscriptions()
- 
+
         # AccountMixin
         self._account_ids: set[str] = set()
- 
+
         # ConnectionMixin
         self._connection_attempts: int = 0
         self._max_connection_attempts: int = int(os.getenv("IB_MAX_CONNECTION_ATTEMPTS", "0"))
         self._indefinite_reconnect: bool = not self._max_connection_attempts
         self._reconnect_delay: int = 5  # seconds
         self._last_disconnection_ns: int | None = None
- 
+
         # MarketDataMixin
         self._bar_type_to_last_bar: dict[str, BarData | None] = {}
         self._bar_timeout_tasks: dict[
@@ -160,7 +160,7 @@ class InteractiveBrokersClient(
         ] = {}  # 跟踪每种 K 线类型的超时任务
         self._subscription_tick_data: dict[int, dict] = {}  # 按 req_id 存储逐笔行情数据
         self._subscription_start_times: dict[int, int] = {}  # 存储用于 K 线过滤的 start_ns
- 
+
         # OrderMixin
         self._exec_id_details: dict[
             str,
@@ -168,10 +168,10 @@ class InteractiveBrokersClient(
         ] = {}
         self._order_id_to_order_ref: dict[VenueOrderId, AccountOrderRef] = {}
         self._next_valid_order_id: int = -1
- 
+
         # 工具提供者 (Instrument provider，在连接期间由数据/执行客户端设置)
         self._instrument_provider = None
- 
+
         # 启动客户端
         self._request_id_seq: int = 10000
 
@@ -343,7 +343,7 @@ class InteractiveBrokersClient(
         subscriptions = self._subscriptions.get_all()
         subscription_names = ", ".join([str(subscription.name) for subscription in subscriptions])
         self._log.info(f"正在重新订阅 {len(subscriptions)} 个订阅：{subscription_names}")
- 
+
         for subscription in self._subscriptions.get_all():
             self._log.info(f"正在重新订阅 {subscription.name} 订阅...")
 
@@ -593,16 +593,16 @@ class InteractiveBrokersClient(
         """
         self._log.debug("客户端 TWS 传入消息读取器已启动")
         buf = b""
- 
+
         try:
             while self._eclient.conn and self._eclient.conn.isConnected():
                 data = await asyncio.to_thread(self._eclient.conn.recvMsg)
                 buf += data
- 
+
                 while buf:
                     _, msg, buf = comm.read_msg(buf)
                     self._log.debug(f"收到消息缓冲区：{buf!s}")
- 
+
                     if msg:
                         # 将消息放入内部队列进行处理
                         self._loop.call_soon_threadsafe(self._internal_msg_queue.put_nowait, msg)
@@ -620,7 +620,7 @@ class InteractiveBrokersClient(
                     LogColor.BLUE,
                 )
                 self._is_ib_connected.clear()
- 
+
             self._log.debug("客户端 TWS 传入消息读取器已停止")
 
     async def _run_internal_msg_queue_processor(self) -> None:
@@ -628,7 +628,7 @@ class InteractiveBrokersClient(
         持续从内部传入消息队列中处理消息。
         """
         self._log.debug("客户端内部消息队列处理程序已启动")
- 
+
         try:
             while (
                 self._eclient.conn and self._eclient.conn.isConnected()
@@ -693,7 +693,7 @@ class InteractiveBrokersClient(
         else:
             fields: tuple[bytes] = comm.read_fields(msg)
             self._log.debug(f"收到消息：msgId={msgId} 字段={fields}")
-            # 使用标准解码器根据 msgId 识别消息类型，并调用 EWrapper 
+            # 使用标准解码器根据 msgId 识别消息类型，并调用 EWrapper
             # 中的相应方法。这些方法中有许多在客户端管理器和处理程序类中
             # 被覆盖，以支持 Nautilus 所需的自定义处理。
             await asyncio.to_thread(self._eclient.decoder.interpret, fields, msgId)

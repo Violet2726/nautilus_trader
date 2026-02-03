@@ -340,15 +340,15 @@ def _deserialize_enum_from_value(enum_class, value):
     """
     if value is None:
         return None
- 
+
     # 如果已经是枚举成员，则按原样返回
     if isinstance(value, enum_class):
         return value
- 
+
     # 尝试通过匹配值来查找枚举成员
     for member in enum_class:
         if member.value == value:
             return member
- 
+
     # 如果未找到，返回原始值（可能无效）
     return value

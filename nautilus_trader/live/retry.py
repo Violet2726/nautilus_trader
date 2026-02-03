@@ -89,6 +89,7 @@ class RetryManager[T]:
         用于替代默认 `logger.error` 的自定义错误日志记录函数。
 
     """
+
     def __init__(
         self,
         max_retries: int,

@@ -96,7 +96,7 @@ class InteractiveBrokersInstrumentProvider(InstrumentProvider):
 
     async def initialize(self, reload: bool = False) -> None:
         await super().initialize(reload)
- 
+
         # 仅当 `load_ids_on_start` 为 False 且 `load_contracts_on_start` 为 True 时触发合约加载
         if not self._load_ids_on_start and self._load_contracts_on_start:
             self._loaded = False
@@ -130,17 +130,17 @@ class InteractiveBrokersInstrumentProvider(InstrumentProvider):
             instrument = self.find(instrument_id)
             if instrument is not None:
                 return instrument
- 
+
         # 对 BAG 合约的特殊处理
         if contract.secType == "BAG":
             return await self._load_bag_contract(contract)
- 
+
         # 对于非 BAG 合约，使用常规加载
         instrument_ids = await self.load_with_return_async(contract)
         if instrument_ids is None:
             self._log.error(f"无法为合约 {contract} 加载工具")
             raise ValueError(f"未找到合约 {contract} 的工具")
- 
+
         instrument = self.find(instrument_ids[0])
         if instrument is None:
             self._log.error(f"无法为合约 {contract} 加载工具")
@@ -153,10 +153,10 @@ class InteractiveBrokersInstrumentProvider(InstrumentProvider):
         # 加载每个腿（leg）工具，创建组合 ID，查询 BAG 详情以获取最小报价单位，并创建组合工具。
         if bag_contract.secType != "BAG" or not bag_contract.comboLegs:
             raise ValueError(f"无效的 BAG 合约: {bag_contract}")
- 
+
         try:
             self._log.info(f"正在加载 BAG 合约: {bag_contract}")
- 
+
             # 首先，加载所有单个腿工具并收集其详细信息
             leg_contract_details = []
             leg_tuples = []
@@ -171,21 +171,21 @@ class InteractiveBrokersInstrumentProvider(InstrumentProvider):
                 )
                 leg_instrument = await self.get_instrument(leg_contract)
                 leg_instrument_id = leg_instrument.id
- 
+
                 # 获取此腿的合约详情
                 if leg_instrument_id not in self.contract_details:
                     raise ValueError(f"未找到腿 {leg_instrument_id} 的合约详情")
- 
+
                 leg_details = self.contract_details[leg_instrument_id]
- 
+
                 # 确定比例（BUY 为正，SELL 为负）
                 ratio = combo_leg.ratio if combo_leg.action == "BUY" else -combo_leg.ratio
                 leg_contract_details.append((leg_details, ratio))
                 leg_tuples.append((leg_instrument_id, ratio))
- 
+
             # 直接从加载的腿工具 ID 创建工具 ID
             instrument_id = new_generic_spread_id(leg_tuples)
- 
+
             # 创建 BAG 合约（IB 不支持 BAG 合约的合约详情）
             bag_contract = await self._create_bag_contract(
                 leg_contract_details,
@@ -193,16 +193,16 @@ class InteractiveBrokersInstrumentProvider(InstrumentProvider):
                 bag_contract,
                 bag_contract.exchange,
             )
- 
+
             # 使用通用的价差创建逻辑
             spread_instrument = self._create_spread_instrument(
                 instrument_id,
                 leg_contract_details,
                 bag_contract,
             )
- 
+
             return spread_instrument
- 
+
         except Exception as e:
             self._log.error(f"加载 BAG 合约失败: {e}")
             raise ValueError(f"加载 BAG 合约失败: {e}") from e
@@ -280,7 +280,7 @@ class InteractiveBrokersInstrumentProvider(InstrumentProvider):
             )
             if loaded_ids:
                 loaded_instrument_ids.extend(loaded_ids)
- 
+
         return loaded_instrument_ids
 
     async def load_async(
@@ -359,9 +359,9 @@ class InteractiveBrokersInstrumentProvider(InstrumentProvider):
         ):
             converted_contract_details = dict_to_contract_details(instrument.info)
             processed_ids = self._process_contract_details([converted_contract_details], venue)
- 
+
             return bool(processed_ids)  # 如果处理了任何工具，则返回 True
- 
+
         # VENUE_MEMBERS 将一个 MIC 交易场所关联到多个可能的 IB 交易所
         possible_exchanges = VENUE_MEMBERS.get(venue, [venue])
         try:
@@ -372,9 +372,9 @@ class InteractiveBrokersInstrumentProvider(InstrumentProvider):
                     symbology_method=self.config.symbology_method,
                     contract_details_map=self.contract_details,
                 )
- 
+
                 self._log.info(f"正在尝试查找工具 {contract=}")
- 
+
                 contract_details: list = await self.get_contract_details(contract)
                 if contract_details:
                     processed_ids = self._process_contract_details(
@@ -400,46 +400,46 @@ class InteractiveBrokersInstrumentProvider(InstrumentProvider):
             if not leg_tuples:
                 self._log.error(f"价差工具 {spread_instrument_id} 没有腿")
                 return False
- 
+
             self._log.info(
                 f"正在加载具有 {len(leg_tuples)} 个腿的价差工具 {spread_instrument_id}",
             )
- 
+
             # 首先，加载所有单个腿工具以获取其合约详情
             leg_contract_details = []
             for leg_instrument_id, ratio in leg_tuples:
                 self._log.info(f"正在加载腿工具：{leg_instrument_id} (比例: {ratio})")
- 
+
                 # 加载单个腿工具
                 leg_loaded = await self.fetch_instrument_id(leg_instrument_id, filters)
                 if not leg_loaded:
                     self._log.error(f"加载腿工具失败：{leg_instrument_id}")
                     return False
- 
+
                 # 获取此腿的合约详情
                 if leg_instrument_id not in self.contract_details:
                     self._log.error(
                         f"在合约详情中未找到腿工具 {leg_instrument_id}",
                     )
                     return False
- 
+
                 leg_details = self.contract_details[leg_instrument_id]
                 leg_contract_details.append((leg_details, ratio))
- 
+
             exchange = filters.get("exchange", "") if filters else ""
             bag_contract = await self._create_bag_contract(
                 leg_contract_details,
                 spread_instrument_id,
                 exchange=exchange,
             )
- 
+
             # 使用通用的价差创建逻辑
             self._create_spread_instrument(
                 spread_instrument_id,
                 leg_contract_details,
                 bag_contract,
             )
- 
+
             return True
         except Exception as e:
             self._log.error(f"获取价差工具 {spread_instrument_id} 失败: {e}")
@@ -465,15 +465,15 @@ class InteractiveBrokersInstrumentProvider(InstrumentProvider):
                     exchange=leg_details.contract.exchange,
                 )
                 combo_legs.append(combo_leg)
- 
+
             # 使用第一个腿的基础证券代码
             first_contract = leg_contract_details[0][0].contract
             underlying_symbol = getattr(first_contract, "symbol", "ES")
- 
+
             # 除非明确提供交易所，否则使用 SMART
             if not exchange:
                 exchange = "SMART"
- 
+
             bag_contract = IBContract(
                 secType="BAG",
                 symbol=underlying_symbol,
@@ -484,7 +484,7 @@ class InteractiveBrokersInstrumentProvider(InstrumentProvider):
                     f"价差: {instrument_id.symbol.value}" if instrument_id else "价差"
                 ),
             )
- 
+
         return bag_contract
 
     def _create_spread_instrument(
@@ -526,9 +526,9 @@ class InteractiveBrokersInstrumentProvider(InstrumentProvider):
         # 存储合约映射
         self.contract[instrument_id] = bag_contract
         self.contract_id_to_instrument_id[bag_contract.conId] = instrument_id
- 
+
         self._log.info(f"成功创建价差工具：{spread_instrument}")
- 
+
         return spread_instrument
 
     async def get_contract_details(
@@ -540,7 +540,7 @@ class InteractiveBrokersInstrumentProvider(InstrumentProvider):
             if not details:
                 self._log.debug(f"未返回 {contract} 的合约详情")
                 return []
- 
+
             [qualified] = details
             self._log.info(
                 f"合约已限定为 {qualified.contract.localSymbol}。"
@@ -566,7 +566,7 @@ class InteractiveBrokersInstrumentProvider(InstrumentProvider):
             # 返回具有期货链的底层合约详情
             future_chain_details = await self.get_future_chain_details(qualified.contract)
             details.extend(future_chain_details)
- 
+
         if (
             contract.secType in ["STK", "CONTFUT", "FUT", "IND"] and contract.build_options_chain
         ) or self._build_options_chain:
@@ -605,7 +605,7 @@ class InteractiveBrokersInstrumentProvider(InstrumentProvider):
             ),
         )
         self._log.debug(f"获取到 {details=}")
- 
+
         return details
 
     async def get_option_chain_details_by_range(
@@ -658,19 +658,19 @@ class InteractiveBrokersInstrumentProvider(InstrumentProvider):
                 f"未找到 {underlying.symbol} 在 {last_trading_date} 到期的期权合约",
             )
             return []
- 
+
         # 处理单列表和嵌套列表的情况
         if len(option_details_result) == 1 and isinstance(option_details_result[0], list):
             option_details = option_details_result[0]
         else:
             option_details = option_details_result  # type: ignore[assignment]
- 
+
         if option_details is None:
             self._log.warning(
                 f"对于 {underlying.symbol} 在 {last_trading_date} 到期的期权详情为 None",
             )
             return []
- 
+
         option_details = [d for d in option_details if d.underConId == underlying.conId]  # type: ignore[assignment]
         self._log.info(
             f"收到了 {len(option_details)} 个 {underlying.symbol}.{underlying.primaryExchange or underlying.exchange} "
@@ -715,14 +715,14 @@ class InteractiveBrokersInstrumentProvider(InstrumentProvider):
                     if contract.symbol.startswith(symbol_prefix):
                         venue = symbol_venue
                         break
- 
+
             # 如果未找到特定证券代码的映射，使用 VENUE_MEMBERS 映射
             if not venue:
                 for venue_member, exchanges in VENUE_MEMBERS.items():
                     if exchange in exchanges:
                         venue = venue_member
                         break
- 
+
         # 回退到使用交易所作为交易场所
         if not venue:
             venue = exchange
@@ -767,7 +767,7 @@ class InteractiveBrokersInstrumentProvider(InstrumentProvider):
                     f"正在跳过合约 {details.contract} 的已过滤 {sec_type=}",
                 )
                 continue
- 
+
             self._log.debug(f"正在尝试从 {details} 创建工具")
 
             try:

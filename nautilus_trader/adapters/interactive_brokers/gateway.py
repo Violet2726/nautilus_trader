@@ -157,7 +157,7 @@ class DockerizedIBGateway:
         elif status in (ContainerStatus.READY, ContainerStatus.CONTAINER_STARTING):
             self.log.info(f"{status=}, 使用现有容器")
             return
- 
+
         self.log.debug("正在启动新容器")
 
         ports = {
@@ -191,7 +191,7 @@ class DockerizedIBGateway:
             sleep(1)
         else:
             raise RuntimeError(f"网关 `{self.container_name}` 未就绪")
- 
+
         self.log.info(
             f"网关 `{self.container_name}` 已就绪。VNC 端口为 {self.vnc_port}",
         )

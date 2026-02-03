@@ -103,5 +103,4 @@ class LiveExecClientFactory:
         LiveExecutionClient
 
         """
-        raise NotImplementedError(
-        )  # pragma: no cover
+        raise NotImplementedError  # pragma: no cover

@@ -122,7 +122,7 @@ from nautilus_trader.model.orders.trailing_stop_market import TrailingStopMarket
 
 
 # 对 PriceCondition.__str__ 进行猴子补丁（monkey patch），以修复 IB API 中该属性
-# 并非方法而导致的 bug。这可以防止 IB API 尝试记录订单时出现 
+# 并非方法而导致的 bug。这可以防止 IB API 尝试记录订单时出现
 # TypeError: 'str' object is not callable。
 def _price_condition_str(self):
     """
