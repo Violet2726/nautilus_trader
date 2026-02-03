@@ -1,4 +1,5 @@
 import asyncio
+from typing import Any
 from xtquant.xttrader import XtQuantTraderCallback
 
 from nautilus_trader.common.component import Logger

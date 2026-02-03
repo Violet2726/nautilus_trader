@@ -15,10 +15,6 @@ def check_connection():
     # 路径
     mini_qmt_path = r'D:\中信证券QMT交易终端仿真\userdata_mini'
 
-    file_path = r"D:\中信证券QMT交易终端仿真\userdata_mini\example.txt"
-    with open(file_path, "w") as file:
-        file.write("123")  # 向文件写入内容
-
 
     account_id = '10100002780'
     session_id = random.randint(100000, 999999)

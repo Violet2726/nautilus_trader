@@ -312,8 +312,74 @@ class ThinkTraderClientMarketDataMixin(BaseMixin):
             request.handle()
             return await self._await_request(request, timeout, default_value=[])
         else:
-            self._log.info(f"请求 {request} 已存在")
+            self._log.info(f"请求 {name} 已存在")
             return []
+
+    async def req_fundamental_data(
+        self,
+        instrument_id: InstrumentId,
+        stock_code: str,
+        report_type: str = "report_time",
+        timeout: int = 60,
+    ) -> dict[str, Any]:
+        """
+        请求特定合约的基本面/财务数据。
+        """
+        name = (instrument_id, "fundamental", report_type)
+        if not (request := self._requests.get(name=name)):
+            req_id = self._next_req_id()
+
+            def handle():
+                # 获取财务数据（Balance, Income, CashFlow 等）
+                financial = xtdata.get_financial_data(
+                    stock_list=[stock_code],
+                    report_type=report_type,
+                )
+                # 获取合约详细静态信息
+                detail = xtdata.get_instrument_detail(stock_code)
+                
+                request.future.set_result({
+                    "financial": financial,
+                    "detail": detail,
+                })
+
+            request = self._requests.add(
+                req_id=req_id,
+                name=name,
+                handle=handle,
+                cancel=lambda: None,
+            )
+            
+            request.handle()
+            return await self._await_request(request, timeout, default_value={})
+        else:
+            self._log.info(f"请求 {name} 已存在")
+            return {}
+
+    async def subscribe_tick_by_tick(
+        self,
+        instrument_id: InstrumentId,
+        stock_code: str,
+        tick_type: str = "AllLast", # "AllLast" (成交) 或 "BidAsk" (报单/撤单)
+    ) -> None:
+        """
+        订阅逐笔行情数据（Level 2）。
+        """
+        if tick_type == "AllLast":
+            period = "l2transaction"
+        else:
+            period = "l2order"
+            
+        name = (str(instrument_id), period)
+        await self._subscribe(
+            name,
+            xtdata.subscribe_quote,
+            xtdata.unsubscribe_quote,
+            stock_code=stock_code,
+            period=period,
+            count=0,
+            callback=functools.partial(self._on_quote_data, name=name),
+        )
 
     async def get_price(self, instrument_id: InstrumentId, stock_code: str) -> float:
         """
@@ -508,6 +574,11 @@ class ThinkTraderClientMarketDataMixin(BaseMixin):
                 data,
             )
 
+    def _forward_data(self, data: Any) -> None:
+        """转发解析后的数据到注册的处理器"""
+        if handler := self._event_handlers.get("data"):
+            handler(data)
+
     def _handle_quote_data(
         self,
         name: str | tuple | None,
@@ -531,21 +602,31 @@ class ThinkTraderClientMarketDataMixin(BaseMixin):
              
              if data_type == "tick":
                  quote = parse_tick_to_quote_tick(instrument_id, data, ts_init)
-                 asyncio.create_task(self._handle_data(quote))
+                 self._forward_data(quote)
                  trade = parse_tick_to_trade_tick(instrument_id, data, ts_init)
-                 asyncio.create_task(self._handle_data(trade))
+                 self._forward_data(trade)
              elif data_type == "market_data":
                  quote = parse_tick_to_quote_tick(instrument_id, data, ts_init)
-                 asyncio.create_task(self._handle_data(quote))
+                 self._forward_data(quote)
              elif data_type == "order_book":
-                 # TODO: 处理 L2 深度
-                 pass
+                 from nautilus_trader.adapters.thinktrader.parsing.data import parse_l2_quote_to_order_book_deltas
+                 deltas = parse_l2_quote_to_order_book_deltas(instrument_id, data, ts_init)
+                 for delta in deltas:
+                     self._forward_data(delta)
+             elif data_type == "l2order":
+                 from nautilus_trader.adapters.thinktrader.parsing.data import parse_l2_order_to_delta
+                 delta = parse_l2_order_to_delta(instrument_id, data, ts_init)
+                 self._forward_data(delta)
+             elif data_type == "l2transaction":
+                 from nautilus_trader.adapters.thinktrader.parsing.data import parse_l2_transaction_to_trade_tick
+                 trade = parse_l2_transaction_to_trade_tick(instrument_id, data, ts_init)
+                 self._forward_data(trade)
         elif isinstance(name, str):
             # 可能是 BarType.from_str(name)
             try:
                 bar_type = BarType.from_str(name)
                 bar = parse_kline_to_bar(bar_type.instrument_id, bar_type, data, ts_init)
-                asyncio.create_task(self._handle_data(bar))
+                self._forward_data(bar)
             except Exception:
                 self._log.error(f"无法解析数据报文，订阅名为: {name}")
         else:
@@ -553,7 +634,7 @@ class ThinkTraderClientMarketDataMixin(BaseMixin):
             instrument_id = self._cache.instrument_id_for_symbol(stock_code)
             if instrument_id:
                 quote = parse_tick_to_quote_tick(instrument_id, data, ts_init)
-                asyncio.create_task(self._handle_data(quote))
+                self._forward_data(quote)
 
     def subscribe_whole_quote(
         self,

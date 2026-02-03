@@ -42,9 +42,7 @@ class ThinkTraderDataClient(LiveMarketDataClient):
         self._subscription_map: dict[InstrumentId, int] = {}
         
         # 注册回调
-        # 新实现中，回调由 Mixin 统一分发到 _handle_quote_data
-        # 但 DataClient 仍然可以通过 register_event_handler 获取
-        self._client.register_event_handler("quote_data", self._on_quote_data)
+        self._client.register_event_handler("data", self._handle_data)
     
     async def _connect(self) -> None:
         if not self._config.skip_trader_login:
@@ -85,37 +83,87 @@ class ThinkTraderDataClient(LiveMarketDataClient):
         if instrument_id in self._subscription_map:
             await self._client.unsubscribe_ticks(instrument_id)
             self._subscription_map.pop(instrument_id)
-            
-    def _on_quote_data(self, stock_code: str, data: dict, name: str | tuple | None = None) -> None:
-        """处理行情回调"""
-        from nautilus_trader.adapters.thinktrader.parsing.instruments import (
-            stock_code_to_instrument_id,
+
+    async def _subscribe_order_book(self, instrument_id: InstrumentId) -> None:
+        stock_code = instrument_id_to_stock_code(instrument_id)
+        await self._client.subscribe_order_book(instrument_id, stock_code)
+
+    async def _unsubscribe_order_book(self, instrument_id: InstrumentId) -> None:
+        await self._client.unsubscribe_order_book(instrument_id)
+
+    async def _request_quote_ticks(self, request) -> None:
+        stock_code = instrument_id_to_stock_code(request.instrument_id)
+        start_ns = int(request.start.timestamp() * 1e9) if request.start else 0
+        end_ns = int(request.end.timestamp() * 1e9) if request.end else self._clock.timestamp_ns()
+        
+        data = await self._client.get_historical_ticks(
+            instrument_id=request.instrument_id,
+            stock_code=stock_code,
+            start_ns=start_ns,
+            end_ns=end_ns,
         )
         
-        # XtQuant tick data sometimes comes without instrument ID in the dict itself
-        # But we have stock_code from the handler argument.
+        ticks = self._parse_historical_ticks(request.instrument_id, data, quote_only=True)
+        self._handle_quote_ticks(request.instrument_id, ticks, request.id, request.start, request.end)
+
+    async def _request_trade_ticks(self, request) -> None:
+        stock_code = instrument_id_to_stock_code(request.instrument_id)
+        start_ns = int(request.start.timestamp() * 1e9) if request.start else 0
+        end_ns = int(request.end.timestamp() * 1e9) if request.end else self._clock.timestamp_ns()
         
-        instrument_id = stock_code_to_instrument_id(stock_code)
+        data = await self._client.get_historical_ticks(
+            instrument_id=request.instrument_id,
+            stock_code=stock_code,
+            start_ns=start_ns,
+            end_ns=end_ns,
+        )
         
-        # In a real whole-market scenario, we might receive ticks for instruments 
-        # that Nautilus hasn't loaded. We should check if we care about this instrument.
-        # However, checking cache for every tick might be specific.
-        # Usually DataClient filters by subscriptions. 
-        # But if subscribe_whole_quote is True, we essentially subscribe to everything.
-        # So we should pass it to kernel. Kernel will discard if not subscribed?
-        # Actually LiveMarketDataClient typically handles subscription mapping.
-        # If we use whole quote, we bypass explicit subscription map checks?
+        ticks = self._parse_historical_ticks(request.instrument_id, data, trade_only=True)
+        self._handle_trade_ticks(request.instrument_id, ticks, request.id, request.start, request.end)
+
+    def _parse_historical_ticks(self, instrument_id, data, quote_only=False, trade_only=False):
+        if not data:
+            return []
+            
+        import pandas as pd
+        from nautilus_trader.adapters.thinktrader.parsing.data import (
+            parse_tick_to_quote_tick,
+            parse_tick_to_trade_tick,
+        )
         
-        if self._config.subscribe_whole_quote:
-             # If whole quote, we push everything? Or check if instrument is known?
-             # Checking if instrument is in cache is good practice to avoid pollution
-             if not self._cache.instrument(instrument_id):
-                 return
+        # XtQuant returns {field: DF}
+        # We need to reconstruct individual ticks.
+        # This is expensive for many ticks, but necessary for Nautilus compatibility.
         
+        # Combine all fields into one DF for the specific stock_code
+        fields = list(data.keys())
+        series_list = {}
+        stock_code = instrument_id_to_stock_code(instrument_id)
+        
+        for f in fields:
+            if stock_code in data[f].index:
+                series_list[f] = data[f].loc[stock_code]
+                
+        if not series_list:
+            return []
+            
+        df = pd.DataFrame(series_list)
+        ticks = []
         ts_init = self._clock.timestamp_ns()
         
-        quote_tick = parse_tick_to_quote_tick(instrument_id, data, ts_init)
-        self._handle_data(quote_tick)
+        for time_val, row in df.iterrows():
+            row_dict = row.to_dict()
+            row_dict['time'] = time_val
+            
+            if not trade_only:
+                quote = parse_tick_to_quote_tick(instrument_id, row_dict, ts_init)
+                ticks.append(quote)
+            if not quote_only:
+                trade = parse_tick_to_trade_tick(instrument_id, row_dict, ts_init)
+                ticks.append(trade)
+                
+        return ticks
+            
 
     async def _request_bars(
         self,
@@ -189,4 +237,4 @@ class ThinkTraderDataClient(LiveMarketDataClient):
                         self._log.error(f"Failed to parse bar for {stock_code} at {time_val}: {e}")
                         continue
 
-        self._handle_bars(bar_type, bars, None, correlation_id)
+        self._handle_bars(bar_type, bars, correlation_id, start, end)

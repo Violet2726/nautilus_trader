@@ -1,9 +1,8 @@
 from datetime import datetime
-from nautilus_trader.model.data import QuoteTick, TradeTick, Bar, BarType
+from nautilus_trader.model.data import QuoteTick, TradeTick, Bar, BarType, OrderBookDelta, BookOrder, BarSpecification
 from nautilus_trader.model.identifiers import InstrumentId
 from nautilus_trader.model.objects import Price, Quantity
-from nautilus_trader.model.enums import BarAggregation
-from nautilus_trader.model.data import BarSpec
+from nautilus_trader.model.enums import BarAggregation, BookAction, OrderSide
 
 # ============================================================================
 # 周期类型映射
@@ -60,7 +59,7 @@ def ns_to_xt_time(ts_ns: int) -> str:
     return dt.strftime("%Y%m%d%H%M%S")
 
 
-def bar_spec_to_period(bar_spec: BarSpec) -> str:
+def bar_spec_to_period(bar_spec: BarSpecification) -> str:
     """
     将 Nautilus BarSpec 转换为 XtQuant period 字符串
     """
@@ -157,6 +156,114 @@ def parse_kline_to_bar(
         low=Price.from_str(f"{data.get('low', 0.0):.4f}"),
         close=Price.from_str(f"{data.get('close', 0.0):.4f}"),
         volume=Quantity.from_int(int(data.get("volume", 0))),
+        ts_event=ts_event,
+        ts_init=ts_init,
+    )
+def parse_l2_quote_to_order_book_deltas(
+    instrument_id: InstrumentId,
+    data: dict,
+    ts_init: int,
+) -> list[OrderBookDelta]:
+    """
+    将 XtQuant l2quote 快照转换为 OrderBookDelta 列表。
+    """
+    deltas = []
+    ts_event = xt_time_to_ns(int(data.get("time", 0)))
+    
+    bid_prices = data.get("bidPrice", [])
+    bid_vols = data.get("bidVol", [])
+    ask_prices = data.get("askPrice", [])
+    ask_vols = data.get("askVol", [])
+    
+    for i in range(len(bid_prices)):
+        if bid_prices[i] > 0:
+            deltas.append(OrderBookDelta(
+                instrument_id=instrument_id,
+                action=BookAction.UPDATE,
+                order=BookOrder(
+                    side=OrderSide.BUY,
+                    price=Price.from_str(f"{bid_prices[i]:.4f}"),
+                    size=Quantity.from_int(int(bid_vols[i])),
+                    order_id=0,
+                ),
+                flags=0,
+                sequence=0,
+                ts_event=ts_event,
+                ts_init=ts_init,
+            ))
+            
+    for i in range(len(ask_prices)):
+        if ask_prices[i] > 0:
+            deltas.append(OrderBookDelta(
+                instrument_id=instrument_id,
+                action=BookAction.UPDATE,
+                order=BookOrder(
+                    side=OrderSide.SELL,
+                    price=Price.from_str(f"{ask_prices[i]:.4f}"),
+                    size=Quantity.from_int(int(ask_vols[i])),
+                    order_id=0,
+                ),
+                flags=0,
+                sequence=0,
+                ts_event=ts_event,
+                ts_init=ts_init,
+            ))
+            
+    return deltas
+
+def parse_l2_order_to_delta(
+    instrument_id: InstrumentId,
+    data: dict,
+    ts_init: int,
+) -> OrderBookDelta:
+    """
+    将 XtQuant l2order (逐笔委托) 转换为 OrderBookDelta。
+    """
+    ts_event = xt_time_to_ns(int(data.get("time", 0)))
+    direction = data.get("entrustDirection", 0)
+    
+    # direction: 1=买入, 2=卖出, 3=撤买, 4=撤卖
+    side = OrderSide.BUY if direction in (1, 3) else OrderSide.SELL
+    action = BookAction.ADD if direction in (1, 2) else BookAction.DELETE
+    
+    return OrderBookDelta(
+        instrument_id=instrument_id,
+        action=action,
+        order=BookOrder(
+            side=side,
+            price=Price.from_str(f"{data.get('price', 0.0):.4f}"),
+            size=Quantity.from_int(int(data.get("volume", 0))),
+            order_id=int(data.get("orderIndex", 0)),
+        ),
+        flags=0,
+        sequence=0,
+        ts_event=ts_event,
+        ts_init=ts_init,
+    )
+
+def parse_l2_transaction_to_trade_tick(
+    instrument_id: InstrumentId,
+    data: dict,
+    ts_init: int,
+) -> TradeTick:
+    """
+    将 XtQuant l2transaction (逐笔成交) 转换为 TradeTick。
+    """
+    from nautilus_trader.model.identifiers import TradeId
+    from nautilus_trader.model.enums import AggressorSide
+    
+    ts_event = xt_time_to_ns(int(data.get("time", 0)))
+    flag = data.get("tradeFlag", 0)
+    
+    # flag: 1=外盘(主动买), 2=内盘(主动卖), 3=撤单
+    aggressor_side = AggressorSide.BUYER if flag == 1 else AggressorSide.SELLER if flag == 2 else AggressorSide.NO_AGGRESSOR
+    
+    return TradeTick(
+        instrument_id=instrument_id,
+        price=Price.from_str(f"{data.get('price', 0.0):.4f}"),
+        size=Quantity.from_int(int(data.get("volume", 0))),
+        aggressor_side=aggressor_side,
+        trade_id=TradeId(str(data.get("index", data.get("time", 0)))),
         ts_event=ts_event,
         ts_init=ts_init,
     )
