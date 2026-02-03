@@ -14,6 +14,7 @@ from nautilus_trader.model.data import BarType
 from nautilus_trader.model.identifiers import ClientId
 from nautilus_trader.model.identifiers import InstrumentId
 from nautilus_trader.model.identifiers import Venue
+from nautilus_trader.test_kit.providers import TestInstrumentProvider
 from nautilus_trader.test_kit.stubs.identifiers import TestIdStubs
 
 
@@ -36,6 +37,62 @@ def thinktrader_client(event_loop):
     client._cache = Mock()
     client._msgbus = Mock()
     return client
+
+
+@pytest.mark.asyncio
+async def test_instrument_provider_initialize_loads_all_on_start():
+    _print_section("InstrumentProvider 启动加载: load_contracts_on_start=True 时加载全量工具")
+    from nautilus_trader.adapters.thinktrader.config import ThinkTraderInstrumentProviderConfig
+    from nautilus_trader.adapters.thinktrader.providers import ThinkTraderInstrumentProvider
+
+    client = Mock()
+    client.get_stock_list = Mock(return_value=["000001.SZ", "000002.SZ"])
+    client.get_instrument_detail = Mock(return_value={"dummy": True})
+    client.get_instrument_type = Mock(return_value={"stock": True})
+
+    config = ThinkTraderInstrumentProviderConfig(
+        load_contracts_on_start=True,
+        cache_instruments=True,
+        sectors=("沪深A股",),
+    )
+
+    provider = ThinkTraderInstrumentProvider(client=client, config=config)
+    provider._parse_instrument = Mock(
+        side_effect=[
+            TestInstrumentProvider.equity(symbol="000001", venue="SZSE"),
+            TestInstrumentProvider.equity(symbol="000002", venue="SZSE"),
+        ],
+    )
+
+    await provider.initialize()
+
+    instruments = provider.list_all()
+    assert len(instruments) == 2
+    print(f"已加载工具数量: {len(instruments)}")
+    print("样例工具[0]:", instruments[0].id)
+    print("样例工具[1]:", instruments[1].id)
+
+
+@pytest.mark.asyncio
+async def test_instrument_provider_initialize_reload_forces_reload():
+    _print_section("InstrumentProvider 重载: reload=True 时强制重新加载")
+    from nautilus_trader.adapters.thinktrader.config import ThinkTraderInstrumentProviderConfig
+    from nautilus_trader.adapters.thinktrader.providers import ThinkTraderInstrumentProvider
+
+    client = Mock()
+    config = ThinkTraderInstrumentProviderConfig(
+        load_contracts_on_start=True,
+        cache_instruments=True,
+        sectors=("沪深A股",),
+    )
+    provider = ThinkTraderInstrumentProvider(client=client, config=config)
+    provider._loaded = True
+    provider.load_all_async = AsyncMock(return_value=None)
+
+    await provider.initialize(reload=True)
+
+    provider.load_all_async.assert_called_once()
+    print("reload=True 已触发 load_all_async 调用。")
 
 
 @pytest.mark.asyncio

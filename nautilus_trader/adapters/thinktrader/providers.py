@@ -25,11 +25,20 @@ class ThinkTraderInstrumentProvider(InstrumentProvider):
 
     async def initialize(self, reload: bool = False) -> None:
         await super().initialize(reload)
-        if self._loaded:
+        if self._load_all_on_start or self._load_ids_on_start:
             return
-        if self._tt_config.load_contracts_on_start:
-            await self.load_all_async(self._filters)
-            self._loaded = True
+
+        if self._loaded and not reload:
+            return
+
+        if not self._tt_config.load_contracts_on_start:
+            return
+
+        if reload:
+            self._loaded = False
+
+        await self.load_all_async(self._filters)
+        self._loaded = True
 
     async def load_all_async(self, filters: dict | None = None) -> None:
         """异步加载所有工具"""
