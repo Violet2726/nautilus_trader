@@ -54,7 +54,7 @@ def thinktrader_client(event_loop):
     client = ThinkTraderClient(
         loop=event_loop,
         logger=Logger("ThinkTraderClientTests"),
-        miniqmt_path="D:\\中信证券QMT交易终端仿真\\userdata_mini",
+        miniqmt_path="D:\\迅投QMT交易终端财通证券版\\userdata_mini",
         session_id=1,
         account_id="",
     )
