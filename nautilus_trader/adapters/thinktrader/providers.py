@@ -23,6 +23,14 @@ class ThinkTraderInstrumentProvider(InstrumentProvider):
         self._client = client
         self._tt_config = config
 
+    async def initialize(self, reload: bool = False) -> None:
+        await super().initialize(reload)
+        if self._loaded:
+            return
+        if self._tt_config.load_contracts_on_start:
+            await self.load_all_async(self._filters)
+            self._loaded = True
+
     async def load_all_async(self, filters: dict | None = None) -> None:
         """异步加载所有工具"""
         if self._loaded and self._tt_config.cache_instruments:

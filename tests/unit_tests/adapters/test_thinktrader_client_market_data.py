@@ -545,3 +545,108 @@ async def test_data_client_request_bars_parses_kline_fields(thinktrader_data_cli
     print(f"解析得到 Bar 数量: {len(seen)}")
     print("样例 Bar[0]:", seen[0])
     print("样例 Bar[1]:", seen[1])
+
+
+@pytest.mark.asyncio
+async def test_data_client_subscribe_and_unsubscribe_quote_ticks_calls_client_methods(thinktrader_data_client):
+    _print_section("DataClient 订阅/反订阅 QuoteTicks: 调用 client.subscribe_market_data")
+    from nautilus_trader.core.uuid import UUID4
+    from nautilus_trader.data.messages import SubscribeQuoteTicks
+    from nautilus_trader.data.messages import UnsubscribeQuoteTicks
+
+    instrument_id = InstrumentId.from_str("000001.SZSE")
+
+    thinktrader_data_client._client.subscribe_market_data = AsyncMock(return_value=None)
+    thinktrader_data_client._client.unsubscribe_market_data = AsyncMock(return_value=None)
+
+    sub = SubscribeQuoteTicks(
+        instrument_id=instrument_id,
+        client_id=ClientId("THINKTRADER"),
+        venue=Venue("THINKTRADER"),
+        command_id=UUID4(),
+        ts_init=thinktrader_data_client._clock.timestamp_ns(),
+        params=None,
+    )
+    await thinktrader_data_client._subscribe_quote_ticks(sub)
+    thinktrader_data_client._client.subscribe_market_data.assert_awaited_once()
+
+    unsub = UnsubscribeQuoteTicks(
+        instrument_id=instrument_id,
+        client_id=ClientId("THINKTRADER"),
+        venue=Venue("THINKTRADER"),
+        command_id=UUID4(),
+        ts_init=thinktrader_data_client._clock.timestamp_ns(),
+        params=None,
+    )
+    await thinktrader_data_client._unsubscribe_quote_ticks(unsub)
+    thinktrader_data_client._client.unsubscribe_market_data.assert_awaited_once_with(instrument_id)
+
+
+@pytest.mark.asyncio
+async def test_data_client_subscribe_and_unsubscribe_trade_ticks_calls_client_methods(thinktrader_data_client):
+    _print_section("DataClient 订阅/反订阅 TradeTicks: 调用 client.subscribe_tick_by_tick")
+    from nautilus_trader.core.uuid import UUID4
+    from nautilus_trader.data.messages import SubscribeTradeTicks
+    from nautilus_trader.data.messages import UnsubscribeTradeTicks
+
+    instrument_id = InstrumentId.from_str("000001.SZSE")
+
+    thinktrader_data_client._client.subscribe_tick_by_tick = AsyncMock(return_value=None)
+    thinktrader_data_client._client.unsubscribe_tick_by_tick = AsyncMock(return_value=None)
+
+    sub = SubscribeTradeTicks(
+        instrument_id=instrument_id,
+        client_id=ClientId("THINKTRADER"),
+        venue=Venue("THINKTRADER"),
+        command_id=UUID4(),
+        ts_init=thinktrader_data_client._clock.timestamp_ns(),
+        params=None,
+    )
+    await thinktrader_data_client._subscribe_trade_ticks(sub)
+    thinktrader_data_client._client.subscribe_tick_by_tick.assert_awaited_once()
+
+    unsub = UnsubscribeTradeTicks(
+        instrument_id=instrument_id,
+        client_id=ClientId("THINKTRADER"),
+        venue=Venue("THINKTRADER"),
+        command_id=UUID4(),
+        ts_init=thinktrader_data_client._clock.timestamp_ns(),
+        params=None,
+    )
+    await thinktrader_data_client._unsubscribe_trade_ticks(unsub)
+    thinktrader_data_client._client.unsubscribe_tick_by_tick.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_data_client_subscribe_and_unsubscribe_bars_calls_client_methods(thinktrader_data_client):
+    _print_section("DataClient 订阅/反订阅 Bars: 调用 client.subscribe_realtime_bars")
+    from nautilus_trader.core.uuid import UUID4
+    from nautilus_trader.data.messages import SubscribeBars
+    from nautilus_trader.data.messages import UnsubscribeBars
+
+    bar_type = BarType.from_str("000001.SZSE-1-MINUTE-LAST-EXTERNAL")
+
+    thinktrader_data_client._client.subscribe_realtime_bars = AsyncMock(return_value=None)
+    thinktrader_data_client._client.unsubscribe_realtime_bars = AsyncMock(return_value=None)
+
+    sub = SubscribeBars(
+        bar_type=bar_type,
+        client_id=ClientId("THINKTRADER"),
+        venue=Venue("THINKTRADER"),
+        command_id=UUID4(),
+        ts_init=thinktrader_data_client._clock.timestamp_ns(),
+        params=None,
+    )
+    await thinktrader_data_client._subscribe_bars(sub)
+    thinktrader_data_client._client.subscribe_realtime_bars.assert_awaited_once()
+
+    unsub = UnsubscribeBars(
+        bar_type=bar_type,
+        client_id=ClientId("THINKTRADER"),
+        venue=Venue("THINKTRADER"),
+        command_id=UUID4(),
+        ts_init=thinktrader_data_client._clock.timestamp_ns(),
+        params=None,
+    )
+    await thinktrader_data_client._unsubscribe_bars(unsub)
+    thinktrader_data_client._client.unsubscribe_realtime_bars.assert_awaited_once_with(bar_type)

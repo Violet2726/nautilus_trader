@@ -11,8 +11,23 @@ from nautilus_trader.common.component import LiveClock
 from nautilus_trader.common.component import MessageBus
 from nautilus_trader.common.providers import InstrumentProvider
 from nautilus_trader.data.messages import RequestBars
+from nautilus_trader.data.messages import RequestData
+from nautilus_trader.data.messages import RequestInstrument
+from nautilus_trader.data.messages import RequestInstruments
 from nautilus_trader.data.messages import RequestQuoteTicks
 from nautilus_trader.data.messages import RequestTradeTicks
+from nautilus_trader.data.messages import SubscribeBars
+from nautilus_trader.data.messages import SubscribeInstrument
+from nautilus_trader.data.messages import SubscribeInstruments
+from nautilus_trader.data.messages import SubscribeOrderBook
+from nautilus_trader.data.messages import SubscribeQuoteTicks
+from nautilus_trader.data.messages import SubscribeTradeTicks
+from nautilus_trader.data.messages import UnsubscribeBars
+from nautilus_trader.data.messages import UnsubscribeInstrument
+from nautilus_trader.data.messages import UnsubscribeInstruments
+from nautilus_trader.data.messages import UnsubscribeOrderBook
+from nautilus_trader.data.messages import UnsubscribeQuoteTicks
+from nautilus_trader.data.messages import UnsubscribeTradeTicks
 from nautilus_trader.live.data_client import LiveMarketDataClient
 from nautilus_trader.model.data import Bar
 from nautilus_trader.model.identifiers import ClientId
@@ -44,61 +59,132 @@ class ThinkTraderDataClient(LiveMarketDataClient):
         )
         self._client = client
         self._config = config
-        self._subscription_map: dict[InstrumentId, int] = {}
-
         self._client.register_event_handler("data", self._on_client_data)
 
     def _on_client_data(self, data: Any) -> None:
         self._handle_data(data)
 
     async def _connect(self) -> None:
+        self._client._clock = self._clock
+        self._client._cache = self._cache
+        self._client._msgbus = self._msgbus
+        self._client._instrument_provider = self._instrument_provider
+
         if not self._config.skip_trader_login:
             await self._client._connect()
         else:
             self._log.info("Skipping ThinkTrader client connection (market data only mode)")
             self._client._is_connected.set()
-            # Yield control to event loop to ensure proper coroutine scheduling
             await asyncio.sleep(0)
 
         self._client.configure_xtdata_data_dir(self._config.miniqmt_path)
 
-        # Subscribe to whole market quotes if configured
+        await self.instrument_provider.initialize()
+        for instrument in self.instrument_provider.list_all():
+            self._handle_data(instrument)
+
         if self._config.subscribe_whole_quote:
             self._log.info("Subscribing to whole market quotes (SH, SZ)...")
-            # Usually we subscribe to main markets.
-            # Users can customize this list in config if we extend Config,
-            # for now hardcode main markets or use sectors config?
-            # XtQuant: ['SH', 'SZ'] for full market.
             code_list = ["SH", "SZ"]
             self._client.subscribe_whole_quote(code_list)
 
     async def _disconnect(self) -> None:
         await self._client._disconnect()
 
-    async def _subscribe_quote_ticks(self, instrument_id: InstrumentId) -> None:
-        # If whole quote is enabled, we don't need individual subscription usually,
-        # UNLESS the user wants to ensure historical cache for this specific instrument is active?
-        # But 'subscribe_quote' is for L1. 'subscribe_whole_quote' is also L1.
+    async def _subscribe_instruments(self, command: SubscribeInstruments) -> None:
+        return
+
+    async def _subscribe_instrument(self, command: SubscribeInstrument) -> None:
+        await self.instrument_provider.load_ids_async([command.instrument_id])
+        if instrument := self.instrument_provider.find(command.instrument_id):
+            self._handle_data(instrument)
+
+    async def _subscribe_quote_ticks(self, command: SubscribeQuoteTicks) -> None:
         if self._config.subscribe_whole_quote:
             return
 
-        stock_code = instrument_id_to_stock_code(instrument_id)
-        # 使用新的 mixin 方法
-        await self._client.subscribe_ticks(instrument_id, stock_code)
-        # 订阅记录现在由 client._subscriptions 管理, DataClient 仅需同步状态
-        self._subscription_map[instrument_id] = 1  # 占位
+        stock_code = instrument_id_to_stock_code(command.instrument_id)
+        await self._client.subscribe_market_data(command.instrument_id, stock_code)
+        await asyncio.sleep(self._config.subscription_delay_secs)
 
-    async def _unsubscribe_quote_ticks(self, instrument_id: InstrumentId) -> None:
-        if instrument_id in self._subscription_map:
-            await self._client.unsubscribe_ticks(instrument_id)
-            self._subscription_map.pop(instrument_id)
+    async def _subscribe_trade_ticks(self, command: SubscribeTradeTicks) -> None:
+        stock_code = instrument_id_to_stock_code(command.instrument_id)
+        await self._client.subscribe_tick_by_tick(
+            instrument_id=command.instrument_id,
+            stock_code=stock_code,
+            tick_type="AllLast",
+        )
+        await asyncio.sleep(self._config.subscription_delay_secs)
 
-    async def _subscribe_order_book(self, instrument_id: InstrumentId) -> None:
-        stock_code = instrument_id_to_stock_code(instrument_id)
-        await self._client.subscribe_order_book(instrument_id, stock_code)
+    async def _subscribe_order_book_deltas(self, command: SubscribeOrderBook) -> None:
+        stock_code = instrument_id_to_stock_code(command.instrument_id)
+        await self._client.subscribe_order_book(command.instrument_id, stock_code)
+        await asyncio.sleep(self._config.subscription_delay_secs)
 
-    async def _unsubscribe_order_book(self, instrument_id: InstrumentId) -> None:
-        await self._client.unsubscribe_order_book(instrument_id)
+    async def _subscribe_order_book_depth(self, command: SubscribeOrderBook) -> None:
+        self._log.error(
+            f"无法为 {command.instrument_id} 订阅订单簿深度: ThinkTrader 仅支持订单簿增量",
+        )
+
+    async def _subscribe_bars(self, command: SubscribeBars) -> None:
+        stock_code = instrument_id_to_stock_code(command.bar_type.instrument_id)
+        await self._client.subscribe_realtime_bars(bar_type=command.bar_type, stock_code=stock_code)
+        await asyncio.sleep(self._config.subscription_delay_secs)
+
+    async def _unsubscribe_instruments(self, command: UnsubscribeInstruments) -> None:
+        return
+
+    async def _unsubscribe_instrument(self, command: UnsubscribeInstrument) -> None:
+        return
+
+    async def _unsubscribe_quote_ticks(self, command: UnsubscribeQuoteTicks) -> None:
+        await self._client.unsubscribe_market_data(command.instrument_id)
+
+    async def _unsubscribe_trade_ticks(self, command: UnsubscribeTradeTicks) -> None:
+        stock_code = instrument_id_to_stock_code(command.instrument_id)
+        await self._client.unsubscribe_tick_by_tick(command.instrument_id, stock_code, tick_type="AllLast")
+
+    async def _unsubscribe_order_book_deltas(self, command: UnsubscribeOrderBook) -> None:
+        await self._client.unsubscribe_order_book(command.instrument_id)
+
+    async def _unsubscribe_order_book_depth(self, command: UnsubscribeOrderBook) -> None:
+        return
+
+    async def _unsubscribe_bars(self, command: UnsubscribeBars) -> None:
+        await self._client.unsubscribe_realtime_bars(command.bar_type)
+
+    async def _request(self, request: RequestData) -> None:
+        if isinstance(request, RequestQuoteTicks):
+            await self._request_quote_ticks(request)
+            return
+        if isinstance(request, RequestTradeTicks):
+            await self._request_trade_ticks(request)
+            return
+        if isinstance(request, RequestBars):
+            await self._request_bars(request)
+            return
+        if isinstance(request, RequestInstrument):
+            await self._request_instrument(request)
+            return
+        if isinstance(request, RequestInstruments):
+            await self._request_instruments(request)
+            return
+        self._log.error(f"不支持的请求类型: {type(request)!r}")
+
+    async def _request_instrument(self, request: RequestInstrument) -> None:
+        await self.instrument_provider.load_ids_async([request.instrument_id], request.params)
+        if instrument := self.instrument_provider.find(request.instrument_id):
+            self._handle_data(instrument)
+            self._handle_instrument(instrument, request.id, request.start, request.end, request.params)
+        else:
+            self._log.warning(f"{request.instrument_id} 的工具不可用")
+
+    async def _request_instruments(self, request: RequestInstruments) -> None:
+        await self.instrument_provider.initialize(reload=request.params.get("reload", False) if request.params else False)
+        instruments = list(self.instrument_provider.list_all())
+        for instrument in instruments:
+            self._handle_data(instrument)
+        self._handle_instruments(request.venue, instruments, request.id, request.start, request.end, request.params)
 
     async def _request_quote_ticks(self, request: RequestQuoteTicks) -> None:
         from nautilus_trader.adapters.thinktrader.parsing.data import ns_to_xt_time

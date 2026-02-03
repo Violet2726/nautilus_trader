@@ -407,6 +407,20 @@ class ThinkTraderClientMarketDataMixin(BaseMixin):
             callback=functools.partial(self._on_quote_data, name=name),
         )
 
+    async def unsubscribe_tick_by_tick(
+        self,
+        instrument_id: InstrumentId,
+        stock_code: str,
+        tick_type: str = "AllLast",
+    ) -> None:
+        if tick_type == "AllLast":
+            period = "l2transaction"
+        else:
+            period = "l2order"
+
+        name = (str(instrument_id), period)
+        await self._unsubscribe(name, xtdata.unsubscribe_quote)
+
     async def get_price(self, instrument_id: InstrumentId, stock_code: str) -> float:
         """
         请求特定合约的最新价格。

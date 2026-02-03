@@ -263,6 +263,7 @@ class BaseMixin(ABC):
     _clock: Any
     _cache: Any
     _msgbus: Any
+    _instrument_provider: Any
     _account: Any
     _miniqmt_path: str
     _session_id: int
