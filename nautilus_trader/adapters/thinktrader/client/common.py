@@ -82,7 +82,7 @@ class Subscription(msgspec.Struct, frozen=True):
 
 class Base(ABC):
     """
-    维护订阅和数据请求的请求 ID（Request Id）映射的抽象基类。
+    维护订阅和数据请求的请求 ID (Request Id) 映射的抽象基类。
     """
 
     def __init__(self) -> None:
@@ -102,10 +102,10 @@ class Base(ABC):
     def _validation_check(self, req_id: int, name: Any) -> None:
         if req_id in self._req_id_to_name:
             existing = self.get(req_id=req_id)
-            raise KeyError(f"不允许重复输入 {req_id=}，现有条目：{existing}")
+            raise KeyError(f"不允许重复输入 {req_id=}, 现有条目: {existing}")
         if name in self._req_id_to_name.values():
             existing = self.get(name=name)
-            raise KeyError(f"不允许重复输入 {name=}，现有条目：{existing}")
+            raise KeyError(f"不允许重复输入 {name=}, 现有条目: {existing}")
 
     def add_req_id(
         self,
@@ -255,7 +255,7 @@ class Requests(Base):
 
 
 class BaseMixin(ABC):
-    """Mixin 基类，提供类型提示"""
+    """Mixin 基类, 提供类型提示"""
 
     _loop: asyncio.AbstractEventLoop
     _log: Any

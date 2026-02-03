@@ -1,7 +1,11 @@
 import asyncio
 from typing import Any
 
-from xtquant.xttrader import XtQuantTraderCallback
+try:
+    from xtquant.xttrader import XtQuantTraderCallback as XtQuantTraderCallback  # type: ignore[no-redef]
+except ModuleNotFoundError:  # pragma: no cover
+    class XtQuantTraderCallback:  # type: ignore[no-redef]
+        pass
 
 from nautilus_trader.adapters.thinktrader.client.account import ThinkTraderClientAccountMixin
 from nautilus_trader.adapters.thinktrader.client.common import Request
@@ -61,8 +65,8 @@ class ThinkTraderClient(
 ):
     """
     ThinkTrader 底层客户端
-    
-    聚合所有 Mixin 功能，与 XtQuant API 交互。
+
+    聚合所有 Mixin 功能, 与 XtQuant API 交互。
     """
 
     def __init__(

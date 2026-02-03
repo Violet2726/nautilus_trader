@@ -1,7 +1,38 @@
+import asyncio
 import functools
 from typing import Any
 
-from xtquant import xtdata
+try:
+    from xtquant import xtdata as xtdata  # type: ignore[no-redef]
+except ModuleNotFoundError:  # pragma: no cover
+    class _XtDataStub:
+        data_dir: str = ""
+
+        def subscribe_quote(self, *args: Any, **kwargs: Any) -> int:
+            raise ModuleNotFoundError("xtquant is required for ThinkTrader market data")
+
+        def unsubscribe_quote(self, *args: Any, **kwargs: Any) -> None:
+            raise ModuleNotFoundError("xtquant is required for ThinkTrader market data")
+
+        def subscribe_whole_quote(self, *args: Any, **kwargs: Any) -> int:
+            raise ModuleNotFoundError("xtquant is required for ThinkTrader market data")
+
+        def get_market_data(self, *args: Any, **kwargs: Any) -> Any:
+            raise ModuleNotFoundError("xtquant is required for ThinkTrader market data")
+
+        def get_full_tick(self, *args: Any, **kwargs: Any) -> Any:
+            raise ModuleNotFoundError("xtquant is required for ThinkTrader market data")
+
+        def download_history_data2(self, *args: Any, **kwargs: Any) -> None:
+            raise ModuleNotFoundError("xtquant is required for ThinkTrader market data")
+
+        def get_financial_data(self, *args: Any, **kwargs: Any) -> Any:
+            raise ModuleNotFoundError("xtquant is required for ThinkTrader market data")
+
+        def get_instrument_detail(self, *args: Any, **kwargs: Any) -> Any:
+            raise ModuleNotFoundError("xtquant is required for ThinkTrader market data")
+
+    xtdata = _XtDataStub()
 
 from nautilus_trader.adapters.thinktrader.client.common import BaseMixin
 from nautilus_trader.adapters.thinktrader.client.common import Subscription
@@ -16,16 +47,19 @@ from nautilus_trader.model.identifiers import InstrumentId
 class ThinkTraderClientMarketDataMixin(BaseMixin):
     """
     为 ThinkTrader (XtQuant) 处理市场数据请求、订阅和数据处理。
-    
+
     此 Mixin 旨在与系统的标准市场数据接口保持功能对齐。
     """
 
     async def set_market_data_type(self, market_data_type: Any) -> None:
         """
         设置数据订阅的市场数据类型。
-        
-        TODO: XtQuant 主要提供实时和本地数据，尚无直接对应的 MarketDataTypeEnum。
+
+        TODO: XtQuant 主要提供实时和本地数据, 尚无直接对应的 MarketDataTypeEnum。
         """
+
+    def configure_xtdata_data_dir(self, data_dir: str) -> None:
+        setattr(xtdata, "data_dir", data_dir)
 
     async def _subscribe(
         self,
@@ -79,7 +113,7 @@ class ThinkTraderClientMarketDataMixin(BaseMixin):
         stock_code: str,
     ) -> None:
         """
-        订阅指定工具的逐笔行情（tick）数据。
+        订阅指定工具的逐笔行情 (tick) 数据。
         """
         name = (str(instrument_id), "tick")
         await self._subscribe(
@@ -219,7 +253,7 @@ class ThinkTraderClientMarketDataMixin(BaseMixin):
         start_ns: int,
         end_ns: int,
         timeout: int = 60,
-    ) -> list[Bar]:
+    ) -> Any:
         """
         请求并检索指定 K 线类型的历史 K 线数据。
         """
@@ -259,11 +293,11 @@ class ThinkTraderClientMarketDataMixin(BaseMixin):
             self._log.debug(f"get_historical_bars: {request.req_id=}, {stock_code=}")
             request.handle()
 
-            return await self._await_request(request, timeout, default_value=[])
+            return await self._await_request(request, timeout, default_value={})
         else:
             existing = self._requests.get(name=name)
             self._log.info(f"请求已存在于 {existing}")
-            return []
+            return {}
 
     async def get_historical_ticks(
         self,
@@ -272,7 +306,7 @@ class ThinkTraderClientMarketDataMixin(BaseMixin):
         start_ns: int,
         end_ns: int,
         timeout: int = 60,
-    ) -> list[QuoteTick | TradeTick]:
+    ) -> Any:
         """
         请求并检索历史逐笔行情数据。
         """
@@ -305,10 +339,10 @@ class ThinkTraderClientMarketDataMixin(BaseMixin):
             )
 
             request.handle()
-            return await self._await_request(request, timeout, default_value=[])
+            return await self._await_request(request, timeout, default_value={})
         else:
             self._log.info(f"请求 {name} 已存在")
-            return []
+            return {}
 
     async def req_fundamental_data(
         self,
@@ -325,7 +359,7 @@ class ThinkTraderClientMarketDataMixin(BaseMixin):
             req_id = self._next_req_id()
 
             def handle():
-                # 获取财务数据（Balance, Income, CashFlow 等）
+                # 获取财务数据 (Balance, Income, CashFlow 等)
                 financial = xtdata.get_financial_data(
                     stock_list=[stock_code],
                     report_type=report_type,
@@ -357,7 +391,7 @@ class ThinkTraderClientMarketDataMixin(BaseMixin):
         tick_type: str = "AllLast", # "AllLast" (成交) 或 "BidAsk" (报单/撤单)
     ) -> None:
         """
-        订阅逐笔行情数据（Level 2）。
+        订阅逐笔行情数据 (Level 2)。
         """
         if tick_type == "AllLast":
             period = "l2transaction"
@@ -415,7 +449,7 @@ class ThinkTraderClientMarketDataMixin(BaseMixin):
 
     async def _try_create_quote_tick_from_market_data(self, **kwargs: Any) -> None:
         """
-        TODO: 尝试从零散字段中拼接 QuoteTick (XtQuant 通常提供完整 dict，无需此逻辑)。
+        TODO: 尝试从零散字段中拼接 QuoteTick (XtQuant 通常提供完整 dict, 无需此逻辑)。
         """
 
     async def process_realtime_bar(self, **kwargs: Any) -> None:
@@ -425,12 +459,12 @@ class ThinkTraderClientMarketDataMixin(BaseMixin):
 
     async def process_historical_data(self, **kwargs: Any) -> None:
         """
-        TODO: 处理历史 K 线响应 (XtQuant 通过 get_market_data 同步获取，无需回调)。
+        TODO: 处理历史 K 线响应 (XtQuant 通过 get_market_data 同步获取, 无需回调)。
         """
 
     async def process_historical_data_end(self, **kwargs: Any) -> None:
         """
-        TODO: 标记历史数据加载结束 (XtQuant 通过 get_market_data 同步获取，无需此标记)。
+        TODO: 标记历史数据加载结束 (XtQuant 通过 get_market_data 同步获取, 无需此标记)。
         """
 
     async def process_historical_data_update(self, **kwargs: Any) -> None:
@@ -466,7 +500,7 @@ class ThinkTraderClientMarketDataMixin(BaseMixin):
         """
         处理并向适当的目的地转发已处理的数据。
         """
-        # 基类 BaseMixin 中应定义此属性，通常在 Client 中初始化
+        # 基类 BaseMixin 中应定义此属性, 通常在 Client 中初始化
         self._msgbus.send(endpoint="DataEngine.process", msg=data)
 
     def _schedule_bar_completion_timeout(self, **kwargs: Any) -> None:
@@ -557,9 +591,7 @@ class ThinkTraderClientMarketDataMixin(BaseMixin):
         data: dict,
         ts_init: int,
     ) -> None:
-        from nautilus_trader.adapters.thinktrader.parsing.data import (
-            parse_l2_order_to_delta,
-        )
+        from nautilus_trader.adapters.thinktrader.parsing.data import parse_l2_order_to_delta
         from nautilus_trader.adapters.thinktrader.parsing.data import (
             parse_l2_quote_to_order_book_deltas,
         )
@@ -654,6 +686,7 @@ class ThinkTraderClientMarketDataMixin(BaseMixin):
         period: str,
         start_time: str = "",
         end_time: str = "",
+        timeout: float = 60.0,
     ) -> None:
         """
         在请求历史数据前, 确保数据已下载到本地。
@@ -663,8 +696,20 @@ class ThinkTraderClientMarketDataMixin(BaseMixin):
         future = self._loop.create_future()
 
         def on_download(data: dict[str, Any]) -> None:
-            # 根据官方文档, data 通常包含下载进度或状态
-            if data.get("finished", False):
+            if future.done():
+                return
+
+            if data.get("finished") is True:
+                self._loop.call_soon_threadsafe(future.set_result, True)
+                return
+
+            try:
+                total = int(data.get("total", 0) or 0)
+                finished = int(data.get("finished", 0) or 0)
+            except Exception:
+                return
+
+            if total > 0 and finished >= total:
                 self._loop.call_soon_threadsafe(future.set_result, True)
 
         xtdata.download_history_data2(
@@ -675,4 +720,4 @@ class ThinkTraderClientMarketDataMixin(BaseMixin):
             callback=on_download,
         )
 
-        await future
+        await asyncio.wait_for(future, timeout=timeout)

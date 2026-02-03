@@ -1,4 +1,54 @@
-from xtquant import xtconstant
+try:
+    from xtquant import xtconstant as xtconstant  # type: ignore[no-redef]
+except ModuleNotFoundError:  # pragma: no cover
+    class _XtConstantStub:
+        ORDER_UNREPORTED = 48
+        ORDER_WAIT_REPORTING = 49
+        ORDER_REPORTED = 50
+        ORDER_REPORTED_CANCEL = 51
+        ORDER_PARTSUCC_CANCEL = 52
+        ORDER_PART_CANCEL = 53
+        ORDER_CANCELED = 54
+        ORDER_PART_SUCC = 55
+        ORDER_SUCCEEDED = 56
+        ORDER_JUNK = 57
+        ORDER_UNKNOWN = 255
+
+        STOCK_BUY = 1
+        STOCK_SELL = 2
+
+        CREDIT_FIN_BUY = 11
+        CREDIT_SELL_SECU_REPAY = 12
+        CREDIT_SLO_SELL = 13
+        CREDIT_BUY_SECU_REPAY = 14
+        CREDIT_BUY = 15
+        CREDIT_SELL = 16
+
+        FUTURE_OPEN_LONG = 21
+        FUTURE_CLOSE_LONG_HISTORY = 22
+        FUTURE_CLOSE_LONG_TODAY = 23
+        FUTURE_OPEN_SHORT = 24
+        FUTURE_CLOSE_SHORT_HISTORY = 25
+        FUTURE_CLOSE_SHORT_TODAY = 26
+        FUTURE_CLOSE_LONG_HISTORY_FIRST = 27
+        FUTURE_CLOSE_SHORT_HISTORY_FIRST = 28
+
+        DIRECTION_FLAG_LONG = 48
+        DIRECTION_FLAG_SHORT = 49
+
+        OFFSET_FLAG_OPEN = 48
+        OFFSET_FLAG_CLOSE = 49
+        OFFSET_FLAG_FORCECLOSE = 50
+        OFFSET_FLAG_CLOSETODAY = 51
+        OFFSET_FLAG_ClOSEYESTERDAY = 52
+        OFFSET_FLAG_FORCEOFF = 53
+        OFFSET_FLAG_LOCALFORCECLOSE = 54
+
+        FIX_PRICE = 0
+        LATEST_PRICE = 1
+        MARKET_PEER_PRICE_FIRST = 2
+
+    xtconstant = _XtConstantStub()
 
 from nautilus_trader.model.enums import OrderSide
 from nautilus_trader.model.enums import OrderStatus
@@ -6,7 +56,7 @@ from nautilus_trader.model.enums import OrderType
 
 
 # ============================================================================
-# 订单状态映射 (来源: API_NOTES 4.5)
+# 订单状态映射
 # ============================================================================
 ORDER_STATUS_MAP = {
     xtconstant.ORDER_UNREPORTED: OrderStatus.SUBMITTED,      # 48: 未报
@@ -23,7 +73,7 @@ ORDER_STATUS_MAP = {
 }
 
 # ============================================================================
-# 股票委托类型映射 (来源: API_NOTES 4.3)
+# 股票委托类型映射
 # ============================================================================
 STOCK_ORDER_TYPE_MAP = {
     "BUY": xtconstant.STOCK_BUY,                   # 股票买入
@@ -31,7 +81,7 @@ STOCK_ORDER_TYPE_MAP = {
 }
 
 # ============================================================================
-# 信用委托类型映射 (来源: API_NOTES 4.3)
+# 信用委托类型映射
 # ============================================================================
 CREDIT_ORDER_TYPE_MAP = {
     "MARGIN_BUY": xtconstant.CREDIT_FIN_BUY,            # 融资买入
@@ -43,7 +93,7 @@ CREDIT_ORDER_TYPE_MAP = {
 }
 
 # ============================================================================
-# 期货委托类型映射 - 六键风格 (来源: API_NOTES 4.3)
+# 期货委托类型映射
 # ============================================================================
 FUTURES_SIX_KEY_ORDER_TYPE_MAP = {
     "OPEN_LONG": xtconstant.FUTURE_OPEN_LONG,              # 买开
@@ -55,7 +105,7 @@ FUTURES_SIX_KEY_ORDER_TYPE_MAP = {
 }
 
 # ============================================================================
-# 期货委托类型映射 - 四键风格 (来源: API_NOTES 4.3)
+# 期货委托类型映射
 # ============================================================================
 FUTURES_FOUR_KEY_ORDER_TYPE_MAP = {
     "OPEN_LONG": xtconstant.FUTURE_OPEN_LONG,       # 买开
@@ -65,7 +115,7 @@ FUTURES_FOUR_KEY_ORDER_TYPE_MAP = {
 }
 
 # ============================================================================
-# 期货委托类型映射 - 两键风格 (来源: API_NOTES 4.3)
+# 期货委托类型映射
 # ============================================================================
 # FUTURES_TWO_KEY_ORDER_TYPE_MAP = {
 #     "SMART_BUY": xtconstant.FUTURE_SMART_BUY,            # 智能买入 (自动判断开/平)
@@ -75,7 +125,7 @@ FUTURES_FOUR_KEY_ORDER_TYPE_MAP = {
 # }
 
 # ============================================================================
-# 多空方向 (来源: API_NOTES 4.7)
+# 多空方向
 # ============================================================================
 DIRECTION_MAP = {
     "LONG": xtconstant.DIRECTION_FLAG_LONG,         # 48: 多
@@ -83,7 +133,7 @@ DIRECTION_MAP = {
 }
 
 # ============================================================================
-# 交易操作 / 开平标志 (来源: API_NOTES 4.8)
+# 交易操作 / 开平标志
 # ============================================================================
 OFFSET_FLAG_MAP = {
     "OPEN": xtconstant.OFFSET_FLAG_OPEN,                  # 48: 开仓
@@ -96,7 +146,7 @@ OFFSET_FLAG_MAP = {
 }
 
 # ============================================================================
-# 报价类型映射 (来源: API_NOTES 4.4)
+# 报价类型映射
 # ============================================================================
 PRICE_TYPE_MAP = {
     # 通用

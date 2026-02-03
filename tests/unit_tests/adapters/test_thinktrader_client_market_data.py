@@ -1,5 +1,8 @@
 import asyncio
+from datetime import datetime
+from datetime import timezone
 from unittest.mock import Mock
+from unittest.mock import AsyncMock
 from unittest.mock import patch
 from unittest.mock import sentinel
 
@@ -9,7 +12,16 @@ from nautilus_trader.adapters.thinktrader.client import ThinkTraderClient
 from nautilus_trader.common.component import Logger
 from nautilus_trader.common.component import TestClock
 from nautilus_trader.model.data import BarType
+from nautilus_trader.model.identifiers import ClientId
 from nautilus_trader.model.identifiers import InstrumentId
+from nautilus_trader.model.identifiers import Venue
+from nautilus_trader.test_kit.stubs.identifiers import TestIdStubs
+
+
+def _print_section(title: str) -> None:
+    print("\n" + "=" * 88)
+    print(f"【ThinkTrader 测试】{title}")
+    print("=" * 88)
 
 
 @pytest.fixture
@@ -29,6 +41,7 @@ def thinktrader_client(event_loop):
 
 @pytest.mark.asyncio
 async def test_subscribe_ticks_and_unsubscribe_ticks(thinktrader_client):
+    _print_section("订阅/反订阅 tick（xtdata.subscribe_quote / unsubscribe_quote）")
     instrument_id = InstrumentId.from_str("000001.SZSE")
     stock_code = "000001.SZ"
 
@@ -142,6 +155,7 @@ async def test_subscribe_realtime_bars_uses_bar_spec_period(thinktrader_client):
 
 @pytest.mark.asyncio
 async def test_get_historical_bars_calls_get_market_data(thinktrader_client):
+    _print_section("历史 K 线获取（xtdata.get_market_data）")
     from nautilus_trader.adapters.thinktrader.parsing.data import ns_to_xt_time
 
     bar_type = BarType.from_str("000001.SZSE-1-MINUTE-LAST-EXTERNAL")
@@ -171,10 +185,12 @@ async def test_get_historical_bars_calls_get_market_data(thinktrader_client):
         assert kwargs["count"] == -1
         assert kwargs["dividend_type"] == "none"
         assert kwargs["fill_data"] is True
+        print("已调用参数:", kwargs)
 
 
 @pytest.mark.asyncio
 async def test_get_historical_ticks_calls_get_market_data(thinktrader_client):
+    _print_section("历史 Tick 获取（xtdata.get_market_data period=tick）")
     from nautilus_trader.adapters.thinktrader.parsing.data import ns_to_xt_time
 
     instrument_id = InstrumentId.from_str("000001.SZSE")
@@ -202,6 +218,7 @@ async def test_get_historical_ticks_calls_get_market_data(thinktrader_client):
         assert kwargs["start_time"] == ns_to_xt_time(start_ns)
         assert kwargs["end_time"] == ns_to_xt_time(end_ns)
         assert kwargs["count"] == -1
+        print("已调用参数:", kwargs)
 
 
 @pytest.mark.asyncio
@@ -347,6 +364,7 @@ def test_handle_quote_data_bar_type_string_forwards_bar(thinktrader_client):
 
 @pytest.mark.asyncio
 async def test_download_history_data_waits_for_finished(thinktrader_client):
+    _print_section("历史数据下载等待完成（xtdata.download_history_data2 callback）")
     with patch(
         "nautilus_trader.adapters.thinktrader.client.market_data.xtdata.download_history_data2",
     ) as download_history_data2:
@@ -361,6 +379,7 @@ async def test_download_history_data_waits_for_finished(thinktrader_client):
             start_time="20240101000000",
             end_time="20240102000000",
         )
+        print("download_history_data2 已触发 finished=True，等待结束通过。")
 
 
 @pytest.mark.asyncio
@@ -372,3 +391,159 @@ async def test_unsubscribe_missing_subscription_does_not_call_xtdata(thinktrader
         await thinktrader_client.unsubscribe_ticks(instrument_id=instrument_id)
         unsubscribe_quote.assert_not_called()
 
+
+@pytest.fixture
+def thinktrader_data_client(event_loop):
+    from nautilus_trader.adapters.thinktrader.config import ThinkTraderDataClientConfig
+    from nautilus_trader.adapters.thinktrader.data import ThinkTraderDataClient
+    from nautilus_trader.cache.cache import Cache
+    from nautilus_trader.common.component import MessageBus
+    from nautilus_trader.common.providers import InstrumentProvider
+
+    clock = TestClock()
+    msgbus = MessageBus(trader_id=TestIdStubs.trader_id(), clock=clock)
+    cache = Cache(database=None)
+    client = ThinkTraderClient(
+        loop=event_loop,
+        logger=Logger("ThinkTraderDataClientTests"),
+        miniqmt_path="D:\\中信证券QMT交易终端仿真\\userdata_mini",
+        session_id=1,
+        account_id="",
+    )
+
+    config = ThinkTraderDataClientConfig(
+        miniqmt_path="D:\\中信证券QMT交易终端仿真\\userdata_mini",
+        session_id=1,
+        subscribe_whole_quote=False,
+        skip_trader_login=True,
+    )
+
+    return ThinkTraderDataClient(
+        loop=event_loop,
+        client=client,
+        msgbus=msgbus,
+        cache=cache,
+        clock=clock,
+        instrument_provider=InstrumentProvider(),
+        config=config,
+    )
+
+
+@pytest.mark.asyncio
+async def test_data_client_request_quote_ticks_parses_numpy_ticks(thinktrader_data_client):
+    _print_section("DataClient 请求 QuoteTicks：解析 xtdata tick(np.ndarray) -> QuoteTick 列表")
+    import numpy as np
+
+    from nautilus_trader.core.uuid import UUID4
+    from nautilus_trader.data.messages import RequestQuoteTicks
+
+    instrument_id = InstrumentId.from_str("000001.SZSE")
+    stock_code = "000001.SZ"
+
+    arr = np.array(
+        [
+            (
+                20240101093000,
+                [10.0],
+                [10.01],
+                [100],
+                [120],
+                10.005,
+                50,
+            ),
+            (
+                20240101093001,
+                [10.01],
+                [10.02],
+                [110],
+                [130],
+                10.015,
+                60,
+            ),
+        ],
+        dtype=[
+            ("time", "i8"),
+            ("bidPrice", "O"),
+            ("askPrice", "O"),
+            ("bidVol", "O"),
+            ("askVol", "O"),
+            ("lastPrice", "f8"),
+            ("volume", "i8"),
+        ],
+    )
+
+    thinktrader_data_client._client.download_history_data = AsyncMock(return_value=None)
+    thinktrader_data_client._client.get_historical_ticks = AsyncMock(return_value={stock_code: arr})
+
+    seen: list = []
+    thinktrader_data_client._handle_quote_ticks = Mock(
+        side_effect=lambda _instrument_id, ticks, *_args: seen.extend(ticks),
+    )
+
+    request = RequestQuoteTicks(
+        instrument_id=instrument_id,
+        start=datetime(2024, 1, 1, 1, 0, 0, tzinfo=timezone.utc),
+        end=datetime(2024, 1, 1, 1, 5, 0, tzinfo=timezone.utc),
+        limit=0,
+        client_id=ClientId("THINKTRADER"),
+        venue=Venue("THINKTRADER"),
+        callback=None,
+        request_id=UUID4(),
+        ts_init=thinktrader_data_client._clock.timestamp_ns(),
+        params=None,
+    )
+
+    await thinktrader_data_client._request_quote_ticks(request)
+
+    assert len(seen) == 2
+    print(f"解析得到 QuoteTick 数量: {len(seen)}")
+    print("样例 QuoteTick[0]:", seen[0])
+    print("样例 QuoteTick[1]:", seen[1])
+
+
+@pytest.mark.asyncio
+async def test_data_client_request_bars_parses_kline_fields(thinktrader_data_client):
+    _print_section("DataClient 请求 Bars：解析 xtdata K线(dict[field]->DataFrame) -> Bar 列表")
+    import pandas as pd
+
+    from nautilus_trader.core.uuid import UUID4
+    from nautilus_trader.data.messages import RequestBars
+
+    bar_type = BarType.from_str("000001.SZSE-1-MINUTE-LAST-EXTERNAL")
+    stock_code = "000001.SZ"
+
+    cols = [20240101093000, 20240101093100]
+    data = {
+        "open": pd.DataFrame([[10.0, 10.1]], index=[stock_code], columns=cols),
+        "high": pd.DataFrame([[10.2, 10.3]], index=[stock_code], columns=cols),
+        "low": pd.DataFrame([[9.9, 10.0]], index=[stock_code], columns=cols),
+        "close": pd.DataFrame([[10.05, 10.15]], index=[stock_code], columns=cols),
+        "volume": pd.DataFrame([[1000, 1200]], index=[stock_code], columns=cols),
+    }
+
+    thinktrader_data_client._client.download_history_data = AsyncMock(return_value=None)
+    thinktrader_data_client._client.get_historical_bars = AsyncMock(return_value=data)
+    thinktrader_data_client._msgbus.publish = Mock()
+
+    seen: list = []
+    thinktrader_data_client._handle_bars = Mock(side_effect=lambda _bar_type, bars, *_args: seen.extend(bars))
+
+    request = RequestBars(
+        bar_type=bar_type,
+        start=datetime(2024, 1, 1, 1, 0, 0, tzinfo=timezone.utc),
+        end=datetime(2024, 1, 1, 1, 5, 0, tzinfo=timezone.utc),
+        limit=0,
+        client_id=ClientId("THINKTRADER"),
+        venue=Venue("THINKTRADER"),
+        callback=None,
+        request_id=UUID4(),
+        ts_init=thinktrader_data_client._clock.timestamp_ns(),
+        params=None,
+    )
+
+    await thinktrader_data_client._request_bars(request)
+
+    assert len(seen) == 2
+    print(f"解析得到 Bar 数量: {len(seen)}")
+    print("样例 Bar[0]:", seen[0])
+    print("样例 Bar[1]:", seen[1])

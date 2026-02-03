@@ -60,6 +60,8 @@ class ThinkTraderDataClient(LiveMarketDataClient):
             # Yield control to event loop to ensure proper coroutine scheduling
             await asyncio.sleep(0)
 
+        self._client.configure_xtdata_data_dir(self._config.miniqmt_path)
+
         # Subscribe to whole market quotes if configured
         if self._config.subscribe_whole_quote:
             self._log.info("Subscribing to whole market quotes (SH, SZ)...")
@@ -99,9 +101,18 @@ class ThinkTraderDataClient(LiveMarketDataClient):
         await self._client.unsubscribe_order_book(instrument_id)
 
     async def _request_quote_ticks(self, request: RequestQuoteTicks) -> None:
+        from nautilus_trader.adapters.thinktrader.parsing.data import ns_to_xt_time
+
         stock_code = instrument_id_to_stock_code(request.instrument_id)
         start_ns = int(request.start.timestamp() * 1e9) if request.start else 0
         end_ns = int(request.end.timestamp() * 1e9) if request.end else self._clock.timestamp_ns()
+
+        await self._client.download_history_data(
+            stock_list=[stock_code],
+            period="tick",
+            start_time=ns_to_xt_time(start_ns),
+            end_time=ns_to_xt_time(end_ns),
+        )
 
         data = await self._client.get_historical_ticks(
             instrument_id=request.instrument_id,
@@ -121,9 +132,18 @@ class ThinkTraderDataClient(LiveMarketDataClient):
         )
 
     async def _request_trade_ticks(self, request: RequestTradeTicks) -> None:
+        from nautilus_trader.adapters.thinktrader.parsing.data import ns_to_xt_time
+
         stock_code = instrument_id_to_stock_code(request.instrument_id)
         start_ns = int(request.start.timestamp() * 1e9) if request.start else 0
         end_ns = int(request.end.timestamp() * 1e9) if request.end else self._clock.timestamp_ns()
+
+        await self._client.download_history_data(
+            stock_list=[stock_code],
+            period="tick",
+            start_time=ns_to_xt_time(start_ns),
+            end_time=ns_to_xt_time(end_ns),
+        )
 
         data = await self._client.get_historical_ticks(
             instrument_id=request.instrument_id,
@@ -152,54 +172,61 @@ class ThinkTraderDataClient(LiveMarketDataClient):
         if not data:
             return []
 
-        import pandas as pd
-
         from nautilus_trader.adapters.thinktrader.parsing.data import parse_tick_to_quote_tick
         from nautilus_trader.adapters.thinktrader.parsing.data import parse_tick_to_trade_tick
 
-        # XtQuant returns {field: DF}
-        # We need to reconstruct individual ticks.
-        # This is expensive for many ticks, but necessary for Nautilus compatibility.
-
-        # Combine all fields into one DF for the specific stock_code
-        fields = list(data.keys())
-        series_list = {}
         stock_code = instrument_id_to_stock_code(instrument_id)
-
-        for f in fields:
-            if stock_code in data[f].index:
-                series_list[f] = data[f].loc[stock_code]
-
-        if not series_list:
-            return []
-
-        df = pd.DataFrame(series_list)
-        ticks = []
         ts_init = self._clock.timestamp_ns()
 
-        for time_val, row in df.iterrows():
-            row_dict = row.to_dict()
-            row_dict["time"] = time_val
+        if isinstance(data, dict) and stock_code in data:
+            try:
+                import numpy as np
 
-            if not trade_only:
-                quote = parse_tick_to_quote_tick(instrument_id, row_dict, ts_init)
-                ticks.append(quote)
-            if not quote_only:
-                trade = parse_tick_to_trade_tick(instrument_id, row_dict, ts_init)
-                ticks.append(trade)
+                arr = data.get(stock_code)
+                if isinstance(arr, np.ndarray):
+                    ticks: list[Any] = []
+                    for row in arr:
+                        if hasattr(row, "dtype") and getattr(row.dtype, "names", None):
+                            row_dict = {}
+                            for k in row.dtype.names:
+                                val = row[k]
+                                row_dict[k] = val.item() if hasattr(val, "item") else val
+                        else:
+                            row_dict = dict(row)
 
-        return ticks
+                        if not trade_only:
+                            ticks.append(parse_tick_to_quote_tick(instrument_id, row_dict, ts_init))
+                        if not quote_only:
+                            ticks.append(parse_tick_to_trade_tick(instrument_id, row_dict, ts_init))
+
+                    return ticks
+            except Exception:
+                pass
+
+        if not isinstance(data, dict):
+            return []
+
+        return []
 
 
     async def _request_bars(self, request: RequestBars) -> None:
-        import pandas as pd
-
         from nautilus_trader.adapters.thinktrader.parsing.data import parse_kline_to_bar
+        from nautilus_trader.adapters.thinktrader.parsing.data import bar_spec_to_period
+        from nautilus_trader.adapters.thinktrader.parsing.data import ns_to_xt_time
+        import pandas as pd
 
         bar_type = request.bar_type
         stock_code = instrument_id_to_stock_code(bar_type.instrument_id)
         start_ns = int(request.start.timestamp() * 1e9) if request.start else 0
-        end_ns = int(request.end.timestamp() * 1e9) if request.end else int(pd.Timestamp.now().timestamp() * 1e9)
+        end_ns = int(request.end.timestamp() * 1e9) if request.end else self._clock.timestamp_ns()
+
+        period = bar_spec_to_period(bar_type.spec)
+        await self._client.download_history_data(
+            stock_list=[stock_code],
+            period=period,
+            start_time=ns_to_xt_time(start_ns),
+            end_time=ns_to_xt_time(end_ns),
+        )
 
         data = await self._client.get_historical_bars(
             bar_type=bar_type,

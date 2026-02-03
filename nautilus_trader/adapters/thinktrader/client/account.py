@@ -1,5 +1,4 @@
-from typing import Dict
-from typing import List
+from typing import Any
 
 from nautilus_trader.adapters.thinktrader.client.common import BaseMixin
 from nautilus_trader.adapters.thinktrader.client.common import TTPosition
@@ -8,7 +7,7 @@ from nautilus_trader.adapters.thinktrader.client.common import TTPosition
 class ThinkTraderClientAccountMixin(BaseMixin):
     """处理账户和持仓查询"""
 
-    def query_asset(self) -> Dict | None:
+    def query_asset(self) -> dict[str, Any] | None:
         """查询账户资产"""
         try:
             asset = self._trader.query_stock_asset(self._account)
@@ -25,27 +24,29 @@ class ThinkTraderClientAccountMixin(BaseMixin):
             self._log.error(f"查询资产失败: {e}")
             return None
 
-    def query_positions(self) -> List[TTPosition]:
+    def query_positions(self) -> list[TTPosition]:
         """查询持仓"""
         try:
             positions = self._trader.query_stock_positions(self._account)
-            result = []
+            result: list[TTPosition] = []
             if positions:
                 for pos in positions:
-                    result.append(TTPosition(
-                        account_id=pos.account_id,
-                        stock_code=pos.stock_code,
-                        volume=pos.volume,
-                        available_volume=pos.can_use_volume,
-                        avg_price=pos.open_price,
-                        market_value=pos.market_value,
-                    ))
+                    result.append(
+                        TTPosition(
+                            account_id=pos.account_id,
+                            stock_code=pos.stock_code,
+                            volume=pos.volume,
+                            available_volume=pos.can_use_volume,
+                            avg_price=pos.open_price,
+                            market_value=pos.market_value,
+                        ),
+                    )
             return result
         except Exception as e:
             self._log.error(f"查询持仓失败: {e}")
             return []
 
-    def query_orders(self) -> List:
+    def query_orders(self) -> list[Any]:
         """查询当日委托"""
         try:
             return self._trader.query_stock_orders(self._account)
@@ -53,7 +54,7 @@ class ThinkTraderClientAccountMixin(BaseMixin):
             self._log.error(f"查询委托失败: {e}")
             return []
 
-    def query_trades(self) -> List:
+    def query_trades(self) -> list[Any]:
         """查询当日成交"""
         try:
             return self._trader.query_stock_trades(self._account)

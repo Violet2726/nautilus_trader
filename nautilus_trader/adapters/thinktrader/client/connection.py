@@ -1,5 +1,12 @@
-from xtquant import xttrader
-from xtquant.xttype import StockAccount
+try:
+    from xtquant import xttrader as xttrader  # type: ignore[no-redef]
+    from xtquant.xttype import StockAccount  # type: ignore[no-redef]
+except ModuleNotFoundError:  # pragma: no cover
+    xttrader = None
+
+    class StockAccount:  # type: ignore[no-redef]
+        def __init__(self, *args, **kwargs):
+            raise ModuleNotFoundError("xtquant is required for ThinkTrader trader connection")
 
 from nautilus_trader.adapters.thinktrader.client.common import BaseMixin
 from nautilus_trader.common.enums import LogColor
@@ -10,6 +17,8 @@ class ThinkTraderClientConnectionMixin(BaseMixin):
 
     async def _connect(self) -> None:
         """建立连接"""
+        if xttrader is None:
+            raise ModuleNotFoundError("xtquant is required for ThinkTrader trader connection")
         self._log.info(f"正在连接到 MiniQmt: {self._miniqmt_path}")
 
         self._trader = xttrader.XtQuantTrader(
@@ -22,16 +31,16 @@ class ThinkTraderClientConnectionMixin(BaseMixin):
 
         connect_result = self._trader.connect()
         if connect_result != 0:
-            raise ConnectionError(f"连接 MiniQmt 失败，错误码: {connect_result}")
+            raise ConnectionError(f"连接 MiniQmt 失败, 错误码: {connect_result}")
 
         self._account = StockAccount(self._account_id)
         subscribe_result = self._trader.subscribe(self._account)
         if subscribe_result != 0:
-            raise ConnectionError(f"订阅账户失败，错误码: {subscribe_result}")
+            raise ConnectionError(f"订阅账户失败, 错误码: {subscribe_result}")
 
         self._is_connected.set()
         self._log.info(
-            f"已连接到 MiniQmt，账户: {self._account_id}",
+            f"已连接到 MiniQmt, 账户: {self._account_id}",
             LogColor.GREEN,
         )
 
