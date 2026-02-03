@@ -22,6 +22,12 @@ from nautilus_trader.adapters.thinktrader.client.error import (
 )
 
 
+from nautilus_trader.adapters.thinktrader.client.common import (
+    Subscriptions,
+    Requests,
+    Request,
+)
+
 class ThinkTraderClientCallback(XtQuantTraderCallback):
     """XtQuant 回调实现"""
     
@@ -91,9 +97,29 @@ class ThinkTraderClient(
         self._callback = ThinkTraderClientCallback(self)
         
         self._is_connected = asyncio.Event()
-        self._subscriptions: dict = {}
-        self._requests: dict = {}
+        self._subscriptions = Subscriptions()
+        self._requests = Requests()
+        self._req_id = 1000  # Start from 1000 to avoid conflicts with system seq
         self._event_handlers: dict = {}
+
+    def _next_req_id(self) -> int:
+        """生成下一个请求 ID"""
+        self._req_id += 1
+        return self._req_id
+
+    async def _await_request(
+        self,
+        request: Request,
+        timeout: int,
+        default_value: Any = None,
+    ) -> Any:
+        """等待异步请求完成"""
+        try:
+            return await asyncio.wait_for(request.future, timeout=timeout)
+        except asyncio.TimeoutError:
+            self._log.error(f"请求 {request.req_id} ({request.name}) 超时 ({timeout}s)")
+            self._requests.remove(req_id=request.req_id)
+            return default_value
     
     def register_event_handler(self, event_name: str, handler) -> None:
         """注册事件处理器"""
