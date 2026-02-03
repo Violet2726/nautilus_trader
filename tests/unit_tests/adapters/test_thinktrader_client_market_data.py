@@ -1,8 +1,7 @@
 import asyncio
-from datetime import datetime
-from datetime import timezone
-from unittest.mock import Mock
+import datetime
 from unittest.mock import AsyncMock
+from unittest.mock import Mock
 from unittest.mock import patch
 from unittest.mock import sentinel
 
@@ -41,7 +40,7 @@ def thinktrader_client(event_loop):
 
 @pytest.mark.asyncio
 async def test_subscribe_ticks_and_unsubscribe_ticks(thinktrader_client):
-    _print_section("订阅/反订阅 tick（xtdata.subscribe_quote / unsubscribe_quote）")
+    _print_section("订阅/反订阅 tick (xtdata.subscribe_quote / unsubscribe_quote)")
     instrument_id = InstrumentId.from_str("000001.SZSE")
     stock_code = "000001.SZ"
 
@@ -155,7 +154,7 @@ async def test_subscribe_realtime_bars_uses_bar_spec_period(thinktrader_client):
 
 @pytest.mark.asyncio
 async def test_get_historical_bars_calls_get_market_data(thinktrader_client):
-    _print_section("历史 K 线获取（xtdata.get_market_data）")
+    _print_section("历史 K 线获取 (xtdata.get_market_data)")
     from nautilus_trader.adapters.thinktrader.parsing.data import ns_to_xt_time
 
     bar_type = BarType.from_str("000001.SZSE-1-MINUTE-LAST-EXTERNAL")
@@ -190,7 +189,7 @@ async def test_get_historical_bars_calls_get_market_data(thinktrader_client):
 
 @pytest.mark.asyncio
 async def test_get_historical_ticks_calls_get_market_data(thinktrader_client):
-    _print_section("历史 Tick 获取（xtdata.get_market_data period=tick）")
+    _print_section("历史 Tick 获取 (xtdata.get_market_data period=tick)")
     from nautilus_trader.adapters.thinktrader.parsing.data import ns_to_xt_time
 
     instrument_id = InstrumentId.from_str("000001.SZSE")
@@ -364,7 +363,7 @@ def test_handle_quote_data_bar_type_string_forwards_bar(thinktrader_client):
 
 @pytest.mark.asyncio
 async def test_download_history_data_waits_for_finished(thinktrader_client):
-    _print_section("历史数据下载等待完成（xtdata.download_history_data2 callback）")
+    _print_section("历史数据下载等待完成 (xtdata.download_history_data2 callback)")
     with patch(
         "nautilus_trader.adapters.thinktrader.client.market_data.xtdata.download_history_data2",
     ) as download_history_data2:
@@ -379,7 +378,7 @@ async def test_download_history_data_waits_for_finished(thinktrader_client):
             start_time="20240101000000",
             end_time="20240102000000",
         )
-        print("download_history_data2 已触发 finished=True，等待结束通过。")
+        print("download_history_data2 已触发 finished=True, 等待结束通过。")
 
 
 @pytest.mark.asyncio
@@ -431,7 +430,7 @@ def thinktrader_data_client(event_loop):
 
 @pytest.mark.asyncio
 async def test_data_client_request_quote_ticks_parses_numpy_ticks(thinktrader_data_client):
-    _print_section("DataClient 请求 QuoteTicks：解析 xtdata tick(np.ndarray) -> QuoteTick 列表")
+    _print_section("DataClient 请求 QuoteTicks: 解析 xtdata tick(np.ndarray) -> QuoteTick 列表")
     import numpy as np
 
     from nautilus_trader.core.uuid import UUID4
@@ -482,8 +481,8 @@ async def test_data_client_request_quote_ticks_parses_numpy_ticks(thinktrader_da
 
     request = RequestQuoteTicks(
         instrument_id=instrument_id,
-        start=datetime(2024, 1, 1, 1, 0, 0, tzinfo=timezone.utc),
-        end=datetime(2024, 1, 1, 1, 5, 0, tzinfo=timezone.utc),
+        start=datetime.datetime(2024, 1, 1, 1, 0, 0, tzinfo=datetime.UTC),
+        end=datetime.datetime(2024, 1, 1, 1, 5, 0, tzinfo=datetime.UTC),
         limit=0,
         client_id=ClientId("THINKTRADER"),
         venue=Venue("THINKTRADER"),
@@ -503,7 +502,7 @@ async def test_data_client_request_quote_ticks_parses_numpy_ticks(thinktrader_da
 
 @pytest.mark.asyncio
 async def test_data_client_request_bars_parses_kline_fields(thinktrader_data_client):
-    _print_section("DataClient 请求 Bars：解析 xtdata K线(dict[field]->DataFrame) -> Bar 列表")
+    _print_section("DataClient 请求 Bars: 解析 xtdata K线(dict[field]->DataFrame) -> Bar 列表")
     import pandas as pd
 
     from nautilus_trader.core.uuid import UUID4
@@ -523,15 +522,14 @@ async def test_data_client_request_bars_parses_kline_fields(thinktrader_data_cli
 
     thinktrader_data_client._client.download_history_data = AsyncMock(return_value=None)
     thinktrader_data_client._client.get_historical_bars = AsyncMock(return_value=data)
-    thinktrader_data_client._msgbus.publish = Mock()
 
     seen: list = []
     thinktrader_data_client._handle_bars = Mock(side_effect=lambda _bar_type, bars, *_args: seen.extend(bars))
 
     request = RequestBars(
         bar_type=bar_type,
-        start=datetime(2024, 1, 1, 1, 0, 0, tzinfo=timezone.utc),
-        end=datetime(2024, 1, 1, 1, 5, 0, tzinfo=timezone.utc),
+        start=datetime.datetime(2024, 1, 1, 1, 0, 0, tzinfo=datetime.UTC),
+        end=datetime.datetime(2024, 1, 1, 1, 5, 0, tzinfo=datetime.UTC),
         limit=0,
         client_id=ClientId("THINKTRADER"),
         venue=Venue("THINKTRADER"),

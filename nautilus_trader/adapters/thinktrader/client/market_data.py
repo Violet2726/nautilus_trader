@@ -2,8 +2,9 @@ import asyncio
 import functools
 from typing import Any
 
+
 try:
-    from xtquant import xtdata as xtdata  # type: ignore[no-redef]
+    from xtquant import xtdata
 except ModuleNotFoundError:  # pragma: no cover
     class _XtDataStub:
         data_dir: str = ""
@@ -37,10 +38,7 @@ except ModuleNotFoundError:  # pragma: no cover
 from nautilus_trader.adapters.thinktrader.client.common import BaseMixin
 from nautilus_trader.adapters.thinktrader.client.common import Subscription
 from nautilus_trader.core.data import Data
-from nautilus_trader.model.data import Bar
 from nautilus_trader.model.data import BarType
-from nautilus_trader.model.data import QuoteTick
-from nautilus_trader.model.data import TradeTick
 from nautilus_trader.model.identifiers import InstrumentId
 
 
@@ -59,7 +57,7 @@ class ThinkTraderClientMarketDataMixin(BaseMixin):
         """
 
     def configure_xtdata_data_dir(self, data_dir: str) -> None:
-        setattr(xtdata, "data_dir", data_dir)
+        xtdata.data_dir = data_dir
 
     async def _subscribe(
         self,

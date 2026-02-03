@@ -1,5 +1,5 @@
 try:
-    from xtquant import xtconstant as xtconstant  # type: ignore[no-redef]
+    from xtquant import xtconstant as xtconstant
 except ModuleNotFoundError:  # pragma: no cover
     class _XtConstantStub:
         FIX_PRICE = 0

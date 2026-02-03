@@ -1,6 +1,6 @@
 try:
-    from xtquant import xttrader as xttrader  # type: ignore[no-redef]
-    from xtquant.xttype import StockAccount  # type: ignore[no-redef]
+    from xtquant import xttrader as xttrader
+    from xtquant.xttype import StockAccount
 except ModuleNotFoundError:  # pragma: no cover
     xttrader = None
 

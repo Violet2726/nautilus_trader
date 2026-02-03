@@ -1,7 +1,8 @@
 from typing import Any
 
+
 try:
-    from xtquant import xtdata as xtdata  # type: ignore[no-redef]
+    from xtquant import xtdata
 except ModuleNotFoundError:  # pragma: no cover
     class _XtDataStub:
         def get_instrument_detail(self, *args: Any, **kwargs: Any) -> Any:

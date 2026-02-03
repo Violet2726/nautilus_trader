@@ -1,8 +1,9 @@
 import asyncio
 from typing import Any
 
+
 try:
-    from xtquant.xttrader import XtQuantTraderCallback as XtQuantTraderCallback  # type: ignore[no-redef]
+    from xtquant.xttrader import XtQuantTraderCallback
 except ModuleNotFoundError:  # pragma: no cover
     class XtQuantTraderCallback:  # type: ignore[no-redef]
         pass

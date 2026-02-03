@@ -169,51 +169,70 @@ class ThinkTraderDataClient(LiveMarketDataClient):
         quote_only: bool = False,
         trade_only: bool = False,
     ) -> list[Any]:
-        if not data:
+        if not data or not isinstance(data, dict):
             return []
 
+        stock_code = instrument_id_to_stock_code(instrument_id)
+        arr = data.get(stock_code)
+        if arr is None:
+            return []
+
+        try:
+            import numpy as np
+        except ModuleNotFoundError:
+            return []
+
+        if not isinstance(arr, np.ndarray):
+            return []
+
+        ts_init = self._clock.timestamp_ns()
+        try:
+            return self._parse_numpy_tick_array(
+                instrument_id=instrument_id,
+                arr=arr,
+                ts_init=ts_init,
+                quote_only=quote_only,
+                trade_only=trade_only,
+            )
+        except Exception as e:
+            self._log.warning(f"Failed to parse numpy ticks for {stock_code}: {e}")
+            return []
+
+    def _parse_numpy_tick_array(
+        self,
+        instrument_id: InstrumentId,
+        arr: Any,
+        ts_init: int,
+        quote_only: bool,
+        trade_only: bool,
+    ) -> list[Any]:
         from nautilus_trader.adapters.thinktrader.parsing.data import parse_tick_to_quote_tick
         from nautilus_trader.adapters.thinktrader.parsing.data import parse_tick_to_trade_tick
 
-        stock_code = instrument_id_to_stock_code(instrument_id)
-        ts_init = self._clock.timestamp_ns()
+        ticks: list[Any] = []
+        for row in arr:
+            if hasattr(row, "dtype") and getattr(row.dtype, "names", None):
+                row_dict = {}
+                for k in row.dtype.names:
+                    val = row[k]
+                    row_dict[k] = val.item() if hasattr(val, "item") else val
+            else:
+                row_dict = dict(row)
 
-        if isinstance(data, dict) and stock_code in data:
-            try:
-                import numpy as np
+            if not trade_only:
+                ticks.append(parse_tick_to_quote_tick(instrument_id, row_dict, ts_init))
+            if not quote_only:
+                ticks.append(parse_tick_to_trade_tick(instrument_id, row_dict, ts_init))
 
-                arr = data.get(stock_code)
-                if isinstance(arr, np.ndarray):
-                    ticks: list[Any] = []
-                    for row in arr:
-                        if hasattr(row, "dtype") and getattr(row.dtype, "names", None):
-                            row_dict = {}
-                            for k in row.dtype.names:
-                                val = row[k]
-                                row_dict[k] = val.item() if hasattr(val, "item") else val
-                        else:
-                            row_dict = dict(row)
-
-                        if not trade_only:
-                            ticks.append(parse_tick_to_quote_tick(instrument_id, row_dict, ts_init))
-                        if not quote_only:
-                            ticks.append(parse_tick_to_trade_tick(instrument_id, row_dict, ts_init))
-
-                    return ticks
-            except Exception:
-                pass
-
-        if not isinstance(data, dict):
-            return []
-
-        return []
+        return ticks
 
 
     async def _request_bars(self, request: RequestBars) -> None:
-        from nautilus_trader.adapters.thinktrader.parsing.data import parse_kline_to_bar
+        import pandas as pd
+
         from nautilus_trader.adapters.thinktrader.parsing.data import bar_spec_to_period
         from nautilus_trader.adapters.thinktrader.parsing.data import ns_to_xt_time
-        import pandas as pd
+        from nautilus_trader.adapters.thinktrader.parsing.data import parse_kline_to_bar
 
         bar_type = request.bar_type
         stock_code = instrument_id_to_stock_code(bar_type.instrument_id)
