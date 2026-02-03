@@ -160,11 +160,6 @@ class ThinkTraderClient(
             f"order_id={response.order_id}, seq={response.seq}"
         )
     
-    def _handle_quote_data(self, stock_code: str, data: dict) -> None:
-        """处理行情数据 (在主循环中执行)"""
-        if handler := self._event_handlers.get("quote_data"):
-            handler(stock_code, data)
-    
     def _handle_order_update(self, order) -> None:
         """处理委托更新 (在主循环中执行)"""
         if handler := self._event_handlers.get("order_update"):

@@ -42,6 +42,8 @@ class ThinkTraderDataClient(LiveMarketDataClient):
         self._subscription_map: dict[InstrumentId, int] = {}
         
         # 注册回调
+        # 新实现中，回调由 Mixin 统一分发到 _handle_quote_data
+        # 但 DataClient 仍然可以通过 register_event_handler 获取
         self._client.register_event_handler("quote_data", self._on_quote_data)
     
     async def _connect(self) -> None:
@@ -74,18 +76,17 @@ class ThinkTraderDataClient(LiveMarketDataClient):
             return
 
         stock_code = instrument_id_to_stock_code(instrument_id)
-        seq = self._client.subscribe_quote(stock_code, period="tick")
-        if seq > 0:
-            self._subscription_map[instrument_id] = seq
+        # 使用新的 mixin 方法
+        await self._client.subscribe_ticks(instrument_id, stock_code)
+        # 订阅记录现在由 client._subscriptions 管理，DataClient 仅需同步状态
+        self._subscription_map[instrument_id] = 1 # 占位
     
     async def _unsubscribe_quote_ticks(self, instrument_id: InstrumentId) -> None:
-        if self._config.subscribe_whole_quote:
-            return
-
-        if seq := self._subscription_map.pop(instrument_id, None):
-            self._client.unsubscribe_quote(seq)
+        if instrument_id in self._subscription_map:
+            await self._client.unsubscribe_ticks(instrument_id)
+            self._subscription_map.pop(instrument_id)
             
-    def _on_quote_data(self, stock_code: str, data: dict) -> None:
+    def _on_quote_data(self, stock_code: str, data: dict, name: str | tuple | None = None) -> None:
         """处理行情回调"""
         from nautilus_trader.adapters.thinktrader.parsing.instruments import (
             stock_code_to_instrument_id,
@@ -130,19 +131,18 @@ class ThinkTraderDataClient(LiveMarketDataClient):
             PERIOD_MAP,
         )
         import pandas as pd
+        from nautilus_trader.adapters.thinktrader.parsing.data import ns_to_xt_time
         
         stock_code = instrument_id_to_stock_code(bar_type.instrument_id)
-        period = PERIOD_MAP.get(bar_type.spec.aggregation, "1d")
+        start_ns = int(start.timestamp() * 1e9) if start else 0
+        end_ns = int(end.timestamp() * 1e9) if end else int(pd.Timestamp.now().timestamp() * 1e9)
         
-        start_time = start.strftime("%Y%m%d") if start else ""
-        end_time = end.strftime("%Y%m%d") if end else ""
-        
-        data = self._client.get_market_data(
-            stock_list=[stock_code],
-            period=period,
-            start_time=start_time,
-            end_time=end_time,
-            count=limit,
+        # 使用新的 mixin 方法 (异步且处理了请求队列)
+        data = await self._client.get_historical_bars(
+            bar_type=bar_type,
+            stock_code=stock_code,
+            start_ns=start_ns,
+            end_ns=end_ns,
         )
         
         bars = []

@@ -1,5 +1,6 @@
 import asyncio
 import functools
+from decimal import Decimal
 from typing import Any
 
 import pandas as pd
@@ -7,6 +8,7 @@ from xtquant import xtdata
 
 from nautilus_trader.adapters.thinktrader.client.common import BaseMixin
 from nautilus_trader.adapters.thinktrader.client.common import Subscription
+from nautilus_trader.core.data import Data
 from nautilus_trader.model.data import Bar
 from nautilus_trader.model.data import BarType
 from nautilus_trader.model.data import QuoteTick
@@ -17,11 +19,13 @@ from nautilus_trader.model.identifiers import InstrumentId
 class ThinkTraderClientMarketDataMixin(BaseMixin):
     """
     为 ThinkTrader (XtQuant) 处理市场数据请求、订阅和数据处理。
+    
+    此 Mixin 旨在与系统的标准市场数据接口保持功能对齐。
     """
 
     async def set_market_data_type(self, market_data_type: Any) -> None:
         """
-        设置市场数据类型。
+        设置数据订阅的市场数据类型。
         
         TODO: XtQuant 主要提供实时和本地数据，尚无直接对应的 MarketDataTypeEnum。
         """
@@ -41,13 +45,12 @@ class ThinkTraderClientMarketDataMixin(BaseMixin):
         if not (subscription := self._subscriptions.get(name=name)):
             req_id = self._next_req_id()
             
-            # XtQuant subscribe_quote returns a sequence number (seq) which is our req_id
-            # However, Nautilus expects us to manage req_id, but XtQuant generates its own.
-            # We will use xtdata's seq as req_id.
+            # XtQuant subscribe_quote 返回一个序列号 (seq)
+            # 我们将其映射为 Subscription 的 req_id
             
             handle_func = functools.partial(subscription_method, *args, **kwargs)
             
-            # Actually call xtdata subscription
+            # 调用 xtdata 订阅
             seq = handle_func()
             if seq <= 0:
                 raise RuntimeError(f"XtQuant 订阅失败: {name}")
@@ -86,7 +89,7 @@ class ThinkTraderClientMarketDataMixin(BaseMixin):
         stock_code: str,
     ) -> None:
         """
-        订阅逐笔行情数据。
+        订阅指定工具的逐笔行情（tick）数据。
         """
         name = (str(instrument_id), "tick")
         await self._subscribe(
@@ -96,12 +99,12 @@ class ThinkTraderClientMarketDataMixin(BaseMixin):
             stock_code=stock_code,
             period="tick",
             count=0,
-            callback=self._on_quote_data,
+            callback=functools.partial(self._on_quote_data, name=name),
         )
 
     async def unsubscribe_ticks(self, instrument_id: InstrumentId) -> None:
         """
-        取消订阅逐笔行情数据。
+        取消订阅指定工具的逐笔行情数据。
         """
         name = (str(instrument_id), "tick")
         await self._unsubscribe(name, xtdata.unsubscribe_quote)
@@ -112,7 +115,7 @@ class ThinkTraderClientMarketDataMixin(BaseMixin):
         stock_code: str,
     ) -> None:
         """
-        使用普通行情请求订阅数据（在 ThinkTrader 中主要也是 subscribe_quote）。
+        订阅指定工具的市场数据。
         """
         name = (str(instrument_id), "market_data")
         await self._subscribe(
@@ -122,7 +125,7 @@ class ThinkTraderClientMarketDataMixin(BaseMixin):
             stock_code=stock_code,
             period="tick",
             count=0,
-            callback=self._on_quote_data,
+            callback=functools.partial(self._on_quote_data, name=name),
         )
 
     async def unsubscribe_market_data(self, instrument_id: InstrumentId) -> None:
@@ -138,7 +141,7 @@ class ThinkTraderClientMarketDataMixin(BaseMixin):
         stock_code: str,
     ) -> None:
         """
-        订阅订单簿（Level 2）数据。
+        订阅指定工具的订单簿数据。
         """
         name = (str(instrument_id), "order_book")
         await self._subscribe(
@@ -148,12 +151,12 @@ class ThinkTraderClientMarketDataMixin(BaseMixin):
             stock_code=stock_code,
             period="l2quote", # Level 2 快照
             count=0,
-            callback=self._on_quote_data,
+            callback=functools.partial(self._on_quote_data, name=name),
         )
 
     async def unsubscribe_order_book(self, instrument_id: InstrumentId) -> None:
         """
-        取消订阅订单簿数据。
+        取消订阅指定工具的订单簿数据。
         """
         name = (str(instrument_id), "order_book")
         await self._unsubscribe(name, xtdata.unsubscribe_quote)
@@ -164,7 +167,7 @@ class ThinkTraderClientMarketDataMixin(BaseMixin):
         stock_code: str,
     ) -> None:
         """
-        订阅实时 K 线数据。
+        订阅指定 K 线类型的实时 K 线数据。
         """
         from nautilus_trader.adapters.thinktrader.parsing.data import bar_spec_to_period
         period = bar_spec_to_period(bar_type.spec)
@@ -176,12 +179,12 @@ class ThinkTraderClientMarketDataMixin(BaseMixin):
             stock_code=stock_code,
             period=period,
             count=0,
-            callback=self._on_quote_data,
+            callback=functools.partial(self._on_quote_data, name=name),
         )
 
     async def unsubscribe_realtime_bars(self, bar_type: BarType) -> None:
         """
-        取消订阅实时 K 线数据。
+        取消订阅指定 K 线类型的实时 K 线数据。
         """
         name = str(bar_type)
         await self._unsubscribe(name, xtdata.unsubscribe_quote)
@@ -193,7 +196,7 @@ class ThinkTraderClientMarketDataMixin(BaseMixin):
         start_ns: int,
     ) -> None:
         """
-        订阅包含历史数据的 K 线。
+        订阅指定 K 线类型的历史 K 线数据。
         """
         from nautilus_trader.adapters.thinktrader.parsing.data import bar_spec_to_period
         from nautilus_trader.adapters.thinktrader.parsing.data import ns_to_xt_time
@@ -209,7 +212,7 @@ class ThinkTraderClientMarketDataMixin(BaseMixin):
             period=period,
             start_time=start_time,
             count=-1,
-            callback=self._on_quote_data,
+            callback=functools.partial(self._on_quote_data, name=name),
         )
 
     async def unsubscribe_historical_bars(self, bar_type: BarType) -> None:
@@ -240,10 +243,6 @@ class ThinkTraderClientMarketDataMixin(BaseMixin):
 
         if not (request := self._requests.get(name=name)):
             req_id = self._next_req_id()
-            
-            # 由于 get_market_data 是同步的，我们在这里简单封装为非阻塞
-            # 或者将其视为一个立即完成的请求
-            # 在实际生产中，可能需要先调用 download_history_data2 并等待其回调
             
             def handle():
                 data = xtdata.get_market_data(
@@ -316,49 +315,173 @@ class ThinkTraderClientMarketDataMixin(BaseMixin):
             self._log.info(f"请求 {request} 已存在")
             return []
 
+    async def get_price(self, instrument_id: InstrumentId, stock_code: str) -> float:
+        """
+        请求特定合约的最新价格。
+        """
+        data = xtdata.get_full_tick([stock_code])
+        if stock_code in data:
+            return data[stock_code].get('lastPrice', 0.0)
+        return 0.0
+
     # =========================================================================
-    # 以下为同步 IB 实现的功能函数占位或 TODO
+    # 回调处理函数 (对应标准接口的 process_... 系列)
     # =========================================================================
 
     async def process_market_data_type(self, *, req_id: int, market_data_type: int) -> None:
-        """TODO: 处理市场数据类型变更"""
+        """
+        TODO: 处理市场数据类型变更 (XtQuant 暂无此概念)。
+        """
         pass
 
     async def process_tick_by_tick_bid_ask(self, **kwargs: Any) -> None:
-        """TODO: 处理逐笔买卖报价 (已集成在 _on_quote_data)"""
+        """
+        TODO: 处理逐笔买卖报价 (在 XtQuant 中由 _on_quote_data 统一分发)。
+        """
         pass
 
     async def process_tick_by_tick_all_last(self, **kwargs: Any) -> None:
-        """TODO: 处理逐笔成交 (已集成在 _on_quote_data)"""
+        """
+        TODO: 处理逐笔成交 (在 XtQuant 中由 _on_quote_data 统一分发)。
+        """
         pass
 
     async def process_tick_price(self, **kwargs: Any) -> None:
-        """TODO: 处理行情价格更新"""
+        """
+        TODO: 处理行情价格更新 (在 XtQuant 中由 _on_quote_data 统一分发)。
+        """
         pass
 
     async def process_tick_size(self, **kwargs: Any) -> None:
-        """TODO: 处理行情大小更新"""
+        """
+        TODO: 处理行情大小更新 (在 XtQuant 中由 _on_quote_data 统一分发)。
+        """
         pass
 
-    async def process_order_book_update(self, **kwargs: Any) -> None:
-        """TODO: 处理订单簿更新 (已集成在 _on_quote_data)"""
+    async def _try_create_quote_tick_from_market_data(self, **kwargs: Any) -> None:
+        """
+        TODO: 尝试从零散字段中拼接 QuoteTick (XtQuant 通常提供完整 dict，无需此逻辑)。
+        """
         pass
 
     async def process_realtime_bar(self, **kwargs: Any) -> None:
-        """TODO: 处理实时 K 线更新 (已集成在 _on_quote_data)"""
+        """
+        TODO: 处理实时 K 线更新 (在 XtQuant 中由 _on_quote_data 统一分发)。
+        """
         pass
 
-    async def process_historical_bars(self, **kwargs: Any) -> None:
-        """TODO: 处理历史 K 线响应"""
+    async def process_historical_data(self, **kwargs: Any) -> None:
+        """
+        TODO: 处理历史 K 线响应 (XtQuant 通过 get_market_data 同步获取，无需回调)。
+        """
+        pass
+
+    async def process_historical_data_end(self, **kwargs: Any) -> None:
+        """
+        TODO: 标记历史数据加载结束 (XtQuant 通过 get_market_data 同步获取，无需此标记)。
+        """
+        pass
+
+    async def process_historical_data_update(self, **kwargs: Any) -> None:
+        """
+        TODO: 处理包含历史和实时的 K 线更新 (XtQuant 暂无此对应)。
+        """
+        pass
+
+    async def process_historical_ticks_bid_ask(self, **kwargs: Any) -> None:
+        """
+        TODO: 处理历史买卖报价响应 (XtQuant 通过 get_market_data 同步获取，无需回调)。
+        """
+        pass
+
+    async def process_historical_ticks_last(self, **kwargs: Any) -> None:
+        """
+        TODO: 处理历史成交历史响应 (XtQuant 通过 get_market_data 同步获取，无需回调)。
+        """
         pass
 
     async def process_historical_ticks(self, **kwargs: Any) -> None:
-        """TODO: 处理历史逐笔行情响应"""
+        """
+        TODO: 处理历史行情通用响应 (XtQuant 通过 get_market_data 同步获取，无需回调)。
+        """
         pass
 
-    def _on_quote_data(self, datas: dict) -> None:
-        # (已由上一步实现)
-        ...
+    async def process_update_mkt_depth_l2(self, **kwargs: Any) -> None:
+        """
+        TODO: 处理市场深度 (L2) 实时数据 (在 XtQuant 中由 _on_quote_data 统一分发)。
+        """
+        pass
+
+    # =========================================================================
+    # 内部辅助函数
+    # =========================================================================
+
+    async def _handle_data(self, data: Data) -> None:
+        """
+        处理并向适当的目的地转发已处理的数据。
+        """
+        # 基类 BaseMixin 中应定义此属性，通常在 Client 中初始化
+        self._msgbus.send(endpoint="DataEngine.process", msg=data)
+
+    def _schedule_bar_completion_timeout(self, **kwargs: Any) -> None:
+        """
+        TODO: 调度 K 线完成超时 (XtQuant 通常发送完整 K 线，可根据需要实现)。
+        """
+        pass
+
+    def _process_bar_data(self, **kwargs: Any) -> None:
+        """
+        TODO: 处理 K 线数据 (XtQuant 通过 _on_quote_data 统一分发，解析后直接处理)。
+        """
+        pass
+
+    def _process_trade_ticks(self, **kwargs: Any) -> None:
+        """
+        TODO: 处理成交行情列表 (XtQuant 通过 _on_quote_data 统一分发，解析后直接处理)。
+        """
+        pass
+
+    def _xt_bar_to_nautilus_bar(self, **kwargs: Any) -> None:
+        """
+        XtQuant 对应逻辑由 parsing/data.py 中的 parse_kline_to_bar 处理。
+        """
+        pass
+
+    def _xt_bar_to_ts_event(self, **kwargs: Any) -> None:
+        """
+        XtQuant 对应逻辑由 parsing/data.py 处理。
+        """
+        pass
+
+    def _xt_bar_to_ts_init(self, **kwargs: Any) -> None:
+        """
+        XtQuant 对应逻辑由 parsing/data.py 处理。
+        """
+        pass
+
+    def _convert_xt_bar_date_to_unix_nanos(self, **kwargs: Any) -> None:
+        """
+        XtQuant 对应逻辑由 parsing/data.py 处理。
+        """
+        pass
+
+    def _validate_bar_prices(self, **kwargs: Any) -> None:
+        """
+        TODO: 验证 K 线价格有效性 (XtQuant 数据通常已清洗，但可根据需要添加)。
+        """
+        pass
+
+    def _aggregate_order_book_by_price(self, **kwargs: Any) -> None:
+        """
+        TODO: 按价格汇总订单簿 (XtQuant L2 已是快照，但在某些情况下可能仍需汇总)。
+        """
+        pass
+
+    # =========================================================================
+    # ThinkTrader 特有逻辑 (XtQuant API 特点)
+    # =========================================================================
+
+    def _on_quote_data(self, datas: dict, name: str | tuple | None = None) -> None:
         """
         处理单股行情回调。
         callback datas 格式: { stock_code : [data1, data2, ...] }
@@ -367,6 +490,7 @@ class ThinkTraderClientMarketDataMixin(BaseMixin):
             for data in data_list:
                 self._loop.call_soon_threadsafe(
                     self._handle_quote_data,
+                    name,
                     stock_code,
                     data,
                 )
@@ -379,16 +503,66 @@ class ThinkTraderClientMarketDataMixin(BaseMixin):
         for stock_code, data in datas.items():
             self._loop.call_soon_threadsafe(
                 self._handle_quote_data,
+                None,
                 stock_code,
                 data,
             )
+
+    def _handle_quote_data(
+        self,
+        name: str | tuple | None,
+        stock_code: str,
+        data: dict,
+    ) -> None:
+        """
+        处理原始 XtQuant 数据报文并转发。
+        """
+        from nautilus_trader.adapters.thinktrader.parsing.data import parse_tick_to_quote_tick
+        from nautilus_trader.adapters.thinktrader.parsing.data import parse_tick_to_trade_tick
+        from nautilus_trader.adapters.thinktrader.parsing.data import parse_kline_to_bar
+        
+        ts_init = self._clock.timestamp_ns()
+        
+        # 尝试从订阅名中推断数据类型
+        if isinstance(name, tuple):
+             # 格式: (instrument_id_str, "tick/order_book/...")
+             instrument_id = InstrumentId.from_str(name[0])
+             data_type = name[1]
+             
+             if data_type == "tick":
+                 quote = parse_tick_to_quote_tick(instrument_id, data, ts_init)
+                 asyncio.create_task(self._handle_data(quote))
+                 trade = parse_tick_to_trade_tick(instrument_id, data, ts_init)
+                 asyncio.create_task(self._handle_data(trade))
+             elif data_type == "market_data":
+                 quote = parse_tick_to_quote_tick(instrument_id, data, ts_init)
+                 asyncio.create_task(self._handle_data(quote))
+             elif data_type == "order_book":
+                 # TODO: 处理 L2 深度
+                 pass
+        elif isinstance(name, str):
+            # 可能是 BarType.from_str(name)
+            try:
+                bar_type = BarType.from_str(name)
+                bar = parse_kline_to_bar(bar_type.instrument_id, bar_type, data, ts_init)
+                asyncio.create_task(self._handle_data(bar))
+            except Exception:
+                self._log.error(f"无法解析数据报文，订阅名为: {name}")
+        else:
+            # 全推行情处理，这里默认按 Tick 处理
+            instrument_id = self._cache.instrument_id_for_symbol(stock_code)
+            if instrument_id:
+                quote = parse_tick_to_quote_tick(instrument_id, data, ts_init)
+                asyncio.create_task(self._handle_data(quote))
 
     def subscribe_whole_quote(
         self,
         code_list: list[str],
         callback = None,
     ) -> int:
-        """订阅全推行情"""
+        """
+        订阅全推行情。
+        """
         seq = xtdata.subscribe_whole_quote(
             code_list=code_list,
             callback=callback or self._on_whole_quote_data,
@@ -396,3 +570,32 @@ class ThinkTraderClientMarketDataMixin(BaseMixin):
         if seq > 0:
             self._log.debug(f"已订阅全推行情，共 {len(code_list)} 个品种")
         return seq
+
+    async def download_history_data(
+        self,
+        stock_list: list[str],
+        period: str,
+        start_time: str = '',
+        end_time: str = '',
+    ) -> None:
+        """
+        在请求历史数据前，确保数据已下载到本地。
+        """
+        # XtQuant 的 get_market_data 是同步的且依赖本地 cache。
+        # 此方法是对 download_history_data2 的封装。
+        future = self._loop.create_future()
+        
+        def on_download(data):
+             # 根据官方文档，data 通常包含下载进度或状态
+             if data.get('finished', False):
+                 self._loop.call_soon_threadsafe(future.set_result, True)
+        
+        xtdata.download_history_data2(
+            stock_list=stock_list,
+            period=period,
+            start_time=start_time,
+            end_time=end_time,
+            callback=on_download,
+        )
+        
+        await future
