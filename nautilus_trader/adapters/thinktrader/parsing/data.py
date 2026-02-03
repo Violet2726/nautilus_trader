@@ -1,8 +1,21 @@
 from datetime import datetime
-from nautilus_trader.model.data import QuoteTick, TradeTick, Bar, BarType, OrderBookDelta, BookOrder, BarSpecification
+from datetime import timedelta
+from datetime import timezone
+
+from nautilus_trader.model.data import Bar
+from nautilus_trader.model.data import BarSpecification
+from nautilus_trader.model.data import BarType
+from nautilus_trader.model.data import BookOrder
+from nautilus_trader.model.data import OrderBookDelta
+from nautilus_trader.model.data import QuoteTick
+from nautilus_trader.model.data import TradeTick
+from nautilus_trader.model.enums import BarAggregation
+from nautilus_trader.model.enums import BookAction
+from nautilus_trader.model.enums import OrderSide
 from nautilus_trader.model.identifiers import InstrumentId
-from nautilus_trader.model.objects import Price, Quantity
-from nautilus_trader.model.enums import BarAggregation, BookAction, OrderSide
+from nautilus_trader.model.objects import Price
+from nautilus_trader.model.objects import Quantity
+
 
 # ============================================================================
 # 周期类型映射
@@ -26,6 +39,8 @@ LEVEL2_PERIOD_MAP = {
     "l2orderqueue": "l2orderqueue",    # Level2委托队列
 }
 
+CHINA_TZ = timezone(timedelta(hours=8))
+
 # step -> period (分钟级别)
 STEP_TO_PERIOD = {
     1: "1m",
@@ -40,14 +55,14 @@ def xt_time_to_ns(time_val: int) -> int:
     """
     将 XtQuant 时间 (毫秒戳或 YYYYMMDDHHMMSS) 转换为纳秒时间戳
     """
-    if time_val > 10_000_000_000_000: # 大于 13 位，假设是 YYYYMMDDHHMMSS 格式
+    if time_val > 10_000_000_000_000:  # 大于 13 位, 假设是 YYYYMMDDHHMMSS 格式
         s = str(time_val)
         try:
-            dt = datetime.strptime(s, "%Y%m%d%H%M%S")
+            dt = datetime.strptime(s, "%Y%m%d%H%M%S").replace(tzinfo=CHINA_TZ)
             return int(dt.timestamp() * 1_000_000_000)
         except ValueError:
-             return time_val * 1_000_000 
-    
+            return time_val * 1_000_000
+
     return time_val * 1_000_000
 
 
@@ -55,7 +70,7 @@ def ns_to_xt_time(ts_ns: int) -> str:
     """
     将纳秒时间戳转换为 XtQuant 格式 (YYYYMMDDHHMMSS)
     """
-    dt = datetime.fromtimestamp(ts_ns / 1_000_000_000)
+    dt = datetime.fromtimestamp(ts_ns / 1_000_000_000, tz=CHINA_TZ)
     return dt.strftime("%Y%m%d%H%M%S")
 
 
@@ -65,7 +80,7 @@ def bar_spec_to_period(bar_spec: BarSpecification) -> str:
     """
     agg = bar_spec.aggregation
     step = bar_spec.step
-    
+
     if agg == BarAggregation.TICK:
         return "tick"
     elif agg == BarAggregation.MINUTE:
@@ -81,7 +96,7 @@ def bar_spec_to_period(bar_spec: BarSpecification) -> str:
         return "1w"
     elif agg == BarAggregation.MONTH:
         return "1mon"
-        
+
     raise ValueError(f"不支持的 BarSpec: {bar_spec}")
 
 
@@ -97,14 +112,14 @@ def parse_tick_to_quote_tick(
     ask_prices = data.get("askPrice", [0.0])
     bid_vols = data.get("bidVol", [0])
     ask_vols = data.get("askVol", [0])
-    
+
     bid_price = bid_prices[0] if bid_prices else 0.0
     ask_price = ask_prices[0] if ask_prices else 0.0
     bid_vol = int(bid_vols[0]) if bid_vols else 0
     ask_vol = int(ask_vols[0]) if ask_vols else 0
-    
+
     ts_event = xt_time_to_ns(int(data.get("time", 0)))
-    
+
     return QuoteTick(
         instrument_id=instrument_id,
         bid_price=Price.from_str(f"{bid_price:.4f}"),
@@ -123,11 +138,11 @@ def parse_tick_to_trade_tick(
     """
     将 XtQuant tick 数据转换为 TradeTick
     """
-    from nautilus_trader.model.identifiers import TradeId
     from nautilus_trader.model.enums import AggressorSide
-    
+    from nautilus_trader.model.identifiers import TradeId
+
     ts_event = xt_time_to_ns(int(data.get("time", 0)))
-    
+
     return TradeTick(
         instrument_id=instrument_id,
         price=Price.from_str(f"{data.get('lastPrice', 0.0):.4f}"),
@@ -148,7 +163,7 @@ def parse_kline_to_bar(
     将 XtQuant K线数据转换为 Bar
     """
     ts_event = xt_time_to_ns(int(data.get("time", 0)))
-    
+
     return Bar(
         bar_type=bar_type,
         open=Price.from_str(f"{data.get('open', 0.0):.4f}"),
@@ -169,12 +184,12 @@ def parse_l2_quote_to_order_book_deltas(
     """
     deltas = []
     ts_event = xt_time_to_ns(int(data.get("time", 0)))
-    
+
     bid_prices = data.get("bidPrice", [])
     bid_vols = data.get("bidVol", [])
     ask_prices = data.get("askPrice", [])
     ask_vols = data.get("askVol", [])
-    
+
     for i in range(len(bid_prices)):
         if bid_prices[i] > 0:
             deltas.append(OrderBookDelta(
@@ -191,7 +206,7 @@ def parse_l2_quote_to_order_book_deltas(
                 ts_event=ts_event,
                 ts_init=ts_init,
             ))
-            
+
     for i in range(len(ask_prices)):
         if ask_prices[i] > 0:
             deltas.append(OrderBookDelta(
@@ -208,7 +223,7 @@ def parse_l2_quote_to_order_book_deltas(
                 ts_event=ts_event,
                 ts_init=ts_init,
             ))
-            
+
     return deltas
 
 def parse_l2_order_to_delta(
@@ -221,11 +236,11 @@ def parse_l2_order_to_delta(
     """
     ts_event = xt_time_to_ns(int(data.get("time", 0)))
     direction = data.get("entrustDirection", 0)
-    
+
     # direction: 1=买入, 2=卖出, 3=撤买, 4=撤卖
     side = OrderSide.BUY if direction in (1, 3) else OrderSide.SELL
     action = BookAction.ADD if direction in (1, 2) else BookAction.DELETE
-    
+
     return OrderBookDelta(
         instrument_id=instrument_id,
         action=action,
@@ -249,15 +264,15 @@ def parse_l2_transaction_to_trade_tick(
     """
     将 XtQuant l2transaction (逐笔成交) 转换为 TradeTick。
     """
-    from nautilus_trader.model.identifiers import TradeId
     from nautilus_trader.model.enums import AggressorSide
-    
+    from nautilus_trader.model.identifiers import TradeId
+
     ts_event = xt_time_to_ns(int(data.get("time", 0)))
     flag = data.get("tradeFlag", 0)
-    
+
     # flag: 1=外盘(主动买), 2=内盘(主动卖), 3=撤单
     aggressor_side = AggressorSide.BUYER if flag == 1 else AggressorSide.SELLER if flag == 2 else AggressorSide.NO_AGGRESSOR
-    
+
     return TradeTick(
         instrument_id=instrument_id,
         price=Price.from_str(f"{data.get('price', 0.0):.4f}"),

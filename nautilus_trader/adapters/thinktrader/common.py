@@ -1,5 +1,6 @@
 from nautilus_trader.model.identifiers import Venue
 
+
 TT = "THINKTRADER"
 TT_VENUE = Venue(TT)
 

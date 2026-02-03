@@ -1,5 +1,9 @@
 from xtquant import xtconstant
-from nautilus_trader.model.enums import OrderStatus, OrderSide, OrderType, TimeInForce
+
+from nautilus_trader.model.enums import OrderSide
+from nautilus_trader.model.enums import OrderStatus
+from nautilus_trader.model.enums import OrderType
+
 
 # ============================================================================
 # 订单状态映射 (来源: API_NOTES 4.5)

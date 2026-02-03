@@ -1,4 +1,6 @@
-from typing import Dict, List, Optional
+from typing import Dict
+from typing import List
+
 from xtquant import xtdata
 
 from nautilus_trader.adapters.thinktrader.client.common import BaseMixin
@@ -6,8 +8,8 @@ from nautilus_trader.adapters.thinktrader.client.common import BaseMixin
 
 class ThinkTraderClientContractMixin(BaseMixin):
     """处理合约查询"""
-    
-    def get_instrument_detail(self, stock_code: str) -> Optional[Dict]:
+
+    def get_instrument_detail(self, stock_code: str) -> Dict | None:
         """
         获取合约详情
         
@@ -40,7 +42,7 @@ class ThinkTraderClientContractMixin(BaseMixin):
         except Exception as e:
             self._log.error(f"获取合约类型失败: {stock_code}, 错误: {e}")
             return {}
-    
+
     def get_stock_list(self, sector: str = "沪深A股") -> List[str]:
         """
         获取板块内的合约列表
@@ -62,7 +64,7 @@ class ThinkTraderClientContractMixin(BaseMixin):
         except Exception as e:
             self._log.error(f"获取合约列表失败: {sector}, 错误: {e}")
             return []
-    
+
     def get_trading_dates(
         self,
         market: str = "SH",

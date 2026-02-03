@@ -1,11 +1,14 @@
-from typing import List, Dict, Optional
-from nautilus_trader.adapters.thinktrader.client.common import BaseMixin, TTPosition
+from typing import Dict
+from typing import List
+
+from nautilus_trader.adapters.thinktrader.client.common import BaseMixin
+from nautilus_trader.adapters.thinktrader.client.common import TTPosition
 
 
 class ThinkTraderClientAccountMixin(BaseMixin):
     """处理账户和持仓查询"""
-    
-    def query_asset(self) -> Optional[Dict]:
+
+    def query_asset(self) -> Dict | None:
         """查询账户资产"""
         try:
             asset = self._trader.query_stock_asset(self._account)
@@ -21,7 +24,7 @@ class ThinkTraderClientAccountMixin(BaseMixin):
         except Exception as e:
             self._log.error(f"查询资产失败: {e}")
             return None
-    
+
     def query_positions(self) -> List[TTPosition]:
         """查询持仓"""
         try:
@@ -41,7 +44,7 @@ class ThinkTraderClientAccountMixin(BaseMixin):
         except Exception as e:
             self._log.error(f"查询持仓失败: {e}")
             return []
-    
+
     def query_orders(self) -> List:
         """查询当日委托"""
         try:
@@ -49,7 +52,7 @@ class ThinkTraderClientAccountMixin(BaseMixin):
         except Exception as e:
             self._log.error(f"查询委托失败: {e}")
             return []
-    
+
     def query_trades(self) -> List:
         """查询当日成交"""
         try:

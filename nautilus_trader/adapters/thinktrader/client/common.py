@@ -12,6 +12,7 @@ import msgspec
 
 class TTPosition(NamedTuple):
     """ThinkTrader 持仓结构"""
+
     account_id: str
     stock_code: str
     volume: int
@@ -22,6 +23,7 @@ class TTPosition(NamedTuple):
 
 class TTOrder(NamedTuple):
     """ThinkTrader 订单结构"""
+
     order_id: int
     order_sysid: str
     stock_code: str
@@ -36,6 +38,7 @@ class TTOrder(NamedTuple):
 
 class TTTrade(NamedTuple):
     """ThinkTrader 成交结构"""
+
     account_id: str
     order_id: int
     order_sysid: str
@@ -162,10 +165,12 @@ class Subscriptions(Base):
         name: str | tuple,
         handle: Callable,
         cancel: Callable = lambda: None,
-    ) -> Subscription | None:
+    ) -> Subscription:
         super().add_req_id(req_id, name, handle, cancel)
         self._req_id_to_last[req_id] = None
-        return self.get(req_id=req_id)
+        subscription = self.get(req_id=req_id)
+        assert subscription is not None
+        return subscription
 
     def remove(self, req_id: int | None = None, name: str | tuple | None = None) -> None:
         if not req_id:
@@ -214,11 +219,13 @@ class Requests(Base):
         name: str | tuple,
         handle: Callable,
         cancel: Callable = lambda: None,
-    ) -> Request | None:
+    ) -> Request:
         super().add_req_id(req_id, name, handle, cancel)
         self._req_id_to_future[req_id] = asyncio.Future()
         self._req_id_to_result[req_id] = []
-        return self.get(req_id=req_id)
+        request = self.get(req_id=req_id)
+        assert request is not None
+        return request
 
     def remove(self, req_id: int | None = None, name: str | tuple | None = None) -> None:
         if not req_id:
@@ -249,6 +256,7 @@ class Requests(Base):
 
 class BaseMixin(ABC):
     """Mixin 基类，提供类型提示"""
+
     _loop: asyncio.AbstractEventLoop
     _log: Any
     _trader: Any
@@ -259,10 +267,11 @@ class BaseMixin(ABC):
     _miniqmt_path: str
     _session_id: int
     _account_id: str
+    _callback: Any
+    _is_connected: asyncio.Event
+    _event_handlers: dict[str, Any]
     _subscriptions: Subscriptions
     _requests: Requests
-    _instrument_provider: Any
-    
-    _next_req_id: Callable
-    _handle_data: Callable
-    _await_request: Callable
+    _req_id: int
+    _next_req_id: Callable[[], int]
+    _await_request: Callable[..., Any]
