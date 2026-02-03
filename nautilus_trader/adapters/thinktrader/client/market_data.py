@@ -6,6 +6,7 @@ from typing import Any
 try:
     from xtquant import xtdata
 except ModuleNotFoundError:  # pragma: no cover
+
     class _XtDataStub:
         data_dir: str = ""
 
@@ -171,7 +172,7 @@ class ThinkTraderClientMarketDataMixin(BaseMixin):
             xtdata.subscribe_quote,
             xtdata.unsubscribe_quote,
             stock_code=stock_code,
-            period="l2quote", # Level 2 快照
+            period="l2quote",  # Level 2 快照
             count=0,
             callback=functools.partial(self._on_quote_data, name=name),
         )
@@ -192,6 +193,7 @@ class ThinkTraderClientMarketDataMixin(BaseMixin):
         订阅指定 K 线类型的实时 K 线数据。
         """
         from nautilus_trader.adapters.thinktrader.parsing.data import bar_spec_to_period
+
         period = bar_spec_to_period(bar_type.spec)
         name = str(bar_type)
         await self._subscribe(
@@ -222,6 +224,7 @@ class ThinkTraderClientMarketDataMixin(BaseMixin):
         """
         from nautilus_trader.adapters.thinktrader.parsing.data import bar_spec_to_period
         from nautilus_trader.adapters.thinktrader.parsing.data import ns_to_xt_time
+
         period = bar_spec_to_period(bar_type.spec)
         start_time = ns_to_xt_time(start_ns)
         name = str(bar_type)
@@ -309,6 +312,7 @@ class ThinkTraderClientMarketDataMixin(BaseMixin):
         请求并检索历史逐笔行情数据。
         """
         from nautilus_trader.adapters.thinktrader.parsing.data import ns_to_xt_time
+
         start_time = ns_to_xt_time(start_ns)
         end_time = ns_to_xt_time(end_ns)
         name = (instrument_id, "tick", start_time, end_time)
@@ -386,7 +390,7 @@ class ThinkTraderClientMarketDataMixin(BaseMixin):
         self,
         instrument_id: InstrumentId,
         stock_code: str,
-        tick_type: str = "AllLast", # "AllLast" (成交) 或 "BidAsk" (报单/撤单)
+        tick_type: str = "AllLast",  # "AllLast" (成交) 或 "BidAsk" (报单/撤单)
     ) -> None:
         """
         订阅逐笔行情数据 (Level 2)。

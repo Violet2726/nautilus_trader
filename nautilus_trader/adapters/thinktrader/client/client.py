@@ -5,8 +5,10 @@ from typing import Any
 try:
     from xtquant.xttrader import XtQuantTraderCallback
 except ModuleNotFoundError:  # pragma: no cover
+
     class XtQuantTraderCallback:  # type: ignore[no-redef]
         pass
+
 
 from nautilus_trader.adapters.thinktrader.client.account import ThinkTraderClientAccountMixin
 from nautilus_trader.adapters.thinktrader.client.common import Request
@@ -127,8 +129,7 @@ class ThinkTraderClient(
     def _on_account_status(self, status: Any) -> None:
         """处理账号状态变更"""
         self._log.info(
-            f"账号状态: {status.account_id}, "
-            f"type={status.account_type}, status={status.status}"
+            f"账号状态: {status.account_id}, type={status.account_type}, status={status.status}"
         )
 
     def _on_order(self, order: Any) -> None:

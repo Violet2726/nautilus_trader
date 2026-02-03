@@ -19,8 +19,7 @@ class ThinkTraderClientErrorMixin(BaseMixin):
         order_id = order_error.order_id
 
         self._log.error(
-            f"下单失败: order_id={order_id}, "
-            f"error_id={error_id}, error_msg={error_msg}"
+            f"下单失败: order_id={order_id}, error_id={error_id}, error_msg={error_msg}"
         )
 
         # 触发订单拒绝事件
@@ -38,8 +37,7 @@ class ThinkTraderClientErrorMixin(BaseMixin):
         order_id = cancel_error.order_id
 
         self._log.warning(
-            f"撤单失败: order_id={order_id}, "
-            f"error_id={error_id}, error_msg={error_msg}"
+            f"撤单失败: order_id={order_id}, error_id={error_id}, error_msg={error_msg}"
         )
 
     def _handle_connection_error(self, error_code: int) -> None:

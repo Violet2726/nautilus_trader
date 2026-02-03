@@ -142,7 +142,9 @@ class ThinkTraderDataClient(LiveMarketDataClient):
 
     async def _unsubscribe_trade_ticks(self, command: UnsubscribeTradeTicks) -> None:
         stock_code = instrument_id_to_stock_code(command.instrument_id)
-        await self._client.unsubscribe_tick_by_tick(command.instrument_id, stock_code, tick_type="AllLast")
+        await self._client.unsubscribe_tick_by_tick(
+            command.instrument_id, stock_code, tick_type="AllLast"
+        )
 
     async def _unsubscribe_order_book_deltas(self, command: UnsubscribeOrderBook) -> None:
         await self._client.unsubscribe_order_book(command.instrument_id)
@@ -175,16 +177,22 @@ class ThinkTraderDataClient(LiveMarketDataClient):
         await self.instrument_provider.load_ids_async([request.instrument_id], request.params)
         if instrument := self.instrument_provider.find(request.instrument_id):
             self._handle_data(instrument)
-            self._handle_instrument(instrument, request.id, request.start, request.end, request.params)
+            self._handle_instrument(
+                instrument, request.id, request.start, request.end, request.params
+            )
         else:
             self._log.warning(f"{request.instrument_id} 的工具不可用")
 
     async def _request_instruments(self, request: RequestInstruments) -> None:
-        await self.instrument_provider.initialize(reload=request.params.get("reload", False) if request.params else False)
+        await self.instrument_provider.initialize(
+            reload=request.params.get("reload", False) if request.params else False
+        )
         instruments = list(self.instrument_provider.list_all())
         for instrument in instruments:
             self._handle_data(instrument)
-        self._handle_instruments(request.venue, instruments, request.id, request.start, request.end, request.params)
+        self._handle_instruments(
+            request.venue, instruments, request.id, request.start, request.end, request.params
+        )
 
     async def _request_quote_ticks(self, request: RequestQuoteTicks) -> None:
         from nautilus_trader.adapters.thinktrader.parsing.data import ns_to_xt_time
@@ -311,7 +319,6 @@ class ThinkTraderDataClient(LiveMarketDataClient):
                 ticks.append(parse_tick_to_trade_tick(instrument_id, row_dict, ts_init))
 
         return ticks
-
 
     async def _request_bars(self, request: RequestBars) -> None:
         import pandas as pd

@@ -203,7 +203,11 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
         instrument_id = stock_code_to_instrument_id(trade.stock_code)
         instrument = self._cache.instrument(instrument_id)
 
-        ts_event = int(trade.traded_time) * 1_000_000_000 if trade.traded_time else self._clock.timestamp_ns()
+        ts_event = (
+            int(trade.traded_time) * 1_000_000_000
+            if trade.traded_time
+            else self._clock.timestamp_ns()
+        )
 
         self.generate_order_filled(
             strategy_id=cached_order.strategy_id,

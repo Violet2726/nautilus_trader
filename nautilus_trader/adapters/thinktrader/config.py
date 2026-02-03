@@ -27,7 +27,7 @@ class ThinkTraderExecClientConfig(LiveExecClientConfig, kw_only=True, frozen=Tru
     """ThinkTrader 执行客户端配置"""
 
     miniqmt_path: str
-    account_id: str       # 资金账号
+    account_id: str  # 资金账号
     account_type: str = "STOCK"  # 账号类型: STOCK, CREDIT, FUTURE, OPTION
     session_id: int = 123456  # 会话 ID
     use_async_order: bool = True  # 是否使用异步下单

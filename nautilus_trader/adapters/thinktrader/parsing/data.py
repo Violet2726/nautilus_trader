@@ -32,11 +32,11 @@ PERIOD_MAP = {
 
 # Level2 周期类型
 LEVEL2_PERIOD_MAP = {
-    "l2quote": "l2quote",        # Level2实时行情快照
-    "l2order": "l2order",        # Level2逐笔委托
+    "l2quote": "l2quote",  # Level2实时行情快照
+    "l2order": "l2order",  # Level2逐笔委托
     "l2transaction": "l2transaction",  # Level2逐笔成交
     "l2quoteaux": "l2quoteaux",  # Level2实时行情补充
-    "l2orderqueue": "l2orderqueue",    # Level2委托队列
+    "l2orderqueue": "l2orderqueue",  # Level2委托队列
 }
 
 CHINA_TZ = timezone(timedelta(hours=8))
@@ -130,6 +130,7 @@ def parse_tick_to_quote_tick(
         ts_init=ts_init,
     )
 
+
 def parse_tick_to_trade_tick(
     instrument_id: InstrumentId,
     data: dict,
@@ -153,6 +154,7 @@ def parse_tick_to_trade_tick(
         ts_init=ts_init,
     )
 
+
 def parse_kline_to_bar(
     instrument_id: InstrumentId,
     bar_type: BarType,
@@ -174,6 +176,8 @@ def parse_kline_to_bar(
         ts_event=ts_event,
         ts_init=ts_init,
     )
+
+
 def parse_l2_quote_to_order_book_deltas(
     instrument_id: InstrumentId,
     data: dict,
@@ -192,39 +196,44 @@ def parse_l2_quote_to_order_book_deltas(
 
     for i in range(len(bid_prices)):
         if bid_prices[i] > 0:
-            deltas.append(OrderBookDelta(
-                instrument_id=instrument_id,
-                action=BookAction.UPDATE,
-                order=BookOrder(
-                    side=OrderSide.BUY,
-                    price=Price.from_str(f"{bid_prices[i]:.4f}"),
-                    size=Quantity.from_int(int(bid_vols[i])),
-                    order_id=0,
-                ),
-                flags=0,
-                sequence=0,
-                ts_event=ts_event,
-                ts_init=ts_init,
-            ))
+            deltas.append(
+                OrderBookDelta(
+                    instrument_id=instrument_id,
+                    action=BookAction.UPDATE,
+                    order=BookOrder(
+                        side=OrderSide.BUY,
+                        price=Price.from_str(f"{bid_prices[i]:.4f}"),
+                        size=Quantity.from_int(int(bid_vols[i])),
+                        order_id=0,
+                    ),
+                    flags=0,
+                    sequence=0,
+                    ts_event=ts_event,
+                    ts_init=ts_init,
+                )
+            )
 
     for i in range(len(ask_prices)):
         if ask_prices[i] > 0:
-            deltas.append(OrderBookDelta(
-                instrument_id=instrument_id,
-                action=BookAction.UPDATE,
-                order=BookOrder(
-                    side=OrderSide.SELL,
-                    price=Price.from_str(f"{ask_prices[i]:.4f}"),
-                    size=Quantity.from_int(int(ask_vols[i])),
-                    order_id=0,
-                ),
-                flags=0,
-                sequence=0,
-                ts_event=ts_event,
-                ts_init=ts_init,
-            ))
+            deltas.append(
+                OrderBookDelta(
+                    instrument_id=instrument_id,
+                    action=BookAction.UPDATE,
+                    order=BookOrder(
+                        side=OrderSide.SELL,
+                        price=Price.from_str(f"{ask_prices[i]:.4f}"),
+                        size=Quantity.from_int(int(ask_vols[i])),
+                        order_id=0,
+                    ),
+                    flags=0,
+                    sequence=0,
+                    ts_event=ts_event,
+                    ts_init=ts_init,
+                )
+            )
 
     return deltas
+
 
 def parse_l2_order_to_delta(
     instrument_id: InstrumentId,
@@ -256,6 +265,7 @@ def parse_l2_order_to_delta(
         ts_init=ts_init,
     )
 
+
 def parse_l2_transaction_to_trade_tick(
     instrument_id: InstrumentId,
     data: dict,
@@ -271,7 +281,13 @@ def parse_l2_transaction_to_trade_tick(
     flag = data.get("tradeFlag", 0)
 
     # flag: 1=外盘(主动买), 2=内盘(主动卖), 3=撤单
-    aggressor_side = AggressorSide.BUYER if flag == 1 else AggressorSide.SELLER if flag == 2 else AggressorSide.NO_AGGRESSOR
+    aggressor_side = (
+        AggressorSide.BUYER
+        if flag == 1
+        else AggressorSide.SELLER
+        if flag == 2
+        else AggressorSide.NO_AGGRESSOR
+    )
 
     return TradeTick(
         instrument_id=instrument_id,

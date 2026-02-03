@@ -4,6 +4,7 @@ from typing import Any
 try:
     from xtquant import xtdata
 except ModuleNotFoundError:  # pragma: no cover
+
     class _XtDataStub:
         def get_instrument_detail(self, *args: Any, **kwargs: Any) -> Any:
             raise ModuleNotFoundError("xtquant is required for ThinkTrader contract data")

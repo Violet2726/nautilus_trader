@@ -19,15 +19,15 @@ from nautilus_trader.model.objects import Quantity
 
 # 市场代码映射: XtQuant市场后缀 -> Nautilus Venue 后缀
 MARKET_TO_VENUE = {
-    "SH": "SSE",     # 上交所
-    "SZ": "SZSE",    # 深交所
-    "BJ": "BSE",     # 北交所
-    "SF": "SHFE",    # 上期所
-    "DF": "DCE",     # 大商所
-    "ZF": "CZCE",    # 郑商所
-    "IF": "CFFEX",   # 中金所
-    "INE": "INE",    # 能源中心
-    "GF": "GFEX",    # 广期所
+    "SH": "SSE",  # 上交所
+    "SZ": "SZSE",  # 深交所
+    "BJ": "BSE",  # 北交所
+    "SF": "SHFE",  # 上期所
+    "DF": "DCE",  # 大商所
+    "ZF": "CZCE",  # 郑商所
+    "IF": "CFFEX",  # 中金所
+    "INE": "INE",  # 能源中心
+    "GF": "GFEX",  # 广期所
 }
 
 VENUE_TO_MARKET = {v: k for k, v in MARKET_TO_VENUE.items()}

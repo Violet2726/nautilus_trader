@@ -8,6 +8,7 @@ except ModuleNotFoundError:  # pragma: no cover
         def __init__(self, *args, **kwargs):
             raise ModuleNotFoundError("xtquant is required for ThinkTrader trader connection")
 
+
 from nautilus_trader.adapters.thinktrader.client.common import BaseMixin
 from nautilus_trader.common.enums import LogColor
 
