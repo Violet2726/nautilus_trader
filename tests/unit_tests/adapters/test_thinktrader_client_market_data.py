@@ -315,6 +315,33 @@ async def test_subscribe_realtime_bars_uses_bar_spec_period(thinktrader_client):
 
 
 @pytest.mark.asyncio
+async def test_subscribe_realtime_bars_with_dividend_uses_subscribe_quote2(thinktrader_client):
+    _print_section("订阅 realtime bars(带除权): 应调用 subscribe_quote2 并传 dividend_type")
+    bar_type = BarType.from_str("000001.SZSE-1-MINUTE-LAST-EXTERNAL")
+    stock_code = "000001.SZ"
+
+    with (
+        patch(
+            "nautilus_trader.adapters.thinktrader.client.market_data.xtdata.subscribe_quote2",
+            return_value=202,
+        ) as subscribe_quote2,
+        patch(
+            "nautilus_trader.adapters.thinktrader.client.market_data.xtdata.unsubscribe_quote",
+        ),
+    ):
+        await thinktrader_client.subscribe_realtime_bars_with_dividend(
+            bar_type=bar_type,
+            stock_code=stock_code,
+            dividend_type="front",
+        )
+        _, kwargs = subscribe_quote2.call_args
+        _print_kv("subscribe_quote2.call_args", subscribe_quote2.call_args)
+        _print_kv("bar_type", bar_type)
+        assert kwargs["period"] == "1m"
+        assert kwargs["dividend_type"] == "front"
+
+
+@pytest.mark.asyncio
 async def test_get_historical_bars_calls_get_market_data(thinktrader_client):
     _print_section("历史 K 线获取 (xtdata.get_market_data)")
     from nautilus_trader.adapters.thinktrader.parsing.data import ns_to_xt_time
@@ -602,6 +629,56 @@ async def test_xtdata_live_subscribe_tick_once_and_unsubscribe(event_loop):
             datas = await asyncio.wait_for(future, timeout=5.0)
         except TimeoutError:
             pytest.skip("等待 tick 回调超时, 可能当前无实时推送或未连接 MiniQmt")
+
+        _print_kv("回调数据类型", type(datas))
+        if isinstance(datas, dict):
+            _print_kv("回调 dict keys", list(datas.keys())[:10])
+            first_key = next(iter(datas.keys()), None)
+            if first_key is not None:
+                _print_kv("回调样例 stock_code", first_key)
+                _print_kv("回调样例 payload", datas[first_key])
+    finally:
+        xtdata.unsubscribe_quote(seq)
+        _print_kv("unsubscribe_quote 已调用", True)
+
+
+@pytest.mark.asyncio
+async def test_xtdata_live_subscribe_quote2_1m_once_and_unsubscribe(event_loop):
+    _print_section("xtdata 实测: subscribe_quote2(1m, 除权) 回调原始数据与取消订阅")
+    xtdata = _try_import_xtdata()
+    _prepare_xtdata_data_dir(xtdata, "D:\\中信证券QMT交易终端仿真\\userdata_mini")
+    if not hasattr(xtdata, "subscribe_quote2"):
+        pytest.skip("xtdata 不包含 subscribe_quote2, 可能 xtquant 版本较旧")
+
+    stock_code = "000001.SZ"
+    _print_kv("stock_code", stock_code)
+
+    loop = event_loop
+    future = loop.create_future()
+
+    def on_kline(datas):
+        if future.done():
+            return
+        _print_kv("xtdata.subscribe_quote2 callback 原始参数", datas)
+        loop.call_soon_threadsafe(future.set_result, datas)
+
+    seq = xtdata.subscribe_quote2(
+        stock_code=stock_code,
+        period="1m",
+        count=0,
+        dividend_type="front",
+        callback=on_kline,
+    )
+    _print_kv("subscribe_quote2 返回 seq", seq)
+    assert isinstance(seq, int)
+    if seq <= 0:
+        pytest.skip("subscribe_quote2 返回非正值, 可能未连接 MiniQmt 或无权限")
+
+    try:
+        try:
+            datas = await asyncio.wait_for(future, timeout=5.0)
+        except TimeoutError:
+            pytest.skip("等待 1m 回调超时, 可能当前无实时推送或未连接 MiniQmt")
 
         _print_kv("回调数据类型", type(datas))
         if isinstance(datas, dict):

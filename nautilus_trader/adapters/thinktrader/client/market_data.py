@@ -13,6 +13,9 @@ except ModuleNotFoundError:  # pragma: no cover
         def subscribe_quote(self, *args: Any, **kwargs: Any) -> int:
             raise ModuleNotFoundError("xtquant is required for ThinkTrader market data")
 
+        def subscribe_quote2(self, *args: Any, **kwargs: Any) -> int:
+            raise ModuleNotFoundError("xtquant is required for ThinkTrader market data")
+
         def unsubscribe_quote(self, *args: Any, **kwargs: Any) -> None:
             raise ModuleNotFoundError("xtquant is required for ThinkTrader market data")
 
@@ -212,6 +215,30 @@ class ThinkTraderClientMarketDataMixin(BaseMixin):
         """
         name = str(bar_type)
         await self._unsubscribe(name, xtdata.unsubscribe_quote)
+
+    async def subscribe_realtime_bars_with_dividend(
+        self,
+        bar_type: BarType,
+        stock_code: str,
+        dividend_type: str | None = None,
+    ) -> None:
+        """
+        使用带除权参数的接口订阅指定 K 线类型的实时 K 线数据。
+        """
+        from nautilus_trader.adapters.thinktrader.parsing.data import bar_spec_to_period
+
+        period = bar_spec_to_period(bar_type.spec)
+        name = str(bar_type)
+        await self._subscribe(
+            name,
+            xtdata.subscribe_quote2,
+            xtdata.unsubscribe_quote,
+            stock_code=stock_code,
+            period=period,
+            count=0,
+            dividend_type=dividend_type,
+            callback=functools.partial(self._on_quote_data, name=name),
+        )
 
     async def subscribe_historical_bars(
         self,
@@ -435,80 +462,6 @@ class ThinkTraderClientMarketDataMixin(BaseMixin):
         return 0.0
 
     # =========================================================================
-    # 回调处理函数 (对应标准接口的 process_... 系列)
-    # =========================================================================
-
-    async def process_market_data_type(self, *, req_id: int, market_data_type: int) -> None:
-        """
-        TODO: 处理市场数据类型变更 (XtQuant 暂无此概念)。
-        """
-
-    async def process_tick_by_tick_bid_ask(self, **kwargs: Any) -> None:
-        """
-        TODO: 处理逐笔买卖报价 (在 XtQuant 中由 _on_quote_data 统一分发)。
-        """
-
-    async def process_tick_by_tick_all_last(self, **kwargs: Any) -> None:
-        """
-        TODO: 处理逐笔成交 (在 XtQuant 中由 _on_quote_data 统一分发)。
-        """
-
-    async def process_tick_price(self, **kwargs: Any) -> None:
-        """
-        TODO: 处理行情价格更新 (在 XtQuant 中由 _on_quote_data 统一分发)。
-        """
-
-    async def process_tick_size(self, **kwargs: Any) -> None:
-        """
-        TODO: 处理行情大小更新 (在 XtQuant 中由 _on_quote_data 统一分发)。
-        """
-
-    async def _try_create_quote_tick_from_market_data(self, **kwargs: Any) -> None:
-        """
-        TODO: 尝试从零散字段中拼接 QuoteTick (XtQuant 通常提供完整 dict, 无需此逻辑)。
-        """
-
-    async def process_realtime_bar(self, **kwargs: Any) -> None:
-        """
-        TODO: 处理实时 K 线更新 (在 XtQuant 中由 _on_quote_data 统一分发)。
-        """
-
-    async def process_historical_data(self, **kwargs: Any) -> None:
-        """
-        TODO: 处理历史 K 线响应 (XtQuant 通过 get_market_data 同步获取, 无需回调)。
-        """
-
-    async def process_historical_data_end(self, **kwargs: Any) -> None:
-        """
-        TODO: 标记历史数据加载结束 (XtQuant 通过 get_market_data 同步获取, 无需此标记)。
-        """
-
-    async def process_historical_data_update(self, **kwargs: Any) -> None:
-        """
-        TODO: 处理包含历史和实时的 K 线更新 (XtQuant 暂无此对应)。
-        """
-
-    async def process_historical_ticks_bid_ask(self, **kwargs: Any) -> None:
-        """
-        TODO: 处理历史买卖报价响应 (XtQuant 通过 get_market_data 同步获取, 无需回调)。
-        """
-
-    async def process_historical_ticks_last(self, **kwargs: Any) -> None:
-        """
-        TODO: 处理历史成交历史响应 (XtQuant 通过 get_market_data 同步获取, 无需回调)。
-        """
-
-    async def process_historical_ticks(self, **kwargs: Any) -> None:
-        """
-        TODO: 处理历史行情通用响应 (XtQuant 通过 get_market_data 同步获取, 无需回调)。
-        """
-
-    async def process_update_mkt_depth_l2(self, **kwargs: Any) -> None:
-        """
-        TODO: 处理市场深度 (L2) 实时数据 (在 XtQuant 中由 _on_quote_data 统一分发)。
-        """
-
-    # =========================================================================
     # 内部辅助函数
     # =========================================================================
 
@@ -518,51 +471,6 @@ class ThinkTraderClientMarketDataMixin(BaseMixin):
         """
         # 基类 BaseMixin 中应定义此属性, 通常在 Client 中初始化
         self._msgbus.send(endpoint="DataEngine.process", msg=data)
-
-    def _schedule_bar_completion_timeout(self, **kwargs: Any) -> None:
-        """
-        TODO: 调度 K 线完成超时 (XtQuant 通常发送完整 K 线, 可根据需要实现)。
-        """
-
-    def _process_bar_data(self, **kwargs: Any) -> None:
-        """
-        TODO: 处理 K 线数据 (XtQuant 通过 _on_quote_data 统一分发, 解析后直接处理)。
-        """
-
-    def _process_trade_ticks(self, **kwargs: Any) -> None:
-        """
-        TODO: 处理成交行情列表 (XtQuant 通过 _on_quote_data 统一分发, 解析后直接处理)。
-        """
-
-    def _xt_bar_to_nautilus_bar(self, **kwargs: Any) -> None:
-        """
-        XtQuant 对应逻辑由 parsing/data.py 中的 parse_kline_to_bar 处理。
-        """
-
-    def _xt_bar_to_ts_event(self, **kwargs: Any) -> None:
-        """
-        XtQuant 对应逻辑由 parsing/data.py 处理。
-        """
-
-    def _xt_bar_to_ts_init(self, **kwargs: Any) -> None:
-        """
-        XtQuant 对应逻辑由 parsing/data.py 处理。
-        """
-
-    def _convert_xt_bar_date_to_unix_nanos(self, **kwargs: Any) -> None:
-        """
-        XtQuant 对应逻辑由 parsing/data.py 处理。
-        """
-
-    def _validate_bar_prices(self, **kwargs: Any) -> None:
-        """
-        TODO: 验证 K 线价格有效性 (XtQuant 数据通常已清洗, 但可根据需要添加)。
-        """
-
-    def _aggregate_order_book_by_price(self, **kwargs: Any) -> None:
-        """
-        TODO: 按价格汇总订单簿 (XtQuant L2 已是快照, 但在某些情况下可能仍需汇总)。
-        """
 
     # =========================================================================
     # ThinkTrader 特有逻辑 (XtQuant API 特点)
