@@ -495,11 +495,11 @@ def test_handle_quote_data_tick_forwards_quote_and_trade(thinktrader_client):
 
     with (
         patch(
-            "nautilus_trader.adapters.thinktrader.parsing.data.parse_tick_to_quote_tick",
+            "nautilus_trader.adapters.thinktrader.client.market_data.parse_tick_to_quote_tick",
             return_value=sentinel.quote,
         ) as parse_quote,
         patch(
-            "nautilus_trader.adapters.thinktrader.parsing.data.parse_tick_to_trade_tick",
+            "nautilus_trader.adapters.thinktrader.client.market_data.parse_tick_to_trade_tick",
             return_value=sentinel.trade,
         ) as parse_trade,
     ):
@@ -520,7 +520,7 @@ def test_handle_quote_data_order_book_forwards_all_deltas(thinktrader_client):
     name = (str(instrument_id), "order_book")
 
     with patch(
-        "nautilus_trader.adapters.thinktrader.parsing.data.parse_l2_quote_to_order_book_deltas",
+        "nautilus_trader.adapters.thinktrader.client.market_data.parse_l2_quote_to_order_book_deltas",
         return_value=[sentinel.d1, sentinel.d2],
     ) as parse_deltas:
         thinktrader_client._handle_quote_data(name, "000001.SZ", {"time": 0})
@@ -538,7 +538,7 @@ def test_handle_quote_data_l2order_forwards_delta(thinktrader_client):
     name = (str(instrument_id), "l2order")
 
     with patch(
-        "nautilus_trader.adapters.thinktrader.parsing.data.parse_l2_order_to_delta",
+        "nautilus_trader.adapters.thinktrader.client.market_data.parse_l2_order_to_delta",
         return_value=sentinel.delta,
     ) as parse_delta:
         thinktrader_client._handle_quote_data(name, "000001.SZ", {"time": 0})
@@ -556,7 +556,7 @@ def test_handle_quote_data_l2transaction_forwards_trade_tick(thinktrader_client)
     name = (str(instrument_id), "l2transaction")
 
     with patch(
-        "nautilus_trader.adapters.thinktrader.parsing.data.parse_l2_transaction_to_trade_tick",
+        "nautilus_trader.adapters.thinktrader.client.market_data.parse_l2_transaction_to_trade_tick",
         return_value=sentinel.trade,
     ) as parse_trade:
         thinktrader_client._handle_quote_data(name, "000001.SZ", {"time": 0})
@@ -837,7 +837,7 @@ def test_handle_quote_data_bar_type_string_forwards_bar(thinktrader_client):
     name = str(bar_type)
 
     with patch(
-        "nautilus_trader.adapters.thinktrader.parsing.data.parse_kline_to_bar",
+        "nautilus_trader.adapters.thinktrader.client.market_data.parse_kline_to_bar",
         return_value=sentinel.bar,
     ) as parse_bar:
         thinktrader_client._handle_quote_data(name, "000001.SZ", {"time": 0})

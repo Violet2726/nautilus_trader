@@ -41,6 +41,14 @@ except ModuleNotFoundError:  # pragma: no cover
 
 from nautilus_trader.adapters.thinktrader.client.common import BaseMixin
 from nautilus_trader.adapters.thinktrader.client.common import Subscription
+from nautilus_trader.adapters.thinktrader.parsing.data import bar_spec_to_period
+from nautilus_trader.adapters.thinktrader.parsing.data import ns_to_xt_time
+from nautilus_trader.adapters.thinktrader.parsing.data import parse_kline_to_bar
+from nautilus_trader.adapters.thinktrader.parsing.data import parse_l2_order_to_delta
+from nautilus_trader.adapters.thinktrader.parsing.data import parse_l2_quote_to_order_book_deltas
+from nautilus_trader.adapters.thinktrader.parsing.data import parse_l2_transaction_to_trade_tick
+from nautilus_trader.adapters.thinktrader.parsing.data import parse_tick_to_quote_tick
+from nautilus_trader.adapters.thinktrader.parsing.data import parse_tick_to_trade_tick
 from nautilus_trader.core.data import Data
 from nautilus_trader.model.data import BarType
 from nautilus_trader.model.identifiers import InstrumentId
@@ -195,8 +203,6 @@ class ThinkTraderClientMarketDataMixin(BaseMixin):
         """
         订阅指定 K 线类型的实时 K 线数据。
         """
-        from nautilus_trader.adapters.thinktrader.parsing.data import bar_spec_to_period
-
         period = bar_spec_to_period(bar_type.spec)
         name = str(bar_type)
         await self._subscribe(
@@ -225,8 +231,6 @@ class ThinkTraderClientMarketDataMixin(BaseMixin):
         """
         使用带除权参数的接口订阅指定 K 线类型的实时 K 线数据。
         """
-        from nautilus_trader.adapters.thinktrader.parsing.data import bar_spec_to_period
-
         period = bar_spec_to_period(bar_type.spec)
         name = str(bar_type)
         await self._subscribe(
@@ -249,9 +253,6 @@ class ThinkTraderClientMarketDataMixin(BaseMixin):
         """
         订阅指定 K 线类型的历史 K 线数据。
         """
-        from nautilus_trader.adapters.thinktrader.parsing.data import bar_spec_to_period
-        from nautilus_trader.adapters.thinktrader.parsing.data import ns_to_xt_time
-
         period = bar_spec_to_period(bar_type.spec)
         start_time = ns_to_xt_time(start_ns)
         name = str(bar_type)
@@ -285,9 +286,6 @@ class ThinkTraderClientMarketDataMixin(BaseMixin):
         """
         请求并检索指定 K 线类型的历史 K 线数据。
         """
-        from nautilus_trader.adapters.thinktrader.parsing.data import bar_spec_to_period
-        from nautilus_trader.adapters.thinktrader.parsing.data import ns_to_xt_time
-
         period = bar_spec_to_period(bar_type.spec)
         start_time = ns_to_xt_time(start_ns)
         end_time = ns_to_xt_time(end_ns)
@@ -338,8 +336,6 @@ class ThinkTraderClientMarketDataMixin(BaseMixin):
         """
         请求并检索历史逐笔行情数据。
         """
-        from nautilus_trader.adapters.thinktrader.parsing.data import ns_to_xt_time
-
         start_time = ns_to_xt_time(start_ns)
         end_time = ns_to_xt_time(end_ns)
         name = (instrument_id, "tick", start_time, end_time)
@@ -515,16 +511,6 @@ class ThinkTraderClientMarketDataMixin(BaseMixin):
         data: dict,
         ts_init: int,
     ) -> None:
-        from nautilus_trader.adapters.thinktrader.parsing.data import parse_l2_order_to_delta
-        from nautilus_trader.adapters.thinktrader.parsing.data import (
-            parse_l2_quote_to_order_book_deltas,
-        )
-        from nautilus_trader.adapters.thinktrader.parsing.data import (
-            parse_l2_transaction_to_trade_tick,
-        )
-        from nautilus_trader.adapters.thinktrader.parsing.data import parse_tick_to_quote_tick
-        from nautilus_trader.adapters.thinktrader.parsing.data import parse_tick_to_trade_tick
-
         if data_type == "tick":
             quote = parse_tick_to_quote_tick(instrument_id, data, ts_init)
             self._forward_data(quote)
@@ -561,9 +547,6 @@ class ThinkTraderClientMarketDataMixin(BaseMixin):
         """
         处理原始 XtQuant 数据报文并转发。
         """
-        from nautilus_trader.adapters.thinktrader.parsing.data import parse_kline_to_bar
-        from nautilus_trader.adapters.thinktrader.parsing.data import parse_tick_to_quote_tick
-
         ts_init = self._clock.timestamp_ns()
 
         # 尝试从订阅名中推断数据类型

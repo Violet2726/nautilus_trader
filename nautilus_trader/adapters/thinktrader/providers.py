@@ -2,6 +2,7 @@ import asyncio
 
 from nautilus_trader.adapters.thinktrader.client import ThinkTraderClient
 from nautilus_trader.adapters.thinktrader.config import ThinkTraderInstrumentProviderConfig
+from nautilus_trader.adapters.thinktrader.parsing.instruments import instrument_id_to_stock_code
 from nautilus_trader.adapters.thinktrader.parsing.instruments import parse_equity
 from nautilus_trader.adapters.thinktrader.parsing.instruments import parse_future
 from nautilus_trader.adapters.thinktrader.parsing.instruments import parse_option
@@ -92,10 +93,6 @@ class ThinkTraderInstrumentProvider(InstrumentProvider):
         filters: dict | None = None,
     ) -> None:
         """按 ID 加载工具"""
-        from nautilus_trader.adapters.thinktrader.parsing.instruments import (
-            instrument_id_to_stock_code,
-        )
-
         for instrument_id in instrument_ids:
             if self.find(instrument_id) is not None:
                 continue

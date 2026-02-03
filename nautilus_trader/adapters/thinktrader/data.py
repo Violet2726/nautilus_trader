@@ -2,9 +2,17 @@ import asyncio
 from typing import Any
 from typing import cast
 
+import numpy as np
+import pandas as pd
+
 from nautilus_trader.adapters.thinktrader.client import ThinkTraderClient
 from nautilus_trader.adapters.thinktrader.common import TT_VENUE
 from nautilus_trader.adapters.thinktrader.config import ThinkTraderDataClientConfig
+from nautilus_trader.adapters.thinktrader.parsing.data import bar_spec_to_period
+from nautilus_trader.adapters.thinktrader.parsing.data import ns_to_xt_time
+from nautilus_trader.adapters.thinktrader.parsing.data import parse_kline_to_bar
+from nautilus_trader.adapters.thinktrader.parsing.data import parse_tick_to_quote_tick
+from nautilus_trader.adapters.thinktrader.parsing.data import parse_tick_to_trade_tick
 from nautilus_trader.adapters.thinktrader.parsing.instruments import instrument_id_to_stock_code
 from nautilus_trader.cache.cache import Cache
 from nautilus_trader.common.component import LiveClock
@@ -195,8 +203,6 @@ class ThinkTraderDataClient(LiveMarketDataClient):
         )
 
     async def _request_quote_ticks(self, request: RequestQuoteTicks) -> None:
-        from nautilus_trader.adapters.thinktrader.parsing.data import ns_to_xt_time
-
         stock_code = instrument_id_to_stock_code(request.instrument_id)
         start_ns = int(request.start.timestamp() * 1e9) if request.start else 0
         end_ns = int(request.end.timestamp() * 1e9) if request.end else self._clock.timestamp_ns()
@@ -226,8 +232,6 @@ class ThinkTraderDataClient(LiveMarketDataClient):
         )
 
     async def _request_trade_ticks(self, request: RequestTradeTicks) -> None:
-        from nautilus_trader.adapters.thinktrader.parsing.data import ns_to_xt_time
-
         stock_code = instrument_id_to_stock_code(request.instrument_id)
         start_ns = int(request.start.timestamp() * 1e9) if request.start else 0
         end_ns = int(request.end.timestamp() * 1e9) if request.end else self._clock.timestamp_ns()
@@ -271,11 +275,6 @@ class ThinkTraderDataClient(LiveMarketDataClient):
         if arr is None:
             return []
 
-        try:
-            import numpy as np
-        except ModuleNotFoundError:
-            return []
-
         if not isinstance(arr, np.ndarray):
             return []
 
@@ -300,9 +299,6 @@ class ThinkTraderDataClient(LiveMarketDataClient):
         quote_only: bool,
         trade_only: bool,
     ) -> list[Any]:
-        from nautilus_trader.adapters.thinktrader.parsing.data import parse_tick_to_quote_tick
-        from nautilus_trader.adapters.thinktrader.parsing.data import parse_tick_to_trade_tick
-
         ticks: list[Any] = []
         for row in arr:
             if hasattr(row, "dtype") and getattr(row.dtype, "names", None):
@@ -321,12 +317,6 @@ class ThinkTraderDataClient(LiveMarketDataClient):
         return ticks
 
     async def _request_bars(self, request: RequestBars) -> None:
-        import pandas as pd
-
-        from nautilus_trader.adapters.thinktrader.parsing.data import bar_spec_to_period
-        from nautilus_trader.adapters.thinktrader.parsing.data import ns_to_xt_time
-        from nautilus_trader.adapters.thinktrader.parsing.data import parse_kline_to_bar
-
         bar_type = request.bar_type
         stock_code = instrument_id_to_stock_code(bar_type.instrument_id)
         start_ns = int(request.start.timestamp() * 1e9) if request.start else 0
