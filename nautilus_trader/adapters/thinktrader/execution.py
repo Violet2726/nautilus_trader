@@ -397,7 +397,21 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
             )
 
     async def _modify_order(self, _command: ModifyOrder) -> None:
-        raise NotImplementedError("TODO: ThinkTrader 暂不支持修改订单, 请使用撤单后重下")
+        command = _command
+        cached_order = self._cache.order(command.client_order_id)
+        venue_order_id = (
+            command.venue_order_id
+            or (cached_order.venue_order_id if cached_order is not None else None)
+            or VenueOrderId(command.client_order_id.value)
+        )
+        self.generate_order_modify_rejected(
+            strategy_id=command.strategy_id,
+            instrument_id=command.instrument_id,
+            client_order_id=command.client_order_id,
+            venue_order_id=venue_order_id,
+            reason="ThinkTrader 暂不支持修改订单, 请撤单后重下",
+            ts_event=self._clock.timestamp_ns(),
+        )
 
     def _cancel_order_id(
         self,
