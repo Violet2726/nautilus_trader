@@ -1,3 +1,4 @@
+import asyncio
 from typing import Any
 from unittest.mock import Mock
 
@@ -257,3 +258,104 @@ async def test_modify_order_generates_modify_rejected(event_loop, client, msgbus
     assert kwargs["venue_order_id"] == VenueOrderId(command.client_order_id.value)
     assert kwargs["reason"] == "ThinkTrader 暂不支持修改订单, 请撤单后重下"
     assert isinstance(kwargs["ts_event"], int)
+
+
+@pytest.mark.asyncio
+async def test_on_order_update_partially_filled_sends_order_status_report(event_loop, client, msgbus, cache, clock, instrument_provider):
+    exec_client = _make_exec_client(
+        event_loop=event_loop,
+        client=client,
+        msgbus=msgbus,
+        cache=cache,
+        clock=clock,
+        instrument_provider=instrument_provider,
+        use_async_cancel=False,
+    )
+    exec_client._send_order_status_report = Mock()
+
+    instrument_id = InstrumentId.from_str("000001.SZSE")
+    client_order_id = ClientOrderId("COID-ORDER-UPDATE-1")
+    order_id = 10
+
+    order = OrderFactory(
+        trader_id=TestIdStubs.trader_id(),
+        strategy_id=TestIdStubs.strategy_id(),
+        clock=clock,
+    ).market(
+        instrument_id=instrument_id,
+        order_side=OrderSide.BUY,
+        quantity=Quantity.from_int(100),
+        client_order_id=client_order_id,
+    )
+    cache.add_order(order)
+
+    xt_order = Mock(
+        order_id=order_id,
+        order_sysid="SYS-1",
+        stock_code="000001.SZ",
+        order_type=1,
+        order_status=55,
+        order_volume=100,
+        traded_volume=10,
+        traded_price=10.25,
+        price=10.25,
+        price_type=0,
+        order_time=1_700_000_000,
+        order_remark=str(client_order_id),
+    )
+
+    exec_client._on_order_update(xt_order)
+    await asyncio.sleep(0)
+
+    assert exec_client._order_id_to_client_order_id[order_id] == client_order_id
+    assert exec_client._client_order_id_to_order_id[client_order_id] == order_id
+
+    exec_client._send_order_status_report.assert_called_once()
+    report = exec_client._send_order_status_report.call_args.args[0]
+    assert report.client_order_id == client_order_id
+
+
+def test_on_trade_recovers_order_id_mapping_from_order_remark(event_loop, client, msgbus, cache, clock, instrument_provider):
+    exec_client = _make_exec_client(
+        event_loop=event_loop,
+        client=client,
+        msgbus=msgbus,
+        cache=cache,
+        clock=clock,
+        instrument_provider=instrument_provider,
+        use_async_cancel=False,
+    )
+    exec_client.generate_order_filled = Mock()
+
+    instrument_id = InstrumentId.from_str("000001.SZSE")
+    client_order_id = ClientOrderId("COID-TRADE-1")
+    order_id = 99
+
+    order = OrderFactory(
+        trader_id=TestIdStubs.trader_id(),
+        strategy_id=TestIdStubs.strategy_id(),
+        clock=clock,
+    ).market(
+        instrument_id=instrument_id,
+        order_side=OrderSide.BUY,
+        quantity=Quantity.from_int(1),
+        client_order_id=client_order_id,
+    )
+    cache.add_order(order)
+
+    trade = Mock(
+        order_id=order_id,
+        order_sysid="SYS-99",
+        stock_code="000001.SZ",
+        traded_id="T-1",
+        traded_price=10.0,
+        traded_volume=1,
+        traded_time=1_700_000_000,
+        order_remark=str(client_order_id),
+    )
+
+    exec_client._on_trade(trade)
+
+    assert exec_client._order_id_to_client_order_id[order_id] == client_order_id
+    assert exec_client._client_order_id_to_order_id[client_order_id] == order_id
+    exec_client.generate_order_filled.assert_called_once()

@@ -603,6 +603,8 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
 
         if not client_order_id and order.order_remark:
             client_order_id = ClientOrderId(order.order_remark)
+            self._order_id_to_client_order_id[order_id] = client_order_id
+            self._client_order_id_to_order_id[client_order_id] = order_id
 
         if not client_order_id:
             self._log.warning(f"未知订单: order_id={order_id}")
@@ -627,6 +629,14 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
                     venue_order_id=VenueOrderId(order.order_sysid),
                     ts_event=ts_event,
                 )
+        elif status in (OrderStatus.PARTIALLY_FILLED, OrderStatus.FILLED):
+            self.create_task(
+                self._send_order_status_report_from_order_update(
+                    order=order,
+                    client_order_id=client_order_id,
+                    cached_order=cached_order,
+                ),
+            )
         elif status == OrderStatus.CANCELED:
             self.generate_order_canceled(
                 strategy_id=cached_order.strategy_id,
@@ -648,6 +658,59 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
                 ts_event=ts_event,
             )
 
+    async def _send_order_status_report_from_order_update(
+        self,
+        *,
+        order: Any,
+        client_order_id: ClientOrderId,
+        cached_order: Any,
+    ) -> None:
+        venue_order_id_value = getattr(order, "order_sysid", None) or None
+        venue_order_id = (
+            VenueOrderId(venue_order_id_value)
+            if venue_order_id_value
+            else VenueOrderId(str(getattr(order, "order_id", "")))
+        )
+
+        command = GenerateOrderStatusReport(
+            instrument_id=cached_order.instrument_id,
+            client_order_id=client_order_id,
+            venue_order_id=venue_order_id,
+            command_id=UUID4(),
+            ts_init=self._clock.timestamp_ns(),
+        )
+        report = await self.generate_order_status_report(command)
+        if report is None:
+            ts_init = self._clock.timestamp_ns()
+            ts_last = self._to_timestamp_ns(getattr(order, "order_time", None)) or ts_init
+            mapped_status = ORDER_STATUS_MAP.get(
+                getattr(order, "order_status", None),
+                OrderStatus.SUBMITTED,
+            )
+
+            report = OrderStatusReport(
+                account_id=self.account_id,
+                instrument_id=cached_order.instrument_id,
+                venue_order_id=venue_order_id,
+                order_side=cached_order.side,
+                order_type=cached_order.order_type,
+                time_in_force=cached_order.time_in_force,
+                order_status=mapped_status,
+                quantity=Quantity.from_int(int(getattr(order, "order_volume", 0) or 0)),
+                filled_qty=Quantity.from_int(int(getattr(order, "traded_volume", 0) or 0)),
+                avg_px=Decimal(str(getattr(order, "traded_price", 0.0))),
+                report_id=UUID4(),
+                ts_accepted=ts_last,
+                ts_last=ts_last,
+                ts_init=ts_init,
+                client_order_id=client_order_id,
+                price=Price.from_str(str(getattr(order, "price", 0.0)))
+                if getattr(order, "price", None)
+                else None,
+            )
+
+        self._send_order_status_report(report)
+
     def _on_trade(self, trade: Any) -> None:
         """处理成交回报"""
         from nautilus_trader.model.identifiers import TradeId
@@ -659,6 +722,8 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
             # 尝试从 order_remark 恢复
             if trade.order_remark:
                 client_order_id = ClientOrderId(trade.order_remark)
+                self._order_id_to_client_order_id[order_id] = client_order_id
+                self._client_order_id_to_order_id[client_order_id] = order_id
             else:
                 self._log.warning(f"未知成交: order_id={order_id}")
                 return
@@ -684,7 +749,7 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
             venue_order_id=VenueOrderId(trade.order_sysid),
             trade_id=TradeId(trade.traded_id),
             order_side=cached_order.side,
-            order_type=cached_order.type,
+            order_type=cached_order.order_type,
             last_qty=Quantity.from_int(trade.traded_volume),
             last_px=Price.from_str(f"{trade.traded_price:.4f}"),
             quote_currency=instrument.quote_currency if instrument else Currency.from_str("CNY"),
