@@ -152,6 +152,8 @@ class ThinkTraderClient(
             f"异步下单回报: account={response.account_id}, "
             f"order_id={response.order_id}, seq={response.seq}"
         )
+        if handler := self._event_handlers.get("order_async_response"):
+            self._loop.call_soon_threadsafe(handler, response)
 
     def _handle_order_update(self, order: Any) -> None:
         """处理委托更新 (在主循环中执行)"""
