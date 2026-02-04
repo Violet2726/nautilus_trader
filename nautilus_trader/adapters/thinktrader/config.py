@@ -31,5 +31,6 @@ class ThinkTraderExecClientConfig(LiveExecClientConfig, kw_only=True, frozen=Tru
     account_type: str = "STOCK"  # 账号类型: STOCK, CREDIT, FUTURE, OPTION
     session_id: int = 123456  # 会话 ID
     use_async_order: bool = True  # 是否使用异步下单
+    use_async_cancel: bool = True  # 是否使用异步撤单
     relaxed_response_order: bool = True  # 开启宽松时序模式
     instrument_provider: InstrumentProviderConfig = ThinkTraderInstrumentProviderConfig()

@@ -587,6 +587,8 @@ async def test_on_quote_data_schedules_handle_quote_data(thinktrader_client):
     name = (str(_live_instrument_id()), "tick")
     _print_kv("输入 datas", datas)
     _print_kv("订阅 name", name)
+
+    thinktrader_client._handle_quote_data = Mock()
     thinktrader_client._on_quote_data(datas, name=name)
 
     await asyncio.sleep(0)

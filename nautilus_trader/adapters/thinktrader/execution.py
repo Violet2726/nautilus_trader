@@ -84,13 +84,16 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
         self._client_order_id_to_order_id: dict[ClientOrderId, int] = {}
         self._order_id_to_client_order_id: dict[int, ClientOrderId] = {}
         self._order_seq_to_client_order_id: dict[int, ClientOrderId] = {}
+        self._cancel_seq_to_client_order_id: dict[int, ClientOrderId] = {}
 
         # 注册回调
         self._client.register_event_handler("order_update", self._on_order_update)
         self._client.register_event_handler("trade", self._on_trade)
         self._client.register_event_handler("order_rejected", self._on_order_rejected)
         self._client.register_event_handler("order_async_response", self._on_order_async_response)
+        self._client.register_event_handler("cancel_async_response", self._on_cancel_async_response)
         self._client.register_event_handler("asset_update", self._on_asset_update)
+        self._client.register_event_handler("position_update", self._on_position_update)
         self._client.register_event_handler("cancel_rejected", self._on_cancel_rejected)
 
     async def _connect(self) -> None:
@@ -102,7 +105,7 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
         await self._client._connect()
         self._client.set_relaxed_response_order_enabled(self._config.relaxed_response_order)
 
-        await self.instrument_provider.initialize()
+        await self._instrument_provider.initialize()
 
     async def _disconnect(self) -> None:
         await self._client._disconnect()
@@ -396,6 +399,80 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
     async def _modify_order(self, _command: ModifyOrder) -> None:
         raise NotImplementedError("TODO: ThinkTrader 暂不支持修改订单, 请使用撤单后重下")
 
+    def _cancel_order_id(
+        self,
+        *,
+        order_id: int,
+        client_order_id: ClientOrderId,
+    ) -> None:
+        if self._config.use_async_cancel:
+            seq = self._client.cancel_order_async(order_id)
+            if seq <= 0:
+                self._on_cancel_rejected(order_id, f"撤单请求失败, 返回值: {seq}")
+                return
+            self._cancel_seq_to_client_order_id[seq] = client_order_id
+            return
+
+        result = self._client.cancel_order(order_id)
+        if result <= 0:
+            self._on_cancel_rejected(order_id, f"撤单请求失败, 返回值: {result}")
+
+    def _find_order_id_from_orders(self, command: CancelOrder) -> int | None:
+        for xt_order in self._client.query_orders():
+            if (
+                command.venue_order_id is not None
+                and getattr(xt_order, "order_sysid", None) == command.venue_order_id.value
+            ):
+                order_id = getattr(xt_order, "order_id", None)
+                if order_id:
+                    return int(order_id)
+
+            if getattr(xt_order, "order_remark", None) == command.client_order_id.value:
+                order_id = getattr(xt_order, "order_id", None)
+                if order_id:
+                    return int(order_id)
+
+        return None
+
+    def _try_cancel_by_sysid(self, *, cached_order: Any, command: CancelOrder) -> bool:
+        if command.venue_order_id is None:
+            return False
+
+        try:
+            from xtquant import xtconstant as xtconstant
+        except ModuleNotFoundError:
+            xtconstant = None
+
+        if xtconstant is None:
+            return False
+
+        venue = cached_order.instrument_id.venue.value
+        market = (
+            xtconstant.SH_MARKET
+            if venue == "SSE"
+            else xtconstant.SZ_MARKET
+            if venue == "SZSE"
+            else None
+        )
+        if market is None:
+            return False
+
+        if self._config.use_async_cancel:
+            seq = self._client.cancel_order_by_sysid_async(
+                market=market,
+                order_sysid=command.venue_order_id.value,
+            )
+            if seq > 0:
+                self._cancel_seq_to_client_order_id[seq] = command.client_order_id
+                return True
+            return False
+
+        result = self._client.cancel_order_by_sysid(
+            market=market,
+            order_sysid=command.venue_order_id.value,
+        )
+        return result == 0
+
     async def _cancel_order(self, command: CancelOrder) -> None:
         """取消订单"""
         cached_order = self._cache.order(command.client_order_id)
@@ -416,32 +493,16 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
 
         order_id = self._client_order_id_to_order_id.get(command.client_order_id)
         if order_id:
-            result = self._client.cancel_order(order_id)
-            if result <= 0:
-                self._on_cancel_rejected(order_id, f"撤单请求失败, 返回值: {result}")
+            self._cancel_order_id(order_id=order_id, client_order_id=command.client_order_id)
             return
 
-        for xt_order in self._client.query_orders():
-            if (
-                command.venue_order_id is not None
-                and getattr(xt_order, "order_sysid", None) == command.venue_order_id.value
-                and getattr(xt_order, "order_id", None)
-            ):
-                order_id = int(xt_order.order_id)
-                result = self._client.cancel_order(order_id)
-                if result <= 0:
-                    self._on_cancel_rejected(order_id, f"撤单请求失败, 返回值: {result}")
-                return
-            if getattr(xt_order, "order_remark", None) == command.client_order_id.value and getattr(
-                xt_order,
-                "order_id",
-                None,
-            ):
-                order_id = int(xt_order.order_id)
-                result = self._client.cancel_order(order_id)
-                if result <= 0:
-                    self._on_cancel_rejected(order_id, f"撤单请求失败, 返回值: {result}")
-                return
+        found_order_id = self._find_order_id_from_orders(command)
+        if found_order_id is not None:
+            self._cancel_order_id(order_id=found_order_id, client_order_id=command.client_order_id)
+            return
+
+        if self._try_cancel_by_sysid(cached_order=cached_order, command=command):
+            return
 
         venue_order_id = (
             cached_order.venue_order_id
@@ -484,7 +545,11 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
                 continue
 
             if xt_order.order_id:
-                self._client.cancel_order(int(xt_order.order_id))
+                order_id = int(xt_order.order_id)
+                if self._config.use_async_cancel:
+                    self._client.cancel_order_async(order_id)
+                else:
+                    self._client.cancel_order(order_id)
 
     async def _batch_cancel_orders(self, command: BatchCancelOrders) -> None:
         for cancel in command.cancels:
@@ -636,6 +701,73 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
             },
         )
 
+    def _on_position_update(self, position: Any) -> None:
+        try:
+            instrument_id = stock_code_to_instrument_id(position.stock_code)
+        except Exception:
+            return
+
+        volume = int(getattr(position, "volume", 0) or 0)
+        if volume > 0:
+            side = PositionSide.LONG
+        elif volume < 0:
+            side = PositionSide.SHORT
+        else:
+            side = PositionSide.FLAT
+
+        instrument = self._cache.instrument(instrument_id)
+        if instrument is None and self._instrument_provider.find(instrument_id) is not None:
+            instrument = self._instrument_provider.find(instrument_id)
+
+        if instrument is None:
+            self.create_task(
+                self._send_position_report_after_load(instrument_id=instrument_id, position=position),
+            )
+            return
+
+        if not self._cache.instrument(instrument.id):
+            self._msgbus.send(endpoint="DataEngine.process", msg=instrument)
+
+        report = PositionStatusReport(
+            account_id=self.account_id,
+            instrument_id=instrument_id,
+            position_side=side,
+            quantity=instrument.make_qty(abs(volume)),
+            report_id=UUID4(),
+            ts_last=self._clock.timestamp_ns(),
+            ts_init=self._clock.timestamp_ns(),
+            avg_px_open=Decimal(str(getattr(position, "avg_price", 0.0) or 0.0)),
+        )
+        self._send_position_status_report(report)
+
+    async def _send_position_report_after_load(self, instrument_id: Any, position: Any) -> None:
+        await self._instrument_provider.load_ids_async([instrument_id])
+        instrument = self._instrument_provider.find(instrument_id)
+        if instrument is None:
+            return
+        if not self._cache.instrument(instrument.id):
+            self._msgbus.send(endpoint="DataEngine.process", msg=instrument)
+
+        volume = int(getattr(position, "volume", 0) or 0)
+        if volume > 0:
+            side = PositionSide.LONG
+        elif volume < 0:
+            side = PositionSide.SHORT
+        else:
+            side = PositionSide.FLAT
+
+        report = PositionStatusReport(
+            account_id=self.account_id,
+            instrument_id=instrument_id,
+            position_side=side,
+            quantity=instrument.make_qty(abs(volume)),
+            report_id=UUID4(),
+            ts_last=self._clock.timestamp_ns(),
+            ts_init=self._clock.timestamp_ns(),
+            avg_px_open=Decimal(str(getattr(position, "avg_price", 0.0) or 0.0)),
+        )
+        self._send_position_status_report(report)
+
     def _on_order_rejected(self, order_id: int, reason: str) -> None:
         """处理订单拒绝"""
         client_order_id = self._order_id_to_client_order_id.get(order_id)
@@ -673,6 +805,21 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
 
         self._client_order_id_to_order_id[client_order_id] = int(order_id)
         self._order_id_to_client_order_id[int(order_id)] = client_order_id
+
+    def _on_cancel_async_response(self, response: Any) -> None:
+        client_order_id: ClientOrderId | None = None
+        if getattr(response, "order_remark", None):
+            client_order_id = ClientOrderId(response.order_remark)
+        elif getattr(response, "seq", None) in self._cancel_seq_to_client_order_id:
+            client_order_id = self._cancel_seq_to_client_order_id.get(response.seq)
+
+        if client_order_id is None:
+            return
+
+        order_id = getattr(response, "order_id", None)
+        if order_id:
+            self._client_order_id_to_order_id[client_order_id] = int(order_id)
+            self._order_id_to_client_order_id[int(order_id)] = client_order_id
 
     def _on_cancel_rejected(self, order_id: int, reason: str) -> None:
         client_order_id = self._order_id_to_client_order_id.get(order_id)
