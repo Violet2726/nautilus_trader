@@ -35,7 +35,7 @@ class ThinkTraderClientConnectionMixin(BaseMixin):
             raise ConnectionError(f"连接 MiniQmt 失败, 错误码: {connect_result}")
 
         self._account = StockAccount(self._account_id)
-        subscribe_result = self._trader.subscribe(self._account)
+        subscribe_result = self.subscribe()
         if subscribe_result != 0:
             raise ConnectionError(f"订阅账户失败, 错误码: {subscribe_result}")
 
@@ -48,10 +48,20 @@ class ThinkTraderClientConnectionMixin(BaseMixin):
     async def _disconnect(self) -> None:
         """断开连接"""
         if self._trader:
-            self._trader.unsubscribe(self._account)
+            self.unsubscribe()
             self._trader.stop()
         self._is_connected.clear()
         self._log.info("已断开与 MiniQmt 的连接")
+
+    def subscribe(self) -> int:
+        if not self._trader or not self._account:
+            return -1
+        return self._trader.subscribe(self._account)
+
+    def unsubscribe(self) -> int:
+        if not self._trader or not self._account:
+            return -1
+        return self._trader.unsubscribe(self._account)
 
     def _check_connection(self) -> bool:
         """检查连接状态"""

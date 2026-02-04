@@ -54,6 +54,13 @@ class ThinkTraderClientAccountMixin(BaseMixin):
             self._log.error(f"查询委托失败: {e}")
             return []
 
+    def query_orders_async(self) -> int:
+        method = getattr(self._trader, "query_stock_orders_async", None)
+        if method is None:
+            self._log.warning("TODO: xtquant 暂不支持 query_stock_orders_async")
+            return -1
+        return method(self._account)
+
     def query_trades(self) -> list[Any]:
         """查询当日成交"""
         try:
@@ -61,3 +68,10 @@ class ThinkTraderClientAccountMixin(BaseMixin):
         except Exception as e:
             self._log.error(f"查询成交失败: {e}")
             return []
+
+    def query_trades_async(self) -> int:
+        method = getattr(self._trader, "query_stock_trades_async", None)
+        if method is None:
+            self._log.warning("TODO: xtquant 暂不支持 query_stock_trades_async")
+            return -1
+        return method(self._account)

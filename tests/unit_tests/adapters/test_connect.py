@@ -5,7 +5,6 @@ from xtquant.xttype import StockAccount
 
 def test_specific_account():
     path = r"D:\迅投QMT交易终端财通证券版\userdata_mini"
-    # 使用我们刚刚发现的账号
     account_id = "2007576" 
     session_id = 888888
     

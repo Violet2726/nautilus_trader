@@ -141,3 +141,31 @@ class ThinkTraderClientOrderMixin(BaseMixin):
         )
         self._log.debug(f"异步撤单请求: order_id={order_id}, seq={seq}")
         return seq
+
+    def cancel_order_by_sysid_async(self, market: int, order_sysid: str) -> int:
+        """
+        异步撤单 (通过柜台编号)
+
+        注意: 部分 xtquant 版本可能不支持该接口, 将回退到同步撤单。
+        """
+        method = getattr(self._trader, "cancel_order_stock_sysid_async", None)
+        if method is None:
+            self._log.warning("TODO: xtquant 暂不支持 cancel_order_stock_sysid_async, 回退到同步撤单")
+            return self.cancel_order_by_sysid(market=market, order_sysid=order_sysid)
+
+        seq = method(
+            account=self._account,
+            market=market,
+            order_sysid=order_sysid,
+        )
+        self._log.debug(
+            f"异步撤单请求: market={market}, order_sysid={order_sysid}, seq={seq}",
+        )
+        return seq
+
+    def set_relaxed_response_order_enabled(self, enabled: bool) -> None:
+        method = getattr(self._trader, "set_relaxed_response_order_enabled", None)
+        if method is None:
+            self._log.warning("TODO: xtquant 暂不支持 set_relaxed_response_order_enabled")
+            return
+        method(enabled)

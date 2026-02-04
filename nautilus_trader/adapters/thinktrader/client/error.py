@@ -40,6 +40,13 @@ class ThinkTraderClientErrorMixin(BaseMixin):
             f"撤单失败: order_id={order_id}, error_id={error_id}, error_msg={error_msg}"
         )
 
+        if handler := self._event_handlers.get("cancel_rejected"):
+            self._loop.call_soon_threadsafe(
+                handler,
+                order_id,
+                error_msg,
+            )
+
     def _handle_connection_error(self, error_code: int) -> None:
         """处理连接错误"""
         if error_code in self.CONNECTION_ERRORS:

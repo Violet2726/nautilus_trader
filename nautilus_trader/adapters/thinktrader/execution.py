@@ -90,9 +90,19 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
         self._client.register_event_handler("trade", self._on_trade)
         self._client.register_event_handler("order_rejected", self._on_order_rejected)
         self._client.register_event_handler("order_async_response", self._on_order_async_response)
+        self._client.register_event_handler("asset_update", self._on_asset_update)
+        self._client.register_event_handler("cancel_rejected", self._on_cancel_rejected)
 
     async def _connect(self) -> None:
+        self._client._clock = self._clock
+        self._client._cache = self._cache
+        self._client._msgbus = self._msgbus
+        self._client._instrument_provider = self._instrument_provider
+
         await self._client._connect()
+        self._client.set_relaxed_response_order_enabled(self._config.relaxed_response_order)
+
+        await self.instrument_provider.initialize()
 
     async def _disconnect(self) -> None:
         await self._client._disconnect()
@@ -567,6 +577,28 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
             ts_event=ts_event,
         )
 
+    def _on_asset_update(self, asset: Any) -> None:
+        currency = Currency.from_str("CNY")
+        cash = float(getattr(asset, "cash", 0.0) or 0.0)
+        frozen = float(getattr(asset, "frozen_cash", 0.0) or 0.0)
+        balances = [
+            AccountBalance(
+                total=Money(cash + frozen, currency),
+                locked=Money(frozen, currency),
+                free=Money(cash, currency),
+            ),
+        ]
+        self.generate_account_state(
+            balances=balances,
+            margins=[],
+            reported=True,
+            ts_event=self._clock.timestamp_ns(),
+            info={
+                "market_value": getattr(asset, "market_value", None),
+                "total_asset": getattr(asset, "total_asset", None),
+            },
+        )
+
     def _on_order_rejected(self, order_id: int, reason: str) -> None:
         """处理订单拒绝"""
         client_order_id = self._order_id_to_client_order_id.get(order_id)
@@ -604,6 +636,36 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
 
         self._client_order_id_to_order_id[client_order_id] = int(order_id)
         self._order_id_to_client_order_id[int(order_id)] = client_order_id
+
+    def _on_cancel_rejected(self, order_id: int, reason: str) -> None:
+        client_order_id = self._order_id_to_client_order_id.get(order_id)
+        if client_order_id is None:
+            for xt_order in self._client.query_orders():
+                if getattr(xt_order, "order_id", None) == order_id and getattr(
+                    xt_order,
+                    "order_remark",
+                    None,
+                ):
+                    client_order_id = ClientOrderId(xt_order.order_remark)
+                    break
+
+        if client_order_id is None:
+            self._log.warning(f"未知的撤单失败订单: order_id={order_id}")
+            return
+
+        cached_order = self._cache.order(client_order_id)
+        if cached_order is None or cached_order.is_closed:
+            return
+
+        venue_order_id = cached_order.venue_order_id or VenueOrderId(str(order_id))
+        self.generate_order_cancel_rejected(
+            strategy_id=cached_order.strategy_id,
+            instrument_id=cached_order.instrument_id,
+            client_order_id=client_order_id,
+            venue_order_id=venue_order_id,
+            reason=reason,
+            ts_event=self._clock.timestamp_ns(),
+        )
 
     @staticmethod
     def _datetime_to_ns(dt: datetime) -> int:

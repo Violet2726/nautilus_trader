@@ -45,6 +45,14 @@ class ThinkTraderClientCallback(XtQuantTraderCallback):
         """成交回报"""
         self._client._on_trade(trade)
 
+    def on_stock_asset(self, asset: Any) -> None:
+        """资金变动推送"""
+        self._client._on_asset(asset)
+
+    def on_stock_position(self, position: Any) -> None:
+        """持仓变动推送"""
+        self._client._on_position(position)
+
     def on_order_error(self, order_error: Any) -> None:
         """下单错误"""
         self._client._handle_order_error(order_error)
@@ -56,6 +64,14 @@ class ThinkTraderClientCallback(XtQuantTraderCallback):
     def on_order_stock_async_response(self, response: Any) -> None:
         """异步下单回报"""
         self._client._on_order_async_response(response)
+
+    def on_cancel_order_stock_async_response(self, response: Any) -> None:
+        """异步撤单回报"""
+        self._client._on_cancel_async_response(response)
+
+    def on_cancel_order_stock_sysid_async_response(self, response: Any) -> None:
+        """异步撤单(按sysid)回报"""
+        self._client._on_cancel_async_response(response)
 
 
 class ThinkTraderClient(
@@ -146,6 +162,20 @@ class ThinkTraderClient(
             trade,
         )
 
+    def _on_asset(self, asset: Any) -> None:
+        """处理资金变动推送"""
+        self._loop.call_soon_threadsafe(
+            self._handle_asset,
+            asset,
+        )
+
+    def _on_position(self, position: Any) -> None:
+        """处理持仓变动推送"""
+        self._loop.call_soon_threadsafe(
+            self._handle_position,
+            position,
+        )
+
     def _on_order_async_response(self, response: Any) -> None:
         """处理异步下单回报"""
         self._log.debug(
@@ -153,6 +183,11 @@ class ThinkTraderClient(
             f"order_id={response.order_id}, seq={response.seq}"
         )
         if handler := self._event_handlers.get("order_async_response"):
+            self._loop.call_soon_threadsafe(handler, response)
+
+    def _on_cancel_async_response(self, response: Any) -> None:
+        """处理异步撤单回报"""
+        if handler := self._event_handlers.get("cancel_async_response"):
             self._loop.call_soon_threadsafe(handler, response)
 
     def _handle_order_update(self, order: Any) -> None:
@@ -164,3 +199,13 @@ class ThinkTraderClient(
         """处理成交 (在主循环中执行)"""
         if handler := self._event_handlers.get("trade"):
             handler(trade)
+
+    def _handle_asset(self, asset: Any) -> None:
+        """处理资金变动 (在主循环中执行)"""
+        if handler := self._event_handlers.get("asset_update"):
+            handler(asset)
+
+    def _handle_position(self, position: Any) -> None:
+        """处理持仓变动 (在主循环中执行)"""
+        if handler := self._event_handlers.get("position_update"):
+            handler(position)
