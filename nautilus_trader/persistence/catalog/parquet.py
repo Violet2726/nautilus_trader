@@ -390,7 +390,7 @@ class ParquetDataCatalog(BaseDataCatalog):
         identifier: str | None = None,
         start: int | None = None,
         end: int | None = None,
-    ):
+    ) -> None:
         """
         Extend the timestamp range of an existing parquet file by renaming it.
 

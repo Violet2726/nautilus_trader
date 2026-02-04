@@ -13,6 +13,9 @@
 #  limitations under the License.
 # -------------------------------------------------------------------------------------------------
 
+from collections.abc import Callable
+from typing import Any
+
 import pyarrow as pa
 
 from nautilus_trader.model.events import PositionChanged
@@ -22,13 +25,13 @@ from nautilus_trader.model.events import PositionOpened
 from nautilus_trader.model.objects import Money
 
 
-def try_float(x):
+def try_float(x: Any) -> float | None:
     if x == "None" or x is None:
         return None
     return float(x)
 
 
-def serialize(event: PositionEvent):
+def serialize(event: PositionEvent) -> pa.RecordBatch:
     data = {k: v for k, v in event.to_dict(event).items() if k not in ("order_fill",)}
     caster = {
         "signed_qty": float,
@@ -50,9 +53,11 @@ def serialize(event: PositionEvent):
     return pa.RecordBatch.from_pylist([values], schema=SCHEMAS[type(event)])
 
 
-def deserialize(cls):
-    def inner(batch: pa.RecordBatch) -> PositionOpened | (PositionChanged | PositionClosed):
-        def parse(data):
+def deserialize(
+    cls: type[PositionEvent],
+) -> Callable[[pa.RecordBatch], list[PositionOpened | PositionChanged | PositionClosed]]:
+    def inner(batch: pa.RecordBatch) -> list[PositionOpened | PositionChanged | PositionClosed]:
+        def parse(data: dict[str, Any]) -> dict[str, Any]:
             for k in ("quantity", "last_qty", "peak_qty", "last_px"):
                 if k in data:
                     data[k] = str(data[k])

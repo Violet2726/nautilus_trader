@@ -356,7 +356,12 @@ cpdef datetime time_object_to_dt(time_object):
     else:
         used_date = pd.Timestamp(time_object)
 
-    return as_utc_timestamp(used_date)
+    if used_date.tzinfo is None:  # tz-naive
+        used_date = used_date.tz_localize(pytz.utc)
+    elif used_date.tzinfo != pytz.utc:
+        used_date = used_date.tz_convert(pytz.utc)
+
+    return used_date
 
 
 

@@ -23,6 +23,7 @@ built around this domain model.
 
 from decimal import ROUND_HALF_UP
 from decimal import Decimal
+from typing import Any
 
 from nautilus_trader.core import nautilus_pyo3
 from nautilus_trader.model.book import BookLevel
@@ -84,7 +85,7 @@ NAUTILUS_PYO3_DATA_TYPES: tuple[type, ...] = (
 
 # Convert the given value into the raw integer representation based on the given precision
 # and currently compiled precision mode (128-bit for HIGH_PRECISION or 64-bit).
-def convert_to_raw_int(value, precision: int) -> int:
+def convert_to_raw_int(value: Any, precision: int) -> int:
     # Use Decimal for exact decimal arithmetic to avoid platform-specific
     # floating-point rounding differences.
     decimal_value = Decimal(str(value))

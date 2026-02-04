@@ -1090,7 +1090,7 @@ class TestDataGenerator:
         freq_in_nanos = secs_to_nanos(pd.Timedelta(max_freq).total_seconds())
         diffs = gen.uniform(0, freq_in_nanos, size=count - 1)
         srs = pd.Series([start, *diffs.tolist()])
-        return pd.to_datetime(srs.cumsum(), unit="us")
+        return pd.DatetimeIndex(pd.to_datetime(srs.cumsum(), unit="us"))
 
     @staticmethod
     def generate_time_series(
@@ -1121,17 +1121,18 @@ class TestDataGenerator:
         **kwargs: Any,
     ) -> list[QuoteTick]:
         df: pd.DataFrame = TestDataGenerator.generate_time_series(**kwargs)
+        index = df.index
         return [
             QuoteTick(
                 InstrumentId.from_str(instrument_id),
-                Price(row["price"] + 1, price_prec),
-                Price(row["price"] - 1, price_prec),
-                Quantity(row["quantity"], quantity_prec),
-                Quantity(row["quantity"], quantity_prec),
-                dt_to_unix_nanos(idx),
-                dt_to_unix_nanos(idx),
+                Price(row[0] + 1, price_prec),
+                Price(row[0] - 1, price_prec),
+                Quantity(row[1], quantity_prec),
+                Quantity(row[1], quantity_prec),
+                dt_to_unix_nanos(index[i]),
+                dt_to_unix_nanos(index[i]),
             )
-            for idx, row in df.iterrows()
+            for i, row in enumerate(df.itertuples(index=False, name=None))
         ]
 
     @staticmethod
@@ -1142,17 +1143,18 @@ class TestDataGenerator:
         **kwargs: Any,
     ) -> list[TradeTick]:
         df: pd.DataFrame = TestDataGenerator.generate_time_series(**kwargs)
+        index = df.index
         return [
             TradeTick(
                 InstrumentId.from_str(instrument_id),
-                Price(row["price"], price_prec),
-                Quantity(row["quantity"], quantity_prec),
+                Price(row[0], price_prec),
+                Quantity(row[1], quantity_prec),
                 AggressorSide.NO_AGGRESSOR,
                 TradeId(UUID4().value),
-                dt_to_unix_nanos(idx),
-                dt_to_unix_nanos(idx),
+                dt_to_unix_nanos(index[i]),
+                dt_to_unix_nanos(index[i]),
             )
-            for idx, row in df.iterrows()
+            for i, row in enumerate(df.itertuples(index=False, name=None))
         ]
 
     @staticmethod

@@ -522,7 +522,7 @@ class ActorFactory:
     """
 
     @staticmethod
-    def create(config: ImportableActorConfig):
+    def create(config: ImportableActorConfig) -> Any:
         """
         Create an actor from the given configuration.
 
