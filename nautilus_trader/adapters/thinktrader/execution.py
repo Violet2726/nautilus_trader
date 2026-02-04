@@ -391,7 +391,15 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
         """取消订单"""
         cached_order = self._cache.order(command.client_order_id)
         if cached_order is None:
-            self._log.warning(f"缓存中未找到订单: {command.client_order_id}")
+            venue_order_id = command.venue_order_id or VenueOrderId(command.client_order_id.value)
+            self.generate_order_cancel_rejected(
+                strategy_id=command.strategy_id,
+                instrument_id=command.instrument_id,
+                client_order_id=command.client_order_id,
+                venue_order_id=venue_order_id,
+                reason=f"缓存中未找到订单: {command.client_order_id!r}",
+                ts_event=self._clock.timestamp_ns(),
+            )
             return
 
         if cached_order.is_closed:
@@ -399,7 +407,9 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
 
         order_id = self._client_order_id_to_order_id.get(command.client_order_id)
         if order_id:
-            self._client.cancel_order(order_id)
+            result = self._client.cancel_order(order_id)
+            if result <= 0:
+                self._on_cancel_rejected(order_id, f"撤单请求失败, 返回值: {result}")
             return
 
         for xt_order in self._client.query_orders():
@@ -408,17 +418,33 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
                 and getattr(xt_order, "order_sysid", None) == command.venue_order_id.value
                 and getattr(xt_order, "order_id", None)
             ):
-                self._client.cancel_order(int(xt_order.order_id))
+                order_id = int(xt_order.order_id)
+                result = self._client.cancel_order(order_id)
+                if result <= 0:
+                    self._on_cancel_rejected(order_id, f"撤单请求失败, 返回值: {result}")
                 return
             if getattr(xt_order, "order_remark", None) == command.client_order_id.value and getattr(
                 xt_order,
                 "order_id",
                 None,
             ):
-                self._client.cancel_order(int(xt_order.order_id))
+                order_id = int(xt_order.order_id)
+                result = self._client.cancel_order(order_id)
+                if result <= 0:
+                    self._on_cancel_rejected(order_id, f"撤单请求失败, 返回值: {result}")
                 return
 
-        self._log.warning(f"未找到订单映射: {command.client_order_id}")
+        venue_order_id = cached_order.venue_order_id or command.venue_order_id or VenueOrderId(
+            command.client_order_id.value
+        )
+        self.generate_order_cancel_rejected(
+            strategy_id=cached_order.strategy_id,
+            instrument_id=cached_order.instrument_id,
+            client_order_id=command.client_order_id,
+            venue_order_id=venue_order_id,
+            reason=f"未找到订单映射: {command.client_order_id!r}",
+            ts_event=self._clock.timestamp_ns(),
+        )
 
     async def _cancel_all_orders(self, command: CancelAllOrders) -> None:
         orders = self._client.query_orders()
