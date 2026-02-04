@@ -1,19 +1,19 @@
 import asyncio
 import datetime
+import json
 import os
 import pprint
+from http.client import HTTPSConnection
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock
 from unittest.mock import Mock
 from unittest.mock import patch
 from unittest.mock import sentinel
+from urllib.parse import urlencode
 
 import pytest
 from dotenv import load_dotenv
-
-env_path = Path(__file__).parents[3] / ".env"
-load_dotenv(dotenv_path=env_path)
 
 from nautilus_trader.adapters.thinktrader.client import ThinkTraderClient
 from nautilus_trader.common.component import Logger
@@ -24,6 +24,10 @@ from nautilus_trader.model.identifiers import InstrumentId
 from nautilus_trader.model.identifiers import Venue
 from nautilus_trader.test_kit.providers import TestInstrumentProvider
 from nautilus_trader.test_kit.stubs.identifiers import TestIdStubs
+
+
+env_path = Path(__file__).parents[3] / ".env"
+load_dotenv(dotenv_path=env_path)
 
 
 def _print_section(title: str) -> None:
@@ -74,6 +78,55 @@ def _live_timeout_seconds() -> float:
         return 5.0
 
 
+def _eastmoney_last_price(stock_code: str) -> float | None:
+    code, _, suffix = stock_code.partition(".")
+    if not code or not suffix:
+        return None
+
+    suffix_upper = suffix.upper()
+    market = "0" if suffix_upper == "SZ" else "1" if suffix_upper == "SH" else None
+    if market is None:
+        return None
+
+    params = {
+        "ut": "fa5fd1943c7b386f172d6893dbfba10b",
+        "fltt": "2",
+        "invt": "2",
+        "fields": "f43,f57,f58",
+        "secid": f"{market}.{code}",
+    }
+
+    try:
+        conn = HTTPSConnection("push2.eastmoney.com", timeout=5)
+        conn.request(
+            "GET",
+            "/api/qt/stock/get?" + urlencode(params),
+            headers={
+                "User-Agent": "Mozilla/5.0",
+                "Accept": "application/json,text/plain,*/*",
+            },
+        )
+        resp = conn.getresponse()
+        payload = resp.read().decode("utf-8", errors="replace")
+        conn.close()
+        data = json.loads(payload)
+    except Exception:
+        return None
+
+    last_price = (data.get("data") or {}).get("f43")
+    if last_price is None:
+        return None
+
+    try:
+        last = float(last_price)
+    except Exception:
+        return None
+
+    if last <= 0:
+        return None
+
+    return last
+
 
 @pytest.fixture
 def thinktrader_client(event_loop):
@@ -110,7 +163,9 @@ async def test_instrument_provider_initialize_loads_all_on_start():
     provider = ThinkTraderInstrumentProvider(client=client, config=config)
     provider._parse_instrument = Mock(
         side_effect=[
-            TestInstrumentProvider.equity(symbol=_live_stock_code()[:6], venue=_live_instrument_id().venue.value),
+            TestInstrumentProvider.equity(
+                symbol=_live_stock_code()[:6], venue=_live_instrument_id().venue.value
+            ),
             TestInstrumentProvider.equity(symbol="000002", venue="SZSE"),
         ],
     )
@@ -493,9 +548,40 @@ async def test_get_price_reads_last_price_from_full_tick(thinktrader_client):
 
 
 @pytest.mark.asyncio
+async def test_get_price_falls_back_to_subscribe_quote_when_full_tick_empty(thinktrader_client):
+    _print_section("实时价格: get_full_tick 为空时回退 subscribe_quote(tick)")
+    instrument_id = _live_instrument_id()
+    stock_code = _live_stock_code()
+
+    def subscribe_quote(*, callback, **_kwargs):
+        callback({stock_code: [{"lastPrice": 12.34}]})
+        return 123
+
+    with (
+        patch(
+            "nautilus_trader.adapters.thinktrader.client.market_data.xtdata.get_full_tick",
+            return_value={},
+        ),
+        patch(
+            "nautilus_trader.adapters.thinktrader.client.market_data.xtdata.subscribe_quote",
+            side_effect=subscribe_quote,
+        ) as subscribe_quote_mock,
+        patch(
+            "nautilus_trader.adapters.thinktrader.client.market_data.xtdata.unsubscribe_quote",
+        ) as unsubscribe_quote_mock,
+    ):
+        result = await thinktrader_client.get_price(
+            instrument_id=instrument_id,
+            stock_code=stock_code,
+        )
+        assert result == 12.34
+        assert subscribe_quote_mock.call_count == 1
+        unsubscribe_quote_mock.assert_called_once_with(123)
+
+
+@pytest.mark.asyncio
 async def test_on_quote_data_schedules_handle_quote_data(thinktrader_client):
     _print_section("回调派发: _on_quote_data 应拆分 datas 并调度处理")
-    thinktrader_client._handle_quote_data = Mock()
 
     datas = {_live_stock_code(): [{"k": 1}, {"k": 2}]}
     name = (str(_live_instrument_id()), "tick")
@@ -627,6 +713,46 @@ async def test_xtdata_live_full_tick_output(event_loop):
 
 
 @pytest.mark.asyncio
+async def test_live_price_matches_eastmoney_reference(event_loop):
+    if os.environ.get("XT_LIVE_COMPARE_EASTMONEY") != "1":
+        pytest.skip("需设置 XT_LIVE_COMPARE_EASTMONEY=1 才运行公开行情对照用例")
+
+    xtdata = _try_import_xtdata()
+    _prepare_xtdata_data_dir(xtdata, _miniqmt_path())
+
+    client = ThinkTraderClient(
+        loop=event_loop,
+        logger=Logger("ThinkTraderLiveCompare"),
+        miniqmt_path=_miniqmt_path(),
+        session_id=1,
+        account_id="",
+    )
+    client.configure_xtdata_data_dir(_miniqmt_path())
+
+    stock_code = os.environ.get("XT_LIVE_COMPARE_STOCK_CODE") or "000547.SZ"
+    instrument_id = InstrumentId.from_str(
+        os.environ.get("XT_LIVE_COMPARE_INSTRUMENT_ID") or "000547.SZSE",
+    )
+    max_rel_diff = float(os.environ.get("XT_LIVE_COMPARE_MAX_REL_DIFF") or "0.02")
+
+    local_price = await client.get_price(instrument_id=instrument_id, stock_code=stock_code)
+    if local_price <= 0:
+        pytest.skip("xtdata.get_full_tick 本地价格为空, 可能未连接 MiniQmt / 交易时段外 / 无权限")
+
+    ref_price = _eastmoney_last_price(stock_code)
+    if ref_price is None:
+        pytest.skip("东方财富公开行情获取失败或返回为空")
+
+    rel_diff = abs(local_price - ref_price) / ref_price
+    _print_kv("stock_code", stock_code)
+    _print_kv("xtdata.get_full_tick lastPrice", local_price)
+    _print_kv("eastmoney latestPrice", ref_price)
+    _print_kv("relative_diff", rel_diff)
+    _print_kv("max_rel_diff", max_rel_diff)
+    assert rel_diff <= max_rel_diff
+
+
+@pytest.mark.asyncio
 async def test_xtdata_live_subscribe_tick_once_and_unsubscribe(event_loop):
     _print_section("xtdata 实测: subscribe_quote(tick) 回调原始数据与取消订阅")
     xtdata = _try_import_xtdata()
@@ -741,7 +867,9 @@ async def test_xtdata_live_subscribe_whole_quote_single_symbol_parsed(event_loop
     client._clock = TestClock()
     instrument_id = _live_instrument_id()
     client._cache = SimpleNamespace(
-        instrument_id_for_symbol=lambda symbol: instrument_id if symbol == _live_stock_code() else None,
+        instrument_id_for_symbol=lambda symbol: instrument_id
+        if symbol == _live_stock_code()
+        else None,
     )
 
     raw_future = event_loop.create_future()

@@ -448,14 +448,74 @@ class ThinkTraderClientMarketDataMixin(BaseMixin):
         name = (str(instrument_id), period)
         await self._unsubscribe(name, xtdata.unsubscribe_quote)
 
+    def _try_get_price_from_full_tick(self, stock_code: str) -> float:
+        data = xtdata.get_full_tick([stock_code])
+        if not isinstance(data, dict):
+            return 0.0
+
+        tick = data.get(stock_code)
+        if not isinstance(tick, dict):
+            return 0.0
+
+        try:
+            price = float(tick.get("lastPrice") or 0.0)
+        except Exception:
+            return 0.0
+
+        return price if price > 0 else 0.0
+
+    async def _await_price_from_tick_subscription(self, stock_code: str, timeout: float) -> float:
+        future: asyncio.Future[float] = self._loop.create_future()
+
+        def callback(datas: Any) -> None:
+            if future.done():
+                return
+            if not isinstance(datas, dict):
+                return
+
+            items = datas.get(stock_code)
+            if not isinstance(items, list) or not items:
+                return
+
+            first = items[0]
+            if not isinstance(first, dict):
+                return
+
+            try:
+                price = float(first.get("lastPrice") or 0.0)
+            except Exception:
+                return
+
+            if price <= 0:
+                return
+
+            self._loop.call_soon_threadsafe(future.set_result, price)
+
+        seq = xtdata.subscribe_quote(
+            stock_code=stock_code,
+            period="tick",
+            count=0,
+            callback=callback,
+        )
+        if not isinstance(seq, int) or seq <= 0:
+            return 0.0
+
+        try:
+            return await asyncio.wait_for(future, timeout=timeout)
+        except TimeoutError:
+            return 0.0
+        finally:
+            xtdata.unsubscribe_quote(seq)
+
     async def get_price(self, instrument_id: InstrumentId, stock_code: str) -> float:
         """
         请求特定合约的最新价格。
         """
-        data = xtdata.get_full_tick([stock_code])
-        if stock_code in data:
-            return data[stock_code].get("lastPrice", 0.0)
-        return 0.0
+        price = self._try_get_price_from_full_tick(stock_code)
+        if price > 0:
+            return price
+
+        return await self._await_price_from_tick_subscription(stock_code=stock_code, timeout=3.0)
 
     # =========================================================================
     # 内部辅助函数

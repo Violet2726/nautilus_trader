@@ -119,9 +119,15 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
             if report is None:
                 continue
 
-            if command.client_order_id is not None and report.client_order_id == command.client_order_id:
+            if (
+                command.client_order_id is not None
+                and report.client_order_id == command.client_order_id
+            ):
                 return report
-            if command.venue_order_id is not None and report.venue_order_id == command.venue_order_id:
+            if (
+                command.venue_order_id is not None
+                and report.venue_order_id == command.venue_order_id
+            ):
                 return report
 
         return None
@@ -172,7 +178,10 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
 
             if command.instrument_id is not None and report.instrument_id != command.instrument_id:
                 continue
-            if command.venue_order_id is not None and report.venue_order_id != command.venue_order_id:
+            if (
+                command.venue_order_id is not None
+                and report.venue_order_id != command.venue_order_id
+            ):
                 continue
 
             if start_ns is not None and report.ts_event < start_ns:
@@ -434,8 +443,10 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
                     self._on_cancel_rejected(order_id, f"撤单请求失败, 返回值: {result}")
                 return
 
-        venue_order_id = cached_order.venue_order_id or command.venue_order_id or VenueOrderId(
-            command.client_order_id.value
+        venue_order_id = (
+            cached_order.venue_order_id
+            or command.venue_order_id
+            or VenueOrderId(command.client_order_id.value)
         )
         self.generate_order_cancel_rejected(
             strategy_id=cached_order.strategy_id,
@@ -721,13 +732,17 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
         if side is None:
             return None
 
-        mapped_status = ORDER_STATUS_MAP.get(getattr(xt_order, "order_status", None), OrderStatus.SUBMITTED)
+        mapped_status = ORDER_STATUS_MAP.get(
+            getattr(xt_order, "order_status", None), OrderStatus.SUBMITTED
+        )
         order_type = self._parse_order_type(xt_order)
 
         ts_init = self._clock.timestamp_ns()
         ts_last = self._to_timestamp_ns(getattr(xt_order, "order_time", None)) or ts_init
 
-        venue_order_id_value = getattr(xt_order, "order_sysid", "") or str(getattr(xt_order, "order_id", ""))
+        venue_order_id_value = getattr(xt_order, "order_sysid", "") or str(
+            getattr(xt_order, "order_id", "")
+        )
         client_order_id_value = getattr(xt_order, "order_remark", None)
         client_order_id = ClientOrderId(client_order_id_value) if client_order_id_value else None
 
@@ -747,7 +762,9 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
             ts_last=ts_last,
             ts_init=ts_init,
             client_order_id=client_order_id,
-            price=Price.from_str(str(getattr(xt_order, "price", 0.0))) if getattr(xt_order, "price", None) else None,
+            price=Price.from_str(str(getattr(xt_order, "price", 0.0)))
+            if getattr(xt_order, "price", None)
+            else None,
         )
 
     def _try_get_order_side(self, obj: Any) -> OrderSide | None:
@@ -789,7 +806,9 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
         if side is None:
             return None
 
-        venue_order_id_value = getattr(xt_trade, "order_sysid", "") or str(getattr(xt_trade, "order_id", ""))
+        venue_order_id_value = getattr(xt_trade, "order_sysid", "") or str(
+            getattr(xt_trade, "order_id", "")
+        )
         ts_init = self._clock.timestamp_ns()
         ts_event = self._to_timestamp_ns(getattr(xt_trade, "traded_time", None)) or ts_init
 

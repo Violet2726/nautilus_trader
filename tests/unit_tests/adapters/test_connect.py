@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 from dotenv import load_dotenv
 
+
 # 自动加载项目根目录下的 .env 文件
 env_path = Path(__file__).parents[3] / ".env"
 load_dotenv(dotenv_path=env_path)
@@ -47,7 +48,12 @@ def test_specific_account():
                 # 打印所有底层属性以供调试
                 print("底层属性:")
                 for attr in dir(asset):
-                    if attr.startswith("m_") or attr in ['cash', 'total_asset', 'market_value', 'frozen_cash']:
+                    if attr.startswith("m_") or attr in [
+                        "cash",
+                        "total_asset",
+                        "market_value",
+                        "frozen_cash",
+                    ]:
                         print(f"  {attr}: {getattr(asset, attr)}")
             else:
                 print("查询资产返回 None")
@@ -66,6 +72,7 @@ def test_specific_account():
         print(f"连接失败: {res}")
 
     trader.stop()
+
 
 if __name__ == "__main__":
     test_specific_account()
