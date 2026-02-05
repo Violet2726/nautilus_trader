@@ -322,8 +322,10 @@ class ThinkTraderClientMarketDataMixin(BaseMixin):
             return await self._await_request(request, timeout, default_value={})
         else:
             existing = self._requests.get(name=name)
+            if existing is None:
+                return {}
             self._log.info(f"请求已存在于 {existing}")
-            return {}
+            return await self._await_request(existing, timeout, default_value={})
 
     async def get_historical_ticks(
         self,
@@ -366,8 +368,11 @@ class ThinkTraderClientMarketDataMixin(BaseMixin):
             request.handle()
             return await self._await_request(request, timeout, default_value={})
         else:
+            existing = self._requests.get(name=name)
+            if existing is None:
+                return {}
             self._log.info(f"请求 {name} 已存在")
-            return {}
+            return await self._await_request(existing, timeout, default_value={})
 
     async def req_fundamental_data(
         self,
@@ -658,33 +663,45 @@ class ThinkTraderClientMarketDataMixin(BaseMixin):
         """
         在请求历史数据前, 确保数据已下载到本地。
         """
-        # XtQuant 的 get_market_data 是同步的且依赖本地 cache。
-        # 此方法是对 download_history_data2 的封装。
-        future = self._loop.create_future()
+        try:
+            await asyncio.wait_for(
+                asyncio.to_thread(
+                    self._download_history_data_sync,
+                    stock_list=stock_list,
+                    period=period,
+                    start_time=start_time,
+                    end_time=end_time,
+                ),
+                timeout=timeout,
+            )
+        except TimeoutError:
+            self._log.debug(
+                f"download_history_data2 timeout ({timeout}s): {stock_list=}, {period=}, {start_time=}, {end_time=}",
+            )
+            raise
 
-        def on_download(data: dict[str, Any]) -> None:
-            if future.done():
-                return
-
-            if data.get("finished") is True:
-                self._loop.call_soon_threadsafe(future.set_result, True)
-                return
-
-            try:
-                total = int(data.get("total", 0) or 0)
-                finished = int(data.get("finished", 0) or 0)
-            except Exception:
-                return
-
-            if total > 0 and finished >= total:
-                self._loop.call_soon_threadsafe(future.set_result, True)
+    def _download_history_data_sync(
+        self,
+        *,
+        stock_list: list[str],
+        period: str,
+        start_time: str,
+        end_time: str,
+    ) -> None:
+        if len(stock_list) == 1:
+            xtdata.download_history_data(
+                stock_code=stock_list[0],
+                period=period,
+                start_time=start_time,
+                end_time=end_time,
+                incrementally=None,
+            )
+            return
 
         xtdata.download_history_data2(
             stock_list=stock_list,
             period=period,
             start_time=start_time,
             end_time=end_time,
-            callback=on_download,
+            callback=None,
         )
-
-        await asyncio.wait_for(future, timeout=timeout)

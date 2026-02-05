@@ -4,6 +4,7 @@ import asyncio
 import contextlib
 import datetime
 import os
+import random
 from pathlib import Path
 from typing import Any
 
@@ -147,7 +148,7 @@ async def main() -> None:
     _load_dotenv()
 
     miniqmt_path = os.environ.get("MINIQMT_PATH", r"D:\迅投极速策略交易系统交易终端 华福证券QMT仿真\userdata_mini")
-    session_id = int(os.environ.get("MINIQMT_SESSION_ID", "123456"))
+    session_id = random.randint(100000, 999999) # Random Session ID
 
     instrument_id = InstrumentId.from_str(
         os.environ.get("XT_LIVE_INSTRUMENT_ID", "000547.SZSE"),

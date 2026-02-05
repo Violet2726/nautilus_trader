@@ -1,5 +1,6 @@
 import datetime
 import os
+import random
 import sys
 from pathlib import Path
 
@@ -134,7 +135,7 @@ class ThinkTraderBracketStrategy(Strategy):
 _load_dotenv()
 
 miniqmt_path = os.environ.get("MINIQMT_PATH", r"D:\迅投极速策略交易系统交易终端 华福证券QMT仿真\userdata_mini")
-session_id = int(os.environ.get("MINIQMT_SESSION_ID", "123456"))
+session_id = random.randint(100000, 999999) # Random Session ID
 account_id = os.environ.get("MINIQMT_ACCOUNT_ID", "211800003313")
 account_type = os.environ.get("MINIQMT_ACCOUNT_TYPE", "STOCK")
 

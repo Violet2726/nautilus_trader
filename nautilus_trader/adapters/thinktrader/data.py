@@ -6,7 +6,6 @@ import numpy as np
 import pandas as pd
 
 from nautilus_trader.adapters.thinktrader.client import ThinkTraderClient
-from nautilus_trader.adapters.thinktrader.common import TT_VENUE
 from nautilus_trader.adapters.thinktrader.config import ThinkTraderDataClientConfig
 from nautilus_trader.adapters.thinktrader.parsing.data import bar_spec_to_period
 from nautilus_trader.adapters.thinktrader.parsing.data import ns_to_xt_time
@@ -44,6 +43,10 @@ from nautilus_trader.model.identifiers import InstrumentId
 
 class ThinkTraderDataClient(LiveMarketDataClient):
     """ThinkTrader 数据客户端"""
+
+    @property
+    def instrument_provider(self) -> InstrumentProvider:
+        return self._instrument_provider
 
     def __init__(
         self,
@@ -406,6 +409,7 @@ class ThinkTraderDataClient(LiveMarketDataClient):
                 period=period,
                 start_time=ns_to_xt_time(chunk_start_ns),
                 end_time=ns_to_xt_time(chunk_end_ns),
+                timeout=float(timeout),
             )
             data = await self._client.get_historical_bars(
                 bar_type=bar_type,
@@ -454,6 +458,7 @@ class ThinkTraderDataClient(LiveMarketDataClient):
                 period=period,
                 start_time=ns_to_xt_time(chunk_start_ns),
                 end_time=ns_to_xt_time(chunk_end_ns),
+                timeout=float(timeout),
             )
             data = await self._client.get_historical_ticks(
                 instrument_id=instrument_id,

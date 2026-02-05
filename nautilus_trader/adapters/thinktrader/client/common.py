@@ -95,17 +95,24 @@ class Base(ABC):
 
     def _name_to_req_id(self, name: Any) -> int | None:
         for req_id, req_name in self._req_id_to_name.items():
-            if req_name == name:
-                return req_id
+            try:
+                if req_name == name:
+                    return req_id
+            except TypeError:
+                continue
         return None
 
     def _validation_check(self, req_id: int, name: Any) -> None:
         if req_id in self._req_id_to_name:
             existing = self.get(req_id=req_id)
             raise KeyError(f"不允许重复输入 {req_id=}, 现有条目: {existing}")
-        if name in self._req_id_to_name.values():
-            existing = self.get(name=name)
-            raise KeyError(f"不允许重复输入 {name=}, 现有条目: {existing}")
+        for existing_name in self._req_id_to_name.values():
+            try:
+                if existing_name == name:
+                    existing = self.get(name=name)
+                    raise KeyError(f"不允许重复输入 {name=}, 现有条目: {existing}")
+            except TypeError:
+                continue
 
     def add_req_id(
         self,
@@ -268,6 +275,7 @@ class BaseMixin(ABC):
     _miniqmt_path: str
     _session_id: int
     _account_id: str
+    _account_type: str
     _callback: Any
     _is_connected: asyncio.Event
     _event_handlers: dict[str, Any]

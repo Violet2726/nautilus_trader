@@ -17,6 +17,7 @@
 
 import os
 import warnings
+import random
 from pathlib import Path
 
 # Suppress annoying warnings from dependencies
@@ -56,7 +57,7 @@ def _load_dotenv() -> None:
 _load_dotenv()
 
 miniqmt_path = os.environ.get("MINIQMT_PATH", r"D:\迅投极速策略交易系统交易终端 华福证券QMT仿真\userdata_mini")
-session_id = 453881
+session_id = random.randint(100000, 999999) # Random Session ID
 account_id = os.environ.get("MINIQMT_ACCOUNT_ID", "211800003313")
 account_type = "STOCK"
 

@@ -15,6 +15,7 @@ from nautilus_trader.common.component import LiveClock
 from nautilus_trader.common.component import Logger
 from nautilus_trader.common.component import MessageBus
 from nautilus_trader.common.component import init_logging
+from nautilus_trader.common.component import is_logging_initialized
 from nautilus_trader.common.component import log_level_from_str
 from nautilus_trader.common.functions import get_event_loop
 from nautilus_trader.model.data import Bar
@@ -25,6 +26,9 @@ from nautilus_trader.model.data import TradeTick
 from nautilus_trader.model.enums import AggregationSource
 from nautilus_trader.model.identifiers import InstrumentId
 from nautilus_trader.model.identifiers import TraderId
+
+
+_GLOBAL_LOG_GUARD = None
 
 
 class HistoricThinkTraderClient:
@@ -41,16 +45,21 @@ class HistoricThinkTraderClient:
         log_level: str = "INFO",
         instrument_provider_config: ThinkTraderInstrumentProviderConfig | None = None,
     ) -> None:
+        global _GLOBAL_LOG_GUARD
+
         loop = get_event_loop()
-        loop.set_debug(True)
+        loop.set_debug(False)
 
         self._clock = LiveClock()
-        self._log_guard = init_logging(level_stdout=log_level_from_str(log_level))
+        if _GLOBAL_LOG_GUARD is None and not is_logging_initialized():
+            _GLOBAL_LOG_GUARD = init_logging(level_stdout=log_level_from_str(log_level))
+        self._log_guard = _GLOBAL_LOG_GUARD
         self.log = Logger(name="HistoricThinkTraderClient")
 
         trader_id = TraderId("historic_thinktrader_client-001")
         msgbus = MessageBus(trader_id, self._clock)
         cache = Cache()
+        self._cache = cache
 
         self._client = ThinkTraderClient(
             loop=loop,
@@ -156,9 +165,10 @@ class HistoricThinkTraderClient:
         data: list[Bar] = []
         start_ns = int(start_ts.timestamp() * 1e9)
         end_ns = int(end_ts.timestamp() * 1e9)
+        cache = getattr(self, "_cache", None)
 
         for instrument_id in converted_ids:
-            stock_code = instrument_id_to_stock_code(instrument_id, self._data_client.cache)
+            stock_code = instrument_id_to_stock_code(instrument_id, cache)
             for bar_spec in bar_specifications:
                 bar_type = BarType(
                     instrument_id,
@@ -209,8 +219,9 @@ class HistoricThinkTraderClient:
         end_ns = int(end_ts.timestamp() * 1e9)
 
         data: list[TradeTick | QuoteTick] = []
+        cache = getattr(self, "_cache", None)
         for instrument_id in converted_ids:
-            stock_code = instrument_id_to_stock_code(instrument_id, self._data_client.cache)
+            stock_code = instrument_id_to_stock_code(instrument_id, cache)
             if tick_type == "TRADES":
                 ticks = await self._data_client.get_historical_ticks_chunked(
                     instrument_id=instrument_id,
