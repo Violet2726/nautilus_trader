@@ -65,7 +65,7 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
         super().__init__(
             loop=loop,
             client_id=ClientId("THINKTRADER"),
-            venue=TT_VENUE,
+            venue=None,
             oms_type=OmsType.NETTING,
             account_type=account_type,
             base_currency=Currency.from_str("CNY"),
@@ -85,6 +85,7 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
         self._order_id_to_client_order_id: dict[int, ClientOrderId] = {}
         self._order_seq_to_client_order_id: dict[int, ClientOrderId] = {}
         self._cancel_seq_to_client_order_id: dict[int, ClientOrderId] = {}
+        self._submitted_orders: dict[ClientOrderId, Any] = {} # 本地订单缓存,用于处理归因前的回调 race condition
 
         # 注册回调
         self._client.register_event_handler("order_update", self._on_order_update)
@@ -104,6 +105,9 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
 
         await self._client._connect()
         self._client.set_relaxed_response_order_enabled(self._config.relaxed_response_order)
+
+        # 初始查询账户以在缓存中注册
+        self.create_task(self._query_account(None), log_msg="Initial account query")
 
         await self._instrument_provider.initialize()
 
@@ -239,7 +243,7 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
                     account_id=self.account_id,
                     instrument_id=instrument_id,
                     position_side=side,
-                    quantity=Quantity.from_int(abs(pos.volume), size_precision),
+                    quantity=Quantity(abs(pos.volume), precision=size_precision),
                     report_id=UUID4(),
                     ts_last=now,
                     ts_init=now,
@@ -255,7 +259,7 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
     ) -> ExecutionMassStatus | None:
         ts_init = self._clock.timestamp_ns()
         mass_status = ExecutionMassStatus(
-            client_id=self.client_id,
+            client_id=self.id,
             account_id=self.account_id,
             venue=self.venue,
             report_id=UUID4(),
@@ -336,6 +340,7 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
             )
 
             if seq > 0:
+                self._submitted_orders[order.client_order_id] = order
                 self._order_seq_to_client_order_id[seq] = order.client_order_id
                 self.generate_order_submitted(
                     strategy_id=order.strategy_id,
@@ -362,6 +367,7 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
         )
 
         if order_id > 0:
+            self._submitted_orders[order.client_order_id] = order
             self._client_order_id_to_order_id[order.client_order_id] = order_id
             self._order_id_to_client_order_id[order_id] = order.client_order_id
             self.generate_order_submitted(
@@ -611,7 +617,7 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
             return
 
         status = ORDER_STATUS_MAP.get(order.order_status)
-        cached_order = self._cache.order(client_order_id)
+        cached_order = self._cache.order(client_order_id) or self._submitted_orders.get(client_order_id)
 
         if cached_order is None:
             self._log.warning(f"缓存中未找到订单: {client_order_id}")
@@ -728,7 +734,7 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
                 self._log.warning(f"未知成交: order_id={order_id}")
                 return
 
-        cached_order = self._cache.order(client_order_id)
+        cached_order = self._cache.order(client_order_id) or self._submitted_orders.get(client_order_id)
         if cached_order is None:
             self._log.warning(f"缓存中未找到订单: {client_order_id}")
             return

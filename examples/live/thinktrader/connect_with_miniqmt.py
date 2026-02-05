@@ -16,7 +16,12 @@
 
 
 import os
+import warnings
 from pathlib import Path
+
+# Suppress annoying warnings from dependencies
+warnings.filterwarnings("ignore", category=UserWarning)
+warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 from nautilus_trader.adapters.thinktrader.common import TT
 from nautilus_trader.adapters.thinktrader.config import ThinkTraderDataClientConfig
@@ -48,14 +53,10 @@ def _load_dotenv() -> None:
             return
 
 
-# *** THIS IS A TEST STRATEGY WITH NO ALPHA ADVANTAGE WHATSOEVER. ***
-# *** IT IS NOT INTENDED TO BE USED TO TRADE LIVE WITH REAL MONEY. ***
-
-
 _load_dotenv()
 
 miniqmt_path = os.environ.get("MINIQMT_PATH", r"D:\迅投极速策略交易系统交易终端 华福证券QMT仿真\userdata_mini")
-session_id = 453876
+session_id = 453881
 account_id = os.environ.get("MINIQMT_ACCOUNT_ID", "211800003313")
 account_type = "STOCK"
 
@@ -104,7 +105,7 @@ strategy_config = SubscribeStrategyConfig(
     instrument_id=instrument_id,
     trade_ticks=False,
     quote_ticks=True,
-    bars=True,
+    bars=False,
 )
 strategy = SubscribeStrategy(config=strategy_config)
 

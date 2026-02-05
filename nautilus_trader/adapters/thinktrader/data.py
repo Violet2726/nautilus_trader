@@ -58,7 +58,7 @@ class ThinkTraderDataClient(LiveMarketDataClient):
         super().__init__(
             loop=loop,
             client_id=ClientId("THINKTRADER"),
-            venue=TT_VENUE,
+            venue=None,
             msgbus=msgbus,
             cache=cache,
             clock=clock,
