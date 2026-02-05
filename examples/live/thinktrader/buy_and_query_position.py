@@ -63,8 +63,6 @@ class BuyAndQueryStrategy(Strategy):
 
     def on_quote_tick(self, tick: QuoteTick):
         if self._has_ordered:
-            # Poll for position
-            self._print_position()
             return
 
         # Simple logic: Buy at Ask to fill immediately (Crossing the spread)
@@ -113,12 +111,47 @@ class BuyAndQueryStrategy(Strategy):
 
     def on_order_filled(self, event):
         self.log.info(f"Order Filled: {event}")
-        # Wait a brief moment for position update to reflect in cache (though it should be immediate in event-driven)
-        # Query position
         self._print_position()
         
-        self.log.info("Order Filled. Waiting 5s for position update...")
-        self.clock.call_later(5.0, self.stop) # Request node stop after delay
+        if event.order_side == OrderSide.BUY:
+            self.log.info("BUY Order Filled. Waiting 3s to place SELL order...")
+            from datetime import timedelta
+            self.clock.set_time_alert(
+                name="place_sell_order",
+                alert_time=self.clock.utc_now() + timedelta(seconds=3.0),
+                callback=lambda e: self._place_sell_order(),
+            )
+        else:
+            self.log.info("SELL Order Filled. Waiting 5s to stop node...")
+            from datetime import timedelta
+            self.clock.set_time_alert(
+                name="stop_node",
+                alert_time=self.clock.utc_now() + timedelta(seconds=5.0),
+                callback=lambda e: self.stop(),
+            )
+
+    def _place_sell_order(self):
+        tick = self.cache.quote_tick(self.instrument_id)
+        if tick is None or tick.bid_price.as_double() <= 0:
+            self.log.error("Cannot place sell order: No quote or invalid bid price.")
+            self.stop()
+            return
+
+        instrument = self.cache.instrument(self.instrument_id)
+        # Use bid price minus some slippage to ensure fill
+        price_val = round(tick.bid_price.as_double() - 0.02, 2)
+        price = Price.from_str(f"{max(price_val, 0.01):.2f}")
+        qty = instrument.make_qty(100)
+
+        self.log.info(f"Placing SELL LIMIT Order for 100 shares at {price}...")
+        order = self.order_factory.limit(
+            instrument_id=self.instrument_id,
+            order_side=OrderSide.SELL,
+            quantity=qty,
+            price=price,
+            time_in_force=TimeInForce.DAY,
+        )
+        self.submit_order(order)
 
     def _print_position(self):
         # Use cache to find open positions by instrument_id
@@ -149,7 +182,7 @@ miniqmt_path = os.environ.get("MINIQMT_PATH", r"D:\迅投极速策略交易系�
 session_id = random.randint(100000, 999999) # Random Session ID
 account_id = os.environ.get("MINIQMT_ACCOUNT_ID", "211800003313")
 account_type = "STOCK"
-ticker_str = "601005.SSE"
+ticker_str = "601808.SSE"
 
 instrument_id = InstrumentId.from_str(ticker_str)
 
