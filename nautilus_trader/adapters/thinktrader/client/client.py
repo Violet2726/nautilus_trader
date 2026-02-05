@@ -95,12 +95,14 @@ class ThinkTraderClient(
         miniqmt_path: str,
         session_id: int,
         account_id: str,
+        account_type: str = "STOCK",
     ) -> None:
         self._loop = loop
         self._log = logger
         self._miniqmt_path = miniqmt_path
         self._session_id = session_id
         self._account_id = account_id
+        self._account_type = account_type
 
         self._trader = None
         self._account = None

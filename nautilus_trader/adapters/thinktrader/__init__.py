@@ -6,10 +6,12 @@ from nautilus_trader.adapters.thinktrader.data import ThinkTraderDataClient
 from nautilus_trader.adapters.thinktrader.execution import ThinkTraderExecutionClient
 from nautilus_trader.adapters.thinktrader.factories import ThinkTraderLiveDataClientFactory
 from nautilus_trader.adapters.thinktrader.factories import ThinkTraderLiveExecClientFactory
+from nautilus_trader.adapters.thinktrader.historical import HistoricThinkTraderClient
 from nautilus_trader.adapters.thinktrader.providers import ThinkTraderInstrumentProvider
 
 
 __all__ = [
+    "HistoricThinkTraderClient",
     "ThinkTraderClient",
     "ThinkTraderDataClient",
     "ThinkTraderDataClientConfig",

@@ -20,6 +20,20 @@ class ThinkTraderClientConnectionMixin(BaseMixin):
         """建立连接"""
         if xttrader is None:
             raise ModuleNotFoundError("xtquant is required for ThinkTrader trader connection")
+
+        # 如果已经连接，只需检查是否需要补充订阅账户
+        if self._is_connected.is_set():
+            if self._account_id and not self._account:
+                self._account = StockAccount(self._account_id, self._account_type)
+                subscribe_result = self.subscribe()
+                if subscribe_result != 0:
+                    raise ConnectionError(f"订阅账户失败, 错误码: {subscribe_result}")
+                self._log.info(
+                    f"已订阅账户: {self._account_id}",
+                    LogColor.GREEN,
+                )
+            return
+
         self._log.info(f"正在连接到 MiniQmt: {self._miniqmt_path}")
 
         self._trader = xttrader.XtQuantTrader(
@@ -34,16 +48,20 @@ class ThinkTraderClientConnectionMixin(BaseMixin):
         if connect_result != 0:
             raise ConnectionError(f"连接 MiniQmt 失败, 错误码: {connect_result}")
 
-        self._account = StockAccount(self._account_id)
-        subscribe_result = self.subscribe()
-        if subscribe_result != 0:
-            raise ConnectionError(f"订阅账户失败, 错误码: {subscribe_result}")
+        # 仅在有 account_id 时才订阅账户（DataClient 不需要订阅账户）
+        if self._account_id:
+            self._account = StockAccount(self._account_id, self._account_type)
+            subscribe_result = self.subscribe()
+            if subscribe_result != 0:
+                raise ConnectionError(f"订阅账户失败, 错误码: {subscribe_result}")
+            self._log.info(
+                f"已连接到 MiniQmt, 账户: {self._account_id}",
+                LogColor.GREEN,
+            )
+        else:
+            self._log.info("已连接到 MiniQmt (仅行情模式)", LogColor.GREEN)
 
         self._is_connected.set()
-        self._log.info(
-            f"已连接到 MiniQmt, 账户: {self._account_id}",
-            LogColor.GREEN,
-        )
 
     async def _disconnect(self) -> None:
         """断开连接"""

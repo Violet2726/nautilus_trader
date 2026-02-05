@@ -87,8 +87,8 @@ class ThinkTraderDataClient(LiveMarketDataClient):
 
         self._client.configure_xtdata_data_dir(self._config.miniqmt_path)
 
-        await self.instrument_provider.initialize()
-        for instrument in self.instrument_provider.list_all():
+        await self._instrument_provider.initialize()
+        for instrument in self._instrument_provider.list_all():
             self._handle_data(instrument)
 
         if self._config.subscribe_whole_quote:
@@ -206,22 +206,13 @@ class ThinkTraderDataClient(LiveMarketDataClient):
         stock_code = instrument_id_to_stock_code(request.instrument_id)
         start_ns = int(request.start.timestamp() * 1e9) if request.start else 0
         end_ns = int(request.end.timestamp() * 1e9) if request.end else self._clock.timestamp_ns()
-
-        await self._client.download_history_data(
-            stock_list=[stock_code],
-            period="tick",
-            start_time=ns_to_xt_time(start_ns),
-            end_time=ns_to_xt_time(end_ns),
-        )
-
-        data = await self._client.get_historical_ticks(
+        ticks = await self.get_historical_ticks_chunked(
             instrument_id=request.instrument_id,
             stock_code=stock_code,
             start_ns=start_ns,
             end_ns=end_ns,
+            quote_only=True,
         )
-
-        ticks = self._parse_historical_ticks(request.instrument_id, data, quote_only=True)
         self._handle_quote_ticks(
             request.instrument_id,
             ticks,
@@ -235,22 +226,13 @@ class ThinkTraderDataClient(LiveMarketDataClient):
         stock_code = instrument_id_to_stock_code(request.instrument_id)
         start_ns = int(request.start.timestamp() * 1e9) if request.start else 0
         end_ns = int(request.end.timestamp() * 1e9) if request.end else self._clock.timestamp_ns()
-
-        await self._client.download_history_data(
-            stock_list=[stock_code],
-            period="tick",
-            start_time=ns_to_xt_time(start_ns),
-            end_time=ns_to_xt_time(end_ns),
-        )
-
-        data = await self._client.get_historical_ticks(
+        ticks = await self.get_historical_ticks_chunked(
             instrument_id=request.instrument_id,
             stock_code=stock_code,
             start_ns=start_ns,
             end_ns=end_ns,
+            trade_only=True,
         )
-
-        ticks = self._parse_historical_ticks(request.instrument_id, data, trade_only=True)
         self._handle_trade_ticks(
             request.instrument_id,
             ticks,
@@ -316,70 +298,200 @@ class ThinkTraderDataClient(LiveMarketDataClient):
 
         return ticks
 
+    def _iter_time_chunks_ns(self, start_ns: int, end_ns: int, chunk_ns: int) -> list[tuple[int, int]]:
+        if start_ns >= end_ns:
+            return [(start_ns, end_ns)]
+
+        if chunk_ns <= 0:
+            return [(start_ns, end_ns)]
+
+        chunks: list[tuple[int, int]] = []
+        cur = start_ns
+        while cur < end_ns:
+            nxt = min(cur + chunk_ns, end_ns)
+            chunks.append((cur, nxt))
+            if nxt == end_ns:
+                break
+            cur = nxt + 1
+        return chunks
+
+    def _default_chunk_ns_for_period(self, period: str) -> int:
+        day_ns = 86_400_000_000_000
+        if period == "tick":
+            return day_ns
+        if period.endswith("m"):
+            return 31 * day_ns
+        if period.endswith("h"):
+            return 180 * day_ns
+        if period == "1d":
+            return 730 * day_ns
+        if period in ("1w", "1mon"):
+            return 3_650 * day_ns
+        return 180 * day_ns
+
+    def _parse_historical_bars_dict(
+        self,
+        *,
+        bar_type: Any,
+        stock_code: str,
+        data: Any,
+        ts_init: int,
+    ) -> list[Bar]:
+        bars: list[Bar] = []
+        if not isinstance(data, dict):
+            return bars
+
+        data = cast(dict[str, Any], data)
+        series_list: dict[str, Any] = {}
+        for field in ("open", "high", "low", "close", "volume"):
+            field_df = data.get(field)
+            if field_df is None or getattr(field_df, "empty", True):
+                continue
+            try:
+                if stock_code in field_df.index:
+                    series = field_df.loc[stock_code]
+                    series.name = field
+                    series_list[field] = series
+            except Exception as e:
+                self._log.warning(f"Failed to parse field {field} for {stock_code}: {e}")
+                continue
+
+        if not series_list:
+            return bars
+
+        df = pd.DataFrame(series_list)
+        for time_val, row in df.iterrows():
+            bar_data = {
+                "time": time_val,
+                "open": row.get("open", 0.0),
+                "high": row.get("high", 0.0),
+                "low": row.get("low", 0.0),
+                "close": row.get("close", 0.0),
+                "volume": row.get("volume", 0),
+            }
+            try:
+                bars.append(
+                    parse_kline_to_bar(
+                        bar_type.instrument_id,
+                        bar_type,
+                        bar_data,
+                        ts_init,
+                    ),
+                )
+            except Exception as e:
+                self._log.error(f"Failed to parse bar for {stock_code} at {time_val}: {e}")
+                continue
+
+        return bars
+
+    async def get_historical_bars_chunked(
+        self,
+        *,
+        bar_type: Any,
+        stock_code: str,
+        start_ns: int,
+        end_ns: int,
+        timeout: int = 60,
+    ) -> list[Bar]:
+        period = bar_spec_to_period(bar_type.spec)
+        chunk_ns = self._default_chunk_ns_for_period(period)
+        chunks = self._iter_time_chunks_ns(start_ns, end_ns, chunk_ns)
+
+        seen: set[int] = set()
+        out: list[Bar] = []
+
+        for chunk_start_ns, chunk_end_ns in chunks:
+            await self._client.download_history_data(
+                stock_list=[stock_code],
+                period=period,
+                start_time=ns_to_xt_time(chunk_start_ns),
+                end_time=ns_to_xt_time(chunk_end_ns),
+            )
+            data = await self._client.get_historical_bars(
+                bar_type=bar_type,
+                stock_code=stock_code,
+                start_ns=chunk_start_ns,
+                end_ns=chunk_end_ns,
+                timeout=timeout,
+            )
+            ts_init = self._clock.timestamp_ns()
+            bars = self._parse_historical_bars_dict(
+                bar_type=bar_type,
+                stock_code=stock_code,
+                data=data,
+                ts_init=ts_init,
+            )
+            for bar in bars:
+                if bar.ts_event in seen:
+                    continue
+                seen.add(bar.ts_event)
+                out.append(bar)
+
+        out.sort(key=lambda b: b.ts_event)
+        return out
+
+    async def get_historical_ticks_chunked(
+        self,
+        *,
+        instrument_id: InstrumentId,
+        stock_code: str,
+        start_ns: int,
+        end_ns: int,
+        timeout: int = 60,
+        quote_only: bool = False,
+        trade_only: bool = False,
+    ) -> list[Any]:
+        period = "tick"
+        chunk_ns = self._default_chunk_ns_for_period(period)
+        chunks = self._iter_time_chunks_ns(start_ns, end_ns, chunk_ns)
+
+        seen: set[int] = set()
+        out: list[Any] = []
+
+        for chunk_start_ns, chunk_end_ns in chunks:
+            await self._client.download_history_data(
+                stock_list=[stock_code],
+                period=period,
+                start_time=ns_to_xt_time(chunk_start_ns),
+                end_time=ns_to_xt_time(chunk_end_ns),
+            )
+            data = await self._client.get_historical_ticks(
+                instrument_id=instrument_id,
+                stock_code=stock_code,
+                start_ns=chunk_start_ns,
+                end_ns=chunk_end_ns,
+                timeout=timeout,
+            )
+            ticks = self._parse_historical_ticks(
+                instrument_id,
+                data,
+                quote_only=quote_only,
+                trade_only=trade_only,
+            )
+            for tick in ticks:
+                ts_event = getattr(tick, "ts_event", None)
+                if not isinstance(ts_event, int):
+                    out.append(tick)
+                    continue
+                if ts_event in seen:
+                    continue
+                seen.add(ts_event)
+                out.append(tick)
+
+        out.sort(key=lambda t: getattr(t, "ts_event", 0))
+        return out
+
     async def _request_bars(self, request: RequestBars) -> None:
         bar_type = request.bar_type
         stock_code = instrument_id_to_stock_code(bar_type.instrument_id)
         start_ns = int(request.start.timestamp() * 1e9) if request.start else 0
         end_ns = int(request.end.timestamp() * 1e9) if request.end else self._clock.timestamp_ns()
-
-        period = bar_spec_to_period(bar_type.spec)
-        await self._client.download_history_data(
-            stock_list=[stock_code],
-            period=period,
-            start_time=ns_to_xt_time(start_ns),
-            end_time=ns_to_xt_time(end_ns),
-        )
-
-        data = await self._client.get_historical_bars(
+        bars = await self.get_historical_bars_chunked(
             bar_type=bar_type,
             stock_code=stock_code,
             start_ns=start_ns,
             end_ns=end_ns,
         )
-
-        bars: list[Bar] = []
-        if isinstance(data, dict):
-            data = cast(dict[str, Any], data)
-            series_list: dict[str, Any] = {}
-            for field in ("open", "high", "low", "close", "volume"):
-                field_df = data.get(field)
-                if field_df is None or getattr(field_df, "empty", True):
-                    continue
-                try:
-                    if stock_code in field_df.index:
-                        series = field_df.loc[stock_code]
-                        series.name = field
-                        series_list[field] = series
-                except Exception as e:
-                    self._log.warning(f"Failed to parse field {field} for {stock_code}: {e}")
-                    continue
-
-            if series_list:
-                df = pd.DataFrame(series_list)
-
-                ts_init = self._clock.timestamp_ns()
-
-                for time_val, row in df.iterrows():
-                    bar_data = {
-                        "time": time_val,
-                        "open": row.get("open", 0.0),
-                        "high": row.get("high", 0.0),
-                        "low": row.get("low", 0.0),
-                        "close": row.get("close", 0.0),
-                        "volume": row.get("volume", 0),
-                    }
-
-                    try:
-                        bar = parse_kline_to_bar(
-                            bar_type.instrument_id,
-                            bar_type,
-                            bar_data,
-                            ts_init,
-                        )
-                        bars.append(bar)
-                    except Exception as e:
-                        self._log.error(f"Failed to parse bar for {stock_code} at {time_val}: {e}")
-                        continue
 
         if request.limit > 0 and len(bars) > request.limit:
             bars = bars[-request.limit :]

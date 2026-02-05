@@ -27,10 +27,12 @@ def get_cached_thinktrader_client(
     miniqmt_path: str,
     session_id: int,
     account_id: str,
+    account_type: str = "STOCK",
 ) -> ThinkTraderClient:
     global THINKTRADER_CLIENTS
 
-    client_key = (miniqmt_path, session_id, account_id)
+    # 使用 (miniqmt_path, session_id) 作为 key，确保 DataClient 和 ExecClient 共享同一个实例
+    client_key = (miniqmt_path, session_id)
     if client_key not in THINKTRADER_CLIENTS:
         logger = Logger(f"ThinkTraderClient[{session_id}:{account_id or 'DATA'}]")
         THINKTRADER_CLIENTS[client_key] = ThinkTraderClient(
@@ -39,7 +41,14 @@ def get_cached_thinktrader_client(
             miniqmt_path=miniqmt_path,
             session_id=session_id,
             account_id=account_id,
+            account_type=account_type,
         )
+    else:
+        # 如果已存在的 client 没有 account_id，但现在传入了，则更新
+        client = THINKTRADER_CLIENTS[client_key]
+        if not client._account_id and account_id:
+            client._account_id = account_id
+            client._account_type = account_type
 
     return THINKTRADER_CLIENTS[client_key]
 
@@ -83,6 +92,7 @@ class ThinkTraderLiveDataClientFactory(LiveDataClientFactory):
             miniqmt_path=config.miniqmt_path,
             session_id=config.session_id,
             account_id="",
+            account_type="STOCK",
         )
         provider = get_cached_thinktrader_instrument_provider(client=client, config=provider_config)
 
@@ -118,6 +128,7 @@ class ThinkTraderLiveExecClientFactory(LiveExecClientFactory):
             miniqmt_path=config.miniqmt_path,
             session_id=config.session_id,
             account_id=config.account_id,
+            account_type=config.account_type,
         )
         provider = get_cached_thinktrader_instrument_provider(client=client, config=provider_config)
 
