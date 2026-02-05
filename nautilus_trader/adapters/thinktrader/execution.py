@@ -331,6 +331,7 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
         price = float(order.price) if order.price else 0
 
         if self._config.use_async_order:
+            self._submitted_orders[order.client_order_id] = order
             seq = self._client.place_order_async(
                 stock_code=stock_code,
                 order_type=order_type,
@@ -340,7 +341,6 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
             )
 
             if seq > 0:
-                self._submitted_orders[order.client_order_id] = order
                 self._order_seq_to_client_order_id[seq] = order.client_order_id
                 self.generate_order_submitted(
                     strategy_id=order.strategy_id,
@@ -349,6 +349,7 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
                     ts_event=self._clock.timestamp_ns(),
                 )
             else:
+                self._submitted_orders.pop(order.client_order_id, None)
                 self.generate_order_rejected(
                     strategy_id=order.strategy_id,
                     instrument_id=order.instrument_id,
@@ -358,6 +359,7 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
                 )
             return
 
+        self._submitted_orders[order.client_order_id] = order
         order_id = self._client.place_order(
             stock_code=stock_code,
             order_type=order_type,
@@ -367,7 +369,6 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
         )
 
         if order_id > 0:
-            self._submitted_orders[order.client_order_id] = order
             self._client_order_id_to_order_id[order.client_order_id] = order_id
             self._order_id_to_client_order_id[order_id] = order.client_order_id
             self.generate_order_submitted(
@@ -377,6 +378,7 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
                 ts_event=self._clock.timestamp_ns(),
             )
         else:
+            self._submitted_orders.pop(order.client_order_id, None)
             self.generate_order_rejected(
                 strategy_id=order.strategy_id,
                 instrument_id=order.instrument_id,
@@ -620,7 +622,11 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
         cached_order = self._cache.order(client_order_id) or self._submitted_orders.get(client_order_id)
 
         if cached_order is None:
-            self._log.warning(f"缓存中未找到订单: {client_order_id}")
+            report = self._try_parse_xt_order_to_order_status_report(order)
+            if report is not None:
+                self._send_order_status_report(report)
+                return
+            self._log.debug(f"缓存中未找到订单: {client_order_id}")
             return
 
         ts_event = self._clock.timestamp_ns()
@@ -736,7 +742,11 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
 
         cached_order = self._cache.order(client_order_id) or self._submitted_orders.get(client_order_id)
         if cached_order is None:
-            self._log.warning(f"缓存中未找到订单: {client_order_id}")
+            report = self._try_parse_xt_trade_to_fill_report(trade)
+            if report is not None:
+                self._send_fill_report(report)
+                return
+            self._log.debug(f"缓存中未找到订单: {client_order_id}")
             return
 
         instrument_id = stock_code_to_instrument_id(trade.stock_code)

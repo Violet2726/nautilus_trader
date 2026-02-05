@@ -61,6 +61,10 @@ class BuyAndQueryStrategy(Strategy):
         self.subscribe_quote_ticks(self.instrument_id)
         self.log.info(f"Subscribed to {self.instrument_id}, waiting for quote to place order...")
 
+    def on_stop(self):
+        self.unsubscribe_quote_ticks(self.instrument_id)
+        self.log.info(f"Unsubscribed from {self.instrument_id}")
+
     def on_quote_tick(self, tick: QuoteTick):
         if self._has_ordered:
             return
