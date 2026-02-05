@@ -4,9 +4,7 @@ from nautilus_trader.model.identifiers import Venue
 TT = "THINKTRADER"
 TT_VENUE = Venue(TT)
 
-# ============================================================================
 # XtQuant 市场代码映射
-# ============================================================================
 MARKET_CODE_MAP = {
     "SH": "xtconstant.SH_MARKET",  # 上交所
     "SZ": "xtconstant.SZ_MARKET",  # 深交所
@@ -39,9 +37,7 @@ VENUE_TO_MARKET = {
 # XtQuant 市场代码 -> Nautilus Venue
 MARKET_TO_VENUE = {v: k for k, v in VENUE_TO_MARKET.items()}
 
-# ============================================================================
 # 账号类型映射
-# ============================================================================
 ACCOUNT_TYPE_MAP = {
     "FUTURE": "xtconstant.FUTURE_ACCOUNT",  # 期货
     "STOCK": "xtconstant.SECURITY_ACCOUNT",  # 股票
