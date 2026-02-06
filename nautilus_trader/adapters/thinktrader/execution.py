@@ -337,7 +337,7 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
             price_type = xtconstant.FIX_PRICE
         else:
             price = 0.0
-            price_type = xtconstant.LATEST_PRICE
+            price_type = xtconstant.MARKET_PEER_PRICE_FIRST
 
         if self._config.use_async_order:
             self._submitted_orders[order.client_order_id] = order

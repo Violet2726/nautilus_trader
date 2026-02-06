@@ -179,8 +179,8 @@ class MultiTickMomentumStrategy(Strategy):
         price_ago = history[0][1]
         momentum = (mid_price - price_ago) / price_ago if price_ago > 0 else 0
         
-        # 每 20 个 Tick 打印心跳 (避免刷屏)
-        if self._tick_counts[ts_id] % 20 == 0:
+        # 每 5 个 Tick 打印心跳 (避免刷屏)
+        if self._tick_counts[ts_id] % 5 == 0:
             active_count = len(trades)
             self.log.info(f"[{ts_id}] #{self._tick_counts[ts_id]} | 价:{mid_price:.2f} | 动量:{momentum*10000:.1f} bps | 持仓单元:{active_count}")
 
@@ -268,7 +268,7 @@ if __name__ == "__main__":
     account_id = os.environ.get("MINIQMT_ACCOUNT_ID", "211800003313")
     
     # --- 配置多标的列表 ---
-    TARGET_SYMBOLS = ["601808.SSE", "601005.SSE"] 
+    TARGET_SYMBOLS = ["601005.SSE", "000547.SZSE"] 
     instrument_ids = [InstrumentId.from_str(s) for s in TARGET_SYMBOLS]
 
     # 配置节点

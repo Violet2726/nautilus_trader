@@ -1,24 +1,6 @@
 from typing import Any
 
-
-try:
-    from xtquant import xtdata
-except ModuleNotFoundError:  # pragma: no cover
-
-    class _XtDataStub:
-        def get_instrument_detail(self, *args: Any, **kwargs: Any) -> Any:
-            raise ModuleNotFoundError("xtquant is required for ThinkTrader contract data")
-
-        def get_instrument_type(self, *args: Any, **kwargs: Any) -> Any:
-            raise ModuleNotFoundError("xtquant is required for ThinkTrader contract data")
-
-        def get_stock_list_in_sector(self, *args: Any, **kwargs: Any) -> Any:
-            raise ModuleNotFoundError("xtquant is required for ThinkTrader contract data")
-
-        def get_trading_dates(self, *args: Any, **kwargs: Any) -> Any:
-            raise ModuleNotFoundError("xtquant is required for ThinkTrader contract data")
-
-    xtdata = _XtDataStub()
+from xtquant import xtdata
 
 from nautilus_trader.adapters.thinktrader.client.common import BaseMixin
 

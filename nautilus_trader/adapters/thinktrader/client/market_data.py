@@ -2,42 +2,7 @@ import asyncio
 import functools
 from typing import Any
 
-
-try:
-    from xtquant import xtdata
-except ModuleNotFoundError:  # pragma: no cover
-
-    class _XtDataStub:
-        data_dir: str = ""
-
-        def subscribe_quote(self, *args: Any, **kwargs: Any) -> int:
-            raise ModuleNotFoundError("xtquant is required for ThinkTrader market data")
-
-        def subscribe_quote2(self, *args: Any, **kwargs: Any) -> int:
-            raise ModuleNotFoundError("xtquant is required for ThinkTrader market data")
-
-        def unsubscribe_quote(self, *args: Any, **kwargs: Any) -> None:
-            raise ModuleNotFoundError("xtquant is required for ThinkTrader market data")
-
-        def subscribe_whole_quote(self, *args: Any, **kwargs: Any) -> int:
-            raise ModuleNotFoundError("xtquant is required for ThinkTrader market data")
-
-        def get_market_data(self, *args: Any, **kwargs: Any) -> Any:
-            raise ModuleNotFoundError("xtquant is required for ThinkTrader market data")
-
-        def get_full_tick(self, *args: Any, **kwargs: Any) -> Any:
-            raise ModuleNotFoundError("xtquant is required for ThinkTrader market data")
-
-        def download_history_data2(self, *args: Any, **kwargs: Any) -> None:
-            raise ModuleNotFoundError("xtquant is required for ThinkTrader market data")
-
-        def get_financial_data(self, *args: Any, **kwargs: Any) -> Any:
-            raise ModuleNotFoundError("xtquant is required for ThinkTrader market data")
-
-        def get_instrument_detail(self, *args: Any, **kwargs: Any) -> Any:
-            raise ModuleNotFoundError("xtquant is required for ThinkTrader market data")
-
-    xtdata = _XtDataStub()
+from xtquant import xtdata
 
 from nautilus_trader.adapters.thinktrader.client.common import BaseMixin
 from nautilus_trader.adapters.thinktrader.client.common import Subscription

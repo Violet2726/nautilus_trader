@@ -1,13 +1,5 @@
-try:
-    from xtquant import xttrader as xttrader
-    from xtquant.xttype import StockAccount
-except ModuleNotFoundError:  # pragma: no cover
-    xttrader = None
-
-    class StockAccount:  # type: ignore[no-redef]
-        def __init__(self, *args, **kwargs):
-            raise ModuleNotFoundError("xtquant is required for ThinkTrader trader connection")
-
+from xtquant import xttrader as xttrader
+from xtquant.xttype import StockAccount
 
 from nautilus_trader.adapters.thinktrader.client.common import BaseMixin
 from nautilus_trader.common.enums import LogColor

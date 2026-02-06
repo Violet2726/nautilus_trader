@@ -1,14 +1,7 @@
 import asyncio
 from typing import Any
 
-
-try:
-    from xtquant.xttrader import XtQuantTraderCallback
-except ModuleNotFoundError:  # pragma: no cover
-
-    class XtQuantTraderCallback:  # type: ignore[no-redef]
-        pass
-
+from xtquant.xttrader import XtQuantTraderCallback
 
 from nautilus_trader.adapters.thinktrader.client.account import ThinkTraderClientAccountMixin
 from nautilus_trader.adapters.thinktrader.client.common import Request

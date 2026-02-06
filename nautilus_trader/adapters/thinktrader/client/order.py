@@ -1,13 +1,4 @@
-try:
-    from xtquant import xtconstant as xtconstant
-except ModuleNotFoundError:  # pragma: no cover
-
-    class _XtConstantStub:
-        FIX_PRICE = 0
-        SH_MARKET = 0
-        SZ_MARKET = 1
-
-    xtconstant = _XtConstantStub()
+from xtquant import xtconstant as xtconstant
 
 from nautilus_trader.adapters.thinktrader.client.common import BaseMixin
 
