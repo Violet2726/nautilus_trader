@@ -7,10 +7,8 @@
 import os
 import random
 import warnings
-import asyncio
-from typing import Optional
-from decimal import Decimal
 from pathlib import Path
+
 
 # Suppress annoying warnings
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -25,14 +23,15 @@ from nautilus_trader.adapters.thinktrader.factories import ThinkTraderLiveExecCl
 from nautilus_trader.config import LiveDataEngineConfig
 from nautilus_trader.config import LoggingConfig
 from nautilus_trader.config import RoutingConfig
-from nautilus_trader.config import TradingNodeConfig
 from nautilus_trader.config import StrategyConfig
+from nautilus_trader.config import TradingNodeConfig
 from nautilus_trader.live.node import TradingNode
+from nautilus_trader.model.data import QuoteTick
+from nautilus_trader.model.enums import OrderSide
+from nautilus_trader.model.enums import TimeInForce
 from nautilus_trader.model.identifiers import InstrumentId
 from nautilus_trader.model.identifiers import TraderId
-from nautilus_trader.model.data import QuoteTick
-from nautilus_trader.model.objects import Price, Quantity
-from nautilus_trader.model.enums import OrderSide, OrderType, TimeInForce
+from nautilus_trader.model.objects import Price
 from nautilus_trader.trading.strategy import Strategy
 
 
@@ -75,7 +74,7 @@ class BuyAndQueryStrategy(Strategy):
         if price.as_double() == 0.0:
              # Fallback to bid ?? or just waitt
              return
-        
+
         instrument = self.cache.instrument(self.instrument_id)
         if instrument is None:
             self.log.error(f"Could not find instrument for {self.instrument_id}")
@@ -89,12 +88,12 @@ class BuyAndQueryStrategy(Strategy):
              # This is a bit manual, but safe for this test.
              # Ideally: price = price.round(instrument.info.price_precision)
              pass
-        
+
         # Simplified: Just formatting string to 2 decimals which is standard for CN stocks
         price = Price.from_str(f"{price.as_double():.2f}")
 
         qty = instrument.make_qty(100)
-        
+
 
 
         # Add slippage to ensure fill in simulation
@@ -102,7 +101,7 @@ class BuyAndQueryStrategy(Strategy):
         price = Price.from_str(f"{raw_price:.2f}")
 
         self.log.info(f"Received Quote: {tick}. Placing BUY LIMIT Order for 100 shares at {price} (+0.02 slippage)...")
-        
+
         order = self.order_factory.limit(
             instrument_id=self.instrument_id,
             order_side=OrderSide.BUY,
@@ -116,7 +115,7 @@ class BuyAndQueryStrategy(Strategy):
     def on_order_filled(self, event):
         self.log.info(f"Order Filled: {event}")
         self._print_position()
-        
+
         if event.order_side == OrderSide.BUY:
             self.log.info("BUY Order Filled. Waiting 3s to place SELL order...")
             from datetime import timedelta
@@ -228,18 +227,18 @@ config_node = TradingNodeConfig(
 
 if __name__ == "__main__":
     node = TradingNode(config=config_node)
-    
+
     strategy_config = BuyAndQueryStrategyConfig(
         instrument_id=instrument_id,
     )
     strategy = BuyAndQueryStrategy(config=strategy_config)
-    
+
     node.trader.add_strategy(strategy)
-    
+
     node.add_data_client_factory(TT, ThinkTraderLiveDataClientFactory)
     node.add_exec_client_factory(TT, ThinkTraderLiveExecClientFactory)
     node.build()
-    
+
     try:
         node.run()
     except KeyboardInterrupt:

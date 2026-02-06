@@ -13,6 +13,7 @@ from nautilus_trader.common.component import TestClock
 from nautilus_trader.model.data import QuoteTick
 from nautilus_trader.model.identifiers import InstrumentId
 
+
 # Load .env
 env_path = Path(__file__).parents[3] / ".env"
 load_dotenv(dotenv_path=env_path)
@@ -76,12 +77,12 @@ async def main():
     thinktrader_client._clock = TestClock()
     thinktrader_client._cache = Mock()
     thinktrader_client._msgbus = Mock()
-    
+
     thinktrader_client.configure_xtdata_data_dir(miniqmt_path)
 
     instrument_id = _live_instrument_id()
     stock_code = _live_stock_code()
-    
+
     csv_path = (Path(__file__).parent / "thinktrader_ticks.csv").resolve()
     print(f"CSV文件路径: {csv_path}")
 
@@ -89,24 +90,24 @@ async def main():
     ctx = {"writer": None, "count": 0}
 
     f = csv_path.open("w", newline="", encoding="utf-8")
-    
+
     try:
         def on_data(data):
             if not isinstance(data, QuoteTick):
                 return
 
             row = QuoteTick.to_dict(data)
-            
+
             if ctx["writer"] is None:
                 ctx["writer"] = csv.DictWriter(f, fieldnames=list(row.keys()))
                 ctx["writer"].writeheader()
-            
+
             ctx["writer"].writerow(row)
             f.flush()
-            
+
             ctx["count"] += 1
             print(f"写入第 {ctx['count']} 条数据...")
-            
+
             if ctx["count"] >= 10 and not wrote_future.done():
                 loop.call_soon_threadsafe(wrote_future.set_result, ctx["count"])
 

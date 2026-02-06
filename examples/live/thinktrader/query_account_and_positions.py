@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import asyncio
 import os
 import secrets
 import warnings
 from datetime import timedelta
 from pathlib import Path
-import asyncio
+
 import pandas as pd
 
 from nautilus_trader.adapters.thinktrader.common import TT
@@ -71,7 +72,7 @@ class QueryAccountAndPositionsStrategy(Strategy):
             return
 
         self.log.info(f"启动账户与持仓查询示例，account_id={self._account_id}")
-        
+
         self.clock.set_time_alert(
             name="poll_account_positions",
             alert_time=self.clock.utc_now(),
@@ -113,7 +114,7 @@ class QueryAccountAndPositionsStrategy(Strategy):
 
         print("\n" + "=" * 50)
         print(f"查询时间: {self.clock.utc_now()}")
-        
+
         account = self.cache.account(self._account_id)
         if account is None:
             self.log.warning(f"缓存中暂未找到账户对象: {self._account_id}")
@@ -150,7 +151,7 @@ class QueryAccountAndPositionsStrategy(Strategy):
                 try:
                     unrealized_pnl = 0.0
                     market_val = 0.0
-                    
+
                     # Safer extraction
                     # Check if 'details' exists
                     if hasattr(pos, "details") and pos.details:
@@ -158,7 +159,7 @@ class QueryAccountAndPositionsStrategy(Strategy):
                         # We try a few or just rely on what we see in debug output
                         raw_float_pnl = pos.details.get("float_pnl") or pos.details.get("floating_pnl")
                         raw_mkt_val = pos.details.get("mkt_val") or pos.details.get("market_value")
-                        
+
                         try:
                             if raw_float_pnl is not None:
                                 unrealized_pnl = float(raw_float_pnl)
@@ -179,7 +180,7 @@ class QueryAccountAndPositionsStrategy(Strategy):
                     pos_data.append(p)
                 except Exception as e:
                     print(f"Error processing position {pos}: {e}")
-            
+
             if pos_data:
                 df_pos = pd.DataFrame(pos_data)
                 print(df_pos.to_string(index=False))

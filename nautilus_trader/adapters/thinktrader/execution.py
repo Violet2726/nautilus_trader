@@ -9,6 +9,7 @@ from nautilus_trader.adapters.thinktrader.common import TT_VENUE
 from nautilus_trader.adapters.thinktrader.config import ThinkTraderExecClientConfig
 from nautilus_trader.adapters.thinktrader.parsing.execution import NAUTILUS_SIDE_TO_XT
 from nautilus_trader.adapters.thinktrader.parsing.execution import ORDER_STATUS_MAP
+from nautilus_trader.adapters.thinktrader.parsing.execution import xtconstant
 from nautilus_trader.adapters.thinktrader.parsing.instruments import instrument_id_to_stock_code
 from nautilus_trader.adapters.thinktrader.parsing.instruments import stock_code_to_instrument_id
 from nautilus_trader.common.providers import InstrumentProvider
@@ -238,18 +239,21 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
             else:
                 side = PositionSide.FLAT
 
-            reports.append(
-                PositionStatusReport(
-                    account_id=self.account_id,
-                    instrument_id=instrument_id,
-                    position_side=side,
-                    quantity=Quantity(abs(pos.volume), precision=size_precision),
-                    report_id=UUID4(),
-                    ts_last=now,
-                    ts_init=now,
-                    avg_px_open=Decimal(str(pos.avg_price)),
-                ),
+            report = PositionStatusReport(
+                account_id=self.account_id,
+                instrument_id=instrument_id,
+                position_side=side,
+                quantity=instrument.make_qty(abs(float(pos.volume)))
+                if instrument
+                else Quantity.from_int(int(pos.volume)),
+                report_id=UUID4(),
+                ts_last=now,
+                ts_init=now,
+                avg_px_open=instrument.make_price(float(getattr(pos, "avg_price", 0.0) or 0.0))
+                if instrument
+                else Price.from_str(f"{(getattr(pos, 'avg_price', 0.0) or 0.0):.8f}"),
             )
+            reports.append(report)
 
         return reports
 
@@ -328,7 +332,12 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
             )
             return
 
-        price = float(order.price) if order.price else 0
+        if order.order_type == OrderType.LIMIT:
+            price = float(order.price)
+            price_type = xtconstant.FIX_PRICE
+        else:
+            price = 0.0
+            price_type = xtconstant.LATEST_PRICE
 
         if self._config.use_async_order:
             self._submitted_orders[order.client_order_id] = order
@@ -337,6 +346,7 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
                 order_type=order_type,
                 volume=int(order.quantity),
                 price=price,
+                price_type=price_type,
                 order_remark=str(order.client_order_id),
             )
 
@@ -365,6 +375,7 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
             order_type=order_type,
             volume=int(order.quantity),
             price=price,
+            price_type=price_type,
             order_remark=str(order.client_order_id),
         )
 
@@ -831,7 +842,7 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
             report_id=UUID4(),
             ts_last=self._clock.timestamp_ns(),
             ts_init=self._clock.timestamp_ns(),
-            avg_px_open=Decimal(str(getattr(position, "avg_price", 0.0) or 0.0)),
+            avg_px_open=Price.from_str(str(getattr(position, "avg_price", 0.0) or 0.0)),
         )
         self._send_position_status_report(report)
 
@@ -859,7 +870,7 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
             report_id=UUID4(),
             ts_last=self._clock.timestamp_ns(),
             ts_init=self._clock.timestamp_ns(),
-            avg_px_open=Decimal(str(getattr(position, "avg_price", 0.0) or 0.0)),
+            avg_px_open=Price.from_str(str(getattr(position, "avg_price", 0.0) or 0.0)),
         )
         self._send_position_status_report(report)
 
@@ -988,6 +999,8 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
         client_order_id_value = getattr(xt_order, "order_remark", None)
         client_order_id = ClientOrderId(client_order_id_value) if client_order_id_value else None
 
+        instrument = self._cache.instrument(instrument_id)
+        
         return OrderStatusReport(
             account_id=self.account_id,
             instrument_id=instrument_id,
@@ -996,17 +1009,20 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
             order_type=order_type,
             time_in_force=TimeInForce.DAY,
             order_status=mapped_status,
-            quantity=Quantity.from_int(int(getattr(xt_order, "order_volume", 0))),
-            filled_qty=Quantity.from_int(int(getattr(xt_order, "traded_volume", 0))),
-            avg_px=Decimal(str(getattr(xt_order, "traded_price", 0.0))),
+            quantity=instrument.make_qty(float(getattr(xt_order, "order_volume", 0) or 0))
+            if instrument else Quantity.from_int(int(getattr(xt_order, "order_volume", 0) or 0)),
+            filled_qty=instrument.make_qty(float(getattr(xt_order, "traded_volume", 0) or 0))
+            if instrument else Quantity.from_int(int(getattr(xt_order, "traded_volume", 0) or 0)),
+            avg_px=instrument.make_price(float(getattr(xt_order, "traded_price", 0.0) or 0.0))
+            if instrument else Price.from_str(f"{(getattr(xt_order, 'traded_price', 0.0) or 0.0):.8f}"),
             report_id=UUID4(),
             ts_accepted=ts_last,
             ts_last=ts_last,
             ts_init=ts_init,
             client_order_id=client_order_id,
-            price=Price.from_str(str(getattr(xt_order, "price", 0.0)))
-            if getattr(xt_order, "price", None)
-            else None,
+            price=instrument.make_price(float(getattr(xt_order, "price", 0.0) or 0.0))
+            if instrument and getattr(xt_order, "price", None) else
+            (Price.from_str(f"{(getattr(xt_order, 'price', 0.0) or 0.0):.8f}") if getattr(xt_order, "price", None) else None),
         )
 
     def _try_get_order_side(self, obj: Any) -> OrderSide | None:
@@ -1061,15 +1077,19 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
 
         from nautilus_trader.model.identifiers import TradeId
 
+        instrument = self._cache.instrument(instrument_id)
+
         return FillReport(
             account_id=self.account_id,
             instrument_id=instrument_id,
             venue_order_id=VenueOrderId(venue_order_id_value),
             trade_id=TradeId(str(getattr(xt_trade, "traded_id", ""))),
             order_side=side,
-            last_qty=Quantity.from_int(int(getattr(xt_trade, "traded_volume", 0))),
-            last_px=Price.from_str(str(getattr(xt_trade, "traded_price", 0.0))),
-            commission=Money(float(commission_value), Currency.from_str("CNY")),
+            last_qty=instrument.make_qty(float(getattr(xt_trade, "traded_volume", 0) or 0))
+            if instrument else Quantity.from_int(int(getattr(xt_trade, "traded_volume", 0) or 0)),
+            last_px=instrument.make_price(float(getattr(xt_trade, "traded_price", 0.0) or 0.0))
+            if instrument else Price.from_str(f"{(getattr(xt_trade, 'traded_price', 0.0) or 0.0):.8f}"),
+            commission=Money(float(commission_value or 0.0), Currency.from_str("CNY")),
             liquidity_side=LiquiditySide.NO_LIQUIDITY_SIDE,
             report_id=UUID4(),
             ts_event=ts_event,
