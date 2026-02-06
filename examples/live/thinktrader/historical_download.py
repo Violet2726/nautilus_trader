@@ -1,352 +1,361 @@
-#!/usr/bin/env python3
+"""
+历史数据批量下载工具
+
+功能：
+1. 批量下载多只股票的历史K线数据
+2. 批量下载历史Tick数据
+3. 自动保存为CSV文件
+
+使用方法：
+python historical_download.py
+"""
 
 import asyncio
-import contextlib
 import datetime
-import json
 import os
-import secrets
 from pathlib import Path
-from typing import Any
 
-import numpy as np
 import pandas as pd
+from dotenv import load_dotenv
 
-from nautilus_trader.adapters.thinktrader.client import ThinkTraderClient
-from nautilus_trader.adapters.thinktrader.config import ThinkTraderInstrumentProviderConfig
-from nautilus_trader.adapters.thinktrader.parsing.data import bar_spec_to_period
-from nautilus_trader.adapters.thinktrader.parsing.data import ns_to_xt_time
-from nautilus_trader.adapters.thinktrader.parsing.data import parse_kline_to_bar
-from nautilus_trader.adapters.thinktrader.parsing.data import parse_tick_to_quote_tick
-from nautilus_trader.adapters.thinktrader.parsing.data import parse_tick_to_trade_tick
-from nautilus_trader.adapters.thinktrader.parsing.instruments import instrument_id_to_stock_code
-from nautilus_trader.adapters.thinktrader.providers import ThinkTraderInstrumentProvider
-from nautilus_trader.common.component import Logger
-from nautilus_trader.model.data import Bar
-from nautilus_trader.model.data import BarType
-from nautilus_trader.model.data import QuoteTick
-from nautilus_trader.model.data import TradeTick
-from nautilus_trader.model.identifiers import InstrumentId
+from nautilus_trader.adapters.thinktrader.historical.client import HistoricThinkTraderClient
+
+# 加载环境变量（可选）
+load_dotenv()
+
+# ============================================================================
+# 配置参数
+# ============================================================================
+
+# MiniQMT路径
+MINIQMT_PATH = os.getenv(
+    "MINIQMT_PATH",
+    r"D:\迅投极速策略交易系统交易终端 华福证券QMT仿真\userdata_mini",
+)
+
+# 输出目录
+OUTPUT_DIR = Path(__file__).parent / "outputs"
+OUTPUT_DIR.mkdir(exist_ok=True)
+
+# 要下载的股票列表
+TARGET_SYMBOLS = [
+    "601808.SSE",  # 中国海油
+    "601005.SSE",  # 重庆钢铁
+    "000001.SZSE", # 平安银行
+]
+
+# K线类型
+BAR_TYPES = [
+    "1-MINUTE",   # 1分钟
+    "5-MINUTE",   # 5分钟
+    "15-MINUTE",  # 15分钟
+    "1-HOUR",     # 1小时
+    "1-DAY",      # 日K
+]
+
+# 时间范围
+END_TIME = datetime.datetime(2026, 2, 6, 15, 0, 0)  # 结束时间
+BAR_DURATION = "60 D"  # K线数据：往前60天
+TICK_DURATION_HOURS = 2  # Tick数据：往前2小时
+
+# ============================================================================
+# 工具函数
+# ============================================================================
 
 
-CHINA_TZ = datetime.timezone(datetime.timedelta(hours=8))
+def bars_to_dataframe(bars) -> pd.DataFrame:
+    """将Nautilus Bar对象转换为DataFrame"""
+    if not bars:
+        return pd.DataFrame()
+
+    data = []
+    for bar in bars:
+        data.append(
+            {
+                "symbol": str(bar.bar_type.instrument_id),
+                "bar_type": str(bar.bar_type.spec),
+                "timestamp": pd.Timestamp(bar.ts_event, unit="ns"),
+                "open": bar.open.as_double(),
+                "high": bar.high.as_double(),
+                "low": bar.low.as_double(),
+                "close": bar.close.as_double(),
+                "volume": bar.volume.as_double(),
+            },
+        )
+
+    df = pd.DataFrame(data)
+    df = df.sort_values(["symbol", "bar_type", "timestamp"])
+    return df
 
 
-def _load_dotenv() -> None:
+def ticks_to_dataframe(ticks) -> pd.DataFrame:
+    """将Nautilus QuoteTick对象转换为DataFrame"""
+    if not ticks:
+        return pd.DataFrame()
+
+    data = []
+    for tick in ticks:
+        data.append(
+            {
+                "symbol": str(tick.instrument_id),
+                "timestamp": pd.Timestamp(tick.ts_event, unit="ns"),
+                "bid": tick.bid_price.as_double(),
+                "ask": tick.ask_price.as_double(),
+                "bid_size": tick.bid_size.as_double(),
+                "ask_size": tick.ask_size.as_double(),
+            },
+        )
+
+    df = pd.DataFrame(data)
+    df = df.sort_values(["symbol", "timestamp"])
+    return df
+
+
+# ============================================================================
+# 下载任务
+# ============================================================================
+
+
+async def download_bars(client: HistoricThinkTraderClient):
+    """下载历史K线数据"""
+    print("=" * 80)
+    print("任务1: 下载历史K线数据")
+    print("=" * 80)
+    print(f"股票列表: {TARGET_SYMBOLS}")
+    print(f"K线类型: {BAR_TYPES}")
+    print(f"结束时间: {END_TIME}")
+    print(f"时间跨度: {BAR_DURATION}")
+    print()
+
     try:
-        from dotenv import load_dotenv
-    except ModuleNotFoundError:
-        return
+        bars = await client.request_bars(
+            bar_specifications=BAR_TYPES,
+            instrument_ids=TARGET_SYMBOLS,
+            end_date_time=END_TIME,
+            duration=BAR_DURATION,
+            tz_name="Asia/Shanghai",
+            timeout=180,  # 3分钟超时
+        )
 
-    for parent in Path(__file__).resolve().parents:
-        env_path = parent / ".env"
-        if env_path.is_file():
-            load_dotenv(dotenv_path=env_path, override=True)
-            return
+        print(f"✓ 下载成功: 共 {len(bars)} 根K线")
+        print()
 
+        # 转换为DataFrame
+        df = bars_to_dataframe(bars)
 
-def _coerce_xt_time(time_val: Any) -> int | None:
-    if isinstance(time_val, pd.Timestamp):
-        return int(time_val.strftime("%Y%m%d%H%M%S"))
-    try:
-        return int(time_val)
-    except (TypeError, ValueError):
+        # 按K线类型分组保存
+        for bar_type in BAR_TYPES:
+            df_type = df[df["bar_type"] == bar_type]
+            if not df_type.empty:
+                # 生成文件名
+                bar_type_safe = bar_type.replace("-", "_").lower()
+                filename = OUTPUT_DIR / f"bars_{bar_type_safe}.csv"
+
+                # 保存
+                df_type.to_csv(filename, index=False)
+                print(f"✓ 已保存 {bar_type}: {filename} ({len(df_type)} 行)")
+
+        # 保存汇总文件
+        summary_file = OUTPUT_DIR / "bars_all.csv"
+        df.to_csv(summary_file, index=False)
+        print(f"✓ 已保存汇总文件: {summary_file} ({len(df)} 行)")
+        print()
+
+        # 数据统计
+        print("数据统计:")
+        print(df.groupby(["symbol", "bar_type"]).size())
+        print()
+
+        return df
+
+    except Exception as e:
+        print(f"✗ 下载失败: {e}")
+        import traceback
+
+        traceback.print_exc()
         return None
 
 
-def _parse_historical_bars(
-    bar_type: BarType,
-    stock_code: str,
-    data: Any,
-    ts_init: int,
-) -> list[Bar]:
-    if not isinstance(data, dict):
-        return []
+async def download_ticks(client: HistoricThinkTraderClient):
+    """下载历史Tick数据"""
+    print("=" * 80)
+    print("任务2: 下载历史Tick数据")
+    print("=" * 80)
 
-    series_list: dict[str, Any] = {}
-    for field in ("open", "high", "low", "close", "volume"):
-        field_df = data.get(field)
-        if field_df is None or getattr(field_df, "empty", True):
-            continue
-        if stock_code not in field_df.index:
-            continue
-        series = field_df.loc[stock_code]
-        series.name = field
-        series_list[field] = series
+    # 计算时间范围（往前N小时）
+    end_time = END_TIME
+    start_time = end_time - datetime.timedelta(hours=TICK_DURATION_HOURS)
 
-    if not series_list:
-        return []
+    print(f"股票列表: {TARGET_SYMBOLS}")
+    print(f"开始时间: {start_time}")
+    print(f"结束时间: {end_time}")
+    print()
 
-    df = pd.DataFrame(series_list)
-    bars: list[Bar] = []
+    all_ticks = []
 
-    for time_val, row in df.iterrows():
-        xt_time = _coerce_xt_time(time_val)
-        if xt_time is None:
-            continue
+    # 逐个下载（避免数据量过大）
+    for symbol in TARGET_SYMBOLS:
+        try:
+            print(f"正在下载 {symbol} 的Tick数据...")
 
-        bar_data = {
-            "time": xt_time,
-            "open": row.get("open", 0.0),
-            "high": row.get("high", 0.0),
-            "low": row.get("low", 0.0),
-            "close": row.get("close", 0.0),
-            "volume": row.get("volume", 0),
-        }
+            ticks = await client.request_ticks(
+                tick_type="BID_ASK",
+                instrument_ids=[symbol],
+                start_date_time=start_time,
+                end_date_time=end_time,
+                tz_name="Asia/Shanghai",
+                timeout=120,
+                limit=0,  # 不限制
+            )
 
-        with contextlib.suppress(Exception):
-            bars.append(parse_kline_to_bar(bar_type.instrument_id, bar_type, bar_data, ts_init))
+            print(f"✓ {symbol}: 下载了 {len(ticks)} 个Tick")
+            all_ticks.extend(ticks)
 
-    return bars
+        except Exception as e:
+            print(f"✗ {symbol}: 下载失败 - {e}")
 
+    print()
+    print(f"✓ 总计下载: {len(all_ticks)} 个Tick")
+    print()
 
-def _row_to_dict(row: Any) -> dict[str, Any] | None:
-    if hasattr(row, "dtype") and getattr(row.dtype, "names", None):
-        row_dict: dict[str, Any] = {}
-        for k in row.dtype.names:
-            val = row[k]
-            row_dict[k] = val.item() if hasattr(val, "item") else val
-        return row_dict
+    if all_ticks:
+        # 转换为DataFrame
+        df = ticks_to_dataframe(all_ticks)
 
-    try:
-        return dict(row)
-    except (TypeError, ValueError):
-        return None
+        # 保存为CSV
+        tick_file = OUTPUT_DIR / "ticks_quote.csv"
+        df.to_csv(tick_file, index=False)
+        print(f"✓ 已保存: {tick_file} ({len(df)} 行)")
+        print()
 
+        # 数据统计
+        print("数据统计:")
+        print(df.groupby("symbol").size())
+        print()
 
-def _parse_historical_ticks(
-    instrument_id: InstrumentId,
-    stock_code: str,
-    data: Any,
-    ts_init: int,
-) -> tuple[list[QuoteTick], list[TradeTick]]:
-    if not isinstance(data, dict):
-        return ([], [])
+        # 显示样例数据
+        print("样例数据（前5行）:")
+        print(df.head())
+        print()
 
-    arr = data.get(stock_code)
-    if not isinstance(arr, np.ndarray):
-        return ([], [])
-
-    quotes: list[QuoteTick] = []
-    trades: list[TradeTick] = []
-
-    for row in arr:
-        row_dict = _row_to_dict(row)
-        if row_dict is None:
-            continue
-
-        with contextlib.suppress(Exception):
-            quotes.append(parse_tick_to_quote_tick(instrument_id, row_dict, ts_init))
-
-        with contextlib.suppress(Exception):
-            trades.append(parse_tick_to_trade_tick(instrument_id, row_dict, ts_init))
-
-    return (quotes, trades)
-
-
-def _dict_for_csv(value: Any) -> Any:
-    if isinstance(value, (dict, list, tuple)):
-        return json.dumps(value, ensure_ascii=False, default=str)
-    return value
-
-
-def _write_csv(path: Path, rows: list[dict[str, Any]], *, columns: list[str] | None = None) -> None:
-    if not rows:
-        pd.DataFrame(columns=columns or []).to_csv(path, index=False, encoding="utf-8-sig")
-        return
-
-    normalized_rows: list[dict[str, Any]] = []
-    for row in rows:
-        normalized_rows.append({k: _dict_for_csv(v) for k, v in row.items()})
-
-    pd.DataFrame.from_records(normalized_rows, columns=columns).to_csv(path, index=False, encoding="utf-8-sig")
-
-
-def _parse_dt_env(name: str) -> datetime.datetime | None:
-    raw = os.environ.get(name, "").strip()
-    if not raw:
-        return None
-
-    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d"):
-        with contextlib.suppress(ValueError):
-            dt = datetime.datetime.strptime(raw, fmt)
-            if fmt == "%Y-%m-%d":
-                dt = dt.replace(hour=9, minute=30, second=0)
-            return dt.replace(tzinfo=CHINA_TZ)
-
-    with contextlib.suppress(ValueError):
-        dt = datetime.datetime.fromisoformat(raw)
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=CHINA_TZ)
-        else:
-            dt = dt.astimezone(CHINA_TZ)
-        return dt
+        return df
 
     return None
 
 
-async def main() -> None:
-    _load_dotenv()
+async def download_instruments(client: HistoricThinkTraderClient):
+    """下载合约信息"""
+    print("=" * 80)
+    print("任务0: 加载合约信息")
+    print("=" * 80)
 
-    miniqmt_path = os.environ.get("MINIQMT_PATH", r"D:\迅投极速策略交易系统交易终端 华福证券QMT仿真\userdata_mini")
-    session_id = int(os.environ.get("MINIQMT_SESSION_ID", "0") or "0") or (100000 + secrets.randbelow(900000))
-
-    instrument_id = InstrumentId.from_str(
-        os.environ.get("XT_LIVE_INSTRUMENT_ID", "000001.SZSE"),
-    )
-    output_dir = Path(os.environ.get("XT_CSV_DIR", "./csv"))
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    client = ThinkTraderClient(
-        loop=asyncio.get_running_loop(),
-        logger=Logger("ThinkTraderHistoricalDownload"),
-        miniqmt_path=miniqmt_path,
-        session_id=session_id,
-        account_id=os.environ.get("MINIQMT_ACCOUNT_ID", ""),
-    )
-    client.configure_xtdata_data_dir(miniqmt_path)
-
-    instrument_provider = ThinkTraderInstrumentProvider(
-        client=client,
-        config=ThinkTraderInstrumentProviderConfig(load_all=False, load_ids=frozenset([instrument_id])),
-    )
-    await instrument_provider.initialize()
-    instruments = instrument_provider.list_all()
-
-    stock_code = instrument_id_to_stock_code(instrument_id)
-
-    bar_spec_str = os.environ.get("XT_BAR_SPEC", "1-MINUTE-LAST").strip() or "1-MINUTE-LAST"
-    bar_type = BarType.from_str(f"{instrument_id}-{bar_spec_str}-EXTERNAL")
-    period = bar_spec_to_period(bar_type.spec)
-
-    now_cn = datetime.datetime.now(tz=CHINA_TZ)
-    start_dt = _parse_dt_env("XT_BARS_START") or (now_cn - datetime.timedelta(days=2))
-    end_dt = _parse_dt_env("XT_BARS_END") or now_cn
-
-    start_ns = int(start_dt.timestamp() * 1_000_000_000)
-    end_ns = int(end_dt.timestamp() * 1_000_000_000)
-
-    await client.download_history_data(
-        stock_list=[stock_code],
-        period=period,
-        start_time=ns_to_xt_time(start_ns),
-        end_time=ns_to_xt_time(end_ns),
-    )
-    raw_bars = await client.get_historical_bars(
-        bar_type=bar_type,
-        stock_code=stock_code,
-        start_ns=start_ns,
-        end_ns=end_ns,
-    )
-    if isinstance(raw_bars, dict):
-        keys = sorted([str(k) for k in raw_bars])
-        print(f"raw_bars.keys={keys}")
-        for field in ("open", "high", "low", "close", "volume"):
-            obj = raw_bars.get(field)
-            if obj is None:
-                continue
-            shape = getattr(obj, "shape", None)
-            idx = getattr(obj, "index", None)
-            cols = getattr(obj, "columns", None)
-            in_index = bool(idx is not None and stock_code in idx)
-            in_cols = bool(cols is not None and stock_code in cols)
-            print(f"raw_bars[{field}].type={type(obj).__name__} shape={shape} stock_in_index={in_index} stock_in_cols={in_cols}")
-
-    ts_init = int(datetime.datetime.now(tz=datetime.UTC).timestamp() * 1_000_000_000)
-    bars = _parse_historical_bars(bar_type=bar_type, stock_code=stock_code, data=raw_bars, ts_init=ts_init)
-
-    tick_end_dt = _parse_dt_env("XT_TICKS_END") or end_dt
-    tick_start_dt = _parse_dt_env("XT_TICKS_START") or (tick_end_dt - datetime.timedelta(minutes=1))
-    tick_start_ns = int(tick_start_dt.timestamp() * 1_000_000_000)
-    tick_end_ns = int(tick_end_dt.timestamp() * 1_000_000_000)
-
-    await client.download_history_data(
-        stock_list=[stock_code],
-        period="tick",
-        start_time=ns_to_xt_time(tick_start_ns),
-        end_time=ns_to_xt_time(tick_end_ns),
-    )
-    raw_ticks = await client.get_historical_ticks(
-        instrument_id=instrument_id,
-        stock_code=stock_code,
-        start_ns=tick_start_ns,
-        end_ns=tick_end_ns,
-    )
-    quote_ticks, trade_ticks = _parse_historical_ticks(
-        instrument_id=instrument_id,
-        stock_code=stock_code,
-        data=raw_ticks,
-        ts_init=ts_init,
-    )
-    if not quote_ticks and not trade_ticks:
-        fallback_start_dt = datetime.datetime(
-            end_dt.year,
-            end_dt.month,
-            end_dt.day,
-            10,
-            0,
-            0,
-            tzinfo=CHINA_TZ,
+    try:
+        instruments = await client.request_instruments(
+            instrument_ids=TARGET_SYMBOLS,
         )
-        fallback_end_dt = fallback_start_dt + datetime.timedelta(minutes=1)
-        fallback_start_ns = int(fallback_start_dt.timestamp() * 1_000_000_000)
-        fallback_end_ns = int(fallback_end_dt.timestamp() * 1_000_000_000)
-        if (fallback_start_ns, fallback_end_ns) != (tick_start_ns, tick_end_ns):
-            await client.download_history_data(
-                stock_list=[stock_code],
-                period="tick",
-                start_time=ns_to_xt_time(fallback_start_ns),
-                end_time=ns_to_xt_time(fallback_end_ns),
-            )
-            fallback_raw_ticks = await client.get_historical_ticks(
-                instrument_id=instrument_id,
-                stock_code=stock_code,
-                start_ns=fallback_start_ns,
-                end_ns=fallback_end_ns,
-            )
-            quote_ticks, trade_ticks = _parse_historical_ticks(
-                instrument_id=instrument_id,
-                stock_code=stock_code,
-                data=fallback_raw_ticks,
-                ts_init=ts_init,
-            )
-            tick_start_dt = fallback_start_dt
-            tick_end_dt = fallback_end_dt
 
-    instrument_rows = [instrument.to_dict(instrument) for instrument in instruments]
-    bar_rows = [bar.to_dict(bar) for bar in bars]
-    trade_tick_rows = [tick.to_dict(tick) for tick in trade_ticks]
-    quote_tick_rows = [tick.to_dict(tick) for tick in quote_ticks]
+        print(f"✓ 加载了 {len(instruments)} 个合约")
+        print()
 
-    _write_csv(
-        output_dir / "instruments.csv",
-        instrument_rows,
-        columns=list(instrument_rows[0].keys()) if instrument_rows else None,
+        # 显示合约信息
+        for inst in instruments:
+            print(f"  {inst.id}:")
+            print(f"    价格精度: {inst.price_precision}")
+            print(f"    数量精度: {inst.size_precision}")
+            print(f"    最小价格变动: {inst.price_increment}")
+            print(f"    交易单位: {inst.lot_size}")
+            print()
+
+        return instruments
+
+    except Exception as e:
+        print(f"✗ 加载失败: {e}")
+        return None
+
+
+# ============================================================================
+# 主程序
+# ============================================================================
+
+
+async def main():
+    """主函数"""
+    print()
+    print("╔" + "=" * 78 + "╗")
+    print("║" + " " * 20 + "ThinkTrader 历史数据下载工具" + " " * 20 + "║")
+    print("╚" + "=" * 78 + "╝")
+    print()
+    print(f"MiniQMT路径: {MINIQMT_PATH}")
+    print(f"输出目录: {OUTPUT_DIR}")
+    print()
+
+    # 检查MiniQMT路径
+    if not Path(MINIQMT_PATH).exists():
+        print(f"✗ 错误: MiniQMT路径不存在: {MINIQMT_PATH}")
+        print("请修改脚本中的 MINIQMT_PATH 配置")
+        return
+
+    # 1. 创建客户端
+    print("正在创建历史数据客户端...")
+    client = HistoricThinkTraderClient(
+        miniqmt_path=MINIQMT_PATH,
+        session_id=999999,  # 使用固定ID
+        log_level="INFO",
     )
-    _write_csv(
-        output_dir / "bars.csv",
-        bar_rows,
-        columns=list(bar_rows[0].keys()) if bar_rows else ["type", "bar_type", "open", "high", "low", "close", "volume", "ts_event", "ts_init"],
-    )
-    _write_csv(
-        output_dir / "trade_ticks.csv",
-        trade_tick_rows,
-        columns=list(trade_tick_rows[0].keys())
-        if trade_tick_rows
-        else ["type", "instrument_id", "price", "size", "aggressor_side", "trade_id", "ts_event", "ts_init"],
-    )
-    _write_csv(
-        output_dir / "quote_ticks.csv",
-        quote_tick_rows,
-        columns=list(quote_tick_rows[0].keys())
-        if quote_tick_rows
-        else ["type", "instrument_id", "bid_price", "ask_price", "bid_size", "ask_size", "ts_event", "ts_init"],
-    )
-    print(f"CSV 输出目录: {output_dir.resolve()}")
-    print(f"instruments={len(instrument_rows)} bars={len(bar_rows)} trade_ticks={len(trade_tick_rows)} quote_ticks={len(quote_tick_rows)}")
-    print(f"instrument_id={instrument_id} stock_code={stock_code} bar_period={period}")
-    print(f"bars_range={start_dt.isoformat()}..{end_dt.isoformat()} ticks_range={tick_start_dt.isoformat()}..{tick_end_dt.isoformat()}")
+    print("✓ 客户端创建成功")
+    print()
+
+    # 2. 加载合约信息
+    await download_instruments(client)
+
+    # 3. 下载K线数据
+    df_bars = await download_bars(client)
+
+    # 4. 下载Tick数据
+    df_ticks = await download_ticks(client)
+
+    # 5. 总结
+    print("=" * 80)
+    print("下载任务完成!")
+    print("=" * 80)
+    print(f"输出目录: {OUTPUT_DIR.absolute()}")
+    print()
+
+    if df_bars is not None:
+        print(f"K线数据文件:")
+        for bar_type in BAR_TYPES:
+            bar_type_safe = bar_type.replace("-", "_").lower()
+            filename = OUTPUT_DIR / f"bars_{bar_type_safe}.csv"
+            if filename.exists():
+                size_kb = filename.stat().st_size / 1024
+                print(f"  - {filename.name} ({size_kb:.1f} KB)")
+        print(f"  - bars_all.csv (汇总)")
+        print()
+
+    if df_ticks is not None:
+        tick_file = OUTPUT_DIR / "ticks_quote.csv"
+        if tick_file.exists():
+            size_kb = tick_file.stat().st_size / 1024
+            print(f"Tick数据文件:")
+            print(f"  - {tick_file.name} ({size_kb:.1f} KB)")
+        print()
+
+    print("提示: 可以使用以下代码读取数据:")
+    print()
+    print("  import pandas as pd")
+    print(f"  df = pd.read_csv(r'{OUTPUT_DIR}\\bars_1_day.csv')")
+    print("  print(df.head())")
+    print()
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print()
+        print("用户中断，退出程序")
+    except Exception as e:
+        print(f"程序异常: {e}")
+        import traceback
+
+        traceback.print_exc()

@@ -10,7 +10,7 @@ import warnings
 from pathlib import Path
 
 
-# Suppress annoying warnings
+# 抑制烦人的警告信息
 warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
@@ -36,6 +36,7 @@ from nautilus_trader.trading.strategy import Strategy
 
 
 def _load_dotenv() -> None:
+    """加载 .env 环境变量文件"""
     try:
         from dotenv import load_dotenv
     except ModuleNotFoundError:
@@ -47,60 +48,66 @@ def _load_dotenv() -> None:
             load_dotenv(dotenv_path=env_path, override=True)
             return
 
-class BuyAndQueryStrategyConfig(StrategyConfig, frozen=True):
+
+class BuyAndSellStrategyConfig(StrategyConfig, frozen=True):
+    """买入卖出策略配置"""
     instrument_id: InstrumentId
 
-class BuyAndQueryStrategy(Strategy):
-    def __init__(self, config: BuyAndQueryStrategyConfig):
+
+class BuyAndSellStrategy(Strategy):
+    """
+    买入卖出测试策略
+    
+    功能：
+    1. 订阅行情
+    2. 收到报价后立即买入100股
+    3. 等待3秒后卖出100股
+    4. 等待5秒后停止策略
+    """
+
+    def __init__(self, config: BuyAndSellStrategyConfig):
         super().__init__(config)
         self.instrument_id = config.instrument_id
         self._has_ordered = False
 
     def on_start(self):
+        """策略启动"""
         self.subscribe_quote_ticks(self.instrument_id)
-        self.log.info(f"Subscribed to {self.instrument_id}, waiting for quote to place order...")
+        self.log.info(f"已订阅 {self.instrument_id}，等待报价以下单...")
 
     def on_stop(self):
+        """策略停止"""
         self.unsubscribe_quote_ticks(self.instrument_id)
-        self.log.info(f"Unsubscribed from {self.instrument_id}")
+        self.log.info(f"已取消订阅 {self.instrument_id}")
 
     def on_quote_tick(self, tick: QuoteTick):
+        """收到报价时的处理"""
         if self._has_ordered:
             return
 
-        # Simple logic: Buy at Ask to fill immediately (Crossing the spread)
-        # Using a Limit order for safety, price = Ask Price
+        # 简单逻辑：以卖一价买入以确保立即成交（跨越买卖价差）
+        # 使用限价单以确保安全，价格 = 卖一价
         price = tick.ask_price
         if price.as_double() == 0.0:
-             # Fallback to bid ?? or just waitt
+             # 价格无效，等待下一个报价
              return
 
         instrument = self.cache.instrument(self.instrument_id)
         if instrument is None:
-            self.log.error(f"Could not find instrument for {self.instrument_id}")
+            self.log.error(f"无法找到合约信息: {self.instrument_id}")
             return
 
-        # Round price to instrument tick size to avoid precision errors
-        price = Price.from_str(str(round(price.as_double(), 2))) # HACK: Hardcoded for stocks, or use helper
-        # Better: use quantize if available, or just re-create price with correct precision?
-        # The instrument might have a tick size of 0.01.
-        if instrument.price_precision:
-             # This is a bit manual, but safe for this test.
-             # Ideally: price = price.round(instrument.info.price_precision)
-             pass
-
-        # Simplified: Just formatting string to 2 decimals which is standard for CN stocks
+        # 将价格舍入到合约的最小变动单位以避免精度错误
+        # 简化处理：格式化为2位小数（中国股票标准）
         price = Price.from_str(f"{price.as_double():.2f}")
 
         qty = instrument.make_qty(100)
 
-
-
-        # Add slippage to ensure fill in simulation
+        # 添加滑点以确保成交（模拟环境）
         raw_price = round(price.as_double() + 0.02, 2)
         price = Price.from_str(f"{raw_price:.2f}")
 
-        self.log.info(f"Received Quote: {tick}. Placing BUY LIMIT Order for 100 shares at {price} (+0.02 slippage)...")
+        self.log.info(f"收到报价: {tick}. 正在提交买入限价单，100股 @ {price}（+0.02滑点）...")
 
         order = self.order_factory.limit(
             instrument_id=self.instrument_id,
@@ -113,11 +120,12 @@ class BuyAndQueryStrategy(Strategy):
         self._has_ordered = True
 
     def on_order_filled(self, event):
-        self.log.info(f"Order Filled: {event}")
+        """订单成交时的处理"""
+        self.log.info(f"订单已成交: {event}")
         self._print_position()
 
         if event.order_side == OrderSide.BUY:
-            self.log.info("BUY Order Filled. Waiting 3s to place SELL order...")
+            self.log.info("买入订单已成交。等待3秒后提交卖出订单...")
             from datetime import timedelta
             self.clock.set_time_alert(
                 name="place_sell_order",
@@ -125,7 +133,7 @@ class BuyAndQueryStrategy(Strategy):
                 callback=lambda e: self._place_sell_order(),
             )
         else:
-            self.log.info("SELL Order Filled. Waiting 5s to stop node...")
+            self.log.info("卖出订单已成交。等待5秒后停止节点...")
             from datetime import timedelta
             self.clock.set_time_alert(
                 name="stop_node",
@@ -134,19 +142,20 @@ class BuyAndQueryStrategy(Strategy):
             )
 
     def _place_sell_order(self):
+        """提交卖出订单"""
         tick = self.cache.quote_tick(self.instrument_id)
         if tick is None or tick.bid_price.as_double() <= 0:
-            self.log.error("Cannot place sell order: No quote or invalid bid price.")
+            self.log.error("无法提交卖出订单：没有报价或买一价无效")
             self.stop()
             return
 
         instrument = self.cache.instrument(self.instrument_id)
-        # Use bid price minus some slippage to ensure fill
+        # 使用买一价减去一些滑点以确保成交
         price_val = round(tick.bid_price.as_double() - 0.02, 2)
         price = Price.from_str(f"{max(price_val, 0.01):.2f}")
         qty = instrument.make_qty(100)
 
-        self.log.info(f"Placing SELL LIMIT Order for 100 shares at {price}...")
+        self.log.info(f"正在提交卖出限价单，100股 @ {price}...")
         order = self.order_factory.limit(
             instrument_id=self.instrument_id,
             order_side=OrderSide.SELL,
@@ -157,32 +166,35 @@ class BuyAndQueryStrategy(Strategy):
         self.submit_order(order)
 
     def _print_position(self):
-        # Use cache to find open positions by instrument_id
+        """打印当前持仓信息"""
         try:
             positions = self.cache.positions_open(instrument_id=self.instrument_id)
             if positions:
                 for position in positions:
-                    self.log.info(f"Current Position for {self.instrument_id}: {position}")
-                    self.log.info(f"  - Quantity: {position.quantity}")
-                    self.log.info(f"  - Avg Px: {position.avg_px_open}")
+                    self.log.info(f"{self.instrument_id} 的当前持仓: {position}")
+                    self.log.info(f"  - 数量: {position.quantity}")
+                    self.log.info(f"  - 平均价格: {position.avg_px_open}")
             else:
-                self.log.info(f"No open positions found in cache for {self.instrument_id}")
+                self.log.info(f"缓存中未找到 {self.instrument_id} 的持仓")
         except Exception as e:
-            self.log.error(f"Error querying position from cache: {e}")
+            self.log.error(f"查询持仓时出错: {e}")
 
     def on_order_rejected(self, event):
-        self.log.error(f"Order REJECTED: {event}")
+        """订单被拒绝时的处理"""
+        self.log.error(f"订单被拒绝: {event}")
         self.stop()
 
     def on_order_canceled(self, event):
-        self.log.warn(f"Order CANCELED: {event}")
+        """订单被撤销时的处理"""
+        self.log.warn(f"订单已撤销: {event}")
         self.stop()
 
-# --- Configuration ---
+
+# --- 配置参数 ---
 _load_dotenv()
 
 miniqmt_path = os.environ.get("MINIQMT_PATH", r"D:\迅投极速策略交易系统交易终端 华福证券QMT仿真\userdata_mini")
-session_id = random.randint(100000, 999999) # Random Session ID
+session_id = random.randint(100000, 999999)  # 随机会话ID
 account_id = os.environ.get("MINIQMT_ACCOUNT_ID", "211800003313")
 account_type = "STOCK"
 ticker_str = "601808.SSE"
@@ -195,7 +207,7 @@ instrument_provider = ThinkTraderInstrumentProviderConfig(
 )
 
 config_node = TradingNodeConfig(
-    trader_id=TraderId("BUY-TESTER-001"),
+    trader_id=TraderId("BUY-SELL-TESTER-001"),
     logging=LoggingConfig(log_level="INFO"),
     data_clients={
         TT: ThinkTraderDataClientConfig(
@@ -217,7 +229,6 @@ config_node = TradingNodeConfig(
     data_engine=LiveDataEngineConfig(
         validate_data_sequence=True,
     ),
-
     timeout_connection=90.0,
     timeout_reconciliation=5.0,
     timeout_portfolio=5.0,
@@ -228,10 +239,10 @@ config_node = TradingNodeConfig(
 if __name__ == "__main__":
     node = TradingNode(config=config_node)
 
-    strategy_config = BuyAndQueryStrategyConfig(
+    strategy_config = BuyAndSellStrategyConfig(
         instrument_id=instrument_id,
     )
-    strategy = BuyAndQueryStrategy(config=strategy_config)
+    strategy = BuyAndSellStrategy(config=strategy_config)
 
     node.trader.add_strategy(strategy)
 
@@ -242,6 +253,6 @@ if __name__ == "__main__":
     try:
         node.run()
     except KeyboardInterrupt:
-        node.kernel.logger.info("Stopped by user")
+        node.kernel.logger.info("用户中断")
     finally:
         node.dispose()
