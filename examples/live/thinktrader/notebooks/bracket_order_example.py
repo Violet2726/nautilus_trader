@@ -16,6 +16,7 @@ from nautilus_trader.config import LiveDataEngineConfig
 from nautilus_trader.config import LoggingConfig
 from nautilus_trader.config import RoutingConfig
 from nautilus_trader.config import TradingNodeConfig
+from nautilus_trader.config import OrderEmulatorConfig
 from nautilus_trader.live.node import TradingNode
 from nautilus_trader.model import BarType
 from nautilus_trader.model import TraderId
@@ -89,7 +90,7 @@ class ThinkTraderBracketStrategy(Strategy):
         order_list: OrderList = self.order_factory.bracket(
             instrument_id=instrument_id,
             order_side=OrderSide.BUY,
-            quantity=instrument.make_qty(1),
+            quantity=instrument.make_qty(100),
             time_in_force=TimeInForce.GTC,
             entry_post_only=False,
             contingency_type=ContingencyType.OCO,
@@ -98,9 +99,10 @@ class ThinkTraderBracketStrategy(Strategy):
             tp_price=tp_price,
             tp_post_only=False,
             entry_order_type=OrderType.MARKET,
-            emulation_trigger=TriggerType.NO_TRIGGER,
+            emulation_trigger=TriggerType.LAST_PRICE,
         )
         self.log.info(f"orderlist : {order_list}")
+        self.submit_order_list(order_list)
 
     def modify_sl(self, instrument_id: InstrumentId) -> None:
         instrument = self.cache.instrument(instrument_id)
@@ -123,8 +125,10 @@ class ThinkTraderBracketStrategy(Strategy):
         list_orders_for_instrument = self.cache.orders(instrument_id=instrument_id)
 
         for order in list_orders_for_instrument:
-            if order.is_open and order.order_type == OrderType.STOP_MARKET:
-                return order
+            # 模拟订单在主订单成交前可能还是 INITIALIZED 状态
+            if order.order_type == OrderType.STOP_MARKET:
+                if order.is_open or order.is_emulated:
+                    return order
 
         self.log.error(
             f"Error : sl not found for instrument {instrument_id}\n list of orders found : {list_orders_for_instrument}",
@@ -139,9 +143,7 @@ session_id = random.randint(100000, 999999) # Random Session ID
 account_id = os.environ.get("MINIQMT_ACCOUNT_ID", "211800003313")
 account_type = os.environ.get("MINIQMT_ACCOUNT_TYPE", "STOCK")
 
-instrument_id_str = (
-    os.environ.get("XT_LIVE_INSTRUMENT_ID", "000547.SZSE")
-)
+instrument_id_str = "601808.SSE"
 instrument_id = InstrumentId.from_str(instrument_id_str)
 
 instrument_provider = ThinkTraderInstrumentProviderConfig(
@@ -186,9 +188,10 @@ config_node = TradingNodeConfig(
         validate_data_sequence=True,
         time_bars_build_with_no_updates=False,
     ),
+    emulator=OrderEmulatorConfig(),
 )
 
-strat_config = ThinkTraderBracketConfig(tradable_instrument_id=instrument_id_str)
+strat_config = ThinkTraderBracketConfig(tradable_instrument_id=str(instrument_id))
 strategy = ThinkTraderBracketStrategy(config=strat_config)
 
 node = TradingNode(config=config_node)

@@ -19,6 +19,7 @@ class TTPosition(NamedTuple):
     available_volume: int
     avg_price: float
     market_value: float
+    float_pnl: float
 
 
 class TTOrder(NamedTuple):

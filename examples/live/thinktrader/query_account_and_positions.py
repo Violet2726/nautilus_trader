@@ -141,32 +141,28 @@ class QueryAccountAndPositionsStrategy(Strategy):
             print(f"【账户持仓】 共 {len(positions)} 条")
             pos_data = []
             for i, pos in enumerate(positions):
-                if i == 0:
-                    # Debug: print details to understand what keys are available
-                    if hasattr(pos, "details"):
-                        print(f"DEBUG: First position details: {pos.details}")
-                    else:
-                        print("DEBUG: Position has no 'details' attribute")
-
                 try:
                     unrealized_pnl = 0.0
                     market_val = 0.0
 
                     # Safer extraction
-                    # Check if 'details' exists
-                    if hasattr(pos, "details") and pos.details:
-                        # Common QMT keys might be: 'mkt_val', 'float_pnl', 'market_value', 'floating_pnl'
-                        # We try a few or just rely on what we see in debug output
-                        raw_float_pnl = pos.details.get("float_pnl") or pos.details.get("floating_pnl")
-                        raw_mkt_val = pos.details.get("mkt_val") or pos.details.get("market_value")
+                    if account and account.last_event and account.last_event.info and "positions_map" in account.last_event.info:
+                        pos_info = account.last_event.info["positions_map"].get(str(pos.instrument_id))
+                        if pos_info:
+                            try:
+                                unrealized_pnl = float(pos_info.get("float_pnl", 0.0))
+                                market_val = float(pos_info.get("market_value", 0.0))
 
-                        try:
-                            if raw_float_pnl is not None:
-                                unrealized_pnl = float(raw_float_pnl)
-                            if raw_mkt_val is not None:
-                                market_val = float(raw_mkt_val)
-                        except (ValueError, TypeError) as e:
-                            print(f"Error converting details: {e}, float_pnl={raw_float_pnl}")
+                                # Fallback calculation if PnL is 0 but we have market value
+                                if unrealized_pnl == 0.0 and market_val != 0.0:
+                                    # PnL = Market Value - (Qty * AvgOpen)
+                                    # Note: AvgOpen from Nautilus might be negative (cost basis adjusted)
+                                    # This assumes simplified PnL calculation matching some broker views
+                                    cost_basis = float(pos.quantity) * float(pos.avg_px_open) if pos.avg_px_open else 0.0
+                                    unrealized_pnl = market_val - cost_basis
+
+                            except ValueError as e:
+                                print(f"Error converting pnl/val: {e}")
 
                     p = {
                         "Instrument": str(pos.instrument_id),
@@ -183,7 +179,14 @@ class QueryAccountAndPositionsStrategy(Strategy):
 
             if pos_data:
                 df_pos = pd.DataFrame(pos_data)
-                print(df_pos.to_string(index=False))
+                formatters = {
+                    "UnrealizedPnL": "{:,.2f}".format,
+                    "MarketValue": "{:,.2f}".format,
+                    "RealizedPnL": "{:,.2f}".format,
+                    "AvgOpen": "{:,.2f}".format,
+                    "Qty": "{:,.0f}".format,
+                }
+                print(df_pos.to_string(index=False, formatters=formatters))
         print("=" * 50 + "\n")
 
 

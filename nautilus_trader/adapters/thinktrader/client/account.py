@@ -39,6 +39,7 @@ class ThinkTraderClientAccountMixin(BaseMixin):
                             available_volume=pos.can_use_volume,
                             avg_price=pos.open_price,
                             market_value=pos.market_value,
+                            float_pnl=getattr(pos, "float_pnl", getattr(pos, "floating_pnl", 0.0)),
                         ),
                     )
             return result

@@ -160,13 +160,15 @@ class MultiTickMomentumStrategy(Strategy):
             # 止盈
             if pnl_bps >= self.tp_threshold:
                 self.log.info(f"[{ts_id}] 触发单元止盈: 当前 {mid_price:.2f} >= 入场 {entry_price:.2f} (+{pnl_bps*10000:.1f} bps)")
-                self._submit_exit_order(ts_id, trade['qty'])
+                # 使用买一价限价卖出
+                self._submit_exit_order(ts_id, trade['qty'], bid)
                 trades.remove(trade)
                 closed_any = True
             # 止损
             elif pnl_bps <= -self.sl_threshold:
                 self.log.info(f"[{ts_id}] 触发单元止损: 当前 {mid_price:.2f} <= 入场 {entry_price:.2f} ({pnl_bps*10000:.1f} bps)")
-                self._submit_exit_order(ts_id, trade['qty'])
+                # 使用买一价限价卖出
+                self._submit_exit_order(ts_id, trade['qty'], bid)
                 trades.remove(trade)
                 closed_any = True
         
@@ -199,27 +201,29 @@ class MultiTickMomentumStrategy(Strategy):
             # 触发开仓
             if momentum >= self.entry_threshold:
                 self.log.info(f"[{ts_id}] 动量入场触发! 动量:{momentum*10000:.1f} bps")
-                self._submit_entry_order(ts_id)
+                self._submit_entry_order(ts_id, ask)
 
-    def _submit_entry_order(self, instrument_id: InstrumentId) -> None:
+    def _submit_entry_order(self, instrument_id: InstrumentId, price: float) -> None:
         inst = self._instruments[instrument_id]
         qty = inst.make_qty(self.config.trade_qty)
-        order = self.order_factory.market(
+        order = self.order_factory.limit(
             instrument_id=instrument_id,
             order_side=OrderSide.BUY,
             quantity=qty,
+            price=inst.make_price(price),
             time_in_force=TimeInForce.GTC,
         )
         self.submit_order(order)
         self._pending_orders_count[instrument_id] += 1
 
-    def _submit_exit_order(self, instrument_id: InstrumentId, qty_val: float) -> None:
+    def _submit_exit_order(self, instrument_id: InstrumentId, qty_val: float, price: float) -> None:
         inst = self._instruments[instrument_id]
         qty = inst.make_qty(qty_val)
-        order = self.order_factory.market(
+        order = self.order_factory.limit(
             instrument_id=instrument_id,
             order_side=OrderSide.SELL,
             quantity=qty,
+            price=inst.make_price(price),
             time_in_force=TimeInForce.GTC,
         )
         self.submit_order(order)
@@ -268,7 +272,7 @@ if __name__ == "__main__":
     account_id = os.environ.get("MINIQMT_ACCOUNT_ID", "211800003313")
     
     # --- 配置多标的列表 ---
-    TARGET_SYMBOLS = ["601005.SSE", "000547.SZSE"] 
+    TARGET_SYMBOLS = ["688576.SSE", "601808.SSE"] 
     instrument_ids = [InstrumentId.from_str(s) for s in TARGET_SYMBOLS]
 
     # 配置节点

@@ -332,6 +332,16 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
             )
             return
 
+        if order.order_type not in (OrderType.MARKET, OrderType.LIMIT):
+            self.generate_order_rejected(
+                strategy_id=order.strategy_id,
+                instrument_id=order.instrument_id,
+                client_order_id=order.client_order_id,
+                reason=f"ThinkTrader 不支持订单类型: {order.order_type}",
+                ts_event=self._clock.timestamp_ns(),
+            )
+            return
+
         if order.order_type == OrderType.LIMIT:
             price = float(order.price)
             price_type = xtconstant.FIX_PRICE
@@ -398,22 +408,7 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
                 ts_event=self._clock.timestamp_ns(),
             )
 
-    async def _submit_order_list(self, command: SubmitOrderList) -> None:
-        ts_init = self._clock.timestamp_ns()
-        for order in command.order_list.orders:
-            await self._submit_order(
-                SubmitOrder(
-                    trader_id=command.trader_id,
-                    strategy_id=command.strategy_id,
-                    order=order,
-                    command_id=UUID4(),
-                    ts_init=ts_init,
-                    position_id=command.position_id,
-                    client_id=command.client_id,
-                    params=command.params,
-                    correlation_id=command.correlation_id,
-                ),
-            )
+
 
     async def _modify_order(self, _command: ModifyOrder) -> None:
         command = _command
@@ -603,6 +598,18 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
                 free=Money(cash, currency),
             ),
         ]
+        positions_map = {}
+        try:
+            positions = self._client.query_positions()
+            for pos in positions:
+                instrument_id = stock_code_to_instrument_id(pos.stock_code)
+                positions_map[str(instrument_id)] = {
+                    "market_value": pos.market_value,
+                    "float_pnl": pos.float_pnl,
+                }
+        except Exception as e:
+            self._log.warning(f"Failed to fetch positions for account info: {e}")
+
         self.generate_account_state(
             balances=balances,
             margins=[],
@@ -611,6 +618,7 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
             info={
                 "market_value": asset.get("market_value"),
                 "total_asset": asset.get("total_asset"),
+                "positions_map": positions_map,
             },
         )
 
@@ -626,11 +634,12 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
             self._client_order_id_to_order_id[client_order_id] = order_id
 
         if not client_order_id:
-            self._log.warning(f"未知订单: order_id={order_id}")
-            return
+            # 外部订单（无 ClientOrderId），继续处理以生成报告
+            cached_order = None
+        else:
+            cached_order = self._cache.order(client_order_id) or self._submitted_orders.get(client_order_id)
 
         status = ORDER_STATUS_MAP.get(order.order_status)
-        cached_order = self._cache.order(client_order_id) or self._submitted_orders.get(client_order_id)
 
         if cached_order is None:
             report = self._try_parse_xt_order_to_order_status_report(order)
@@ -748,10 +757,13 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
                 self._order_id_to_client_order_id[order_id] = client_order_id
                 self._client_order_id_to_order_id[client_order_id] = order_id
             else:
-                self._log.warning(f"未知成交: order_id={order_id}")
-                return
+                # 外部成交（无 ClientOrderId），继续处理以生成报告
+                client_order_id = None
 
-        cached_order = self._cache.order(client_order_id) or self._submitted_orders.get(client_order_id)
+        if client_order_id:
+            cached_order = self._cache.order(client_order_id) or self._submitted_orders.get(client_order_id)
+        else:
+            cached_order = None
         if cached_order is None:
             report = self._try_parse_xt_trade_to_fill_report(trade)
             if report is not None:
@@ -1000,6 +1012,25 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
         client_order_id = ClientOrderId(client_order_id_value) if client_order_id_value else None
 
         instrument = self._cache.instrument(instrument_id)
+
+        # 处理价格和订单类型
+        price_val = float(getattr(xt_order, "price", 0.0) or 0.0)
+        
+        # 如果价格为0且是限价单，尝试使用成交价
+        if price_val <= 0.0 and order_type == OrderType.LIMIT:
+             price_val = float(getattr(xt_order, "traded_price", 0.0) or 0.0)
+
+        # 构建 Price 对象
+        price_obj = None
+        if price_val > 0:
+            if instrument:
+                price_obj = instrument.make_price(price_val)
+            else:
+                 price_obj = Price.from_str(f"{price_val:.8f}")
+        
+        # 如果是限价单但没有价格，强制转为市价单，避免 OrderUnpacker 报错
+        if order_type == OrderType.LIMIT and price_obj is None:
+            order_type = OrderType.MARKET
         
         return OrderStatusReport(
             account_id=self.account_id,
@@ -1020,9 +1051,7 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
             ts_last=ts_last,
             ts_init=ts_init,
             client_order_id=client_order_id,
-            price=instrument.make_price(float(getattr(xt_order, "price", 0.0) or 0.0))
-            if instrument and getattr(xt_order, "price", None) else
-            (Price.from_str(f"{(getattr(xt_order, 'price', 0.0) or 0.0):.8f}") if getattr(xt_order, "price", None) else None),
+            price=price_obj,
         )
 
     def _try_get_order_side(self, obj: Any) -> OrderSide | None:

@@ -340,12 +340,6 @@ async def main():
             print(f"  - {tick_file.name} ({size_kb:.1f} KB)")
         print()
 
-    print("提示: 可以使用以下代码读取数据:")
-    print()
-    print("  import pandas as pd")
-    print(f"  df = pd.read_csv(r'{OUTPUT_DIR}\\bars_1_day.csv')")
-    print("  print(df.head())")
-    print()
 
 
 if __name__ == "__main__":
