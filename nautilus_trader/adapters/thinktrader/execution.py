@@ -606,6 +606,7 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
                 positions_map[str(instrument_id)] = {
                     "market_value": pos.market_value,
                     "float_pnl": pos.float_pnl,
+                    "available_volume": pos.available_volume,
                 }
         except Exception as e:
             self._log.warning(f"Failed to fetch positions for account info: {e}")

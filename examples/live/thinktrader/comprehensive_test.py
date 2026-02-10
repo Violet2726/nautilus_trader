@@ -120,13 +120,13 @@ def _parse_bool(value: str | None, default: bool = False) -> bool:
 
 def _parse_instrument_ids(value: str | None) -> tuple[str, ...]:
     if not value:
-        return ("000001.SZSE",)
+        return ("601808.SSE",)
     items = [x.strip() for x in value.split(",")]
     return tuple(x for x in items if x)
 
 
 class ThinkTraderComprehensiveConfig(StrategyConfig, frozen=True):
-    instrument_ids: tuple[str, ...] = ("000001.SZSE",)
+    instrument_ids: tuple[str, ...] = ("601808.SSE",)
     account_id: str = ""
     client_id: str = TT
     enable_trading: bool = False

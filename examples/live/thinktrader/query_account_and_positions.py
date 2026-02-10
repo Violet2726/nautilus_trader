@@ -49,7 +49,7 @@ def _load_dotenv() -> None:
 class QueryAccountAndPositionsConfig(StrategyConfig, frozen=True):
     account_id: str = ""
     client_id: str = TT
-    stop_after_secs: float = 15.0
+    stop_after_secs: float = 0.0  # Set to 0 to run indefinitely (manual stop)
     poll_interval_secs: float = 3.0
     max_polls: int = 100
 
@@ -78,11 +78,12 @@ class QueryAccountAndPositionsStrategy(Strategy):
             alert_time=self.clock.utc_now(),
             callback=lambda _: self._poll(),
         )
-        self.clock.set_time_alert(
-            name="stop_after_dump",
-            alert_time=self.clock.utc_now() + timedelta(seconds=self._stop_after_secs),
-            callback=lambda _: self._dump_and_stop(),
-        )
+        if self._stop_after_secs > 0:
+            self.clock.set_time_alert(
+                name="stop_after_dump",
+                alert_time=self.clock.utc_now() + timedelta(seconds=self._stop_after_secs),
+                callback=lambda _: self._dump_and_stop(),
+            )
 
     def on_stop(self) -> None:
         return
@@ -144,6 +145,7 @@ class QueryAccountAndPositionsStrategy(Strategy):
                 try:
                     unrealized_pnl = 0.0
                     market_val = 0.0
+                    available_qty = 0.0
 
                     # Safer extraction
                     if account and account.last_event and account.last_event.info and "positions_map" in account.last_event.info:
@@ -152,6 +154,7 @@ class QueryAccountAndPositionsStrategy(Strategy):
                             try:
                                 unrealized_pnl = float(pos_info.get("float_pnl", 0.0))
                                 market_val = float(pos_info.get("market_value", 0.0))
+                                available_qty = float(pos_info.get("available_volume", 0.0))
 
                                 # Fallback calculation if PnL is 0 but we have market value
                                 if unrealized_pnl == 0.0 and market_val != 0.0:
@@ -168,6 +171,7 @@ class QueryAccountAndPositionsStrategy(Strategy):
                         "Instrument": str(pos.instrument_id),
                         "Side": pos.side,
                         "Qty": float(pos.quantity),
+                        "Available": available_qty,
                         "AvgOpen": float(pos.avg_px_open) if pos.avg_px_open else 0.0,
                         "RealizedPnL": float(pos.realized_pnl) if pos.realized_pnl else 0.0,
                         "UnrealizedPnL": unrealized_pnl,
@@ -185,6 +189,7 @@ class QueryAccountAndPositionsStrategy(Strategy):
                     "RealizedPnL": "{:,.2f}".format,
                     "AvgOpen": "{:,.2f}".format,
                     "Qty": "{:,.0f}".format,
+                    "Available": "{:,.0f}".format,
                 }
                 print(df_pos.to_string(index=False, formatters=formatters))
         print("=" * 50 + "\n")
@@ -244,8 +249,8 @@ config_node = TradingNodeConfig(
     timeout_connection=90.0,
     timeout_reconciliation=10.0,
     timeout_portfolio=10.0,
-    timeout_disconnection=10.0,
-    timeout_post_stop=5.0,
+    timeout_disconnection=5.0,
+    timeout_post_stop=2.0,
 )
 
 
@@ -262,15 +267,20 @@ if __name__ == "__main__":
     node.build()
 
     async def _stop_node_later() -> None:
-        stop_after = float(os.environ.get("TT_STOP_AFTER_SECS", "20"))
-        await asyncio.sleep(stop_after)
-        node.stop()
+        stop_after = float(os.environ.get("TT_STOP_AFTER_SECS", "0"))
+        if stop_after > 0:
+            await asyncio.sleep(stop_after)
+            node.stop()
 
-    node.kernel.loop.create_task(_stop_node_later())
+    if float(os.environ.get("TT_STOP_AFTER_SECS", "0")) > 0:
+        node.kernel.loop.create_task(_stop_node_later())
 
     try:
         node.run()
     except KeyboardInterrupt:
-        node.kernel.logger.info("Stopped by user")
+        print("\n[INFO] Stopped by user (Ctrl+C), shutting down...")
     finally:
+        print("[INFO] Disposing node...")
         node.dispose()
+        print("[INFO] Node disposed.")
+        os._exit(0)
