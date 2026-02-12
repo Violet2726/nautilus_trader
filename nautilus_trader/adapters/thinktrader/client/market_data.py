@@ -1,5 +1,6 @@
 import asyncio
 import functools
+import pandas as pd
 from typing import Any
 
 from xtquant import xtdata
@@ -486,6 +487,45 @@ class ThinkTraderClientMarketDataMixin(BaseMixin):
             return price
 
         return await self._await_price_from_tick_subscription(stock_code=stock_code, timeout=3.0)
+
+    def get_market_data(
+        self,
+        field_list: list[str],
+        stock_list: list[str],
+        period: str = "1d",
+        start_time: str = "",
+        end_time: str = "",
+        count: int = -1,
+        dividend_type: str = "none",
+        fill_data: bool = True,
+    ) -> dict[str, pd.DataFrame]:
+        """
+        批量获取市场数据 (直接封装 xtdata.get_market_data)。
+        """
+        try:
+            return xtdata.get_market_data(
+                field_list=field_list,
+                stock_list=stock_list,
+                period=period,
+                start_time=start_time,
+                end_time=end_time,
+                count=count,
+                dividend_type=dividend_type,
+                fill_data=fill_data,
+            )
+        except Exception as e:
+            self._log.error(f"批量获取市场数据失败: {e}")
+            return {}
+
+    def get_full_tick(self, stock_list: list[str]) -> dict[str, dict]:
+        """
+        获取全推行情快照 (直接封装 xtdata.get_full_tick)。
+        """
+        try:
+            return xtdata.get_full_tick(stock_list)
+        except Exception as e:
+            self._log.error(f"获取行情快照失败: {e}")
+            return {}
 
     # =========================================================================
     # 内部辅助函数

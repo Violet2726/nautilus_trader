@@ -46,11 +46,14 @@ TARGET_SYMBOLS = [
 
 # K线类型
 BAR_TYPES = [
-    "1-MINUTE",   # 1分钟
-    "5-MINUTE",   # 5分钟
-    "15-MINUTE",  # 15分钟
-    "1-HOUR",     # 1小时
-    "1-DAY",      # 日K
+    "1-MINUTE-LAST",   # 1分钟
+    "5-MINUTE-LAST",   # 5分钟
+    "15-MINUTE-LAST",  # 15分钟
+    "30-MINUTE-LAST",  # 30分钟
+    "1-HOUR-LAST",     # 1小时
+    "1-DAY-LAST",      # 日K
+    "1-WEEK-LAST",     # 周K
+    "1-MONTH-LAST",    # 月K
 ]
 
 # 时间范围
@@ -155,11 +158,7 @@ async def download_bars(client: HistoricThinkTraderClient):
                 df_type.to_csv(filename, index=False)
                 print(f"✓ 已保存 {bar_type}: {filename} ({len(df_type)} 行)")
 
-        # 保存汇总文件
-        summary_file = OUTPUT_DIR / "bars_all.csv"
-        df.to_csv(summary_file, index=False)
-        print(f"✓ 已保存汇总文件: {summary_file} ({len(df)} 行)")
-        print()
+
 
         # 数据统计
         print("数据统计:")
@@ -329,7 +328,7 @@ async def main():
             if filename.exists():
                 size_kb = filename.stat().st_size / 1024
                 print(f"  - {filename.name} ({size_kb:.1f} KB)")
-        print(f"  - bars_all.csv (汇总)")
+
         print()
 
     if df_ticks is not None:

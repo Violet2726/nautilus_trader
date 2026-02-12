@@ -249,3 +249,38 @@ class HistoricThinkTraderClient:
             data = data[-limit:]
 
         return data
+
+    def get_stock_list(self, sector: str = "沪深A股") -> list[str]:
+        """获取板块内的合约列表"""
+        return self._client.get_stock_list(sector=sector)
+
+    def get_instrument_detail(self, stock_code: str) -> dict | None:
+        """获取合约详情"""
+        return self._client.get_instrument_detail(stock_code=stock_code)
+
+    def get_market_data(
+        self,
+        field_list: list[str],
+        stock_list: list[str],
+        period: str = "1d",
+        start_time: str = "",
+        end_time: str = "",
+        count: int = -1,
+        dividend_type: str = "none",
+        fill_data: bool = True,
+    ) -> dict[str, pd.DataFrame]:
+        """批量获取市场数据"""
+        return self._client.get_market_data(
+            field_list=field_list,
+            stock_list=stock_list,
+            period=period,
+            start_time=start_time,
+            end_time=end_time,
+            count=count,
+            dividend_type=dividend_type,
+            fill_data=fill_data,
+        )
+
+    def get_full_tick(self, stock_list: list[str]) -> dict[str, dict]:
+        """获取全推行情快照"""
+        return self._client.get_full_tick(stock_list=stock_list)
