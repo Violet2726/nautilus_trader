@@ -53,9 +53,10 @@ STEP_TO_PERIOD = {
 
 def xt_time_to_ns(time_val: int) -> int:
     """
-    将 XtQuant 时间 (毫秒戳或 YYYYMMDDHHMMSS) 转换为纳秒时间戳
+    将 XtQuant 时间 (毫秒戳或 YYYYMMDDHHMMSS 或 YYYYMMDD) 转换为纳秒时间戳
     """
-    if time_val > 10_000_000_000_000:  # 大于 13 位, 假设是 YYYYMMDDHHMMSS 格式
+    # 情况1: YYYYMMDDHHMMSS (14位)
+    if time_val > 10_000_000_000_000:
         s = str(time_val)
         try:
             dt = datetime.strptime(s, "%Y%m%d%H%M%S").replace(tzinfo=CHINA_TZ)
@@ -63,6 +64,21 @@ def xt_time_to_ns(time_val: int) -> int:
         except ValueError:
             return time_val * 1_000_000
 
+    # 情况2: YYYYMMDD (8位) - 日/周/月线通常返回这个
+    # 20000101 = 20,000,101
+    # 21000101 = 21,000,101
+    # 范围在 10,000,000 到 100,000,000 之间
+    if 10_000_000 < time_val < 100_000_000:
+        s = str(time_val)
+        try:
+            dt = datetime.strptime(s, "%Y%m%d").replace(tzinfo=CHINA_TZ)
+            return int(dt.timestamp() * 1_000_000_000)
+        except ValueError:
+            # 如果不是合法日期, 退回到毫秒处理 (虽然在这个范围内不太可能是毫秒)
+            return time_val * 1_000_000
+
+    # 情况3: 毫秒时间戳 (13位)
+    # 通常是 1,600,000,000,000 左右
     return time_val * 1_000_000
 
 
