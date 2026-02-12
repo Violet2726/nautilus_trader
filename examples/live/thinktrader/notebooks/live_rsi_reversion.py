@@ -62,6 +62,9 @@ class RSIReversionConfig(StrategyConfig, frozen=True):
     rsi_oversold: Decimal = Decimal("0.30") # 超卖阈值 (0.30 对应 30)
     rsi_overbought: Decimal = Decimal("0.70") # 超买阈值 (0.70 对应 70)
 
+from collections import defaultdict
+from nautilus_trader.model.events import OrderFilled
+
 class RSIReversion(Strategy):
     """
     RSI 均值回归策略 (低吸高抛)
@@ -73,6 +76,16 @@ class RSIReversion(Strategy):
         self.instrument: Instrument | None = None
         # 创建 RSI 指标
         self.rsi = RelativeStrengthIndex(config.rsi_period)
+        
+        # 跟踪买入批次: {instrument_id: [{'price': price, 'qty': qty}, ...]}
+        self.lots = defaultdict(list)
+
+    def on_quote_tick(self, tick: QuoteTick) -> None:
+        self.instrument = self.cache.instrument(self.config.instrument_id)
+        if self.instrument is None:
+            self.log.error(f"Could not find instrument for {self.config.instrument_id}")
+            self.stop()
+            return
 
     def on_start(self) -> None:
         self.instrument = self.cache.instrument(self.config.instrument_id)
@@ -112,10 +125,35 @@ class RSIReversion(Strategy):
 
         # 卖出逻辑 (超买 -> 见顶回落预期 -> 卖出)
         elif rsi_val > float(self.config.rsi_overbought):
-            if self.portfolio.is_net_long(self.config.instrument_id):
-                self.log.info(f"[{self.config.instrument_id}] RSI OVERBOUGHT (> {self.config.rsi_overbought}) -> SELL (止盈/高抛)")
-                self.close_all_positions(self.config.instrument_id)
-                # self.sell(bar.close) # close_all 已经平仓了
+            lots = self.lots.get(self.config.instrument_id, [])
+            current_px_dec = bar.close.as_decimal()
+            
+            qty_to_sell = Decimal(0)
+            
+            for lot in lots:
+                # lot['price'] 可能是 Price 对象
+                lot_px = lot['price'].as_decimal() if hasattr(lot['price'], 'as_decimal') else lot['price']
+                lot_qty = lot['qty'].as_decimal() if hasattr(lot['qty'], 'as_decimal') else lot['qty']
+                
+                # 如果买入价 < 当前价 (获利)
+                if lot_px < current_px_dec:
+                    qty_to_sell += lot_qty
+            
+            if qty_to_sell > 0:
+                self.log.info(f"[{self.config.instrument_id}] RSI OVERBOUGHT (> {self.config.rsi_overbought}) -> SELL PROFITABLE LOTS (Total Qty: {qty_to_sell})")
+                
+                # 构造卖出订单
+                limit_price = current_px_dec * Decimal("0.995")
+                order = self.order_factory.limit(
+                    instrument_id=self.config.instrument_id,
+                    order_side=OrderSide.SELL,
+                    quantity=self.instrument.make_qty(qty_to_sell),
+                    price=self.instrument.make_price(limit_price),
+                    time_in_force=TimeInForce.GTC,
+                )
+                self.submit_order(order)
+            else:
+                self.log.info(f"[{self.config.instrument_id}] RSI OVERBOUGHT ({rsi_val:.2f}) but NO PROFITABLE LOTS to sell")
 
     def buy(self, current_price: Decimal) -> None:
         if not self.instrument:
@@ -157,6 +195,48 @@ class RSIReversion(Strategy):
             time_in_force=TimeInForce.GTC,
         )
         self.submit_order(order)
+
+
+    def on_order_filled(self, event: OrderFilled) -> None:
+        if event.order_side == OrderSide.BUY:
+            # 记录买入批次
+            self.lots[event.instrument_id].append({
+                'price': event.last_px, 
+                'qty': event.last_qty,
+                'ts': event.ts_event
+            })
+            self.log.info(f"[{event.instrument_id}] Added LOT: {event.last_qty} @ {event.last_px}")
+            
+        elif event.order_side == OrderSide.SELL:
+            # 卖出成交时，我们需要从持仓批次中移除对应的数量
+            # 假设那是我们在卖出逻辑中选定的“获利单”
+            # 我们按照价格从低到高排序（优先平掉获利最多的单子，或者说按照策略意图）
+            # 注意：这里的逻辑要和下单逻辑匹配。下单是“平掉价格低于当前价的”，即平掉低价单。
+            # 所以成交回来时，我们也应该优先移除低价单。
+            
+            qty_to_remove = event.last_qty
+            lots = self.lots[event.instrument_id]
+            # 按价格升序排序
+            lots.sort(key=lambda x: x['price'])
+            
+            new_lots = []
+            for lot in lots:
+                if qty_to_remove <= 0:
+                    new_lots.append(lot)
+                    continue
+                
+                if lot['qty'] <= qty_to_remove:
+                    # 这个批次全部卖出
+                    qty_to_remove -= lot['qty']
+                    # 不加入 new_lots，相当于移除
+                else:
+                    # 这个批次卖出了一部分
+                    lot['qty'] -= qty_to_remove
+                    qty_to_remove = 0
+                    new_lots.append(lot)
+            
+            self.lots[event.instrument_id] = new_lots
+            self.log.info(f"[{event.instrument_id}] Removed LOT quantity, remaining lots: {len(new_lots)}")
 
 
 # --- 配置部分 ---
