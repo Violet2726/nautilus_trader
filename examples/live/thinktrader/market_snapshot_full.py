@@ -29,8 +29,9 @@ MINIQMT_PATH = os.getenv(
     r"D:\迅投极速策略交易系统交易终端 华福证券QMT仿真\userdata_mini",
 )
 
-# 输出目录
-OUTPUT_DIR = Path(r"d:\user\job\nautilus_trader\examples\live\thinktrader\outputs")
+# 输出目录 (相对于脚本所在位置)
+SCRIPT_DIR = Path(__file__).parent
+OUTPUT_DIR = SCRIPT_DIR / "outputs"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 
@@ -116,11 +117,11 @@ def main():
     
     if df is not None and not df.empty:
         today = datetime.now().strftime("%Y%m%d")
-        filename = OUTPUT_DIR / f"market_snapshot_{today}_adapter.csv"
+        filename = OUTPUT_DIR / f"market_snapshot_{today}.csv"
         df.to_csv(filename, index=False, encoding='utf-8-sig')
         
         elapsed = time.time() - start_time
-        print(f"\n✓ 任务完成 (Adapter版)!")
+        print(f"\n✓ 任务完成!")
         print(f"有效数据: {len(df)} 行")
         print(f"文件路径: {filename}")
         print(f"总耗时: {elapsed:.2f} 秒")
