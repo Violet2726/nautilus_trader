@@ -431,7 +431,7 @@ class FixExecutionClient(LiveExecutionClient):
                     order=order,
                     command_id=UUID4(),
                     ts_init=self._clock.timestamp_ns(),
-                    client_id=self.client_id,
+                    client_id=self.id,
                 ),
             )
 
@@ -532,7 +532,7 @@ class FixExecutionClient(LiveExecutionClient):
                     venue_order_id=order.venue_order_id,
                     command_id=UUID4(),
                     ts_init=self._clock.timestamp_ns(),
-                    client_id=self.client_id,
+                    client_id=self.id,
                 ),
             )
 
@@ -780,7 +780,7 @@ class FixExecutionClient(LiveExecutionClient):
     ) -> ExecutionMassStatus | None:
         now_ns = self._clock.timestamp_ns()
         status = ExecutionMassStatus(
-            client_id=self.client_id,
+            client_id=self.id,
             account_id=self.account_id,
             venue=None,
             report_id=UUID4(),
