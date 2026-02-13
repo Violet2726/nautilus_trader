@@ -209,9 +209,55 @@ class FixExecutionClient(LiveExecutionClient):
             if self._clock.timestamp_ns() - start_wait > 30_000_000_000:
                 break
 
+        # 等待应用层登录完成（UserRequest/UserResponse 握手）
+        # Demo 脚本在 session_id 存在后也额外等待了 2 秒
+        if app.session_id is not None:
+            await asyncio.sleep(3)
+
         await self._instrument_provider.initialize()
 
         self.create_task(self._query_account(None), log_msg="Initial account query")
+        self.create_task(self._initial_data_sync(), log_msg="Initial data sync")
+
+    async def _initial_data_sync(self) -> None:
+        """连接后主动查询持仓和订单并写入缓存."""
+        now_ns = self._clock.timestamp_ns()
+        try:
+            pos_reports = await self.generate_position_status_reports(
+                GeneratePositionStatusReports(
+                    instrument_id=None, start=None, end=None,
+                    command_id=UUID4(), ts_init=now_ns, params=None,
+                ),
+            )
+            self._log.info(f"初始同步: 获取到 {len(pos_reports)} 条持仓记录")
+        except Exception as e:
+            self._log.error(f"初始同步持仓失败: {e}")
+            pos_reports = []
+
+        try:
+            order_reports = await self.generate_order_status_reports(
+                GenerateOrderStatusReports(
+                    instrument_id=None, start=None, end=None,
+                    open_only=False, command_id=UUID4(), ts_init=now_ns, params=None,
+                ),
+            )
+            self._log.info(f"初始同步: 获取到 {len(order_reports)} 条订单记录")
+        except Exception as e:
+            self._log.error(f"初始同步订单失败: {e}")
+            order_reports = []
+
+        # 通过 mass status 将数据写入 ExecEngine 缓存
+        if pos_reports or order_reports:
+            status = ExecutionMassStatus(
+                client_id=self.id,
+                account_id=self.account_id,
+                venue=None,
+                report_id=UUID4(),
+                ts_init=now_ns,
+            )
+            status.add_order_reports(order_reports)
+            status.add_position_reports(pos_reports)
+            self._send_mass_status_report(status)
 
     async def _disconnect(self) -> None:
         initiator = self._fix_initiator
@@ -549,10 +595,15 @@ class FixExecutionClient(LiveExecutionClient):
             return app.get_trade_detail_data(self._config.account_id, "ACCOUNT")
 
         raw = await asyncio.to_thread(fetch_account)
-        if not raw or raw == {} or isinstance(raw, dict):
+        if not raw:
             return
 
-        data = json.loads(raw)
+        if isinstance(raw, dict):
+            data = raw
+        elif isinstance(raw, str):
+            data = json.loads(raw)
+        else:
+            return
         fundings = data.get("NoFundings") or []
 
         balances: list[AccountBalance] = []
@@ -618,10 +669,15 @@ class FixExecutionClient(LiveExecutionClient):
             return app.get_trade_detail_data(self._config.account_id, "ORDER")
 
         raw = await asyncio.to_thread(fetch_orders)
-        if not raw or raw == {} or isinstance(raw, dict):
+        if not raw:
             return []
 
-        data = json.loads(raw)
+        if isinstance(raw, dict):
+            data = raw
+        elif isinstance(raw, str):
+            data = json.loads(raw)
+        else:
+            return []
         orders = data.get("NoQueryOrders") or []
 
         reports: list[OrderStatusReport] = []
@@ -683,10 +739,15 @@ class FixExecutionClient(LiveExecutionClient):
             return app.get_trade_detail_data(self._config.account_id, "DEAL")
 
         raw = await asyncio.to_thread(fetch_deals)
-        if not raw or raw == {} or isinstance(raw, dict):
+        if not raw:
             return []
 
-        data = json.loads(raw)
+        if isinstance(raw, dict):
+            data = raw
+        elif isinstance(raw, str):
+            data = json.loads(raw)
+        else:
+            return []
         orders = data.get("NoQueryOrders") or []
         now_ns = self._clock.timestamp_ns()
 
@@ -741,10 +802,15 @@ class FixExecutionClient(LiveExecutionClient):
             return app.get_trade_detail_data(self._config.account_id, "POSITION")
 
         raw = await asyncio.to_thread(fetch_positions)
-        if not raw or raw == {} or isinstance(raw, dict):
+        if not raw:
             return []
 
-        data = json.loads(raw)
+        if isinstance(raw, dict):
+            data = raw
+        elif isinstance(raw, str):
+            data = json.loads(raw)
+        else:
+            return []
         holdings = data.get("NoHoldings") or []
         now_ns = self._clock.timestamp_ns()
 
@@ -753,8 +819,8 @@ class FixExecutionClient(LiveExecutionClient):
             if not isinstance(h, dict):
                 continue
             symbol = h.get("Symbol")
-            if not symbol:
-                continue
+            if not symbol or "." not in symbol:
+                continue  # 跳过非证券条目（如 CNY 现金余额）
             qty = h.get("PositionQty")
             q = Decimal(str(qty or 0))
             position_side = PositionSide.LONG if q > 0 else PositionSide.SHORT if q < 0 else PositionSide.FLAT
