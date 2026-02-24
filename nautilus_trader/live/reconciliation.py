@@ -489,8 +489,11 @@ def create_inferred_order_filled_event(
         else:
             last_px = instrument.make_price(report.avg_px)
 
-    notional_value: Money = instrument.notional_value(last_qty, last_px)
-    commission: Money = Money(notional_value * instrument.taker_fee, instrument.quote_currency)
+    try:
+        notional_value: Money = instrument.notional_value(last_qty, last_px)
+        commission: Money = Money(notional_value * instrument.taker_fee, instrument.quote_currency)
+    except ValueError:
+        commission = Money(0, instrument.quote_currency)
 
     return OrderFilled(
         trader_id=order.trader_id,

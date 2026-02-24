@@ -268,8 +268,20 @@ class FixExecutionClient(LiveExecutionClient):
             self._log.error(f"初始同步订单失败: {e}")
             order_reports = []
 
+        try:
+            fill_reports = await self.generate_fill_reports(
+                GenerateFillReports(
+                    instrument_id=None, venue_order_id=None, start=None, end=None,
+                    command_id=UUID4(), ts_init=now_ns, params=None,
+                ),
+            )
+            self._log.info(f"初始同步: 获取到 {len(fill_reports)} 条成交记录")
+        except Exception as e:
+            self._log.error(f"初始同步成交失败: {e}")
+            fill_reports = []
+
         # 通过 mass status 将数据写入 ExecEngine 缓存
-        if pos_reports or order_reports:
+        if pos_reports or order_reports or fill_reports:
             status = ExecutionMassStatus(
                 client_id=self.id,
                 account_id=self.account_id,
@@ -279,6 +291,7 @@ class FixExecutionClient(LiveExecutionClient):
             )
             status.add_order_reports(order_reports)
             status.add_position_reports(pos_reports)
+            status.add_fill_reports(fill_reports)
             self._send_mass_status_report(status)
 
     async def _disconnect(self) -> None:
@@ -676,7 +689,19 @@ class FixExecutionClient(LiveExecutionClient):
             ),
         )
 
-        if pos_reports or order_reports:
+        fill_reports = await self.generate_fill_reports(
+            GenerateFillReports(
+                instrument_id=None,
+                venue_order_id=None,
+                start=None,
+                end=None,
+                command_id=UUID4(),
+                ts_init=now_ns,
+                params=command.params if command else None,
+            ),
+        )
+
+        if pos_reports or order_reports or fill_reports:
             status = ExecutionMassStatus(
                 client_id=self.id,
                 account_id=self.account_id,
@@ -686,6 +711,7 @@ class FixExecutionClient(LiveExecutionClient):
             )
             status.add_order_reports(order_reports)
             status.add_position_reports(pos_reports)
+            status.add_fill_reports(fill_reports)
             self._send_mass_status_report(status)
 
     async def generate_order_status_report(
@@ -762,6 +788,10 @@ class FixExecutionClient(LiveExecutionClient):
 
             ts_last = _parse_utc_datetime_ns(o.get("TransactTime")) or now_ns
 
+            cl_ord_id_str = o.get("ClOrdID")
+            if not cl_ord_id_str:
+                cl_ord_id_str = f"EXT-{venue_order_id_str}"
+
             report = OrderStatusReport(
                 account_id=self.account_id,
                 instrument_id=instrument_id,
@@ -776,7 +806,7 @@ class FixExecutionClient(LiveExecutionClient):
                 ts_accepted=ts_last,
                 ts_last=ts_last,
                 ts_init=now_ns,
-                client_order_id=ClientOrderId(o.get("ClOrdID")) if o.get("ClOrdID") else None,
+                client_order_id=ClientOrderId(cl_ord_id_str),
                 price=Price.from_str(str(o.get("Price"))) if o.get("Price") else None,
                 avg_px=Decimal(str(o.get("AvgPx"))) if o.get("AvgPx") else None,
                 cancel_reason=o.get("Text") if o.get("Text") else None,
@@ -825,6 +855,11 @@ class FixExecutionClient(LiveExecutionClient):
         instrument_id = InstrumentId.from_str(symbol)
         self._ensure_instrument_cached(instrument_id)
 
+        cl_ord_id_str = order.get("ClOrdID")
+        if not cl_ord_id_str:
+            cl_ord_id_str = f"EXT-{venue_order_id_str}"
+        client_order_id = ClientOrderId(cl_ord_id_str)
+
         reports: list[FillReport] = []
         executes = order.get("NoExecutes") or []
         for e in executes:
@@ -833,9 +868,14 @@ class FixExecutionClient(LiveExecutionClient):
             exec_id = e.get("ExecID") or e.get("TradeID") or e.get("ExecRefID")
             last_qty = e.get("LastQty") or e.get("CumQty")
             last_px = e.get("LastPx") or e.get("LastPxPrice") or e.get("Price")
-            if exec_id is None or last_qty is None or last_px is None:
+            if last_qty is None or last_px is None:
                 continue
+            
             ts_event = _parse_utc_datetime_ns(e.get("TransactTime")) or now_ns
+            if exec_id is None:
+                # Wind 接口如果没返回明确的 ExecID，则用上下文拼接作为唯一 ID 保证不丢记录
+                exec_id = f"EXEC-{venue_order_id_str}-{ts_event}-{last_qty}"
+            
             reports.append(
                 FillReport(
                     account_id=self.account_id,
@@ -850,7 +890,7 @@ class FixExecutionClient(LiveExecutionClient):
                     report_id=UUID4(),
                     ts_event=ts_event,
                     ts_init=now_ns,
-                    client_order_id=ClientOrderId(order.get("ClOrdID")) if order.get("ClOrdID") else None,
+                    client_order_id=client_order_id,
                 ),
             )
         return reports

@@ -100,8 +100,8 @@ def sell_all(positions):
 
 if __name__ == "__main__":
     # 接口测试
-    order_id_1 = place_order(C, 23, "000002.SZ", "11", 4.95, 100, "")
-    order_id_2 = place_order(C, 23, "000002.SZ", "12", None, 100, "FF")
+    # order_id_1 = place_order(C, 23, "000002.SZ", "11", 4.95, 100, "")
+    # order_id_2 = place_order(C, 23, "000002.SZ", "12", None, 100, "FF")
 
     # cancel_order(C, order_id_1, 1)  # 撤单
     # cancel_order(C, order_id_2, 1)  # 撤单

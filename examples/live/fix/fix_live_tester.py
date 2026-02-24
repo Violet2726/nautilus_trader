@@ -173,6 +173,7 @@ class FixLiveTester(Strategy):
         self._send_test_order = config.send_test_order
         self._stop_after_secs = float(config.stop_after_secs)
         self._order = None
+        self._deals = []
 
     def on_start(self) -> None:
         if self._account_id is None:
@@ -287,10 +288,23 @@ class FixLiveTester(Strategy):
                 }
             )
 
+        deal_data = []
+        for deal in self._deals[-10:]:  # 最近10笔
+            deal_data.append(
+                {
+                    "instrument_id": str(deal.instrument_id),
+                    "side": str(deal.order_side),
+                    "price": float(deal.last_px),
+                    "volume": float(deal.last_qty),
+                    "trade_id": str(deal.trade_id),
+                }
+            )
+
         print("\n" + "=" * 20 + f" 状态快照 ({self.clock.utc_now()}) " + "=" * 20)
         print(f"account:{json.dumps(account_data, indent=4, ensure_ascii=False)}")
         print(f"position:{json.dumps(position_data, indent=4, ensure_ascii=False)}")
         print(f"order:{json.dumps(order_data, indent=4, ensure_ascii=False)}")
+        print(f"deal:{json.dumps(deal_data, indent=4, ensure_ascii=False)}")
         print("=" * 64 + "\n")
 
     def _submit_limit_buy(self) -> None:
@@ -327,6 +341,10 @@ class FixLiveTester(Strategy):
 
     def on_account_status_report(self, report) -> None:
         self.log.info(f"账户状态报告: {report.account_id}")
+
+    def on_order_filled(self, event) -> None:
+        self.log.info(f"订单成交: {event.client_order_id} px={event.last_px} qty={event.last_qty}")
+        self._deals.append(event)
 
 
 _load_dotenv()
@@ -482,7 +500,7 @@ def _build_node():
     remote_port = int(os.environ.get("FIX_REMOTE_PORT", "16669"))
     tls_local_host = os.environ.get("FIX_TLS_LOCAL_HOST", "127.0.0.1")
     tls_local_port = int(os.environ.get("FIX_TLS_LOCAL_PORT", "16670"))
-    reconciliation = _get_env_bool("FIX_RECONCILIATION", False)
+    reconciliation = _get_env_bool("FIX_RECONCILIATION", True)  # 默认开启对账以将查询到的历史订单/成交写入 Cache
 
     missing = []
     if not username:
