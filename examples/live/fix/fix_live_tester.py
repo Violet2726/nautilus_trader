@@ -274,31 +274,48 @@ class FixLiveTester(Strategy):
             )
 
         order_data = []
-        # 合并未完成和最近 5 笔已完成的订单
-        all_relevant_orders = open_orders + closed_orders[-5:]
-        for order in all_relevant_orders:
-            order_data.append(
-                {
-                    "client_order_id": str(order.client_order_id),
-                    "instrument_id": str(order.instrument_id),
-                    "side": str(order.side),
-                    "qty": float(order.quantity),
-                    "filled": float(order.filled_qty),
-                    "status": str(order.status),
-                }
-            )
+        # 优先从 Cache 通用存储读取柜台查询到的全量订单数据
+        raw_order_bytes = self.cache.get("fix_order_reports")
+        if raw_order_bytes:
+            try:
+                order_data = json.loads(raw_order_bytes.decode("utf-8"))
+            except Exception:
+                order_data = []
+        else:
+            # 回退：合并未完成和最近 5 笔已完成的订单（仅含本系统提交的）
+            all_relevant_orders = open_orders + closed_orders[-5:]
+            for order in all_relevant_orders:
+                order_data.append(
+                    {
+                        "client_order_id": str(order.client_order_id),
+                        "instrument_id": str(order.instrument_id),
+                        "side": str(order.side),
+                        "qty": float(order.quantity),
+                        "filled": float(order.filled_qty),
+                        "status": str(order.status),
+                    }
+                )
 
         deal_data = []
-        for deal in self._deals[-10:]:  # 最近10笔
-            deal_data.append(
-                {
-                    "instrument_id": str(deal.instrument_id),
-                    "side": str(deal.order_side),
-                    "price": float(deal.last_px),
-                    "volume": float(deal.last_qty),
-                    "trade_id": str(deal.trade_id),
-                }
-            )
+        # 优先从 Cache 通用存储读取柜台查询到的全量成交数据
+        raw_deal_bytes = self.cache.get("fix_fill_reports")
+        if raw_deal_bytes:
+            try:
+                deal_data = json.loads(raw_deal_bytes.decode("utf-8"))
+            except Exception:
+                deal_data = []
+        else:
+            # 回退：从策略 on_order_filled 事件收集的成交
+            for deal in self._deals[-10:]:
+                deal_data.append(
+                    {
+                        "instrument_id": str(deal.instrument_id),
+                        "side": str(deal.order_side),
+                        "price": float(deal.last_px),
+                        "volume": float(deal.last_qty),
+                        "trade_id": str(deal.trade_id),
+                    }
+                )
 
         print("\n" + "=" * 20 + f" 状态快照 ({self.clock.utc_now()}) " + "=" * 20)
         print(f"account:{json.dumps(account_data, indent=4, ensure_ascii=False)}")

@@ -701,6 +701,35 @@ class FixExecutionClient(LiveExecutionClient):
             ),
         )
 
+        # 将查询到的订单和成交报告序列化存入 Cache 通用存储,
+        # 使策略可通过 cache.get("fix_order_reports") 读取外部/历史数据
+        try:
+            order_report_data = []
+            for r in order_reports:
+                order_report_data.append({
+                    "client_order_id": str(r.client_order_id),
+                    "venue_order_id": str(r.venue_order_id),
+                    "instrument_id": str(r.instrument_id),
+                    "side": str(r.order_side),
+                    "qty": str(r.quantity),
+                    "filled": str(r.filled_qty),
+                    "status": str(r.order_status),
+                })
+            self._cache.add("fix_order_reports", json.dumps(order_report_data).encode("utf-8"))
+
+            fill_report_data = []
+            for r in fill_reports:
+                fill_report_data.append({
+                    "instrument_id": str(r.instrument_id),
+                    "side": str(r.order_side),
+                    "price": str(r.last_px),
+                    "volume": str(r.last_qty),
+                    "trade_id": str(r.trade_id),
+                })
+            self._cache.add("fix_fill_reports", json.dumps(fill_report_data).encode("utf-8"))
+        except Exception as e:
+            self._log.warning(f"序列化订单/成交报告到 Cache 失败: {e}")
+
         if pos_reports or order_reports or fill_reports:
             status = ExecutionMassStatus(
                 client_id=self.id,
