@@ -268,20 +268,7 @@ class FixExecutionClient(LiveExecutionClient):
             self._log.error(f"初始同步订单失败: {e}")
             order_reports = []
 
-        try:
-            fill_reports = await self.generate_fill_reports(
-                GenerateFillReports(
-                    instrument_id=None, venue_order_id=None, start=None, end=None,
-                    command_id=UUID4(), ts_init=now_ns, params=None,
-                ),
-            )
-            self._log.info(f"初始同步: 获取到 {len(fill_reports)} 条成交记录")
-        except Exception as e:
-            self._log.error(f"初始同步成交失败: {e}")
-            fill_reports = []
-
-        # 通过 mass status 将数据写入 ExecEngine 缓存
-        if pos_reports or order_reports or fill_reports:
+        if pos_reports:
             status = ExecutionMassStatus(
                 client_id=self.id,
                 account_id=self.account_id,
@@ -289,9 +276,7 @@ class FixExecutionClient(LiveExecutionClient):
                 report_id=UUID4(),
                 ts_init=now_ns,
             )
-            status.add_order_reports(order_reports)
             status.add_position_reports(pos_reports)
-            status.add_fill_reports(fill_reports)
             self._send_mass_status_report(status)
 
     async def _disconnect(self) -> None:
@@ -701,9 +686,17 @@ class FixExecutionClient(LiveExecutionClient):
             ),
         )
 
-        # 将查询到的订单和成交报告序列化存入 Cache 通用存储,
-        # 使策略可通过 cache.get("fix_order_reports") 读取外部/历史数据
         try:
+            position_report_data = []
+            for r in pos_reports:
+                position_report_data.append({
+                    "instrument_id": str(r.instrument_id),
+                    "side": str(r.position_side),
+                    "volume": str(r.quantity),
+                    "avg_price": str(r.avg_px_open) if r.avg_px_open else "0",
+                })
+            self._cache.add("fix_position_reports", json.dumps(position_report_data).encode("utf-8"))
+
             order_report_data = []
             for r in order_reports:
                 order_report_data.append({
@@ -728,9 +721,9 @@ class FixExecutionClient(LiveExecutionClient):
                 })
             self._cache.add("fix_fill_reports", json.dumps(fill_report_data).encode("utf-8"))
         except Exception as e:
-            self._log.warning(f"序列化订单/成交报告到 Cache 失败: {e}")
+            self._log.warning(f"序列化报告到 Cache 失败: {e}")
 
-        if pos_reports or order_reports or fill_reports:
+        if pos_reports:
             status = ExecutionMassStatus(
                 client_id=self.id,
                 account_id=self.account_id,
@@ -738,9 +731,7 @@ class FixExecutionClient(LiveExecutionClient):
                 report_id=UUID4(),
                 ts_init=now_ns,
             )
-            status.add_order_reports(order_reports)
             status.add_position_reports(pos_reports)
-            status.add_fill_reports(fill_reports)
             self._send_mass_status_report(status)
 
     async def generate_order_status_report(
@@ -960,6 +951,11 @@ class FixExecutionClient(LiveExecutionClient):
             position_side = PositionSide.LONG if q > 0 else PositionSide.SHORT if q < 0 else PositionSide.FLAT
             instrument_id = InstrumentId.from_str(symbol)
             self._ensure_instrument_cached(instrument_id)
+
+            raw_cost = float(h.get("PositionCost") or 0)
+            abs_q = float(abs(q))
+            avg_px = raw_cost / abs_q if abs_q > 0 and raw_cost else 0.0
+
             reports.append(
                 PositionStatusReport(
                     account_id=self.account_id,
@@ -969,7 +965,7 @@ class FixExecutionClient(LiveExecutionClient):
                     report_id=UUID4(),
                     ts_last=now_ns,
                     ts_init=now_ns,
-                    avg_px_open=Price.from_str(str(h.get("PositionCost") or 0)),
+                    avg_px_open=Price.from_str(f"{avg_px:.4f}"),
                 ),
             )
 

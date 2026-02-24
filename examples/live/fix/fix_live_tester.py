@@ -263,15 +263,24 @@ class FixLiveTester(Strategy):
                 }
 
         position_data = []
-        for pos in positions:
-            position_data.append(
-                {
-                    "instrument_id": str(pos.instrument_id),
-                    "side": str(pos.side),
-                    "volume": float(pos.quantity),
-                    "avg_price": float(pos.avg_px_open) if pos.avg_px_open else 0.0,
-                }
-            )
+        # 优先从 Cache 通用存储读取柜台查询到的持仓数据（价格已正确转换）
+        raw_pos_bytes = self.cache.get("fix_position_reports")
+        if raw_pos_bytes:
+            try:
+                position_data = json.loads(raw_pos_bytes.decode("utf-8"))
+            except Exception:
+                position_data = []
+        else:
+            # 回退：从 Cache 的 Position 对象读取
+            for pos in positions:
+                position_data.append(
+                    {
+                        "instrument_id": str(pos.instrument_id),
+                        "side": str(pos.side),
+                        "volume": float(pos.quantity),
+                        "avg_price": float(pos.avg_px_open) if pos.avg_px_open else 0.0,
+                    }
+                )
 
         order_data = []
         # 优先从 Cache 通用存储读取柜台查询到的全量订单数据
