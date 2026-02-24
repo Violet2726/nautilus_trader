@@ -6,6 +6,7 @@ from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
 
+
 # Suppress annoying warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -16,7 +17,6 @@ from nautilus_trader.adapters.thinktrader.config import ThinkTraderExecClientCon
 from nautilus_trader.adapters.thinktrader.config import ThinkTraderInstrumentProviderConfig
 from nautilus_trader.adapters.thinktrader.factories import ThinkTraderLiveDataClientFactory
 from nautilus_trader.adapters.thinktrader.factories import ThinkTraderLiveExecClientFactory
-from nautilus_trader.common.enums import LogColor
 from nautilus_trader.config import LiveDataEngineConfig
 from nautilus_trader.config import LoggingConfig
 from nautilus_trader.config import PositiveInt
@@ -33,7 +33,6 @@ from nautilus_trader.model.enums import TimeInForce
 from nautilus_trader.model.identifiers import InstrumentId
 from nautilus_trader.model.identifiers import TraderId
 from nautilus_trader.model.instruments import Instrument
-from nautilus_trader.model.objects import Quantity
 from nautilus_trader.trading.strategy import Strategy
 
 
@@ -63,7 +62,9 @@ class RSIReversionConfig(StrategyConfig, frozen=True):
     rsi_overbought: Decimal = Decimal("0.70") # 超买阈值 (0.70 对应 70)
 
 from collections import defaultdict
+
 from nautilus_trader.model.events import OrderFilled
+
 
 class RSIReversion(Strategy):
     """
@@ -76,7 +77,7 @@ class RSIReversion(Strategy):
         self.instrument: Instrument | None = None
         # 创建 RSI 指标
         self.rsi = RelativeStrengthIndex(config.rsi_period)
-        
+
         # 跟踪买入批次: {instrument_id: [{'price': price, 'qty': qty}, ...]}
         self.lots = defaultdict(list)
 
@@ -108,7 +109,7 @@ class RSIReversion(Strategy):
         if not self.indicators_initialized():
             self.log.info(f"[{self.config.instrument_id}] Bar Close: {bar.close}, RSI({self.config.rsi_period}): {self.rsi.value:.2f}")
             return
-        
+
         rsi_val = self.rsi.value
         self.log.info(f"[{self.config.instrument_id}] Close: {bar.close}, RSI({self.config.rsi_period}): {rsi_val:.2f}")
 
@@ -116,7 +117,7 @@ class RSIReversion(Strategy):
         if rsi_val < float(self.config.rsi_oversold):
             is_flat = self.portfolio.is_flat(self.config.instrument_id)
             self.log.info(f"[{self.config.instrument_id}] Is Flat: {is_flat}")
-            
+
             # 简化逻辑：只要超卖就买入 (即使已有持仓也加仓)
             self.log.info(f"[{self.config.instrument_id}] RSI OVERSOLD (< {self.config.rsi_oversold}) -> BUY (抄底/加仓)")
             if self.portfolio.is_net_short(self.config.instrument_id):
@@ -127,21 +128,21 @@ class RSIReversion(Strategy):
         elif rsi_val > float(self.config.rsi_overbought):
             lots = self.lots.get(self.config.instrument_id, [])
             current_px_dec = bar.close.as_decimal()
-            
+
             qty_to_sell = Decimal(0)
-            
+
             for lot in lots:
                 # lot['price'] 可能是 Price 对象
-                lot_px = lot['price'].as_decimal() if hasattr(lot['price'], 'as_decimal') else lot['price']
-                lot_qty = lot['qty'].as_decimal() if hasattr(lot['qty'], 'as_decimal') else lot['qty']
-                
+                lot_px = lot["price"].as_decimal() if hasattr(lot["price"], "as_decimal") else lot["price"]
+                lot_qty = lot["qty"].as_decimal() if hasattr(lot["qty"], "as_decimal") else lot["qty"]
+
                 # 如果买入价 < 当前价 (获利)
                 if lot_px < current_px_dec:
                     qty_to_sell += lot_qty
-            
+
             if qty_to_sell > 0:
                 self.log.info(f"[{self.config.instrument_id}] RSI OVERBOUGHT (> {self.config.rsi_overbought}) -> SELL PROFITABLE LOTS (Total Qty: {qty_to_sell})")
-                
+
                 # 构造卖出订单
                 limit_price = current_px_dec * Decimal("0.995")
                 order = self.order_factory.limit(
@@ -165,8 +166,8 @@ class RSIReversion(Strategy):
             return
 
         # 挂限价单买入 (对手价 + 滑点)
-        limit_price = current_price * Decimal("1.005") 
-        
+        limit_price = current_price * Decimal("1.005")
+
         order = self.order_factory.limit(
             instrument_id=self.config.instrument_id,
             order_side=OrderSide.BUY,
@@ -179,7 +180,7 @@ class RSIReversion(Strategy):
     def sell(self, current_price: Decimal) -> None:
         if not self.instrument:
             return
-            
+
         qty = self.config.trade_size
         qty = (int(qty) // 100) * 100
         if qty < 100:
@@ -201,40 +202,40 @@ class RSIReversion(Strategy):
         if event.order_side == OrderSide.BUY:
             # 记录买入批次
             self.lots[event.instrument_id].append({
-                'price': event.last_px, 
-                'qty': event.last_qty,
-                'ts': event.ts_event
+                "price": event.last_px,
+                "qty": event.last_qty,
+                "ts": event.ts_event
             })
             self.log.info(f"[{event.instrument_id}] Added LOT: {event.last_qty} @ {event.last_px}")
-            
+
         elif event.order_side == OrderSide.SELL:
             # 卖出成交时，我们需要从持仓批次中移除对应的数量
             # 假设那是我们在卖出逻辑中选定的“获利单”
             # 我们按照价格从低到高排序（优先平掉获利最多的单子，或者说按照策略意图）
             # 注意：这里的逻辑要和下单逻辑匹配。下单是“平掉价格低于当前价的”，即平掉低价单。
             # 所以成交回来时，我们也应该优先移除低价单。
-            
+
             qty_to_remove = event.last_qty
             lots = self.lots[event.instrument_id]
             # 按价格升序排序
-            lots.sort(key=lambda x: x['price'])
-            
+            lots.sort(key=lambda x: x["price"])
+
             new_lots = []
             for lot in lots:
                 if qty_to_remove <= 0:
                     new_lots.append(lot)
                     continue
-                
-                if lot['qty'] <= qty_to_remove:
+
+                if lot["qty"] <= qty_to_remove:
                     # 这个批次全部卖出
-                    qty_to_remove -= lot['qty']
+                    qty_to_remove -= lot["qty"]
                     # 不加入 new_lots，相当于移除
                 else:
                     # 这个批次卖出了一部分
-                    lot['qty'] -= qty_to_remove
+                    lot["qty"] -= qty_to_remove
                     qty_to_remove = 0
                     new_lots.append(lot)
-            
+
             self.lots[event.instrument_id] = new_lots
             self.log.info(f"[{event.instrument_id}] Removed LOT quantity, remaining lots: {len(new_lots)}")
 
@@ -307,25 +308,25 @@ if __name__ == "__main__":
     node.add_exec_client_factory(TT, ThinkTraderLiveExecClientFactory)
 
     for instrument_id, instrument_id_str in zip(instrument_ids, instrument_ids_str):
-        bar_type_str = f"{instrument_id_str}-1-MINUTE-MID-INTERNAL" 
+        bar_type_str = f"{instrument_id_str}-1-MINUTE-MID-INTERNAL"
         bar_type = BarType.from_str(bar_type_str)
-        
+
         strategy_config = RSIReversionConfig(
             instrument_id=instrument_id,
             bar_type=bar_type,
-            trade_size=Decimal("100"),     # 每次100股
+            trade_size=Decimal(100),     # 每次100股
             rsi_period=6,                  # RSI 周期设置为 6 (更敏感)
             rsi_oversold=Decimal("0.30"),    # RSI < 0.30 买入
             rsi_overbought=Decimal("0.70"),  # RSI > 0.70 卖出
         )
-        
+
         strategy = RSIReversion(config=strategy_config)
         node.trader.add_strategy(strategy)
         print(f"已添加策略: {instrument_id} (RSI Reversion, Period=6)")
 
     node.build()
 
-    print(f"正在启动多标的 RSI Reversion 策略...")
+    print("正在启动多标的 RSI Reversion 策略...")
     print(f"日志将输出到: {log_dir / log_file_name}.log")
     print(f"跟踪标的: {instrument_ids_str}")
 

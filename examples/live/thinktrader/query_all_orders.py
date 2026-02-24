@@ -19,13 +19,11 @@
 """
 from __future__ import annotations
 
-import asyncio
 import os
 import secrets
 import warnings
 from datetime import timedelta
 from pathlib import Path
-
 
 from nautilus_trader.adapters.thinktrader.common import TT
 from nautilus_trader.adapters.thinktrader.config import ThinkTraderDataClientConfig

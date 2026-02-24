@@ -1,7 +1,8 @@
+import json
 import os
 import sys
-import json
 import time
+
 
 # 自动切换到脚本所在目录，确保配置文件的相对路径有效
 base_path = os.path.dirname(os.path.abspath(__file__))
@@ -10,8 +11,8 @@ if base_path not in sys.path:
     sys.path.append(base_path)
 
 import quickfix as fix
-
-from protocol.quick_fix import QMTToFIXAdapter, ensure_tls_tunnel
+from protocol.quick_fix import QMTToFIXAdapter
+from protocol.quick_fix import ensure_tls_tunnel
 
 
 class WindFixConn:
@@ -43,14 +44,14 @@ class WindFixConn:
         # 从配置中获取连接信息
         host = "114.80.213.49"
         port = 16669
-        
+
         print(f"正在测试网络连接: {host}:{port}")
         if not self.test_network_connection(host, port):
             print(f"错误: 无法连接到 {host}:{port}，请检查网络配置")
             return None, None
-        
+
         print("网络连接测试成功，正在初始化 FIX 连接...")
-        
+
         try:
             ensure_tls_tunnel(host, port)
             application = QMTToFIXAdapter(self.wind_fix44_path, self.login_account, self.password)  # fix 对接实现类
@@ -70,7 +71,7 @@ class WindFixConn:
                     print("FIX 传输层连接成功")
                     return initiator, application
                 time.sleep(0.5)
-            
+
             print("警告: FIX 连接在 30 秒内未建立，请检查网络配置、SSL 设置或认证信息")
             print("建议检查：1. 账号密码是否正确 2. TargetCompID 配置是否正确 3. 服务器是否运行")
             return initiator, application
@@ -123,19 +124,19 @@ def get_account(C):
     raw_data = app.get_trade_detail_data(C.acct, "ACCOUNT")
     if isinstance(raw_data, dict): # 处理查询超时返回的空字典
         return AccountInfo()
-    
+
     account_json = json.loads(raw_data)
 
     account_info = AccountInfo()
     if account_json is not None and account_json.get("NoFundings")[0] is not None:
         for no_funding in account_json.get("NoFundings"):
-            if no_funding.get('Currency') == 'CNY':
-                account_info.m_dAvailable = 0.0 if no_funding.get('UseableAmt') is None else no_funding.get(
-                    'UseableAmt')  # 可用资金
-                account_info.m_dInstrumentValue = 0.0 if no_funding.get('MarketCap') is None else no_funding.get(
-                    'MarketCap')  # 持仓市值
-                account_info.m_dBalance = no_funding.get('UseableAmt') + no_funding.get(
-                    'MarketCap')  # 总资产
+            if no_funding.get("Currency") == "CNY":
+                account_info.m_dAvailable = 0.0 if no_funding.get("UseableAmt") is None else no_funding.get(
+                    "UseableAmt")  # 可用资金
+                account_info.m_dInstrumentValue = 0.0 if no_funding.get("MarketCap") is None else no_funding.get(
+                    "MarketCap")  # 持仓市值
+                account_info.m_dBalance = no_funding.get("UseableAmt") + no_funding.get(
+                    "MarketCap")  # 总资产
 
     return account_info
 
@@ -157,7 +158,7 @@ def get_position(C):
     raw_data = app.get_trade_detail_data(C.acct, "POSITION")
     if isinstance(raw_data, dict):
         return []
-    
+
     position_json = json.loads(raw_data)
 
     positions = []
@@ -165,12 +166,12 @@ def get_position(C):
         no_holdings = position_json.get("NoHoldings")
         for no_holding in no_holdings:
             position_info = PositionInfo()
-            symbol_group = no_holding.get('Symbol').split('.')
+            symbol_group = no_holding.get("Symbol").split(".")
             position_info.m_sInstrumentID = symbol_group[0]  # 证券代码
             if len(symbol_group) == 2:
                 position_info.m_sExchangeID = symbol_group[1]  # 交易所代码
-            position_info.m_nVolume = no_holding.get('PositionQty')  # 持仓数量
-            position_info.m_nCanUseVolume = no_holding.get('LeavesQty')  # 可用数量
+            position_info.m_nVolume = no_holding.get("PositionQty")  # 持仓数量
+            position_info.m_nCanUseVolume = no_holding.get("LeavesQty")  # 可用数量
             position_info.m_dMarketValue = 0.0  # 持仓市值 #
             positions.append(position_info)
     return positions
@@ -214,17 +215,17 @@ def get_order(C):
         no_query_orders = orders_json.get("NoQueryOrders")
         for no_query_order in no_query_orders:
             order_info = OrderInfo()
-            symbol_group = no_query_order.get('Symbol').split('.')
+            symbol_group = no_query_order.get("Symbol").split(".")
             order_info.m_sInstrumentID = symbol_group[0]  # 证券代码
             if len(symbol_group) == 2:
                 order_info.m_sExchangeID = symbol_group[1]  # 交易所代码
-            order_info.m_strInstrumentName = ''  # 证券名称
-            order_info.m_strOrderSysID = no_query_order.get('OrderID')  # 委托ID
-            order_info.m_nOffsetFlag = 48 if int(no_query_order.get('Side')) == 1 else 49  # 买卖标记 1:Buy  2:Sell
-            order_info.m_nOrderStatus = order_status_convert(no_query_order.get('OrdStatus'))  # 委托状态
-            order_info.m_strOptName = ''  # 买卖操作 #
-            order_info.m_nVolumeTotal = no_query_order.get('LeavesQty')  # 委托剩余量 #
-            order_info.m_nVolumeTotalOriginal = no_query_order.get('OrderQty')  # 委托原始总量 #
+            order_info.m_strInstrumentName = ""  # 证券名称
+            order_info.m_strOrderSysID = no_query_order.get("OrderID")  # 委托ID
+            order_info.m_nOffsetFlag = 48 if int(no_query_order.get("Side")) == 1 else 49  # 买卖标记 1:Buy  2:Sell
+            order_info.m_nOrderStatus = order_status_convert(no_query_order.get("OrdStatus"))  # 委托状态
+            order_info.m_strOptName = ""  # 买卖操作 #
+            order_info.m_nVolumeTotal = no_query_order.get("LeavesQty")  # 委托剩余量 #
+            order_info.m_nVolumeTotalOriginal = no_query_order.get("OrderQty")  # 委托原始总量 #
             orders.append(order_info)
     return orders
 
@@ -256,15 +257,15 @@ def get_deal(C):
             if no_executes is not None and no_executes[0] is not None:
                 for no_execute in no_executes:
                     deal_info = DealInfo()
-                    symbol_group = no_query_order.get('Symbol').split('.')
+                    symbol_group = no_query_order.get("Symbol").split(".")
                     deal_info.m_sInstrumentID = symbol_group[0]  # 证券代码
                     if len(symbol_group) == 2:
                         deal_info.m_sExchangeID = symbol_group[1]  # 交易所代码
-                    deal_info.m_strInstrumentName = ''  # 证券名称
-                    deal_info.m_nOffsetFlag = 48 if int(no_query_order.get('Side')) == 1 else 49  # 买卖标记 1:Buy  2:Sell
-                    deal_info.m_dPrice = no_execute.get('LastPx')  # 成交价格
-                    deal_info.m_nVolume = no_execute.get('LastQty')  # 成交数量
-                    deal_info.m_strTradeTime = no_execute.get('OrderQty')  # 成交时间
+                    deal_info.m_strInstrumentName = ""  # 证券名称
+                    deal_info.m_nOffsetFlag = 48 if int(no_query_order.get("Side")) == 1 else 49  # 买卖标记 1:Buy  2:Sell
+                    deal_info.m_dPrice = no_execute.get("LastPx")  # 成交价格
+                    deal_info.m_nVolume = no_execute.get("LastQty")  # 成交数量
+                    deal_info.m_strTradeTime = no_execute.get("OrderQty")  # 成交时间
                     deals.append(deal_info)
 
     return deals

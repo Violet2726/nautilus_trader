@@ -3,6 +3,7 @@ from enum import Enum
 
 class FixMsgType(Enum):
     """消息类型 (Tag 35) [cite: 7]"""
+
     HEARTBEAT = "0"  # 心跳
     LOGON = "A"  # 登录(传输层)
     LOGOUT = "5"  # 登出(传输层)
@@ -23,18 +24,21 @@ class FixMsgType(Enum):
 
 class UserRequestType(Enum):
     """用户请求类型 (Tag 924) [cite: 9]"""
+
     LOGIN = 1  # 登录请求
     LOGOUT = 2  # 登出请求
 
 
 class QueryType(Enum):
     """查询类型 (Tag 8000) [cite: 25]"""
+
     ORDER = 1  # 1: 委托查询
     EXECUTION = 2  # 2: 成交查询
 
 
 class StorageTopic(Enum):
     """内存存储的主题分类"""
+
     ORDERS = "orders"
     DEALS = "deals"
     POSITIONS = "positions"
@@ -44,12 +48,14 @@ class StorageTopic(Enum):
 
 class OrdType(Enum):
     """订单类型 (Tag 40) [cite: 10, 12, 19]"""
+
     LIMIT = "2"  # 限价单
     MARKET = "1"  # 市价单
 
 
 class Side(Enum):
     """交易方向 (Tag 54) [cite: 10, 12, 19]"""
+
     BUY = "1"  # 买入
     SELL = "2"  # 卖出
     SELL_SHORT = "5"  # 卖空
@@ -59,6 +65,7 @@ class Side(Enum):
 
 class OrdStatus(Enum):
     """订单状态 (Tag 39) [cite: 12]"""
+
     NEW = "0"  # 新订单
     PARTIALLY_FILLED = "1"  # 部分成交
     FILLED = "2"  # 全部成交
@@ -73,6 +80,7 @@ class OrdStatus(Enum):
 
 class UserStatus(Enum):
     """用户状态 (Tag 926) [cite: 9]"""
+
     LOGGED_IN = "1"  # 已登陆
     NOT_LOGGED_IN = "2"  # 未登陆
     USER_NOT_EXIST = "3"  # 用户不存在
@@ -82,7 +90,8 @@ class UserStatus(Enum):
 
 
 class ExecType(Enum):
-    """成交类型 (Tag 150) """
+    """成交类型 (Tag 150)"""
+
     NEW = "0"  # 新订单(New)
     DONE_FOR_DAY = "3"  # 当天已完结(Done for day)
     CANCELED = "4"  # 已取消(Canceled)
@@ -100,6 +109,7 @@ class ExecType(Enum):
 
 class SecurityExchange(Enum):
     """交易所类型 (Tag 207) [cite: 10]"""
+
     HKEX = "HKEX"  # 香港交易所
     NYSE = "NYSEA"  # 纽交所
     NASDAQ = "NASDAQ"  # 纳斯达克
@@ -112,12 +122,14 @@ class SecurityExchange(Enum):
 
 class BookingType(Enum):
     """委托类型 (Tag 775) [cite: 10]"""
+
     CASH = 0  # 现金交易
     SWAP = 1  # 收益互换
 
 
 class TimeInForce(Enum):
     """有效时间 (Tag 59) [cite: 10]"""
+
     GFD = "0"  # 当日有效
     GTC = "1"  # 取消前有效
     GTD = "5"  # 到期前有效
@@ -125,12 +137,14 @@ class TimeInForce(Enum):
 
 class HandlInst(Enum):
     """执行指令 (Tag 21) [cite: 10]"""
+
     LowTouch = "1"  # 自动处理
     HighTouch = "3"  # 人工处理
 
 
 class SecurityType(Enum):
     """证券类型 (Tag 167) [cite: 10, 13, 19]"""
+
     COMMON_STOCK = "CS"  # 股票
     FUTURE = "FUT"  # 期货
     OPTION = "OPT"  # 期权
@@ -140,6 +154,7 @@ class SecurityType(Enum):
 
 class WindCustomTags(Enum):
     """Wind EMS 私有协议自定义 Tag 字典"""
+
     # 查询相关
     LocateBrokerId = 5700  # 融券来源 (美股 Sell Short 时必填)
     QueryType = 8000  # 查询类型 (1:委托查询, 2:成交查询)
@@ -178,21 +193,21 @@ def get_exchange_info_v3(order_code):
     """
     根据用户提供的最新对照表进行映射
     """
-    symbol, suffix = order_code.split('.')
+    symbol, suffix = order_code.split(".")
     suffix = suffix.upper()
 
     # 映射表：完全匹配用户提供的类型
     mapping = {
-        'SH': ('SSE', 'CS'),  # 上交所
-        'SZ': ('SZSE', 'CS'),  # 深交所
-        'HK': ('HKEX', 'CS'),  # 香港交易所
-        'N': ('NYSEA', 'CS'),  # 纽交所 (假设后缀为N)
-        'OQ': ('NASDAQ', 'CS'),  # 纳斯达克 (假设后缀为OQ)
-        'A': ('AMEX', 'CS'),  # 美交所
-        'SHN': ('SZN', 'CS'),  # 特别注意：用户提到 SZN 对应北向-上交所
-        'SZN': ('SHN', 'CS'),  # 特别注意：用户提到 SHN 对应北向-深交所
+        "SH": ("SSE", "CS"),  # 上交所
+        "SZ": ("SZSE", "CS"),  # 深交所
+        "HK": ("HKEX", "CS"),  # 香港交易所
+        "N": ("NYSEA", "CS"),  # 纽交所 (假设后缀为N)
+        "OQ": ("NASDAQ", "CS"),  # 纳斯达克 (假设后缀为OQ)
+        "A": ("AMEX", "CS"),  # 美交所
+        "SHN": ("SZN", "CS"),  # 特别注意：用户提到 SZN 对应北向-上交所
+        "SZN": ("SHN", "CS"),  # 特别注意：用户提到 SHN 对应北向-深交所
     }
 
     # 获取映射结果，如果匹配不到则默认返回 SSE
-    res = mapping.get(suffix, ('SSE', 'CS'))
+    res = mapping.get(suffix, ("SSE", "CS"))
     return res[0], res[1]

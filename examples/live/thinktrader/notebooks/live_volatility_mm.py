@@ -5,6 +5,7 @@ import warnings
 from decimal import Decimal
 from pathlib import Path
 
+
 # Suppress annoying warnings from dependencies
 warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -42,6 +43,7 @@ def _load_dotenv() -> None:
 _load_dotenv()
 
 from nautilus_trader.adapters.thinktrader.common import TT
+
 
 # --- 配置部分 ---
 
@@ -109,7 +111,7 @@ strategy_config = VolatilityMarketMakerConfig(
     bar_type=bar_type,
     atr_period=14,              # ATR 周期
     atr_multiple=2.0,           # 挂单距离 ATR 的倍数
-    trade_size=Decimal("100"),  # 交易数量 (A股通常为100股一手)
+    trade_size=Decimal(100),  # 交易数量 (A股通常为100股一手)
     client_id=None,
     emulation_trigger="NO_TRIGGER", # 实盘通常不用模拟触发，除非在测试 Testnet
     reduce_only_on_stop=True,
@@ -130,7 +132,7 @@ if __name__ == "__main__":
     # 注册适配器工厂
     node.add_data_client_factory(TT, ThinkTraderLiveDataClientFactory)
     node.add_exec_client_factory(TT, ThinkTraderLiveExecClientFactory)
-    
+
     # 构建节点
     node.build()
 

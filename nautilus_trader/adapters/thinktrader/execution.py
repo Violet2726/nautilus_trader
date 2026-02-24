@@ -24,7 +24,6 @@ from nautilus_trader.execution.messages import GeneratePositionStatusReports
 from nautilus_trader.execution.messages import ModifyOrder
 from nautilus_trader.execution.messages import QueryAccount
 from nautilus_trader.execution.messages import SubmitOrder
-from nautilus_trader.execution.messages import SubmitOrderList
 from nautilus_trader.execution.reports import ExecutionMassStatus
 from nautilus_trader.execution.reports import FillReport
 from nautilus_trader.execution.reports import OrderStatusReport
@@ -1016,7 +1015,7 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
 
         # 处理价格和订单类型
         price_val = float(getattr(xt_order, "price", 0.0) or 0.0)
-        
+
         # 如果价格为0且是限价单，尝试使用成交价
         if price_val <= 0.0 and order_type == OrderType.LIMIT:
              price_val = float(getattr(xt_order, "traded_price", 0.0) or 0.0)
@@ -1028,11 +1027,11 @@ class ThinkTraderExecutionClient(LiveExecutionClient):
                 price_obj = instrument.make_price(price_val)
             else:
                  price_obj = Price.from_str(f"{price_val:.8f}")
-        
+
         # 如果是限价单但没有价格，强制转为市价单，避免 OrderUnpacker 报错
         if order_type == OrderType.LIMIT and price_obj is None:
             order_type = OrderType.MARKET
-        
+
         return OrderStatusReport(
             account_id=self.account_id,
             instrument_id=instrument_id,

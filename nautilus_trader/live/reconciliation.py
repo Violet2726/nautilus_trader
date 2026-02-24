@@ -35,6 +35,7 @@ from nautilus_trader.model.events import OrderFilled
 from nautilus_trader.model.events import OrderRejected
 from nautilus_trader.model.events import OrderTriggered
 from nautilus_trader.model.events import OrderUpdated
+from nautilus_trader.model.identifiers import AccountId
 from nautilus_trader.model.identifiers import InstrumentId
 from nautilus_trader.model.identifiers import PositionId
 from nautilus_trader.model.identifiers import TradeId
@@ -112,6 +113,7 @@ def create_order_rejected_event(
     ts_now: int,
     report: OrderStatusReport | None = None,
     reason: str | None = None,
+    account_id: AccountId | None = None,
 ) -> OrderRejected:
     """
     为对账创建一个 `OrderRejected`（订单被拒绝）事件。
@@ -142,7 +144,7 @@ def create_order_rejected_event(
             strategy_id=order.strategy_id,
             instrument_id=order.instrument_id,
             client_order_id=order.client_order_id,
-            account_id=report.account_id,
+            account_id=report.account_id or account_id or order.account_id,
             reason=report.cancel_reason or reason or "UNKNOWN",
             event_id=UUID4(),
             ts_event=report.ts_last,
@@ -156,7 +158,7 @@ def create_order_rejected_event(
             strategy_id=order.strategy_id,
             instrument_id=order.instrument_id,
             client_order_id=order.client_order_id,
-            account_id=order.account_id,
+            account_id=account_id or order.account_id,
             reason=reason or "UNKNOWN",
             event_id=UUID4(),
             ts_event=ts_now,

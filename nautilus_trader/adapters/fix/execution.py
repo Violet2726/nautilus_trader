@@ -47,8 +47,10 @@ from nautilus_trader.model.identifiers import AccountId
 from nautilus_trader.model.identifiers import ClientId
 from nautilus_trader.model.identifiers import ClientOrderId
 from nautilus_trader.model.identifiers import InstrumentId
+from nautilus_trader.model.identifiers import Symbol
 from nautilus_trader.model.identifiers import TradeId
 from nautilus_trader.model.identifiers import VenueOrderId
+from nautilus_trader.model.instruments import Equity
 from nautilus_trader.model.objects import AccountBalance
 from nautilus_trader.model.objects import Currency
 from nautilus_trader.model.objects import Money
@@ -165,6 +167,29 @@ class FixExecutionClient(LiveExecutionClient):
 
         self._set_account_id(AccountId(f"{client_id_str}-{config.account_id}"))
 
+    def _ensure_instrument_cached(self, instrument_id: InstrumentId) -> None:
+        if self._cache.instrument(instrument_id) is not None:
+            return
+
+        now_ns = self._clock.timestamp_ns()
+        currency = Currency.from_str("CNY")
+        self._cache.add_currency(currency)
+
+        instrument = Equity(
+            instrument_id=instrument_id,
+            raw_symbol=Symbol(instrument_id.symbol.value),
+            currency=currency,
+            price_precision=2,
+            price_increment=Price.from_str("0.01"),
+            lot_size=Quantity.from_int(1),
+            ts_event=now_ns,
+            ts_init=now_ns,
+            info={"source": "fix"},
+        )
+
+        self._cache.add_instrument(instrument)
+        self._instrument_provider.add(instrument)
+
     async def _connect(self) -> None:
         if self._config.use_tls_tunnel and self._config.remote_host and self._config.remote_port:
             ensure_tls_tunnel(
@@ -208,9 +233,6 @@ class FixExecutionClient(LiveExecutionClient):
             await asyncio.sleep(0.25)
             if self._clock.timestamp_ns() - start_wait > 30_000_000_000:
                 break
-
-        # 等待应用层登录完成（UserRequest/UserResponse 握手）
-        # Demo 脚本在 session_id 存在后也额外等待了 2 秒
         if app.session_id is not None:
             await asyncio.sleep(3)
 
@@ -631,6 +653,41 @@ class FixExecutionClient(LiveExecutionClient):
                 info={},
             )
 
+        now_ns = self._clock.timestamp_ns()
+        pos_reports = await self.generate_position_status_reports(
+            GeneratePositionStatusReports(
+                instrument_id=None,
+                start=None,
+                end=None,
+                command_id=UUID4(),
+                ts_init=now_ns,
+                params=command.params if command else None,
+            ),
+        )
+        order_reports = await self.generate_order_status_reports(
+            GenerateOrderStatusReports(
+                instrument_id=None,
+                start=None,
+                end=None,
+                open_only=False,
+                command_id=UUID4(),
+                ts_init=now_ns,
+                params=command.params if command else None,
+            ),
+        )
+
+        if pos_reports or order_reports:
+            status = ExecutionMassStatus(
+                client_id=self.id,
+                account_id=self.account_id,
+                venue=None,
+                report_id=UUID4(),
+                ts_init=now_ns,
+            )
+            status.add_order_reports(order_reports)
+            status.add_position_reports(pos_reports)
+            self._send_mass_status_report(status)
+
     async def generate_order_status_report(
         self,
         command: GenerateOrderStatusReport,
@@ -691,6 +748,7 @@ class FixExecutionClient(LiveExecutionClient):
                 continue
 
             instrument_id = InstrumentId.from_str(symbol)
+            self._ensure_instrument_cached(instrument_id)
 
             qty_str = str(o.get("OrderQty") or "0")
             leaves_str = str(o.get("LeavesQty") or "0")
@@ -755,39 +813,46 @@ class FixExecutionClient(LiveExecutionClient):
         for o in orders:
             if not isinstance(o, dict):
                 continue
-            symbol = o.get("Symbol")
-            venue_order_id_str = o.get("OrderID")
-            if not symbol or not venue_order_id_str:
+            reports.extend(self._parse_fill_reports_for_order(o, now_ns))
+        return reports
+
+    def _parse_fill_reports_for_order(self, order: dict[str, Any], now_ns: int) -> list[FillReport]:
+        symbol = order.get("Symbol")
+        venue_order_id_str = order.get("OrderID")
+        if not symbol or not venue_order_id_str:
+            return []
+
+        instrument_id = InstrumentId.from_str(symbol)
+        self._ensure_instrument_cached(instrument_id)
+
+        reports: list[FillReport] = []
+        executes = order.get("NoExecutes") or []
+        for e in executes:
+            if not isinstance(e, dict):
                 continue
-
-            executes = o.get("NoExecutes") or []
-            for e in executes:
-                if not isinstance(e, dict):
-                    continue
-                exec_id = e.get("ExecID") or e.get("TradeID") or e.get("ExecRefID")
-                last_qty = e.get("LastQty") or e.get("CumQty")
-                last_px = e.get("LastPx") or e.get("LastPxPrice") or e.get("Price")
-                if exec_id is None or last_qty is None or last_px is None:
-                    continue
-                ts_event = _parse_utc_datetime_ns(e.get("TransactTime")) or now_ns
-                reports.append(
-                    FillReport(
-                        account_id=self.account_id,
-                        instrument_id=InstrumentId.from_str(symbol),
-                        venue_order_id=VenueOrderId(str(venue_order_id_str)),
-                        trade_id=TradeId(str(exec_id)),
-                        order_side=_order_side_from_fix(o.get("Side")),
-                        last_qty=Quantity.from_str(str(last_qty)),
-                        last_px=Price.from_str(str(last_px)),
-                        commission=Money(0, Currency.from_str("CNY")),
-                        liquidity_side=LiquiditySide.NO_LIQUIDITY_SIDE,
-                        report_id=UUID4(),
-                        ts_event=ts_event,
-                        ts_init=now_ns,
-                        client_order_id=ClientOrderId(o.get("ClOrdID")) if o.get("ClOrdID") else None,
-                    ),
-                )
-
+            exec_id = e.get("ExecID") or e.get("TradeID") or e.get("ExecRefID")
+            last_qty = e.get("LastQty") or e.get("CumQty")
+            last_px = e.get("LastPx") or e.get("LastPxPrice") or e.get("Price")
+            if exec_id is None or last_qty is None or last_px is None:
+                continue
+            ts_event = _parse_utc_datetime_ns(e.get("TransactTime")) or now_ns
+            reports.append(
+                FillReport(
+                    account_id=self.account_id,
+                    instrument_id=instrument_id,
+                    venue_order_id=VenueOrderId(str(venue_order_id_str)),
+                    trade_id=TradeId(str(exec_id)),
+                    order_side=_order_side_from_fix(order.get("Side")),
+                    last_qty=Quantity.from_str(str(last_qty)),
+                    last_px=Price.from_str(str(last_px)),
+                    commission=Money(0, Currency.from_str("CNY")),
+                    liquidity_side=LiquiditySide.NO_LIQUIDITY_SIDE,
+                    report_id=UUID4(),
+                    ts_event=ts_event,
+                    ts_init=now_ns,
+                    client_order_id=ClientOrderId(order.get("ClOrdID")) if order.get("ClOrdID") else None,
+                ),
+            )
         return reports
 
     async def generate_position_status_reports(
@@ -820,11 +885,12 @@ class FixExecutionClient(LiveExecutionClient):
                 continue
             symbol = h.get("Symbol")
             if not symbol or "." not in symbol:
-                continue  # 跳过非证券条目（如 CNY 现金余额）
+                continue
             qty = h.get("PositionQty")
             q = Decimal(str(qty or 0))
             position_side = PositionSide.LONG if q > 0 else PositionSide.SHORT if q < 0 else PositionSide.FLAT
             instrument_id = InstrumentId.from_str(symbol)
+            self._ensure_instrument_cached(instrument_id)
             reports.append(
                 PositionStatusReport(
                     account_id=self.account_id,

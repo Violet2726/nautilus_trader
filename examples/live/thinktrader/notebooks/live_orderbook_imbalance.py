@@ -6,11 +6,11 @@ import warnings
 from decimal import Decimal
 from pathlib import Path
 
+
 # Suppress annoying warnings from dependencies
 warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
-import pandas as pd
 from nautilus_trader.adapters.thinktrader.common import TT
 from nautilus_trader.adapters.thinktrader.config import ThinkTraderDataClientConfig
 from nautilus_trader.adapters.thinktrader.config import ThinkTraderExecClientConfig
@@ -124,23 +124,23 @@ class OrderBookImbalance(Strategy):
             if not self.config.use_quote_ticks:
                 self.log.error("No book being maintained")
             return
-        
+
         if not book.spread():
             return
-            
+
         self._process_trigger(book.best_bid_size(), book.best_ask_size(), book.best_bid_price(), book.best_ask_price())
 
     def check_trigger_from_tick(self, tick: QuoteTick) -> None:
         """直接从 QuoteTick 检查触发条件"""
         if not self.instrument:
             return
-        
+
         # QuoteTick 可能也是空的或者单边的
         bid_size = tick.bid_size
         ask_size = tick.ask_size
         bid_price = tick.bid_price
         ask_price = tick.ask_price
-        
+
         self._process_trigger(bid_size, ask_size, bid_price, ask_price)
 
     def _process_trigger(self, bid_size, ask_size, bid_price, ask_price) -> None:
@@ -151,13 +151,13 @@ class OrderBookImbalance(Strategy):
 
         smaller = min(bid_size, ask_size)
         larger = max(bid_size, ask_size)
-        
+
         # 避免除以零
         if larger == 0:
             return
-            
+
         ratio = smaller / larger
-        
+
         # Log 太多会刷屏，可以适当减少
         # self.log.info(f"Market: {bid_price} @ {ask_price} ({ratio=:0.2f})")
 
@@ -172,7 +172,7 @@ class OrderBookImbalance(Strategy):
             self.log.info(
                 f"Imbalance Triggered! Ratio: {ratio:.2f}, Bid: {bid_size}@{bid_price}, Ask: {ask_size}@{ask_price}"
             )
-            
+
             if len(self.cache.orders_inflight(strategy_id=self.id)) > 0:
                 self.log.info("Already have orders in flight - skipping.")
             elif seconds_since_last_trigger < self.config.min_seconds_between_triggers:
@@ -183,7 +183,7 @@ class OrderBookImbalance(Strategy):
                 # 原策略代码：
                 # if bid_size > ask_size: ... order_side=OrderSide.BUY ... price=book.best_ask_price()
                 # 这种逻辑是：买单堆积，可能会推高价格，所以吃掉卖单（Taker Buy）
-                
+
                 # Round down trade quantity to nearest 100
                 trade_qty = min(ask_size, Quantity.from_str(str(self.config.max_trade_size)))
                 trade_qty = (int(trade_qty) // 100) * 100
@@ -247,7 +247,7 @@ account_id = os.environ.get("MINIQMT_ACCOUNT_ID", "211800003313")
 account_type = "STOCK"
 session_id = random.randint(100000, 999999)
 
-instrument_ids_str = ["600916.SSE"] # "000547.SZSE", 
+instrument_ids_str = ["600916.SSE"] # "000547.SZSE",
 instrument_ids = [InstrumentId.from_str(i) for i in instrument_ids_str]
 
 instrument_provider = ThinkTraderInstrumentProviderConfig(
@@ -259,7 +259,7 @@ config_node = TradingNodeConfig(
     trader_id=TraderId("TESTER-IMB-001"),
     logging=LoggingConfig(
         log_level="INFO",
-        log_component_levels={"Strategy": "INFO"} 
+        log_component_levels={"Strategy": "INFO"}
     ),
     data_clients={
         TT: ThinkTraderDataClientConfig(
@@ -299,22 +299,22 @@ if __name__ == "__main__":
     for instrument_id in instrument_ids:
         strategy_config = OrderBookImbalanceConfig(
             instrument_id=instrument_id,
-            max_trade_size=Decimal("100"),    
-            trigger_min_size=100.0,          
-            trigger_imbalance_ratio=0.3,      
-            min_seconds_between_triggers=5.0, 
-            book_type="L1_MBP",               
-            use_quote_ticks=True,             
-            dry_run=False,                   
+            max_trade_size=Decimal(100),
+            trigger_min_size=100.0,
+            trigger_imbalance_ratio=0.3,
+            min_seconds_between_triggers=5.0,
+            book_type="L1_MBP",
+            use_quote_ticks=True,
+            dry_run=False,
         )
-        
+
         strategy = OrderBookImbalance(config=strategy_config)
         node.trader.add_strategy(strategy)
         print(f"已添加策略: {instrument_id} (Imbalance)")
 
     node.build()
 
-    print(f"正在启动多标的策略...")
+    print("正在启动多标的策略...")
     print(f"数据路径: {miniqmt_path}")
     print(f"账户 ID: {account_id}")
 

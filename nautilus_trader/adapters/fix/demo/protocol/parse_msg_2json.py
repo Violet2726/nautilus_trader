@@ -5,9 +5,9 @@ class FIXTreeParser:
     def __init__(self, xml_path):
         self.tree = ET.parse(xml_path)
         self.root = self.tree.getroot()
-        self.tag_to_name = {f.get('number'): f.get('name') for f in self.root.findall(".//fields/field")}
+        self.tag_to_name = {f.get("number"): f.get("name") for f in self.root.findall(".//fields/field")}
         self.name_to_tag = {v: k for k, v in self.tag_to_name.items()}
-        self.components = {c.get('name'): c for c in self.root.findall(".//components/component")}
+        self.components = {c.get("name"): c for c in self.root.findall(".//components/component")}
 
     def _get_fields_and_groups(self, element):
         """递归展开 component 并提取字段和子组"""
@@ -16,22 +16,22 @@ class FIXTreeParser:
         first_tag = None
 
         for child in element:
-            if child.tag == 'field':
-                tag = self.name_to_tag.get(child.get('name'))
+            if child.tag == "field":
+                tag = self.name_to_tag.get(child.get("name"))
                 if tag:
                     inner_tags.add(tag)
                     if first_tag is None: first_tag = tag
 
-            elif child.tag == 'component':
-                comp_name = child.get('name')
+            elif child.tag == "component":
+                comp_name = child.get("name")
                 if comp_name in self.components:
                     c_tags, c_groups, c_first = self._get_fields_and_groups(self.components[comp_name])
                     inner_tags.update(c_tags)
                     sub_groups.update(c_groups)
                     if first_tag is None: first_tag = c_first
 
-            elif child.tag == 'group':
-                g_name = child.get('name')
+            elif child.tag == "group":
+                g_name = child.get("name")
                 g_tag = self.name_to_tag.get(g_name)
                 if g_tag:
                     inner_tags.add(g_tag)
@@ -46,19 +46,19 @@ class FIXTreeParser:
                     }
         return inner_tags, sub_groups, first_tag
 
-    def parse(self, message, separator='|'):
+    def parse(self, message, separator="|"):
         # --- 核心修复：处理 QuickFIX Message 对象 ---
-        if hasattr(message, 'toString'):
+        if hasattr(message, "toString"):
             # 将 SOH (\x01) 替换为统一分隔符
-            raw_fix = message.toString().replace('\x01', separator)
+            raw_fix = message.toString().replace("\x01", separator)
         else:
             raw_fix = str(message)
         # 预处理字符串
-        pairs = [p.split('=') for p in raw_fix.strip(separator).split(separator) if '=' in p]
+        pairs = [p.split("=") for p in raw_fix.strip(separator).split(separator) if "=" in p]
         if not pairs: return {}
 
         # 获取消息定义
-        msg_type_val = next((v for t, v in pairs if t == '35'), None)
+        msg_type_val = next((v for t, v in pairs if t == "35"), None)
         msg_def = self.root.find(f".//messages/message[@msgtype='{msg_type_val}']")
 
         # 预加载该消息的结构
@@ -94,8 +94,8 @@ class FIXTreeParser:
 
                         # 定义条目结束条件：遇到该组的首字段且不是第一次，或者遇到不属于该组的字段
                         def is_entry_end(t):
-                            return t == spec['first_tag'] or (
-                                    t not in spec['inner_tags'] and t not in spec['sub_groups'])
+                            return t == spec["first_tag"] or (
+                                    t not in spec["inner_tags"] and t not in spec["sub_groups"])
 
                         item_data, pending_pair = self._parse_recursive_item(first_p, it, spec)
                         items.append(item_data)
@@ -121,13 +121,13 @@ class FIXTreeParser:
                 current_pair = None
 
                 # 如果遇到本组的首字段，说明新条目开始了，当前条目结束
-                if tag == spec['first_tag']:
+                if tag == spec["first_tag"]:
                     return item_data, (tag, val)
 
                 # 如果遇到子组
-                if tag in spec['sub_groups']:
+                if tag in spec["sub_groups"]:
                     count = int(val)
-                    sub_spec = spec['sub_groups'][tag]
+                    sub_spec = spec["sub_groups"][tag]
                     sub_items = []
                     p_pair = None
                     for _ in range(count):
@@ -137,7 +137,7 @@ class FIXTreeParser:
                     item_data[self.tag_to_name.get(tag, tag)] = sub_items
                     current_pair = p_pair
                 # 如果是组内普通字段
-                elif tag in spec['inner_tags']:
+                elif tag in spec["inner_tags"]:
                     item_data[self.tag_to_name.get(tag, tag)] = val
                 else:
                     # 不属于本组的字段，交给父级处理

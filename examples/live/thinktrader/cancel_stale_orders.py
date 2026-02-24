@@ -95,7 +95,7 @@ def _pad(s: str, width: int, align: str = "<") -> str:
 
 
 def _fmt_time(raw_time) -> str:
-    """xtquant 时间戳 → HH:MM:SS"""
+    """Xtquant 时间戳 → HH:MM:SS"""
     try:
         ts = int(raw_time)
         if ts <= 0:
@@ -110,7 +110,7 @@ def _fmt_time(raw_time) -> str:
 
 
 def _ts_to_epoch(raw_time) -> float:
-    """xtquant 时间戳 → Unix epoch seconds"""
+    """Xtquant 时间戳 → Unix epoch seconds"""
     try:
         ts = float(raw_time)
         if ts <= 0:

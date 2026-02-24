@@ -6,6 +6,7 @@ from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
 
+
 # Suppress annoying warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -16,7 +17,6 @@ from nautilus_trader.adapters.thinktrader.config import ThinkTraderExecClientCon
 from nautilus_trader.adapters.thinktrader.config import ThinkTraderInstrumentProviderConfig
 from nautilus_trader.adapters.thinktrader.factories import ThinkTraderLiveDataClientFactory
 from nautilus_trader.adapters.thinktrader.factories import ThinkTraderLiveExecClientFactory
-from nautilus_trader.common.enums import LogColor
 from nautilus_trader.config import LiveDataEngineConfig
 from nautilus_trader.config import LoggingConfig
 from nautilus_trader.config import PositiveInt
@@ -33,7 +33,6 @@ from nautilus_trader.model.enums import TimeInForce
 from nautilus_trader.model.identifiers import InstrumentId
 from nautilus_trader.model.identifiers import TraderId
 from nautilus_trader.model.instruments import Instrument
-from nautilus_trader.model.objects import Quantity
 from nautilus_trader.trading.strategy import Strategy
 
 
@@ -60,9 +59,9 @@ class EMACrossConfig(StrategyConfig, frozen=True):
     trade_size: Decimal
     fast_ema_period: PositiveInt = 10
     slow_ema_period: PositiveInt = 20
-    
+
     # 历史数据加载配置 (可选)
-    request_bars: bool = False 
+    request_bars: bool = False
 
 
 class EMACross(Strategy):
@@ -125,7 +124,7 @@ class EMACross(Strategy):
         elif self.fast_ema.value < self.slow_ema.value:
             if self.portfolio.is_flat(self.config.instrument_id):
                 # A 股不能做空，所以如果空仓则不动，如果是期货则可以开空
-                # self.sell(bar.close) 
+                # self.sell(bar.close)
                 pass
             elif self.portfolio.is_net_long(self.config.instrument_id):
                 self.log.info(f"[{self.config.instrument_id}] DEATH CROSS (死叉) -> SELL")
@@ -144,8 +143,8 @@ class EMACross(Strategy):
 
         # 使用限价单模拟市价买入 (挂高价，例如涨停价或卖五价，这里简单处理为当前价 * 1.02)
         # 注意：这里为了安全，使用当前 Bar Close 价格 + 滑点
-        limit_price = current_price * Decimal("1.01") 
-        
+        limit_price = current_price * Decimal("1.01")
+
         order = self.order_factory.limit(
             instrument_id=self.config.instrument_id,
             order_side=OrderSide.BUY,
@@ -158,7 +157,7 @@ class EMACross(Strategy):
     def sell(self, current_price: Decimal) -> None:
         if not self.instrument:
             return
-            
+
         qty = self.config.trade_size
         # 确保整百
         qty = (int(qty) // 100) * 100
@@ -248,24 +247,24 @@ if __name__ == "__main__":
     # 为每个标的添加策略实例
     for instrument_id, instrument_id_str in zip(instrument_ids, instrument_ids_str):
         # 构造 BarType: {InstrumentID}-1-MINUTE-MID-INTERNAL
-        bar_type_str = f"{instrument_id_str}-1-MINUTE-MID-INTERNAL" 
+        bar_type_str = f"{instrument_id_str}-1-MINUTE-MID-INTERNAL"
         bar_type = BarType.from_str(bar_type_str)
-        
+
         strategy_config = EMACrossConfig(
             instrument_id=instrument_id,
             bar_type=bar_type,
-            trade_size=Decimal("100"),     # 每次100股
+            trade_size=Decimal(100),     # 每次100股
             fast_ema_period=2,             # 2周期
             slow_ema_period=5,            # 5周期
         )
-        
+
         strategy = EMACross(config=strategy_config)
         node.trader.add_strategy(strategy)
         print(f"已添加策略: {instrument_id} (EMA Cross, BarType={bar_type})")
 
     node.build()
 
-    print(f"正在启动多标的 EMA Cross 策略...")
+    print("正在启动多标的 EMA Cross 策略...")
     print(f"日志路径: {log_file_path}")
     print(f"跟踪标的: {instrument_ids_str}")
 

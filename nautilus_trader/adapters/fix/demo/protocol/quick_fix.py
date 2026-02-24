@@ -1,25 +1,36 @@
+import atexit
 import datetime
 import json
 import logging
-import time
-import atexit
 import socket
 import ssl
 import threading
+import time
 from threading import Lock
 
 import quickfix as fix
 
 from protocol.hardware_info import get_hardware_info
 from protocol.parse_msg_2json import FIXTreeParser
-from protocol.wind_fix_enum import FixMsgType, WindCustomTags, Side, OrdType, SecurityType, BookingType, TimeInForce, \
-    HandlInst, get_exchange_info_v3, StorageTopic, UserRequestType, UserStatus, QueryType
+from protocol.wind_fix_enum import BookingType
+from protocol.wind_fix_enum import FixMsgType
+from protocol.wind_fix_enum import HandlInst
+from protocol.wind_fix_enum import OrdType
+from protocol.wind_fix_enum import SecurityType
+from protocol.wind_fix_enum import Side
+from protocol.wind_fix_enum import StorageTopic
+from protocol.wind_fix_enum import TimeInForce
+from protocol.wind_fix_enum import UserRequestType
+from protocol.wind_fix_enum import UserStatus
+from protocol.wind_fix_enum import WindCustomTags
+from protocol.wind_fix_enum import get_exchange_info_v3
+
 
 # 在程序启动的入口处配置
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S"
 )
 
 _tls_tunnel_lock = threading.Lock()
@@ -72,7 +83,7 @@ class _TLSTunnel:
         while not self._stop_event.is_set():
             try:
                 client, _ = self._server_sock.accept()
-            except socket.timeout:
+            except TimeoutError:
                 continue
             except OSError:
                 break
@@ -120,7 +131,7 @@ class _TLSTunnel:
             while True:
                 try:
                     data = src.recv(4096)
-                except socket.timeout:
+                except TimeoutError:
                     continue
                 if not data:
                     if first:
@@ -216,7 +227,7 @@ class QMTToFIXAdapter(fix.Application):
     #     self._query_positions(query_type=4, account_id=self.account_id)
 
     def onLogout(self, session_id):
-        logging.log(logging.INFO, f" onLogout...")
+        logging.log(logging.INFO, " onLogout...")
 
     def toApp(self, message, session_id):
         pass
@@ -225,9 +236,9 @@ class QMTToFIXAdapter(fix.Application):
         """解析服务器返回的行政报文，用于排查登录失败的具体原因"""
         msg_type = fix.MsgType()
         message.getHeader().getField(msg_type)
-        
+
         logging.log(logging.INFO, f"收到管理报文: {msg_type.getValue()}")
-        
+
         # 如果收到服务器的拒绝(Reject)或注销(Logout)报文，打印具体原因(Tag 58: Text)
         if msg_type.getValue() in [fix.MsgType_Reject, fix.MsgType_Logout]:
             if message.isSetField(58):
@@ -243,7 +254,7 @@ class QMTToFIXAdapter(fix.Application):
         """在发送给服务器的行政报文（如 Logon）中注入必要的认证字段"""
         msg_type = fix.MsgType()
         message.getHeader().getField(msg_type)
-        
+
         # 针对 Logon (35=A) 报文注入万得要求的认证字段
         if msg_type.getValue() == fix.MsgType_Logon:
             logging.log(logging.INFO, "正在发送 Logon 报文")
@@ -526,7 +537,7 @@ class QMTToFIXAdapter(fix.Application):
         result: str = self._get_value_waite_time(StorageTopic.EXEC_ORDER.value, cl_ord_id)
         # OrderID 获取 TAG 37
         if result is not None and result != {}:
-            result = json.loads(result).get('OrderID')
+            result = json.loads(result).get("OrderID")
             # logging.log(logging.INFO, f"Receive passorder response: ClOrdID {cl_ord_id} match OrderID {result}")
         return result
 
@@ -568,7 +579,7 @@ class QMTToFIXAdapter(fix.Application):
         result: str = self._get_value_waite_time(StorageTopic.EXEC_ORDER.value, cancel_req_id)
         # OrderID 获取 TAG 37
         if result is not None and result != {}:
-            result = json.loads(result).get('OrderID')
+            result = json.loads(result).get("OrderID")
             # logging.log(logging.INFO, f"Receive cancel response: ClOrdID {cancel_req_id} match OrderID {result}")
         return result
 
@@ -586,22 +597,22 @@ class QMTToFIXAdapter(fix.Application):
             - DEAL ：成交 --\n
         """
         result = {}
-        if str_data_type == 'ACCOUNT':
+        if str_data_type == "ACCOUNT":
             self.trade_cache[StorageTopic.ACCOUNTS.value][account_id] = {}
             self._query_positions(query_type=4, account_id=account_id)
             #  轮询直到获取值或超时
             result = self._get_value_waite_time(StorageTopic.ACCOUNTS.value, account_id)
-        if str_data_type == 'POSITION':
+        if str_data_type == "POSITION":
             self.trade_cache[StorageTopic.POSITIONS.value][account_id] = {}
             self._query_positions(query_type=3, account_id=account_id)
             #  轮询直到获取值或超时
             result = self._get_value_waite_time(StorageTopic.POSITIONS.value, account_id)
-        elif str_data_type == 'ORDER':
+        elif str_data_type == "ORDER":
             self.trade_cache[StorageTopic.ORDERS.value][account_id] = {}
             self._query_deal_data(query_type=1, account_id=account_id)
             #  轮询直到获取值或超时
             result = self._get_value_waite_time(StorageTopic.ORDERS.value, account_id)
-        elif str_data_type == 'DEAL':
+        elif str_data_type == "DEAL":
             self.trade_cache[StorageTopic.DEALS.value][account_id] = {}
             self._query_deal_data(query_type=2, account_id=account_id)
             #  轮询直到获取值或超时

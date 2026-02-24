@@ -845,10 +845,28 @@ class LiveExecutionEngine(ExecutionEngine):
         ts_now = self._clock.timestamp_ns()
 
         if order.status == OrderStatus.SUBMITTED:
+            account_id = order.account_id or self._cache.account_id(order.instrument_id.venue)
+            if account_id is None:
+                account = self._cache.account_for_venue(venue=order.instrument_id.venue)
+                if account is not None:
+                    account_id = account.id
+            if account_id is None:
+                accounts = self._cache.accounts()
+                if accounts and len(accounts) == 1:
+                    account_id = accounts[0].id
+            if account_id is None:
+                self._log.warning(
+                    f"无法为 {order.client_order_id!r} 解析 account_id，跳过 REJECTED 事件",
+                    LogColor.YELLOW,
+                )
+                self._clear_recon_tracking(order.client_order_id)
+                self._order_local_activity_ns.pop(order.client_order_id, None)
+                return
             rejected = create_order_rejected_event(
                 order=order,
                 ts_now=ts_now,
                 reason="UNKNOWN",
+                account_id=account_id,
             )
             self._log.debug(f"生成了 {rejected}")
             self._handle_event_with_tracking(rejected)
@@ -1170,6 +1188,9 @@ class LiveExecutionEngine(ExecutionEngine):
         for fill_report in missing_fills:
             try:
                 result = self._reconcile_fill_report_single(fill_report)
+                if not result:
+                    await self._try_reconcile_order_for_fill(fill_report)
+                    result = self._reconcile_fill_report_single(fill_report)
                 if result:
                     self._position_local_activity_ns[instrument_id] = self._clock.timestamp_ns()
                 else:
@@ -1183,6 +1204,58 @@ class LiveExecutionEngine(ExecutionEngine):
                 self._log.error(
                     f"对账 {instrument_id} 缺失的成交 {fill_report.trade_id} 时出现异常：{e}",
                 )
+
+    async def _try_reconcile_order_for_fill(self, report: FillReport) -> bool:
+        if not self._clients:
+            return False
+
+        if report.client_order_id is None and report.venue_order_id is None:
+            return False
+
+        candidate_client_order_id = report.client_order_id
+        if candidate_client_order_id is None and report.venue_order_id is not None:
+            candidate_client_order_id = self._cache.client_order_id(report.venue_order_id)
+
+        if (
+            candidate_client_order_id is not None
+            and self._cache.order(candidate_client_order_id) is not None
+        ):
+            return True
+
+        query_ts = self._clock.timestamp_ns()
+        tasks = [
+            c.generate_order_status_report(
+                GenerateOrderStatusReport(
+                    instrument_id=report.instrument_id,
+                    client_order_id=report.client_order_id,
+                    venue_order_id=report.venue_order_id,
+                    command_id=UUID4(),
+                    ts_init=query_ts,
+                ),
+            )
+            for c in self._clients.values()
+        ]
+
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        for result in results:
+            if isinstance(result, Exception):
+                self._log.warning(
+                    f"通过成交报告查询订单状态时出错：{result}",
+                )
+                continue
+
+            order_report = cast("OrderStatusReport | None", result)
+            if order_report is None:
+                continue
+
+            self._log.info(
+                f"通过成交报告查询找到订单 {order_report.client_order_id!r}",
+                LogColor.BLUE,
+            )
+            self._reconcile_order_report(order_report, trades=[])
+            return True
+
+        return False
 
     def _prune_recent_fills_cache(self, ttl_secs: float = 60.0) -> None:
         # 从缓存中移除过期的成交（默认 TTL：60 秒）
@@ -1383,10 +1456,28 @@ class LiveExecutionEngine(ExecutionEngine):
                 f"正在对账 {order.client_order_id!r}：柜台未找到 ACCEPTED 订单，标记为 REJECTED",
                 LogColor.YELLOW,
             )
+            account_id = order.account_id or self._cache.account_id(order.instrument_id.venue)
+            if account_id is None:
+                account = self._cache.account_for_venue(venue=order.instrument_id.venue)
+                if account is not None:
+                    account_id = account.id
+            if account_id is None:
+                accounts = self._cache.accounts()
+                if accounts and len(accounts) == 1:
+                    account_id = accounts[0].id
+            if account_id is None:
+                self._log.warning(
+                    f"无法为 {order.client_order_id!r} 解析 account_id，跳过 REJECTED 事件",
+                    LogColor.YELLOW,
+                )
+                self._clear_recon_tracking(order.client_order_id)
+                self._order_local_activity_ns.pop(order.client_order_id, None)
+                return
             rejected = create_order_rejected_event(
                 order=order,
                 ts_now=ts_now,
                 reason="ORDER_NOT_FOUND_AT_VENUE",
+                account_id=account_id,
             )
             self._handle_event_with_tracking(rejected)
             self._clear_recon_tracking(order.client_order_id)
@@ -2092,9 +2183,18 @@ class LiveExecutionEngine(ExecutionEngine):
             self._log_skipping_reconciliation_on_instrument_id(report)
             return True  # 已过滤
 
-        client_order_id: ClientOrderId | None = self._cache.client_order_id(
-            report.venue_order_id,
-        )
+        client_order_id: ClientOrderId | None = None
+        if report.venue_order_id is not None:
+            client_order_id = self._cache.client_order_id(report.venue_order_id)
+        if client_order_id is None and report.client_order_id is not None:
+            client_order_id = report.client_order_id
+            if report.venue_order_id is not None:
+                self._ensure_venue_order_id_indexed(
+                    client_order_id=client_order_id,
+                    venue_order_id=report.venue_order_id,
+                    log_context="来自成交报告",
+                )
+
         if client_order_id is None:
             self._log.warning(
                 f"在收到 OrderStatusReport 之前收到了 {report.venue_order_id!r} 的 FillReport，"

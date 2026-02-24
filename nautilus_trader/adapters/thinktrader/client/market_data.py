@@ -1,8 +1,8 @@
 import asyncio
 import functools
-import pandas as pd
 from typing import Any
 
+import pandas as pd
 from xtquant import xtdata
 
 from nautilus_trader.adapters.thinktrader.client.common import BaseMixin

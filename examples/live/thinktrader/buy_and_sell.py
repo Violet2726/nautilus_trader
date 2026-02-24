@@ -51,6 +51,7 @@ def _load_dotenv() -> None:
 
 class BuyAndSellStrategyConfig(StrategyConfig, frozen=True):
     """买入卖出策略配置"""
+
     instrument_id: InstrumentId
 
 

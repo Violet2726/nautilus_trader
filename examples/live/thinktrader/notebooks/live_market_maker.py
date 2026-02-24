@@ -5,6 +5,7 @@ import warnings
 from decimal import Decimal
 from pathlib import Path
 
+
 # Suppress annoying warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -31,8 +32,6 @@ from nautilus_trader.model.events import PositionOpened
 from nautilus_trader.model.identifiers import InstrumentId
 from nautilus_trader.model.identifiers import TraderId
 from nautilus_trader.model.instruments import Instrument
-from nautilus_trader.model.objects import Price
-from nautilus_trader.model.objects import Quantity
 from nautilus_trader.trading.strategy import Strategy
 
 
@@ -55,8 +54,8 @@ _load_dotenv()
 
 class MarketMakerConfig(StrategyConfig, frozen=True):
     instrument_id: InstrumentId
-    trade_size: Decimal = Decimal("100")
-    max_size: Decimal = Decimal("1000")
+    trade_size: Decimal = Decimal(100)
+    max_size: Decimal = Decimal(1000)
     spread_pct: Decimal = Decimal("0.0") # 设为 0，紧贴买一/卖一价
     update_threshold_pct: Decimal = Decimal("0.0001") # 阈值，只要有微小变动就更新订单
 
@@ -98,7 +97,7 @@ class MarketMaker(Strategy):
         """
         bid_price = tick.bid_price
         ask_price = tick.ask_price
-        
+
         if not bid_price or not ask_price:
             return
 
@@ -115,25 +114,25 @@ class MarketMaker(Strategy):
             pct_change = abs(mid_dec - self._mid) / self._mid
             if pct_change > self.update_threshold_pct:
                 should_update = True
-        
+
         if should_update:
             if self._mid is not None:
                 self.log.info(f"价格变动显著 (Old Mid: {self._mid}, New Mid: {mid_dec}), 重新挂单...")
-            
+
             # 撤销所有旧订单
             self.cancel_all_orders(self.instrument_id)
-            
+
             self._mid = mid_dec
-            
+
             # 库存调整后的基准价
             val = self._mid + self._adj
-            
+
             # 计算买卖价格 (做市商模式：低买高卖)
             # Buy @ Val * (1 - spread)
             # Sell @ Val * (1 + spread)
-            buy_price = val * (Decimal("1") - self.spread_pct)
-            sell_price = val * (Decimal("1") + self.spread_pct)
-            
+            buy_price = val * (Decimal(1) - self.spread_pct)
+            sell_price = val * (Decimal(1) + self.spread_pct)
+
             # 下单
             self.place_order(OrderSide.BUY, buy_price)
             self.place_order(OrderSide.SELL, sell_price)
@@ -148,7 +147,7 @@ class MarketMaker(Strategy):
                 signed_qty = -signed_qty
             # 库存越多，_adj 越小(甚至为负)，买卖价下移，倾向于卖出
             # 库存越少(负库存)，_adj 越大，买卖价上移，倾向于买入
-            self._adj = (signed_qty / self.max_size) * Decimal("0.01") * -1 
+            self._adj = (signed_qty / self.max_size) * Decimal("0.01") * -1
             # 注意：原版策略逻辑似乎是正向的？如果是正向 (signed_qty > 0 implies higher price)，
             # 那意味着持有越多越想要更高的价格？还是说是为了追涨？
             # 传统的Inventory Skew应该是：持有库存多 -> 降价卖出 -> Skew negative.
@@ -160,7 +159,7 @@ class MarketMaker(Strategy):
             # 通常：Inventory > 0 -> Quote Lower to attract Buyers and discourage Sellers.
             # 所以应该是 负相关。
             # 我这里加上 * -1 来符合通用做市逻辑。
-            
+
         elif isinstance(event, PositionClosed):
             self._adj = Decimal(0)
 
@@ -171,13 +170,13 @@ class MarketMaker(Strategy):
         # 数量处理：取整到100
         qty = self.trade_size
         qty = (int(qty) // 100) * 100
-        
+
         if qty < 100:
             return
 
         # 价格处理：符合TickSize
         price_obj = self.instrument.make_price(price)
-        
+
         # 数量对象
         qty_obj = self.instrument.make_qty(qty)
 
@@ -211,7 +210,7 @@ config_node = TradingNodeConfig(
     trader_id=TraderId("TESTER-MM-002"),
     logging=LoggingConfig(
         log_level="INFO",
-        log_component_levels={"Strategy": "INFO"} 
+        log_component_levels={"Strategy": "INFO"}
     ),
     data_clients={
         TT: ThinkTraderDataClientConfig(
@@ -250,11 +249,11 @@ if __name__ == "__main__":
 
     strategy_config = MarketMakerConfig(
         instrument_id=instrument_id,
-        trade_size=Decimal("100"),
-        max_size=Decimal("1000"),
+        trade_size=Decimal(100),
+        max_size=Decimal(1000),
         spread_pct=Decimal("0.005") # 0.5% Spread
     )
-    
+
     strategy = MarketMaker(config=strategy_config)
     node.trader.add_strategy(strategy)
 

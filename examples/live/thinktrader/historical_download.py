@@ -20,6 +20,7 @@ from dotenv import load_dotenv
 
 from nautilus_trader.adapters.thinktrader.historical.client import HistoricThinkTraderClient
 
+
 # 加载环境变量（可选）
 load_dotenv()
 
@@ -321,7 +322,7 @@ async def main():
     print()
 
     if df_bars is not None:
-        print(f"K线数据文件:")
+        print("K线数据文件:")
         for bar_type in BAR_TYPES:
             bar_type_safe = bar_type.replace("-", "_").lower()
             filename = OUTPUT_DIR / f"bars_{bar_type_safe}.csv"
@@ -335,7 +336,7 @@ async def main():
         tick_file = OUTPUT_DIR / "ticks_quote.csv"
         if tick_file.exists():
             size_kb = tick_file.stat().st_size / 1024
-            print(f"Tick数据文件:")
+            print("Tick数据文件:")
             print(f"  - {tick_file.name} ({size_kb:.1f} KB)")
         print()
 

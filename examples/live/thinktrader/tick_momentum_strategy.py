@@ -3,30 +3,30 @@ import os
 import random
 import warnings
 from collections import deque
-from typing import Deque, Tuple, Dict, List, Optional
+from typing import Deque
+from typing import Dict
+from typing import List
+from typing import Tuple
 
 from nautilus_trader.adapters.thinktrader.common import TT
-from nautilus_trader.adapters.thinktrader.config import (
-    ThinkTraderDataClientConfig,
-    ThinkTraderExecClientConfig,
-    ThinkTraderInstrumentProviderConfig,
-)
-from nautilus_trader.adapters.thinktrader.factories import (
-    ThinkTraderLiveDataClientFactory,
-    ThinkTraderLiveExecClientFactory,
-)
-from nautilus_trader.config import (
-    LiveDataEngineConfig,
-    LoggingConfig,
-    RoutingConfig,
-    StrategyConfig,
-    TradingNodeConfig,
-)
+from nautilus_trader.adapters.thinktrader.config import ThinkTraderDataClientConfig
+from nautilus_trader.adapters.thinktrader.config import ThinkTraderExecClientConfig
+from nautilus_trader.adapters.thinktrader.config import ThinkTraderInstrumentProviderConfig
+from nautilus_trader.adapters.thinktrader.factories import ThinkTraderLiveDataClientFactory
+from nautilus_trader.adapters.thinktrader.factories import ThinkTraderLiveExecClientFactory
+from nautilus_trader.config import LiveDataEngineConfig
+from nautilus_trader.config import LoggingConfig
+from nautilus_trader.config import RoutingConfig
+from nautilus_trader.config import StrategyConfig
+from nautilus_trader.config import TradingNodeConfig
 from nautilus_trader.live.node import TradingNode
 from nautilus_trader.model.data import QuoteTick
-from nautilus_trader.model.enums import OrderSide, TimeInForce
-from nautilus_trader.model.identifiers import InstrumentId, TraderId
+from nautilus_trader.model.enums import OrderSide
+from nautilus_trader.model.enums import TimeInForce
+from nautilus_trader.model.identifiers import InstrumentId
+from nautilus_trader.model.identifiers import TraderId
 from nautilus_trader.trading.strategy import Strategy
+
 
 # 过滤不必要的警告
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -52,9 +52,10 @@ class MultiTickMomentumConfig(StrategyConfig, frozen=True):
     """
     多标的 Tick 动量策略配置
     """
+
     instrument_ids: List[InstrumentId]
     trade_qty: int = 100            # 每次交易数量 (股)
-    
+
     # 信号参数
     momentum_window_seconds: float = 10.0
     entry_momentum_bps: float = 5.0
@@ -62,7 +63,7 @@ class MultiTickMomentumConfig(StrategyConfig, frozen=True):
     # 止盈止损参数 (基点)
     take_profit_bps: float = 15.0
     stop_loss_bps: float = 10.0
-    
+
     # 风险控制
     max_positions_per_instrument: int = 3  # 每个标的最大并行持仓个数 (Trade Units)
     max_total_positions: int = 10          # 全局总持仓个数
@@ -86,13 +87,13 @@ class MultiTickMomentumStrategy(Strategy):
     def __init__(self, config: MultiTickMomentumConfig):
         super().__init__(config)
         self.instrument_ids = config.instrument_ids
-        
+
         # 将参数转化为内部计算格式
         self.momentum_window_ns = int(config.momentum_window_seconds * 1_000_000_000)
         self.entry_threshold = config.entry_momentum_bps / 10_000.0
         self.tp_threshold = config.take_profit_bps / 10_000.0
         self.sl_threshold = config.stop_loss_bps / 10_000.0
-        
+
         # 状态字典 (key 为 instrument_id)
         self._tick_history: Dict[InstrumentId, Deque[Tuple[int, float]]] = {
             id: deque() for id in self.instrument_ids
@@ -101,12 +102,10 @@ class MultiTickMomentumStrategy(Strategy):
         self._active_trades: Dict[InstrumentId, List[Dict]] = {
             id: [] for id in self.instrument_ids
         }
-        self._pending_orders_count: Dict[InstrumentId, int] = {
-            id: 0 for id in self.instrument_ids
-        }
-        self._round_trips = {id: 0 for id in self.instrument_ids}
-        self._tick_counts = {id: 0 for id in self.instrument_ids}
-        
+        self._pending_orders_count: Dict[InstrumentId, int] = dict.fromkeys(self.instrument_ids, 0)
+        self._round_trips = dict.fromkeys(self.instrument_ids, 0)
+        self._tick_counts = dict.fromkeys(self.instrument_ids, 0)
+
         self._realized_pnl = 0.0
         self._instruments = {}
 
@@ -154,33 +153,33 @@ class MultiTickMomentumStrategy(Strategy):
         trades = self._active_trades[ts_id]
         closed_any = False
         for trade in trades[:]:  # 复制一份用于遍历，因为会修改原列表
-            entry_price = trade['entry_price']
+            entry_price = trade["entry_price"]
             pnl_bps = (mid_price - entry_price) / entry_price
-            
+
             # 止盈
             if pnl_bps >= self.tp_threshold:
                 self.log.info(f"[{ts_id}] 触发单元止盈: 当前 {mid_price:.2f} >= 入场 {entry_price:.2f} (+{pnl_bps*10000:.1f} bps)")
                 # 使用买一价限价卖出
-                self._submit_exit_order(ts_id, trade['qty'], bid)
+                self._submit_exit_order(ts_id, trade["qty"], bid)
                 trades.remove(trade)
                 closed_any = True
             # 止损
             elif pnl_bps <= -self.sl_threshold:
                 self.log.info(f"[{ts_id}] 触发单元止损: 当前 {mid_price:.2f} <= 入场 {entry_price:.2f} ({pnl_bps*10000:.1f} bps)")
                 # 使用买一价限价卖出
-                self._submit_exit_order(ts_id, trade['qty'], bid)
+                self._submit_exit_order(ts_id, trade["qty"], bid)
                 trades.remove(trade)
                 closed_any = True
-        
+
         if closed_any: return # 如果本 Tick 触发了平仓，本标的不再开新仓
 
         # 3. 入场逻辑
         self._tick_counts[ts_id] += 1
-        
+
         # 计算动量
         price_ago = history[0][1]
         momentum = (mid_price - price_ago) / price_ago if price_ago > 0 else 0
-        
+
         # 每 5 个 Tick 打印心跳 (避免刷屏)
         if self._tick_counts[ts_id] % 5 == 0:
             active_count = len(trades)
@@ -188,12 +187,12 @@ class MultiTickMomentumStrategy(Strategy):
 
         # 入场检查
         if self._pending_orders_count[ts_id] > 0: return # 标的有在途订单，等待
-        
+
         if len(trades) < self.config.max_positions_per_instrument:
             # 检查总仓位
             total_active = sum(len(v) for v in self._active_trades.values())
             if total_active >= self.config.max_total_positions: return
-            
+
             # 检查风控
             if self._round_trips[ts_id] >= self.config.max_round_trips_per_id: return
             if self._realized_pnl <= -self.config.max_daily_loss: return
@@ -232,18 +231,18 @@ class MultiTickMomentumStrategy(Strategy):
     def on_order_filled(self, event) -> None:
         ts_id = event.instrument_id
         self._pending_orders_count[ts_id] = max(0, self._pending_orders_count[ts_id] - 1)
-        
+
         fill_qty = event.last_qty.as_double()
         fill_price = event.last_px.as_double()
-        
+
         if event.order_side == OrderSide.BUY:
             # 新增一个持仓单元
             self._active_trades[ts_id].append({
-                'entry_price': fill_price,
-                'qty': fill_qty
+                "entry_price": fill_price,
+                "qty": fill_qty
             })
             self.log.info(f"[{ts_id}] 买入成交: {fill_qty} @ {fill_price:.2f} (当前持仓单元数: {len(self._active_trades[ts_id])})")
-            
+
         elif event.order_side == OrderSide.SELL:
             # 这种简化的逻辑假定 SELL 是平仓。在 Netting 模式下我们不通过 trade_id 匹配，
             # 只要成交了，盈亏已经在 _on_quote_tick 平仓触发时从逻辑上扣减了。
@@ -266,13 +265,13 @@ class MultiTickMomentumStrategy(Strategy):
 # -------------------------------------------------------------------------------------
 if __name__ == "__main__":
     _load_dotenv()
-    
+
     miniqmt_path = os.environ.get("MINIQMT_PATH", r"D:\迅投极速策略交易系统交易终端 华福证券QMT仿真\userdata_mini")
     session_id = random.randint(100000, 999999)
     account_id = os.environ.get("MINIQMT_ACCOUNT_ID", "211800003313")
-    
+
     # --- 配置多标的列表 ---
-    TARGET_SYMBOLS = ["688576.SSE", "601808.SSE"] 
+    TARGET_SYMBOLS = ["688576.SSE", "601808.SSE"]
     instrument_ids = [InstrumentId.from_str(s) for s in TARGET_SYMBOLS]
 
     # 配置节点
@@ -318,7 +317,7 @@ if __name__ == "__main__":
         max_total_positions=10,         # 总共最多持有 10 笔订单
         momentum_window_seconds=15.0
     )
-    
+
     strategy = MultiTickMomentumStrategy(config=strategy_config)
     node.trader.add_strategy(strategy)
 

@@ -1,8 +1,7 @@
+import re
+
 import pythoncom
 import requests
-import wmi
-import socket
-import re
 
 
 def get_hardware_info():

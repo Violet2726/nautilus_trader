@@ -14,9 +14,9 @@ from nautilus_trader.adapters.thinktrader.factories import ThinkTraderLiveDataCl
 from nautilus_trader.adapters.thinktrader.factories import ThinkTraderLiveExecClientFactory
 from nautilus_trader.config import LiveDataEngineConfig
 from nautilus_trader.config import LoggingConfig
+from nautilus_trader.config import OrderEmulatorConfig
 from nautilus_trader.config import RoutingConfig
 from nautilus_trader.config import TradingNodeConfig
-from nautilus_trader.config import OrderEmulatorConfig
 from nautilus_trader.live.node import TradingNode
 from nautilus_trader.model import BarType
 from nautilus_trader.model import TraderId

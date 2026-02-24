@@ -193,27 +193,28 @@ class FixLiveTester(Strategy):
             print("WARNING: public IP 与预期不一致, 可能导致柜台拒绝连接")
         print("=" * 64 + "\n")
 
-        # 启动后延迟 5 秒再查询和打印, 给与 FIX 连接和对账足够时间
+        # 启动后延迟 15 秒再查询（给 FIX 登录和初始同步留足时间）
         self.clock.set_time_alert(
             name="query_account_after_start",
-            alert_time=self.clock.utc_now() + timedelta(seconds=5),
+            alert_time=self.clock.utc_now() + timedelta(seconds=15),
             callback=lambda _: self._query_and_dump(),
         )
+        print("等待 FIX 连接和数据同步 (约 20 秒)...")
 
         if self._send_test_order:
             self.clock.set_time_alert(
                 name="submit_test_order",
-                alert_time=self.clock.utc_now() + timedelta(seconds=3),
+                alert_time=self.clock.utc_now() + timedelta(seconds=25),
                 callback=lambda _: self._submit_limit_buy(),
             )
             self.clock.set_time_alert(
                 name="cancel_test_order",
-                alert_time=self.clock.utc_now() + timedelta(seconds=10),
+                alert_time=self.clock.utc_now() + timedelta(seconds=35),
                 callback=lambda _: self._cancel_if_open(),
             )
             self.clock.set_time_alert(
                 name="dump_after_order",
-                alert_time=self.clock.utc_now() + timedelta(seconds=12),
+                alert_time=self.clock.utc_now() + timedelta(seconds=40),
                 callback=lambda _: self._query_and_dump(),
             )
 
@@ -231,12 +232,13 @@ class FixLiveTester(Strategy):
         if self._account_id is None:
             return
 
+        print("触发主动查询...")
         self.query_account(account_id=self._account_id, client_id=self._client_id)
 
-        # 延迟 2 秒再打印, 等待 FIX 响应写入缓存
+        # 延迟 5 秒再打印, 确保查询返回
         self.clock.set_time_alert(
             name=f"dump_state_{self.clock.timestamp_ns()}",
-            alert_time=self.clock.utc_now() + timedelta(seconds=2),
+            alert_time=self.clock.utc_now() + timedelta(seconds=5),
             callback=lambda _: self._dump_cache_state(),
         )
 

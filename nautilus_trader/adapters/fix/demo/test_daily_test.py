@@ -1,10 +1,14 @@
 import warnings
+
+
 warnings.filterwarnings("ignore", category=SyntaxWarning)
 
 import json
-import requests
-import socket
 import re
+import socket
+
+import requests
+
 
 # 测试网络IP - 使用多个源获取
 def get_public_ip():
@@ -31,7 +35,7 @@ def get_public_ip():
                     return m.group(0)
         except Exception:
             continue
-    return 'Unknown'
+    return "Unknown"
 
 # 获取本地IP
 def get_local_ip():
@@ -42,7 +46,7 @@ def get_local_ip():
         s.close()
         return ip
     except:
-        return 'Unknown'
+        return "Unknown"
 
 print("=" * 60)
 print("网络诊断信息")
@@ -51,10 +55,10 @@ public_ip = get_public_ip()
 local_ip = get_local_ip()
 print(f"公网IP: {public_ip}")
 print(f"本地IP: {local_ip}")
-print(f"账号绑定IP: 124.160.32.18")
+print("账号绑定IP: 124.160.32.18")
 print("=" * 60)
 
-if public_ip != 'Unknown' and public_ip != '124.160.32.18':
+if public_ip != "Unknown" and public_ip != "124.160.32.18":
     print("⚠️ 警告: 您的公网IP与账号绑定的IP不匹配！")
     print("这很可能是导致连接被拒绝的原因。")
     print("解决方案:")
@@ -62,7 +66,11 @@ if public_ip != 'Unknown' and public_ip != '124.160.32.18':
     print("2. 或者使用VPN获取正确的IP地址")
     print("=" * 60)
 
-from daily_real_wind import get_account, get_position, get_order, get_deal, place_order, cancel_order
+from daily_real_wind import get_account
+from daily_real_wind import get_deal
+from daily_real_wind import get_order
+from daily_real_wind import get_position
+from daily_real_wind import place_order
 
 
 class ContextInfo:
@@ -74,7 +82,7 @@ C = ContextInfo()
 
 
 def custom_serializer(obj):
-    if hasattr(obj, '__dict__'):
+    if hasattr(obj, "__dict__"):
         return obj.__dict__  # 对于有__dict__属性的对象
     elif isinstance(obj, list):
         # 递归处理列表中的元素
@@ -90,7 +98,7 @@ def sell_all(positions):
                     "11", 10, p.m_nVolume, "")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # 接口测试
     order_id_1 = place_order(C, 23, "000002.SZ", "11", 4.95, 100, "")
     order_id_2 = place_order(C, 23, "000002.SZ", "12", None, 100, "FF")
