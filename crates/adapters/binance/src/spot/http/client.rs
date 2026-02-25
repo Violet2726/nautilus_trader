@@ -35,9 +35,7 @@ use std::{collections::HashMap, fmt::Debug, num::NonZeroU32, sync::Arc};
 
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
-use nautilus_core::{
-    consts::NAUTILUS_USER_AGENT, nanos::UnixNanos, time::get_atomic_clock_realtime,
-};
+use nautilus_core::{consts::NAUTILUS_USER_AGENT, nanos::UnixNanos, time::AtomicTime};
 use nautilus_model::{
     data::{Bar, BarType, TradeTick},
     enums::{AggregationSource, BarAggregation, OrderSide, OrderType, TimeInForce},
@@ -404,8 +402,9 @@ impl BinanceRawSpotHttpClient {
             }
         }
 
-        let default_quota =
-            default.unwrap_or_else(|| Quota::per_second(NonZeroU32::new(10).unwrap()));
+        let default_quota = default.unwrap_or_else(|| {
+            Quota::per_second(NonZeroU32::new(10).expect("non-zero")).expect("valid constant")
+        });
 
         keyed.push((BINANCE_GLOBAL_RATE_KEY.to_string(), default_quota));
 
@@ -419,7 +418,7 @@ impl BinanceRawSpotHttpClient {
     fn quota_from(quota: &BinanceRateLimitQuota) -> Option<Quota> {
         let burst = NonZeroU32::new(quota.limit)?;
         match quota.interval {
-            BinanceRateLimitInterval::Second => Some(Quota::per_second(burst)),
+            BinanceRateLimitInterval::Second => Quota::per_second(burst),
             BinanceRateLimitInterval::Minute => Some(Quota::per_minute(burst)),
             BinanceRateLimitInterval::Day => {
                 Quota::with_period(std::time::Duration::from_secs(86_400))
@@ -1232,10 +1231,11 @@ impl BinanceRawSpotHttpClient {
 /// - Complex types (instruments, orders): Transform to Nautilus domain types.
 #[cfg_attr(
     feature = "python",
-    pyo3::pyclass(module = "nautilus_trader.core.nautilus_pyo3.binance")
+    pyo3::pyclass(module = "nautilus_trader.core.nautilus_pyo3.binance", from_py_object)
 )]
 pub struct BinanceSpotHttpClient {
     inner: Arc<BinanceRawSpotHttpClient>,
+    clock: &'static AtomicTime,
     instruments_cache: Arc<DashMap<Ustr, InstrumentAny>>,
 }
 
@@ -1243,6 +1243,7 @@ impl Clone for BinanceSpotHttpClient {
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
+            clock: self.clock,
             instruments_cache: self.instruments_cache.clone(),
         }
     }
@@ -1263,8 +1264,10 @@ impl BinanceSpotHttpClient {
     /// # Errors
     ///
     /// Returns an error if the underlying HTTP client cannot be created.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         environment: BinanceEnvironment,
+        clock: &'static AtomicTime,
         api_key: Option<String>,
         api_secret: Option<String>,
         base_url_override: Option<String>,
@@ -1284,6 +1287,7 @@ impl BinanceSpotHttpClient {
 
         Ok(Self {
             inner: Arc::new(inner),
+            clock,
             instruments_cache: Arc::new(DashMap::new()),
         })
     }
@@ -1308,7 +1312,7 @@ impl BinanceSpotHttpClient {
 
     /// Generates a timestamp for initialization.
     fn generate_ts_init(&self) -> UnixNanos {
-        UnixNanos::from(chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0) as u64)
+        self.clock.get_time_ns()
     }
 
     /// Retrieves an instrument from the cache.
@@ -1488,7 +1492,7 @@ impl BinanceSpotHttpClient {
         &self,
         account_id: AccountId,
     ) -> anyhow::Result<AccountState> {
-        let ts_init = get_atomic_clock_realtime().get_time_ns();
+        let ts_init = self.clock.get_time_ns();
         let params = AccountInfoParams::default();
         let account_info = self.inner.account(&params).await?;
         Ok(account_info.to_account_state(account_id, ts_init))

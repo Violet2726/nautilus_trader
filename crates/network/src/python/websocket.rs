@@ -57,6 +57,7 @@ impl WebSocketConfig {
         reconnect_backoff_factor=1.5,
         reconnect_jitter_ms=100,
         reconnect_max_attempts=None,
+        idle_timeout_ms=None,
     ))]
     fn py_new(
         url: String,
@@ -69,6 +70,7 @@ impl WebSocketConfig {
         reconnect_backoff_factor: Option<f64>,
         reconnect_jitter_ms: Option<u64>,
         reconnect_max_attempts: Option<u32>,
+        idle_timeout_ms: Option<u64>,
     ) -> Self {
         Self {
             url,
@@ -81,6 +83,7 @@ impl WebSocketConfig {
             reconnect_backoff_factor,
             reconnect_jitter_ms,
             reconnect_max_attempts,
+            idle_timeout_ms,
         }
     }
 }
@@ -198,8 +201,17 @@ impl WebSocketClient {
                 }
                 _ => {
                     connection_mode.store(ConnectionMode::Disconnect.as_u8(), Ordering::SeqCst);
-                    while !ConnectionMode::from_atomic(&connection_mode).is_closed() {
-                        tokio::time::sleep(Duration::from_millis(10)).await;
+
+                    let timeout = tokio::time::timeout(Duration::from_secs(5), async {
+                        while !ConnectionMode::from_atomic(&connection_mode).is_closed() {
+                            tokio::time::sleep(Duration::from_millis(10)).await;
+                        }
+                    })
+                    .await;
+
+                    if timeout.is_err() {
+                        log::error!("Timeout waiting for WebSocket to close, forcing closed state");
+                        connection_mode.store(ConnectionMode::Closed.as_u8(), Ordering::SeqCst);
                     }
                 }
             }
@@ -470,7 +482,7 @@ mod tests {
     }
 
     fn create_test_handler() -> (Py<PyAny>, Py<PyAny>) {
-        let code_raw = r"
+        let code_raw = "
 class Counter:
     def __init__(self):
         self.count = 0
@@ -524,6 +536,7 @@ counter = Counter()
         let config = WebSocketConfig::py_new(
             format!("ws://127.0.0.1:{}", server.port),
             vec![(header_key, header_value)],
+            None,
             None,
             None,
             None,
@@ -614,6 +627,7 @@ counter = Counter()
             vec![(header_key, header_value)],
             Some(1),
             Some("heartbeat message".to_string()),
+            None,
             None,
             None,
             None,

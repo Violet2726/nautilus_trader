@@ -40,8 +40,9 @@ pub static DYDX_RATE_LIMIT_KEY_SUBSCRIPTION: LazyLock<[Ustr; 1]> =
 pub const DYDX_WS_TOPIC_DELIMITER: char = ':';
 
 /// Default WebSocket quota for dYdX subscriptions (2 messages per second).
-pub static DYDX_WS_SUBSCRIPTION_QUOTA: LazyLock<Quota> =
-    LazyLock::new(|| Quota::per_second(NonZeroU32::new(2).expect("non-zero")));
+pub static DYDX_WS_SUBSCRIPTION_QUOTA: LazyLock<Quota> = LazyLock::new(|| {
+    Quota::per_second(NonZeroU32::new(2).expect("non-zero")).expect("valid constant")
+});
 
 use std::{
     num::NonZeroU32,
@@ -103,7 +104,7 @@ use crate::{
 #[derive(Debug)]
 #[cfg_attr(
     feature = "python",
-    pyo3::pyclass(module = "nautilus_trader.core.nautilus_pyo3.dydx")
+    pyo3::pyclass(module = "nautilus_trader.core.nautilus_pyo3.dydx", from_py_object)
 )]
 pub struct DydxWebSocketClient {
     /// The WebSocket connection URL.
@@ -457,6 +458,7 @@ impl DydxWebSocketClient {
             reconnect_backoff_factor: Some(2.0),
             reconnect_jitter_ms: Some(200),
             reconnect_max_attempts: None,
+            idle_timeout_ms: None,
         };
 
         let client = WebSocketClient::connect(
@@ -548,7 +550,7 @@ impl DydxWebSocketClient {
         // Drop receiver to stop any consumers
         self.out_rx = None;
 
-        log::info!("Disconnected dYdX WebSocket");
+        log::debug!("Disconnected dYdX WebSocket");
         Ok(())
     }
 

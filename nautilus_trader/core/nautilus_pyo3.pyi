@@ -2318,6 +2318,157 @@ class BinaryOption:
     def from_dict(cls, values: dict[str, str]) -> BinaryOption: ...
     def to_dict(self) -> dict[str, Any]: ...
 
+class Cfd:
+    def __init__(
+        self,
+        instrument_id: InstrumentId,
+        raw_symbol: Symbol,
+        asset_class: AssetClass,
+        quote_currency: Currency,
+        price_precision: int,
+        size_precision: int,
+        price_increment: Price,
+        size_increment: Quantity,
+        ts_event: int,
+        ts_init: int,
+        base_currency: Currency | None = None,
+        lot_size: Quantity | None = None,
+        max_quantity: Quantity | None = None,
+        min_quantity: Quantity | None = None,
+        max_notional: Money | None = None,
+        min_notional: Money | None = None,
+        max_price: Price | None = None,
+        min_price: Price | None = None,
+        margin_init: Decimal | None = None,
+        margin_maint: Decimal | None = None,
+        maker_fee: Decimal | None = None,
+        taker_fee: Decimal | None = None,
+        info: dict[str, Any] | None = None,
+    ) -> None: ...
+    @property
+    def id(self) -> InstrumentId: ...
+    @property
+    def raw_symbol(self) -> Symbol: ...
+    @property
+    def asset_class(self) -> AssetClass: ...
+    @property
+    def base_currency(self) -> Currency | None: ...
+    @property
+    def quote_currency(self) -> Currency: ...
+    @property
+    def price_precision(self) -> int: ...
+    @property
+    def size_precision(self) -> int: ...
+    @property
+    def price_increment(self) -> Price: ...
+    @property
+    def size_increment(self) -> Quantity: ...
+    @property
+    def lot_size(self) -> Quantity | None: ...
+    @property
+    def max_quantity(self) -> Quantity | None: ...
+    @property
+    def min_quantity(self) -> Quantity | None: ...
+    @property
+    def max_notional(self) -> Money | None: ...
+    @property
+    def min_notional(self) -> Money | None: ...
+    @property
+    def max_price(self) -> Price | None: ...
+    @property
+    def min_price(self) -> Price | None: ...
+    @property
+    def margin_init(self) -> Decimal: ...
+    @property
+    def margin_maint(self) -> Decimal: ...
+    @property
+    def maker_fee(self) -> Decimal: ...
+    @property
+    def taker_fee(self) -> Decimal: ...
+    @property
+    def ts_event(self) -> int: ...
+    @property
+    def ts_init(self) -> int: ...
+    @property
+    def info(self) -> dict[str, Any]: ...
+    @classmethod
+    def from_dict(cls, values: dict[str, str]) -> Cfd: ...
+    def to_dict(self) -> dict[str, Any]: ...
+
+class Commodity:
+    def __init__(
+        self,
+        instrument_id: InstrumentId,
+        raw_symbol: Symbol,
+        asset_class: AssetClass,
+        quote_currency: Currency,
+        price_precision: int,
+        size_precision: int,
+        price_increment: Price,
+        size_increment: Quantity,
+        ts_event: int,
+        ts_init: int,
+        lot_size: Quantity | None = None,
+        max_quantity: Quantity | None = None,
+        min_quantity: Quantity | None = None,
+        max_notional: Money | None = None,
+        min_notional: Money | None = None,
+        max_price: Price | None = None,
+        min_price: Price | None = None,
+        margin_init: Decimal | None = None,
+        margin_maint: Decimal | None = None,
+        maker_fee: Decimal | None = None,
+        taker_fee: Decimal | None = None,
+        info: dict[str, Any] | None = None,
+    ) -> None: ...
+    @property
+    def id(self) -> InstrumentId: ...
+    @property
+    def raw_symbol(self) -> Symbol: ...
+    @property
+    def asset_class(self) -> AssetClass: ...
+    @property
+    def quote_currency(self) -> Currency: ...
+    @property
+    def price_precision(self) -> int: ...
+    @property
+    def size_precision(self) -> int: ...
+    @property
+    def price_increment(self) -> Price: ...
+    @property
+    def size_increment(self) -> Quantity: ...
+    @property
+    def lot_size(self) -> Quantity | None: ...
+    @property
+    def max_quantity(self) -> Quantity | None: ...
+    @property
+    def min_quantity(self) -> Quantity | None: ...
+    @property
+    def max_notional(self) -> Money | None: ...
+    @property
+    def min_notional(self) -> Money | None: ...
+    @property
+    def max_price(self) -> Price | None: ...
+    @property
+    def min_price(self) -> Price | None: ...
+    @property
+    def margin_init(self) -> Decimal: ...
+    @property
+    def margin_maint(self) -> Decimal: ...
+    @property
+    def maker_fee(self) -> Decimal: ...
+    @property
+    def taker_fee(self) -> Decimal: ...
+    @property
+    def ts_event(self) -> int: ...
+    @property
+    def ts_init(self) -> int: ...
+    @property
+    def info(self) -> dict[str, Any]: ...
+    @classmethod
+    def from_dict(cls, values: dict[str, str]) -> Commodity: ...
+    def to_dict(self) -> dict[str, Any]: ...
+
 class CryptoFuture:
     def __init__(
         self,
@@ -2648,6 +2799,8 @@ class CurrencyPair:
     def ts_event(self) -> int: ...
     @property
     def ts_init(self) -> int: ...
+    @property
+    def info(self) -> dict[str, Any]: ...
     @classmethod
     def from_dict(cls, values: dict[str, str]) -> CurrencyPair: ...
     def to_dict(self) -> dict[str, Any]: ...
@@ -2882,6 +3035,44 @@ class FuturesSpread:
     def from_dict(cls, values: dict[str, str]) -> FuturesSpread: ...
     def to_dict(self) -> dict[str, Any]: ...
 
+class IndexInstrument:
+    def __init__(
+        self,
+        instrument_id: InstrumentId,
+        raw_symbol: Symbol,
+        currency: Currency,
+        price_precision: int,
+        size_precision: int,
+        price_increment: Price,
+        size_increment: Quantity,
+        ts_event: int,
+        ts_init: int,
+        info: dict[str, Any] | None = None,
+    ) -> None: ...
+    @property
+    def id(self) -> InstrumentId: ...
+    @property
+    def raw_symbol(self) -> Symbol: ...
+    @property
+    def quote_currency(self) -> Currency: ...
+    @property
+    def price_precision(self) -> int: ...
+    @property
+    def size_precision(self) -> int: ...
+    @property
+    def price_increment(self) -> Price: ...
+    @property
+    def size_increment(self) -> Quantity: ...
+    @property
+    def ts_event(self) -> int: ...
+    @property
+    def ts_init(self) -> int: ...
+    @property
+    def info(self) -> dict[str, Any]: ...
+    @classmethod
+    def from_dict(cls, values: dict[str, str]) -> IndexInstrument: ...
+    def to_dict(self) -> dict[str, Any]: ...
+
 class OptionContract:
     def __init__(
         self,
@@ -3053,7 +3244,123 @@ class OptionSpread:
     def from_dict(cls, values: dict[str, str]) -> OptionSpread: ...
     def to_dict(self) -> dict[str, Any]: ...
 
-class SyntheticInstrument: ...
+class PerpetualContract:
+    def __init__(
+        self,
+        instrument_id: InstrumentId,
+        raw_symbol: Symbol,
+        underlying: str,
+        asset_class: AssetClass,
+        quote_currency: Currency,
+        settlement_currency: Currency,
+        is_inverse: bool,
+        price_precision: int,
+        size_precision: int,
+        price_increment: Price,
+        size_increment: Quantity,
+        ts_event: int,
+        ts_init: int,
+        base_currency: Currency | None = None,
+        multiplier: Quantity | None = None,
+        lot_size: Quantity | None = None,
+        max_quantity: Quantity | None = None,
+        min_quantity: Quantity | None = None,
+        max_notional: Money | None = None,
+        min_notional: Money | None = None,
+        max_price: Price | None = None,
+        min_price: Price | None = None,
+        margin_init: Decimal | None = None,
+        margin_maint: Decimal | None = None,
+        maker_fee: Decimal | None = None,
+        taker_fee: Decimal | None = None,
+        info: dict[str, Any] | None = None,
+    ) -> None: ...
+    @property
+    def id(self) -> InstrumentId: ...
+    @property
+    def raw_symbol(self) -> Symbol: ...
+    @property
+    def underlying(self) -> str: ...
+    @property
+    def asset_class(self) -> AssetClass: ...
+    @property
+    def base_currency(self) -> Currency | None: ...
+    @property
+    def quote_currency(self) -> Currency: ...
+    @property
+    def settlement_currency(self) -> Currency: ...
+    @property
+    def is_inverse(self) -> bool: ...
+    @property
+    def price_precision(self) -> int: ...
+    @property
+    def size_precision(self) -> int: ...
+    @property
+    def price_increment(self) -> Price: ...
+    @property
+    def size_increment(self) -> Quantity: ...
+    @property
+    def multiplier(self) -> Quantity: ...
+    @property
+    def lot_size(self) -> Quantity: ...
+    @property
+    def max_quantity(self) -> Quantity | None: ...
+    @property
+    def min_quantity(self) -> Quantity | None: ...
+    @property
+    def max_notional(self) -> Money | None: ...
+    @property
+    def min_notional(self) -> Money | None: ...
+    @property
+    def max_price(self) -> Price | None: ...
+    @property
+    def min_price(self) -> Price | None: ...
+    @property
+    def margin_init(self) -> Decimal: ...
+    @property
+    def margin_maint(self) -> Decimal: ...
+    @property
+    def maker_fee(self) -> Decimal: ...
+    @property
+    def taker_fee(self) -> Decimal: ...
+    @property
+    def info(self) -> dict[str, Any]: ...
+    @property
+    def ts_event(self) -> int: ...
+    @property
+    def ts_init(self) -> int: ...
+    @classmethod
+    def from_dict(cls, values: dict[str, str]) -> PerpetualContract: ...
+    def to_dict(self) -> dict[str, Any]: ...
+
+class SyntheticInstrument:
+    def __init__(
+        self,
+        symbol: Symbol,
+        price_precision: int,
+        components: list[InstrumentId],
+        formula: str,
+        ts_event: int,
+        ts_init: int,
+    ) -> None: ...
+    @property
+    def id(self) -> InstrumentId: ...
+    @property
+    def price_precision(self) -> int: ...
+    @property
+    def price_increment(self) -> Price: ...
+    @property
+    def components(self) -> list[InstrumentId]: ...
+    @property
+    def formula(self) -> str: ...
+    @property
+    def ts_event(self) -> int: ...
+    @property
+    def ts_init(self) -> int: ...
+    def is_valid_formula(self, formula: str) -> bool: ...
+    def change_formula(self, formula: str) -> None: ...
+    def calculate(self, inputs: list[float]) -> Price: ...
+    def calculate_from_map(self, inputs: dict[str, float]) -> Price: ...
 
 type Instrument = Union[
     BettingInstrument,
@@ -3066,6 +3373,7 @@ type Instrument = Union[
     FuturesSpread,
     OptionContract,
     OptionSpread,
+    PerpetualContract,
 ]
 
 # Events
@@ -4051,6 +4359,14 @@ class OrderBook:
         accepted_buffer_ns: int | None = None,
         ts_now: int | None = None,
     ) -> dict[Decimal, Decimal]: ...
+    def filtered_view(
+        self,
+        own_book: OwnOrderBook | None = None,
+        depth: int | None = None,
+        status: set[OrderStatus] | None = None,
+        accepted_buffer_ns: int | None = None,
+        ts_now: int | None = None,
+    ) -> OrderBook: ...
     def best_bid_price(self) -> Price | None: ...
     def best_ask_price(self) -> Price | None: ...
     def best_bid_size(self) -> Quantity | None: ...
@@ -4153,6 +4469,7 @@ class OwnOrderBook:
         accepted_buffer_ns: int | None = None,
         ts_now: int | None = None,
     ) -> dict[Decimal, Decimal]: ...
+    def combined_with_opposite(self, opposite: OwnOrderBook) -> OwnOrderBook: ...
     def pprint(self, num_levels: int = 3, group_size: Decimal | None = None) -> str: ...
 
 ###################################################################################################
@@ -4277,6 +4594,11 @@ class ParquetDataCatalogV2:
         end: int | None = None,
         skip_disjoint_check: bool = False,
     ) -> str: ...
+    def write_instruments(self, data: list[object]) -> list[str]: ...
+    def instruments(
+        self,
+        instrument_ids: list[str] | None = None,
+    ) -> list[object]: ...
     def consolidate_catalog(
         self,
         start: int | None = None,
@@ -4307,6 +4629,11 @@ class ParquetDataCatalogV2:
         end: int | None = None,
         ensure_contiguous_files: bool | None = None,
     ) -> None: ...
+    def query_first_timestamp(
+        self,
+        data_cls: str,
+        instrument_id: str | None = None,
+    ) -> int | None: ...
     def query_last_timestamp(
         self,
         data_cls: str,
@@ -4405,6 +4732,39 @@ class ParquetDataCatalogV2:
         start: int | None = None,
         end: int | None = None,
     ) -> None: ...
+    def list_data_types(self) -> list[str]: ...
+    def list_backtest_runs(self) -> list[str]: ...
+    def list_live_runs(self) -> list[str]: ...
+    def convert_stream_to_data(
+        self,
+        instance_id: str,
+        data_cls: str,
+        subdirectory: str | None = None,
+        identifiers: list[str] | None = None,
+        use_ts_event_for_ts_init: bool = False,
+    ) -> None: ...
+
+class StreamingFeatherWriterV2:
+    def __init__(
+        self,
+        path: str,
+        cache: object,
+        clock: object,
+        fs_protocol: str | None = None,
+        fs_storage_options: dict[str, str] | None = None,
+        include_types: list[str] | None = None,
+        rotation_mode: int = 3,
+        max_file_size: int = ...,
+        rotation_interval_ns: int | None = None,
+        rotation_time_ns: int | None = None,
+        flush_interval_ms: int | None = None,
+        replace: bool = False,
+    ) -> None: ...
+    def subscribe(self) -> None: ...
+    def unsubscribe(self) -> None: ...
+    def write(self, data: object) -> None: ...
+    def flush(self) -> None: ...
+    def close(self) -> None: ...
 
 ###################################################################################################
 # Network
@@ -4540,6 +4900,7 @@ class WebSocketConfig:
         reconnect_backoff_factor: float | None = 1.5,
         reconnect_jitter_ms: int | None = 100,
         reconnect_max_attempts: int | None = None,
+        idle_timeout_ms: int | None = None,
     ) -> None: ...
 
 class WebSocketClient:
@@ -4576,6 +4937,9 @@ class SocketConfig:
         reconnect_delay_max_ms: int | None = 30_000,
         reconnect_backoff_factor: float | None = 1.5,
         reconnect_jitter_ms: int | None = 100,
+        connection_max_retries: int | None = 5,
+        reconnect_max_attempts: int | None = None,
+        idle_timeout_ms: int | None = None,
         certs_dir: str | None = None,
     ) -> None: ...
 
@@ -5687,9 +6051,9 @@ class AxEnvironment(Enum):
     def from_str(cls, value: str) -> AxEnvironment: ...
 
 class AxMarketDataLevel(Enum):
-    LEVEL_1 = "LEVEL_1"
-    LEVEL_2 = "LEVEL_2"
-    LEVEL_3 = "LEVEL_3"
+    LEVEL1 = "LEVEL1"
+    LEVEL2 = "LEVEL2"
+    LEVEL3 = "LEVEL3"
 
     @classmethod
     def from_str(cls, value: str) -> AxMarketDataLevel: ...
@@ -7434,160 +7798,6 @@ async def run_tardis_machine_replay(
     config_filepath: str, output_path: str | None = None
 ) -> None: ...
 
-# Coinbase International
-
-class CoinbaseIntxHttpClient:
-    def __init__(
-        self,
-        api_key: str | None = None,
-        api_secret: str | None = None,
-        api_passphrase: str | None = None,
-        base_url: str | None = None,
-        timeout_secs: int | None = None,
-    ) -> None: ...
-    @property
-    def base_url(self) -> str: ...
-    @property
-    def api_key(self) -> str | None: ...
-    @property
-    def api_key_masked(self) -> str | None: ...
-    def is_initialized(self) -> bool: ...
-    def get_cached_symbols(self) -> list[str]: ...
-    def add_instrument(self, instrument: Instrument) -> None: ...
-    async def list_portfolios(self) -> list[dict[str, Any]]: ...
-    async def request_account_state(self, account_id: AccountId) -> AccountState: ...
-    async def request_instruments(self) -> list[Instrument]: ...
-    async def request_instrument(self, symbol: Symbol) -> Instrument: ...
-    async def request_order_status_report(
-        self,
-        account_id: AccountId,
-        venue_order_id: VenueOrderId,
-    ) -> OrderStatusReport: ...
-    async def request_order_status_reports(
-        self,
-        account_id: AccountId,
-        symbol: Symbol,
-    ) -> list[OrderStatusReport]: ...
-    async def request_fill_reports(
-        self,
-        account_id: AccountId,
-        client_order_id: ClientOrderId | None = None,
-        start: dt.datetime | None = None,
-    ) -> list[FillReport]: ...
-    async def request_position_status_report(
-        self,
-        account_id: AccountId,
-        symbol: Symbol,
-    ) -> PositionStatusReport: ...
-    async def request_position_status_reports(
-        self,
-        account_id: AccountId,
-    ) -> list[PositionStatusReport]: ...
-    async def submit_order(
-        self,
-        account_id: AccountId,
-        symbol: Symbol,
-        client_order_id: ClientOrderId,
-        order_type: OrderType,
-        order_side: OrderSide,
-        quantity: Quantity,
-        time_in_force: TimeInForce,
-        expire_time: dt.datetime | None = None,
-        price: Price | None = None,
-        trigger_price: Price | None = None,
-        trigger_type: TriggerType | None = None,
-        post_only: bool | None = None,
-        reduce_only: bool | None = None,
-    ) -> OrderStatusReport: ...
-    async def cancel_order(
-        self,
-        account_id: AccountId,
-        client_order_id: ClientOrderId,
-    ) -> OrderStatusReport: ...
-    async def cancel_orders(
-        self,
-        account_id: AccountId,
-        symbol: Symbol,
-        order_side: OrderSide | None = None,
-    ) -> list[OrderStatusReport]: ...
-    async def modify_order(
-        self,
-        account_id: AccountId,
-        client_order_id: ClientOrderId,
-        new_client_order_id: ClientOrderId,
-        price: Price | None = None,
-        trigger_price: Price | None = None,
-        quantity: Quantity | None = None,
-    ) -> OrderStatusReport: ...
-
-class CoinbaseIntxWebSocketClient:
-    def __init__(
-        self,
-        url: str | None = None,
-        api_key: str | None = None,
-        api_secret: str | None = None,
-        api_passphrase: str | None = None,
-        heartbeat: int | None = None,
-    ) -> None: ...
-    @property
-    def url(self) -> str: ...
-    @property
-    def api_key(self) -> str: ...
-    @property
-    def api_key_masked(self) -> str: ...
-    def is_active(self) -> bool: ...
-    def is_closed(self) -> bool: ...
-    def get_subscriptions(self, instrument_id: InstrumentId) -> list[str]: ...
-    async def connect(
-        self,
-        instruments: list[Instrument],
-        callback: Callable,
-    ) -> Awaitable: ...
-    async def wait_until_active(self, timeout_secs: float) -> None: ...
-    async def close(self) -> None: ...
-    async def subscribe_instruments(
-        self, instrument_ids: list[InstrumentId] | None = None
-    ) -> None: ...
-    async def subscribe_book(self, instrument_ids: list[InstrumentId]) -> None: ...
-    async def subscribe_quotes(self, instrument_ids: list[InstrumentId]) -> None: ...
-    async def subscribe_trades(self, instrument_ids: list[InstrumentId]) -> None: ...
-    async def subscribe_mark_prices(self, instrument_ids: list[InstrumentId]) -> None: ...
-    async def subscribe_index_prices(self, instrument_ids: list[InstrumentId]) -> None: ...
-    async def subscribe_bars(self, bar_type: BarType) -> None: ...
-    async def unsubscribe_instruments(self) -> None: ...
-    async def unsubscribe_book(self, instrument_ids: list[InstrumentId]) -> None: ...
-    async def unsubscribe_quotes(self, instrument_ids: list[InstrumentId]) -> None: ...
-    async def unsubscribe_trades(self, instrument_ids: list[InstrumentId]) -> None: ...
-    async def unsubscribe_mark_prices(self, instrument_ids: list[InstrumentId]) -> None: ...
-    async def unsubscribe_index_prices(self, instrument_ids: list[InstrumentId]) -> None: ...
-    async def unsubscribe_bars(self, bar_type: BarType) -> None: ...
-
-class CoinbaseIntxFixClient:
-    def __init__(
-        self,
-        endpoint: str | None = None,
-        api_key: str | None = None,
-        api_secret: str | None = None,
-        api_passphrase: str | None = None,
-        portfolio_id: str | None = None,
-    ) -> None: ...
-    @property
-    def endpoint(self) -> str: ...
-    @property
-    def api_key(self) -> str: ...
-    @property
-    def api_key_masked(self) -> str: ...
-    @property
-    def portfolio_id(self) -> str: ...
-    @property
-    def sender_comp_id(self) -> str: ...
-    @property
-    def target_comp_id(self) -> str: ...
-    def is_connected(self) -> bool: ...
-    def is_logged_on(self) -> bool: ...
-    async def connect(self, handler: object) -> Awaitable: ...
-    async def close(self) -> None: ...
-
 # OKX
 
 class OKXHttpClient:
@@ -8259,6 +8469,7 @@ class HyperliquidHttpClient:
         is_testnet: bool = False,
         timeout_secs: int | None = None,
         proxy_url: str | None = None,
+        normalize_prices: bool = True,
     ) -> None: ...
     @staticmethod
     def from_env() -> HyperliquidHttpClient: ...
@@ -8274,8 +8485,12 @@ class HyperliquidHttpClient:
     def set_account_id(self, account_id: str) -> None: ...
     def get_user_address(self) -> str: ...
     def get_spot_fill_coin_mapping(self) -> dict[str, str]: ...
+    def builder_maker_tenths_bp(self) -> int: ...
+    def update_builder_maker_fee(self, user_add_rate: float) -> tuple[int, int]: ...
     async def get_perp_meta(self) -> str: ...
     async def get_spot_meta(self) -> str: ...
+    async def request_account_state(self) -> AccountState: ...
+    async def info_user_fees(self) -> str: ...
     async def load_instrument_definitions(
         self,
         include_perp: bool = True,
@@ -8337,7 +8552,6 @@ class HyperliquidHttpClient:
         client_order_id: ClientOrderId | None = None,
         venue_order_id: VenueOrderId | None = None,
     ) -> None: ...
-    async def request_account_state(self) -> AccountState: ...
 
 class HyperliquidWebSocketClient:
     def __init__(
@@ -8731,10 +8945,9 @@ def black_scholes_greeks(
     is_call: bool,
     k: float,
     t: float,
-    multiplier: float,
 ) -> BlackScholesGreeksResult:
     """
-    Calculate the Black-Scholes Greeks for a given option contract.
+    Calculate the Black-Scholes Greeks for a given option contract (per unit).
 
     Parameters
     ----------
@@ -8752,8 +8965,6 @@ def black_scholes_greeks(
         The strike price of the option.
     t : float
         The time to expiration of the option in years.
-    multiplier : float
-        The multiplier for the option contract.
 
     Returns
     -------
@@ -8789,8 +9000,6 @@ def imply_vol(
         The time to expiration of the option in years.
     price : float
         The current market price of the option.
-    multiplier : float
-        The multiplier for the option contract.
 
     Returns
     -------
@@ -8806,10 +9015,9 @@ def imply_vol_and_greeks(
     k: float,
     t: float,
     price: float,
-    multiplier: float,
 ) -> BlackScholesGreeksResult:
     """
-    Calculate the implied volatility and Greeks for an option contract.
+    Calculate the implied volatility and Greeks for an option contract (per unit).
 
     Parameters
     ----------
@@ -8827,8 +9035,6 @@ def imply_vol_and_greeks(
         The time to expiration of the option in years.
     price : float
         The current market price of the option.
-    multiplier : float
-        The multiplier for the option contract.
 
     Returns
     -------
@@ -8845,7 +9051,6 @@ def refine_vol_and_greeks(
     t: float,
     target_price: float,
     initial_vol: float,
-    multiplier: float,
 ) -> BlackScholesGreeksResult:
     """
     Refine implied volatility using an initial guess and compute greeks.
@@ -8871,8 +9076,6 @@ def refine_vol_and_greeks(
         The target market price of the option.
     initial_vol : float
         The initial guess for the volatility.
-    multiplier : float
-        The multiplier for the option contract.
 
     Returns
     -------

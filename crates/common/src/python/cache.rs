@@ -50,7 +50,12 @@ use crate::{
 /// This wrapper holds an `Rc<RefCell<Cache>>` allowing actors to share
 /// the same cache instance. All methods delegate to the underlying cache.
 #[allow(non_camel_case_types)]
-#[pyo3::pyclass(module = "nautilus_trader.core.nautilus_pyo3.common", unsendable)]
+#[pyo3::pyclass(
+    module = "nautilus_trader.core.nautilus_pyo3.common",
+    name = "Cache",
+    unsendable,
+    from_py_object
+)]
 #[derive(Debug, Clone)]
 pub struct PyCache(Rc<RefCell<Cache>>);
 
@@ -64,6 +69,12 @@ impl PyCache {
 
 #[pymethods]
 impl PyCache {
+    #[new]
+    #[pyo3(signature = (config=None))]
+    fn py_new(config: Option<CacheConfig>) -> Self {
+        Self(Rc::new(RefCell::new(Cache::new(config, None))))
+    }
+
     #[pyo3(name = "instrument")]
     fn py_instrument(
         &self,

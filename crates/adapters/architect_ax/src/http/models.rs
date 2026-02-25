@@ -19,11 +19,13 @@ use ahash::AHashMap;
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
+use strum::{AsRefStr, Display};
 use ustr::Ustr;
 
 use crate::common::{
     enums::{
-        AxCandleWidth, AxInstrumentState, AxOrderSide, AxOrderStatus, AxOrderType, AxTimeInForce,
+        AxCandleWidth, AxCategory, AxInstrumentState, AxOrderSide, AxOrderStatus, AxOrderType,
+        AxTimeInForce,
     },
     parse::{
         deserialize_decimal_or_zero, deserialize_optional_decimal_from_str,
@@ -92,6 +94,9 @@ pub struct AxInstrument {
     pub quote_currency: Ustr,
     /// Funding settlement currency.
     pub funding_settlement_currency: Ustr,
+    /// Instrument category (e.g. fx, equities, metals).
+    #[serde(default)]
+    pub category: Option<AxCategory>,
     /// Maintenance margin percentage.
     #[serde(deserialize_with = "deserialize_decimal_or_zero")]
     pub maintenance_margin_pct: Decimal,
@@ -398,8 +403,9 @@ pub struct AxOrderStatusQueryResponse {
 ///
 /// # References
 /// - <https://docs.architect.exchange/api-reference/order-management/get-orders>
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Display, Eq, PartialEq, Hash, AsRefStr, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 pub enum AxOrderRejectReason {
     CloseOnly,
     InsufficientMargin,
@@ -856,7 +862,7 @@ impl AuthenticateUserRequest {
 /// Request body for `POST /place_order`.
 ///
 /// # References
-/// - <https://docs.architect.co/sdk-reference/order-entry>
+/// - <https://docs.architect.exchange/api-reference/order-management/place-order>
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PlaceOrderRequest {
     /// Order side: "B" (buy) or "S" (sell).
@@ -1022,7 +1028,7 @@ impl CancelOrderRequest {
 /// Request body for `POST /cancel_all_orders`.
 ///
 /// # References
-/// - <https://docs.architect.co/sdk-reference/order-entry>
+/// - <https://docs.architect.exchange/api-reference/order-management/place-order>
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct CancelAllOrdersRequest {
     /// Optional symbol filter - only cancel orders for this symbol.
@@ -1058,7 +1064,7 @@ impl CancelAllOrdersRequest {
 /// Response payload returned by `POST /cancel_all_orders`.
 ///
 /// # References
-/// - <https://docs.architect.co/sdk-reference/order-entry>
+/// - <https://docs.architect.exchange/api-reference/order-management/place-order>
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AxCancelAllOrdersResponse {
     /// Number of orders canceled.
@@ -1069,7 +1075,7 @@ pub struct AxCancelAllOrdersResponse {
 /// Request body for batch cancel orders.
 ///
 /// # References
-/// - <https://docs.architect.co/sdk-reference/order-entry>
+/// - <https://docs.architect.exchange/api-reference/order-management/place-order>
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BatchCancelOrdersRequest {
     /// List of order IDs to cancel.
@@ -1087,7 +1093,7 @@ impl BatchCancelOrdersRequest {
 /// Response payload returned by batch cancel orders.
 ///
 /// # References
-/// - <https://docs.architect.co/sdk-reference/order-entry>
+/// - <https://docs.architect.exchange/api-reference/order-management/place-order>
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AxBatchCancelOrdersResponse {
     /// Number of orders successfully canceled.
@@ -1123,8 +1129,8 @@ mod tests {
     fn test_deserialize_instruments_response() {
         let json = include_str!("../../test_data/http_get_instruments.json");
         let response: AxInstrumentsResponse = serde_json::from_str(json).unwrap();
-        assert_eq!(response.instruments.len(), 4);
-        assert_eq!(response.instruments[0].symbol, "BTCUSD-PERP");
+        assert_eq!(response.instruments.len(), 3);
+        assert_eq!(response.instruments[0].symbol, "EURUSD-PERP");
     }
 
     #[rstest]

@@ -406,7 +406,7 @@ impl MessageBus {
     ///
     /// # Panics
     ///
-    /// Returns an error if the topic is not valid.
+    /// Panics if the `topic` is not a valid topic string.
     #[must_use]
     pub fn subscriptions_count<T: AsRef<str>>(&self, topic: T) -> usize {
         let topic = MStr::<Topic>::topic(topic).expect(FAILED);
@@ -434,7 +434,7 @@ impl MessageBus {
     ///
     /// # Panics
     ///
-    /// Returns an error if the endpoint is not valid topic string.
+    /// Panics if the `endpoint` conversion to `MStr<Endpoint>` fails.
     #[must_use]
     pub fn is_registered<T: Into<MStr<Endpoint>>>(&self, endpoint: T) -> bool {
         let endpoint: MStr<Endpoint> = endpoint.into();
@@ -948,9 +948,7 @@ mod tests {
                 pattern.push('*');
             } else if val < 0.3 {
                 pattern.push('?');
-            } else if val < 0.5 {
-                continue;
-            } else {
+            } else if val >= 0.5 {
                 pattern.push(c);
             };
         }

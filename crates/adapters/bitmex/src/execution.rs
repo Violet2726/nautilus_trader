@@ -15,12 +15,19 @@
 
 //! Live execution client implementation for the BitMEX adapter.
 
-use std::{future::Future, str::FromStr, sync::Mutex};
+use std::{
+    future::Future,
+    str::FromStr,
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
+    time::{Duration, Instant},
+};
 
 use anyhow::Context;
 use async_trait::async_trait;
 use futures_util::{StreamExt, pin_mut};
-use indexmap::IndexMap;
 use nautilus_common::{
     clients::ExecutionClient,
     enums::LogLevel,
@@ -34,7 +41,7 @@ use nautilus_common::{
     },
 };
 use nautilus_core::{
-    UnixNanos,
+    Params, UnixNanos,
     time::{AtomicTime, get_atomic_clock_realtime},
 };
 use nautilus_live::{ExecutionClientCore, ExecutionEventEmitter};
@@ -74,6 +81,8 @@ pub struct BitmexExecutionClient {
     _canceller: CancelBroadcaster,
     ws_stream_handle: Option<JoinHandle<()>>,
     pending_tasks: Mutex<Vec<JoinHandle<()>>>,
+    dms_task_handle: Option<JoinHandle<()>>,
+    dms_running: Arc<AtomicBool>,
 }
 
 impl BitmexExecutionClient {
@@ -121,12 +130,13 @@ impl BitmexExecutionClient {
             config.http_proxy_url.clone(),
         )
         .context("failed to construct BitMEX HTTP client")?;
-        let ws_client = BitmexWebSocketClient::new(
+        let ws_client = BitmexWebSocketClient::new_with_env(
             Some(config.ws_url()),
             config.api_key.clone(),
             config.api_secret.clone(),
             Some(account_id),
             config.heartbeat_interval_secs,
+            config.use_testnet,
         )
         .context("failed to construct BitMEX execution websocket client")?;
 
@@ -193,6 +203,8 @@ impl BitmexExecutionClient {
             _canceller,
             ws_stream_handle: None,
             pending_tasks: Mutex::new(Vec::new()),
+            dms_task_handle: None,
+            dms_running: Arc::new(AtomicBool::new(false)),
         })
     }
 
@@ -223,6 +235,53 @@ impl BitmexExecutionClient {
             .expect("pending task lock poisoned");
         for handle in guard.drain(..) {
             handle.abort();
+        }
+    }
+
+    fn start_deadmans_switch(&mut self) {
+        let Some(timeout_secs) = self.config.deadmans_switch_timeout_secs else {
+            return;
+        };
+
+        let timeout_ms = timeout_secs * 1000;
+        let interval_secs = (timeout_secs / 4).max(1);
+
+        log::info!(
+            "Starting dead man's switch: timeout={timeout_secs}s, refresh_interval={interval_secs}s",
+        );
+
+        self.dms_running.store(true, Ordering::SeqCst);
+        let running = self.dms_running.clone();
+        let http_client = self.http_client.clone();
+
+        let handle = get_runtime().spawn(async move {
+            while running.load(Ordering::SeqCst) {
+                if let Err(e) = http_client.cancel_all_after(timeout_ms).await {
+                    log::warn!("Dead man's switch heartbeat failed: {e}");
+                }
+                tokio::time::sleep(Duration::from_secs(interval_secs)).await;
+            }
+        });
+
+        self.dms_task_handle = Some(handle);
+    }
+
+    async fn stop_deadmans_switch(&mut self) {
+        if self.config.deadmans_switch_timeout_secs.is_none() {
+            return;
+        }
+
+        self.dms_running.store(false, Ordering::SeqCst);
+
+        // Abort and await loop shutdown so disconnect does not block on sleep/HTTP timeout.
+        if let Some(handle) = self.dms_task_handle.take() {
+            handle.abort();
+            let _ = handle.await;
+        }
+
+        log::info!("Disarming dead man's switch");
+        if let Err(e) = self.http_client.cancel_all_after(0).await {
+            log::warn!("Failed to disarm dead man's switch: {e}");
         }
     }
 
@@ -276,6 +335,34 @@ impl BitmexExecutionClient {
 
         self.emitter.send_account_state(account_state);
         Ok(())
+    }
+
+    async fn await_account_registered(&self, timeout_secs: f64) -> anyhow::Result<()> {
+        let account_id = self.core.account_id;
+
+        if self.core.cache().account(&account_id).is_some() {
+            log::info!("Account {account_id} registered");
+            return Ok(());
+        }
+
+        let start = Instant::now();
+        let timeout = Duration::from_secs_f64(timeout_secs);
+        let interval = Duration::from_millis(10);
+
+        loop {
+            tokio::time::sleep(interval).await;
+
+            if self.core.cache().account(&account_id).is_some() {
+                log::info!("Account {account_id} registered");
+                return Ok(());
+            }
+
+            if start.elapsed() >= timeout {
+                anyhow::bail!(
+                    "Timeout waiting for account {account_id} to be registered after {timeout_secs}s"
+                );
+            }
+        }
     }
 
     fn start_ws_stream(&mut self) -> anyhow::Result<()> {
@@ -488,6 +575,10 @@ impl ExecutionClient for BitmexExecutionClient {
         if let Some(handle) = self.ws_stream_handle.take() {
             handle.abort();
         }
+        if let Some(handle) = self.dms_task_handle.take() {
+            handle.abort();
+        }
+        self.dms_running.store(false, Ordering::SeqCst);
         self.abort_pending_tasks();
         log::info!("BitMEX execution client {} stopped", self.core.client_id);
         Ok(())
@@ -520,8 +611,10 @@ impl ExecutionClient for BitmexExecutionClient {
 
         self.start_ws_stream()?;
         self.refresh_account_state().await?;
+        self.await_account_registered(30.0).await?;
 
         self.core.set_connected();
+        self.start_deadmans_switch();
         log::info!("Connected: client_id={}", self.core.client_id);
         Ok(())
     }
@@ -530,6 +623,9 @@ impl ExecutionClient for BitmexExecutionClient {
         if self.core.is_disconnected() {
             return Ok(());
         }
+
+        // Disarm DMS before cancelling requests (needs working HTTP)
+        self.stop_deadmans_switch().await;
 
         self.http_client.cancel_all_requests();
         self._submitter.stop().await;
@@ -742,8 +838,7 @@ impl ExecutionClient for BitmexExecutionClient {
         let submit_tries = cmd
             .params
             .as_ref()
-            .and_then(|params| params.get("submit_tries"))
-            .and_then(|s| s.parse::<usize>().ok())
+            .and_then(|p| p.get_usize("submit_tries"))
             .filter(|&n| n > 0);
 
         let peg_price_type = parse_peg_price_type(cmd.params.as_ref())?;
@@ -776,8 +871,7 @@ impl ExecutionClient for BitmexExecutionClient {
         let submit_tries = cmd
             .params
             .as_ref()
-            .and_then(|params| params.get("submit_tries"))
-            .and_then(|s| s.parse::<usize>().ok())
+            .and_then(|p| p.get_usize("submit_tries"))
             .filter(|&n| n > 0);
 
         let peg_price_type = parse_peg_price_type(cmd.params.as_ref())?;
@@ -984,10 +1078,8 @@ fn dispatch_ws_message(message: NautilusWsMessage, emitter: &ExecutionEventEmitt
     }
 }
 
-fn parse_peg_price_type(
-    params: Option<&IndexMap<String, String>>,
-) -> anyhow::Result<Option<BitmexPegPriceType>> {
-    let value = params.and_then(|p| p.get("peg_price_type"));
+fn parse_peg_price_type(params: Option<&Params>) -> anyhow::Result<Option<BitmexPegPriceType>> {
+    let value = params.and_then(|p| p.get_str("peg_price_type"));
     match value {
         Some(s) => BitmexPegPriceType::from_str(s)
             .map(Some)
@@ -996,10 +1088,8 @@ fn parse_peg_price_type(
     }
 }
 
-fn parse_peg_offset_value(
-    params: Option<&IndexMap<String, String>>,
-) -> anyhow::Result<Option<f64>> {
-    let value = params.and_then(|p| p.get("peg_offset_value"));
+fn parse_peg_offset_value(params: Option<&Params>) -> anyhow::Result<Option<f64>> {
+    let value = params.and_then(|p| p.get_str("peg_offset_value"));
     match value {
         Some(s) => s
             .parse::<f64>()

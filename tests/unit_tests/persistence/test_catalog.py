@@ -19,6 +19,7 @@ import tempfile
 from unittest.mock import patch
 
 import pandas as pd
+import pyarrow as pa
 import pyarrow.dataset as ds
 import pytest
 
@@ -41,6 +42,7 @@ from nautilus_trader.model.data import TradeTick
 from nautilus_trader.model.identifiers import TradeId
 from nautilus_trader.model.identifiers import Venue
 from nautilus_trader.model.instruments import BettingInstrument
+from nautilus_trader.model.instruments import CurrencyPair
 from nautilus_trader.model.objects import Price
 from nautilus_trader.model.objects import Quantity
 from nautilus_trader.persistence.catalog.parquet import ParquetDataCatalog
@@ -153,6 +155,69 @@ def test_catalog_instrument_ids_correctly_unmapped(catalog: ParquetDataCatalog) 
     # Assert
     assert instrument.id.value == "AUD/USD.SIM"
     assert trade_tick.instrument_id.value == "AUD/USD.SIM"
+
+
+def test_enforce_monotonic_ts_already_sorted_returns_unchanged() -> None:
+    table = pa.table(
+        {
+            "ts_init": pa.array([1000, 2000, 3000], type=pa.uint64()),
+            "x": pa.array([1, 2, 3]),
+        },
+    )
+    result = ParquetDataCatalog._enforce_monotonic_ts(table)
+    assert result.num_rows == 3
+    assert result.column("ts_init")[0].as_py() == 1000
+    assert result.column("ts_init")[1].as_py() == 2000
+    assert result.column("ts_init")[2].as_py() == 3000
+
+
+def test_enforce_monotonic_ts_unsorted_returns_sorted_by_ts_init() -> None:
+    table = pa.table(
+        {
+            "ts_init": pa.array([3000, 1000, 2000], type=pa.uint64()),
+            "x": pa.array([3, 1, 2]),
+        },
+    )
+    result = ParquetDataCatalog._enforce_monotonic_ts(table)
+    assert result.num_rows == 3
+    assert result.column("ts_init")[0].as_py() == 1000
+    assert result.column("ts_init")[1].as_py() == 2000
+    assert result.column("ts_init")[2].as_py() == 3000
+    assert result.column("x")[0].as_py() == 1
+    assert result.column("x")[1].as_py() == 2
+    assert result.column("x")[2].as_py() == 3
+
+
+def test_enforce_monotonic_ts_single_row_missing_ts_init_raises_error() -> None:
+    # Arrange
+    table = pa.table({"x": pa.array([1])})
+
+    # Act, Assert
+    with pytest.raises(ValueError, match="no 'ts_init' column"):
+        ParquetDataCatalog._enforce_monotonic_ts(table)
+
+
+def test_enforce_monotonic_ts_chunked_array_unsorted_returns_sorted() -> None:
+    # Tables from concat can have ChunkedArray ts_init; ensure we sort correctly
+    t1 = pa.table(
+        {
+            "ts_init": pa.array([3000, 1000], type=pa.uint64()),
+            "x": pa.array([3, 1]),
+        },
+    )
+    t2 = pa.table(
+        {
+            "ts_init": pa.array([2000], type=pa.uint64()),
+            "x": pa.array([2]),
+        },
+    )
+    combined = pa.concat_tables([t1, t2])
+    assert isinstance(combined.column("ts_init"), pa.ChunkedArray)
+    result = ParquetDataCatalog._enforce_monotonic_ts(combined)
+    assert result.num_rows == 3
+    assert result.column("ts_init")[0].as_py() == 1000
+    assert result.column("ts_init")[1].as_py() == 2000
+    assert result.column("ts_init")[2].as_py() == 3000
 
 
 def test_query_files_discovers_when_files_none(
@@ -427,6 +492,41 @@ def test_catalog_persists_equity(
     assert instrument_from_catalog == instrument
     assert len(quotes_from_catalog) == 1
     assert quotes_from_catalog[0].instrument_id == instrument.id
+
+
+def test_catalog_instrument_roundtrip_with_info_params(
+    catalog: ParquetDataCatalog,
+) -> None:
+    # Roundtrip a vector of same instrument (CurrencyPair) with Params in info and
+    # small variations: two ts_init times.
+    base = TestInstrumentProvider.default_fx_ccy("AUD/USD")
+    d = CurrencyPair.to_dict(base)
+    inst1 = CurrencyPair.from_dict(
+        {
+            **d,
+            "info": {"venue_extra": "v1", "count": 1, "enabled": True},
+            "ts_event": 1000,
+            "ts_init": 1000,
+        },
+    )
+    inst2 = CurrencyPair.from_dict(
+        {
+            **d,
+            "info": {"venue_extra": "v2", "count": 2, "enabled": False},
+            "ts_event": 2000,
+            "ts_init": 2000,
+        },
+    )
+    catalog.write_data([inst1, inst2])
+    read = catalog.instruments(instrument_ids=["AUD/USD.SIM"])
+    assert len(read) == 2
+    by_ts = {inst.ts_init: inst for inst in read}
+    assert 1000 in by_ts
+    assert 2000 in by_ts
+    assert by_ts[1000].info == {"venue_extra": "v1", "count": 1, "enabled": True}
+    assert by_ts[2000].info == {"venue_extra": "v2", "count": 2, "enabled": False}
+    assert by_ts[1000].id == inst1.id
+    assert by_ts[2000].id == inst2.id
 
 
 def test_list_backtest_runs(

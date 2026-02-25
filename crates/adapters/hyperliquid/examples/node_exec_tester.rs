@@ -21,8 +21,6 @@
 //!
 //! Run with: `cargo run --example hyperliquid-exec-tester --package nautilus-hyperliquid`
 
-use std::str::FromStr;
-
 use log::LevelFilter;
 use nautilus_common::{enums::Environment, logging::logger::LoggerConfig};
 use nautilus_hyperliquid::{
@@ -35,17 +33,11 @@ use nautilus_model::{
     types::Quantity,
 };
 use nautilus_testkit::testers::{ExecTester, ExecTesterConfig};
-use rust_decimal::Decimal;
-
-fn get_env_option(key: &str) -> Option<String> {
-    std::env::var(key).ok().filter(|s| !s.trim().is_empty())
-}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenvy::dotenv().ok();
 
-    // Configuration
     let is_testnet = false;
 
     let environment = Environment::Live;
@@ -54,15 +46,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let node_name = "HYPERLIQUID-EXEC-TESTER-001".to_string();
     let client_id = ClientId::new("HYPERLIQUID");
     let instrument_id = InstrumentId::from("ETH-USD-PERP.HYPERLIQUID");
-
-    // Load credentials from environment
-    let private_key_env = if is_testnet {
-        "HYPERLIQUID_TESTNET_PK"
-    } else {
-        "HYPERLIQUID_PK"
-    };
-    let private_key = get_env_option(private_key_env)
-        .ok_or_else(|| format!("Set {private_key_env} environment variable"))?;
 
     let data_config = HyperliquidDataClientConfig {
         is_testnet,
@@ -73,18 +56,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         trader_id,
         account_id,
         config: HyperliquidExecClientConfig {
-            private_key,
-            vault_address: None,
-            base_url_ws: None,
-            base_url_http: None,
-            base_url_exchange: None,
-            http_proxy_url: None,
-            ws_proxy_url: None,
             is_testnet,
-            http_timeout_secs: 60,
-            max_retries: 3,
-            retry_delay_initial_ms: 100,
-            retry_delay_max_ms: 5000,
+            ..Default::default()
         },
     };
 
@@ -106,6 +79,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .build()?;
 
     let order_qty = Quantity::from("0.01"); // Minimum order size for ETH-USD-PERP
+
     let mut tester_config = ExecTesterConfig::new(
         StrategyId::from("EXEC_TESTER-001"),
         instrument_id,
@@ -113,7 +87,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         order_qty,
     )
     .with_log_data(false)
-    .with_open_position_on_start(Some(Decimal::from_str("0.01")?))
+    .with_open_position_on_start(order_qty.as_decimal())
     .with_use_post_only(true)
     .with_cancel_orders_on_stop(true)
     .with_close_positions_on_stop(true);

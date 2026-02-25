@@ -314,7 +314,6 @@ impl FuturesFeedHandler {
                             }
                         }
                     }
-                    continue;
                 }
 
                 msg = self.raw_rx.recv() => {
@@ -381,8 +380,6 @@ impl FuturesFeedHandler {
                     if let Some(msg) = self.pending_messages.pop_front() {
                         return Some(msg);
                     }
-
-                    continue;
                 }
             }
         }
@@ -1459,6 +1456,7 @@ mod tests {
             None,
             None,
             None,
+            None, // info
             UnixNanos::default(),
             UnixNanos::default(),
         ))

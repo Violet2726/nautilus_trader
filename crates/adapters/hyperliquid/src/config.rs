@@ -15,7 +15,7 @@
 
 //! Configuration structures for the Hyperliquid adapter.
 
-use crate::common::consts::{info_url, ws_url};
+use crate::common::consts::{BUILDER_FEE_REFRESH_DEFAULT_MINS, info_url, ws_url};
 
 /// Configuration for the Hyperliquid data client.
 #[derive(Clone, Debug)]
@@ -66,10 +66,12 @@ impl HyperliquidDataClientConfig {
         Self::default()
     }
 
-    /// Returns `true` when private key is populated.
+    /// Returns `true` when private key is populated and non-empty.
     #[must_use]
     pub fn has_credentials(&self) -> bool {
-        self.private_key.is_some()
+        self.private_key
+            .as_deref()
+            .is_some_and(|s| !s.trim().is_empty())
     }
 
     /// Returns the WebSocket URL, respecting the testnet flag and overrides.
@@ -92,8 +94,12 @@ impl HyperliquidDataClientConfig {
 /// Configuration for the Hyperliquid execution client.
 #[derive(Clone, Debug)]
 pub struct HyperliquidExecClientConfig {
-    /// Private key for signing transactions (required for execution).
-    pub private_key: String,
+    /// Private key for signing transactions.
+    ///
+    /// If not provided, falls back to environment variable:
+    /// - Mainnet: `HYPERLIQUID_PK`
+    /// - Testnet: `HYPERLIQUID_TESTNET_PK`
+    pub private_key: Option<String>,
     /// Optional vault address for vault operations.
     pub vault_address: Option<String>,
     /// Override for the WebSocket URL.
@@ -119,12 +125,18 @@ pub struct HyperliquidExecClientConfig {
     pub retry_delay_initial_ms: u64,
     /// Maximum retry delay in milliseconds.
     pub retry_delay_max_ms: u64,
+    /// When true, normalize order prices to 5 significant figures
+    /// before submission (Hyperliquid requirement).
+    pub normalize_prices: bool,
+    /// Interval in minutes for refreshing the builder fee tier from HL.
+    /// Set to `None` to disable periodic refresh.
+    pub builder_fee_refresh_mins: Option<u64>,
 }
 
 impl Default for HyperliquidExecClientConfig {
     fn default() -> Self {
         Self {
-            private_key: String::new(),
+            private_key: None,
             vault_address: None,
             base_url_ws: None,
             base_url_http: None,
@@ -136,6 +148,8 @@ impl Default for HyperliquidExecClientConfig {
             max_retries: 3,
             retry_delay_initial_ms: 100,
             retry_delay_max_ms: 5000,
+            normalize_prices: true,
+            builder_fee_refresh_mins: Some(BUILDER_FEE_REFRESH_DEFAULT_MINS),
         }
     }
 }
@@ -143,17 +157,19 @@ impl Default for HyperliquidExecClientConfig {
 impl HyperliquidExecClientConfig {
     /// Creates a new configuration with the provided private key.
     #[must_use]
-    pub fn new(private_key: String) -> Self {
+    pub fn new(private_key: Option<String>) -> Self {
         Self {
             private_key,
             ..Self::default()
         }
     }
 
-    /// Returns `true` when private key is populated.
+    /// Returns `true` when private key is populated and non-empty.
     #[must_use]
     pub fn has_credentials(&self) -> bool {
-        !self.private_key.is_empty()
+        self.private_key
+            .as_deref()
+            .is_some_and(|s| !s.trim().is_empty())
     }
 
     /// Returns the WebSocket URL, respecting the testnet flag and overrides.

@@ -55,6 +55,11 @@ impl OrderBookDelta {
     ///
     /// Returns a `PyErr` if extracting any attribute or converting types fails.
     pub fn from_pyobject(obj: &Bound<'_, PyAny>) -> PyResult<Self> {
+        // Fast path: avoid property getters that trigger enum type deadlocks
+        if let Ok(delta) = obj.cast::<Self>() {
+            return Ok(*delta.borrow());
+        }
+
         let instrument_id_obj: Bound<'_, PyAny> = obj.getattr("instrument_id")?.extract()?;
         let instrument_id_str: String = instrument_id_obj.getattr("value")?.extract()?;
         let instrument_id = InstrumentId::from_str(instrument_id_str.as_str())
@@ -332,7 +337,7 @@ mod tests {
         Python::initialize();
         Python::attach(|py| {
             let dict_string = delta.py_to_dict(py).unwrap().to_string();
-            let expected_string = r"{'type': 'OrderBookDelta', 'instrument_id': 'AAPL.XNAS', 'action': 'ADD', 'order': {'side': 'BUY', 'price': '100.00', 'size': '10', 'order_id': 123456}, 'flags': 0, 'sequence': 1, 'ts_event': 1, 'ts_init': 2}";
+            let expected_string = "{'type': 'OrderBookDelta', 'instrument_id': 'AAPL.XNAS', 'action': 'ADD', 'order': {'side': 'BUY', 'price': '100.00', 'size': '10', 'order_id': 123456}, 'flags': 0, 'sequence': 1, 'ts_event': 1, 'ts_init': 2}";
             assert_eq!(dict_string, expected_string);
         });
     }

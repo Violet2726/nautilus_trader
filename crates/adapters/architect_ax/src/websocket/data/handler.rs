@@ -268,7 +268,6 @@ impl FeedHandler {
                         log::debug!("Stop signal received during idle period");
                         return None;
                     }
-                    continue;
                 }
 
                 msg = self.raw_rx.recv() => {
@@ -374,7 +373,7 @@ impl FeedHandler {
         }
     }
 
-    async fn send_subscribe(&self, request_id: i64, symbol: Ustr, level: AxMarketDataLevel) {
+    async fn send_subscribe(&mut self, request_id: i64, symbol: Ustr, level: AxMarketDataLevel) {
         let msg = AxMdSubscribe {
             rid: request_id,
             msg_type: AxMdRequestType::Subscribe,
@@ -383,6 +382,7 @@ impl FeedHandler {
         };
 
         if let Err(e) = self.send_json(&msg).await {
+            self.pending_subscribe_requests.remove(&request_id);
             log::error!("Failed to send subscribe message: {e}");
         }
     }
@@ -399,7 +399,12 @@ impl FeedHandler {
         }
     }
 
-    async fn send_subscribe_candles(&self, request_id: i64, symbol: Ustr, width: AxCandleWidth) {
+    async fn send_subscribe_candles(
+        &mut self,
+        request_id: i64,
+        symbol: Ustr,
+        width: AxCandleWidth,
+    ) {
         let msg = AxMdSubscribeCandles {
             rid: request_id,
             msg_type: AxMdRequestType::SubscribeCandles,
@@ -408,6 +413,7 @@ impl FeedHandler {
         };
 
         if let Err(e) = self.send_json(&msg).await {
+            self.pending_subscribe_requests.remove(&request_id);
             log::error!("Failed to send subscribe_candles message: {e}");
         }
     }

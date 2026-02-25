@@ -51,6 +51,11 @@ impl InstrumentStatus {
     ///
     /// Panics if converting `action_u16` to `MarketStatusAction` fails.
     pub fn from_pyobject(obj: &Bound<'_, PyAny>) -> PyResult<Self> {
+        // Fast path: avoid property getters that trigger enum type deadlocks
+        if let Ok(status) = obj.cast::<Self>() {
+            return Ok(*status.borrow());
+        }
+
         let instrument_id_obj: Bound<'_, PyAny> = obj.getattr("instrument_id")?.extract()?;
         let instrument_id_str: String = instrument_id_obj.getattr("value")?.extract()?;
         let instrument_id =
@@ -259,7 +264,7 @@ mod tests {
         Python::initialize();
         Python::attach(|py| {
             let dict_string = stub_instrument_status.py_to_dict(py).unwrap().to_string();
-            let expected_string = r"{'type': 'InstrumentStatus', 'instrument_id': 'MSFT.XNAS', 'action': 'TRADING', 'ts_event': 1, 'ts_init': 2, 'reason': None, 'trading_event': None, 'is_trading': None, 'is_quoting': None, 'is_short_sell_restricted': None}";
+            let expected_string = "{'type': 'InstrumentStatus', 'instrument_id': 'MSFT.XNAS', 'action': 'TRADING', 'ts_event': 1, 'ts_init': 2, 'reason': None, 'trading_event': None, 'is_trading': None, 'is_quoting': None, 'is_short_sell_restricted': None}";
             assert_eq!(dict_string, expected_string);
         });
     }

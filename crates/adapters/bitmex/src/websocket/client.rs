@@ -62,7 +62,7 @@ use super::{
 };
 use crate::common::{
     consts::{BITMEX_WS_TOPIC_DELIMITER, BITMEX_WS_URL},
-    credential::Credential,
+    credential::{Credential, credential_env_vars},
 };
 
 /// Provides a WebSocket client for connecting to the [BitMEX](https://bitmex.com) real-time API.
@@ -75,7 +75,7 @@ use crate::common::{
 #[derive(Clone, Debug)]
 #[cfg_attr(
     feature = "python",
-    pyo3::pyclass(module = "nautilus_trader.core.nautilus_pyo3.bitmex")
+    pyo3::pyclass(module = "nautilus_trader.core.nautilus_pyo3.bitmex", from_py_object)
 )]
 pub struct BitmexWebSocketClient {
     url: String,
@@ -161,11 +161,7 @@ impl BitmexWebSocketClient {
         heartbeat: Option<u64>,
         testnet: bool,
     ) -> anyhow::Result<Self> {
-        let (api_key_env, api_secret_env) = if testnet {
-            ("BITMEX_TESTNET_API_KEY", "BITMEX_TESTNET_API_SECRET")
-        } else {
-            ("BITMEX_API_KEY", "BITMEX_API_SECRET")
-        };
+        let (api_key_env, api_secret_env) = credential_env_vars(testnet);
 
         let key = get_or_env_var_opt(api_key, api_key_env);
         let secret = get_or_env_var_opt(api_secret, api_secret_env);
@@ -180,8 +176,9 @@ impl BitmexWebSocketClient {
     /// Returns an error if environment variables are not set or credentials are invalid.
     pub fn from_env() -> anyhow::Result<Self> {
         let url = get_env_var("BITMEX_WS_URL")?;
-        let api_key = get_env_var("BITMEX_API_KEY")?;
-        let api_secret = get_env_var("BITMEX_API_SECRET")?;
+        let (key_var, secret_var) = credential_env_vars(false);
+        let api_key = get_env_var(key_var)?;
+        let api_secret = get_env_var(secret_var)?;
 
         Self::new(Some(url), Some(api_key), Some(api_secret), None, None)
     }
@@ -195,7 +192,7 @@ impl BitmexWebSocketClient {
     /// Returns the public API key being used by the client.
     #[must_use]
     pub fn api_key(&self) -> Option<&str> {
-        self.credential.as_ref().map(|c| c.api_key.as_str())
+        self.credential.as_ref().map(|c| c.api_key())
     }
 
     /// Returns a masked version of the API key for logging purposes.
@@ -266,9 +263,6 @@ impl BitmexWebSocketClient {
     ///
     /// Returns an error if the WebSocket connection fails or authentication fails (if credentials provided).
     ///
-    /// # Panics
-    ///
-    /// Panics if subscription or authentication messages fail to serialize to JSON.
     pub async fn connect(&mut self) -> Result<(), BitmexWsError> {
         let (client, raw_rx) = self.connect_inner().await?;
 
@@ -415,7 +409,7 @@ impl BitmexWebSocketClient {
 
                             let auth_message = BitmexAuthentication {
                                 op: BitmexWsAuthAction::AuthKeyExpires,
-                                args: (cred.api_key.to_string(), expires, signature),
+                                args: (cred.api_key().to_string(), expires, signature),
                             };
 
                             if let Ok(payload) = serde_json::to_string(&auth_message) {
@@ -440,13 +434,10 @@ impl BitmexWebSocketClient {
                             log::error!("Failed to forward reconnect event (receiver dropped)");
                             break;
                         }
-
-                        continue;
                     }
                     Some(NautilusWsMessage::Authenticated) => {
                         log::debug!("Authenticated after reconnection, resubscribing");
                         resubscribe_all();
-                        continue;
                     }
                     Some(msg) => {
                         if handler.send(msg).is_err() {
@@ -543,6 +534,7 @@ impl BitmexWebSocketClient {
             reconnect_backoff_factor: None,   // Use default
             reconnect_jitter_ms: None,        // Use default
             reconnect_max_attempts: None,
+            idle_timeout_ms: None,
         };
 
         let keyed_quotas = vec![];
@@ -583,7 +575,7 @@ impl BitmexWebSocketClient {
 
         let auth_message = BitmexAuthentication {
             op: BitmexWsAuthAction::AuthKeyExpires,
-            args: (credential.api_key.to_string(), expires, signature),
+            args: (credential.api_key().to_string(), expires, signature),
         };
 
         let auth_json = serde_json::to_string(&auth_message).map_err(|e| {
@@ -659,10 +651,6 @@ impl BitmexWebSocketClient {
     /// # Errors
     ///
     /// Returns an error if the WebSocket is not connected or if closing fails.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the task handle cannot be unwrapped (should never happen in normal usage).
     pub async fn close(&mut self) -> Result<(), BitmexWsError> {
         log::debug!("Starting close process");
 
@@ -712,10 +700,6 @@ impl BitmexWebSocketClient {
     /// # Errors
     ///
     /// Returns an error if the WebSocket is not connected or if sending the subscription message fails.
-    ///
-    /// # Panics
-    ///
-    /// Panics if serialization of WebSocket messages fails (should never happen).
     pub async fn subscribe(&self, topics: Vec<String>) -> Result<(), BitmexWsError> {
         log::debug!("Subscribing to topics: {topics:?}");
 
@@ -1353,7 +1337,7 @@ mod tests {
 
             let auth_message = BitmexAuthentication {
                 op: BitmexWsAuthAction::AuthKeyExpires,
-                args: (cred.api_key.to_string(), expires, signature),
+                args: (cred.api_key().to_string(), expires, signature),
             };
 
             // Verify auth message structure

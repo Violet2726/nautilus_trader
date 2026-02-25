@@ -149,6 +149,10 @@ skip = [
   { crate = "derive_more" },
   { crate = "derive_more-impl" },
 
+  # Enum derive macros - strum 0.27 (alloy, hypersync) vs 0.28 (nautilus)
+  { crate = "strum" },
+  { crate = "strum_macros" },
+
   # Case conversion - version fragmentation via derive_more
   { crate = "convert_case" },
 
@@ -179,6 +183,10 @@ skip = [
 
   # Cap'n Proto - hypersync-client uses 0.23.x, nautilus-serialization uses 0.25.0
   { crate = "capnp" },
+
+  # TOML parser - cbindgen requires 0.9.x, pyo3-stub-gen requires 1.0.x
+  { crate = "toml" },
+  { crate = "toml_datetime" },
 
   # TLS roots - version fragmentation in TLS ecosystem
   { crate = "webpki-roots" },

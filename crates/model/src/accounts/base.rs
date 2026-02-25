@@ -39,7 +39,7 @@ use crate::{
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(
     feature = "python",
-    pyo3::pyclass(module = "nautilus_trader.core.nautilus_pyo3.model")
+    pyo3::pyclass(module = "nautilus_trader.core.nautilus_pyo3.model", from_py_object)
 )]
 pub struct BaseAccount {
     pub id: AccountId,
@@ -238,12 +238,9 @@ impl BaseAccount {
     ///
     /// This function never returns an error (TBD).
     ///
-    /// # Panics
-    ///
-    /// Panics if `side` is not [`OrderSide::Buy`] or [`OrderSide::Sell`].
     pub fn base_calculate_balance_locked(
         &mut self,
-        instrument: InstrumentAny,
+        instrument: &InstrumentAny,
         side: OrderSide,
         quantity: Quantity,
         price: Price,
@@ -286,13 +283,10 @@ impl BaseAccount {
     ///
     /// This function never returns an error (TBD).
     ///
-    /// # Panics
-    ///
-    /// Panics if `fill.order_side` is neither [`OrderSide::Buy`] nor [`OrderSide::Sell`].
     pub fn base_calculate_pnls(
         &self,
-        instrument: InstrumentAny,
-        fill: OrderFilled,
+        instrument: &InstrumentAny,
+        fill: &OrderFilled,
         _position: Option<Position>,
     ) -> anyhow::Result<Vec<Money>> {
         let mut pnls: AHashMap<Currency, Money> = AHashMap::new();
@@ -346,7 +340,7 @@ impl BaseAccount {
     )]
     pub fn base_calculate_commission(
         &self,
-        instrument: InstrumentAny,
+        instrument: &InstrumentAny,
         last_qty: Quantity,
         last_px: Price,
         liquidity_side: LiquiditySide,

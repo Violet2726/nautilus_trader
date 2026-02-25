@@ -35,7 +35,6 @@ use nautilus_model::{
     types::Quantity,
 };
 use nautilus_testkit::testers::{ExecTester, ExecTesterConfig};
-use rust_decimal::{Decimal, prelude::FromStr};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -61,10 +60,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         account_id,
         product_types: vec![BinanceProductType::UsdM],
         environment: BinanceEnvironment::Testnet,
-        api_key: None,    // Will use 'BINANCE_FUTURES_TESTNET_API_KEY' env var
-        api_secret: None, // Will use 'BINANCE_FUTURES_TESTNET_API_SECRET' env var
-        base_url_http: None,
-        base_url_ws: None,
+        ..Default::default()
     };
 
     let data_factory = BinanceDataClientFactory::new();
@@ -79,14 +75,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_delay_post_stop_secs(5)
         .build()?;
 
+    let order_qty = Quantity::from("0.01"); // Small quantity for testing
+
     let mut tester_config = ExecTesterConfig::new(
         StrategyId::from("EXEC_TESTER-001"),
         instrument_id,
         client_id,
-        Quantity::from("0.01"), // Small quantity for testing
+        order_qty,
     )
     .with_log_data(false)
-    .with_open_position_on_start(Some(Decimal::from_str("0.01")?))
+    .with_open_position_on_start(order_qty.as_decimal())
     .with_cancel_orders_on_stop(true)
     .with_close_positions_on_stop(true);
 

@@ -39,7 +39,10 @@ use std::sync::{
 };
 
 use cosmrs::Any;
-use nautilus_network::retry::{RetryConfig, RetryManager};
+use nautilus_network::{
+    ratelimiter::{RateLimiter, clock::MonotonicClock, quota::Quota},
+    retry::{RetryConfig, RetryManager},
+};
 
 use super::{tx_manager::TransactionManager, types::PreparedTransaction};
 use crate::{error::DydxError, grpc::DydxGrpcClient};
@@ -47,15 +50,15 @@ use crate::{error::DydxError, grpc::DydxGrpcClient};
 /// Maximum retries for sequence mismatch errors.
 pub const MAX_SEQUENCE_RETRIES: u32 = 5;
 
-/// Initial delay between retries in milliseconds.
-/// Exponential backoff will increase this: 500 → 1000 → 2000 → 4000ms
+// Initial delay between retries in milliseconds.
+// Exponential backoff will increase this: 500 → 1000 → 2000 → 4000ms
 const INITIAL_RETRY_DELAY_MS: u64 = 500;
 
-/// Maximum delay between retries in milliseconds.
+// Maximum delay between retries in milliseconds
 const MAX_RETRY_DELAY_MS: u64 = 4_000;
 
-/// Maximum total time for all retries in milliseconds (10 seconds).
-/// Prevents indefinite retry loops during chain congestion.
+// Maximum total time for all retries in milliseconds (10 seconds).
+// Prevents indefinite retry loops during chain congestion.
 const MAX_ELAPSED_MS: u64 = 10_000;
 
 /// Creates a retry manager configured for blockchain transaction broadcasting.
@@ -79,6 +82,9 @@ pub fn create_tx_retry_manager() -> RetryManager<DydxError> {
     };
     RetryManager::new(config)
 }
+
+// Rate limiter key for gRPC broadcast calls
+const GRPC_RATE_LIMIT_KEY: &str = "grpc";
 
 /// Transaction broadcaster responsible for gRPC transmission with retry logic.
 ///
@@ -116,17 +122,27 @@ pub struct TxBroadcaster {
     /// Semaphore for serializing broadcasts (permits=1 acts as mutex).
     /// Ensures sequence allocation → build → broadcast are atomic.
     broadcast_semaphore: Arc<tokio::sync::Semaphore>,
+    /// Rate limiter for gRPC broadcast calls.
+    rate_limiter: Arc<RateLimiter<&'static str, MonotonicClock>>,
 }
 
 impl TxBroadcaster {
     /// Creates a new transaction broadcaster.
     #[must_use]
-    pub fn new(grpc_client: DydxGrpcClient) -> Self {
+    pub fn new(grpc_client: DydxGrpcClient, grpc_quota: Option<Quota>) -> Self {
+        let rate_limiter = Arc::new(RateLimiter::new_with_quota(grpc_quota, vec![]));
         Self {
             grpc_client,
             retry_manager: create_tx_retry_manager(),
             broadcast_semaphore: Arc::new(tokio::sync::Semaphore::new(1)),
+            rate_limiter,
         }
+    }
+
+    async fn wait_for_rate_limit(&self) {
+        self.rate_limiter
+            .until_key_ready(&GRPC_RATE_LIMIT_KEY)
+            .await;
     }
 
     /// Broadcasts a prepared transaction with automatic retry on sequence mismatch.
@@ -173,12 +189,14 @@ impl TxBroadcaster {
 
         // Clone values that need to be moved into closures
         let grpc_client = self.grpc_client.clone();
+        let rate_limiter = Arc::clone(&self.rate_limiter);
         let op_name = operation_name.to_string();
 
         let operation = || {
             // Clone captures for the async block
             let needs_resync = Arc::clone(&needs_resync);
             let grpc_client = grpc_client.clone();
+            let rate_limiter = Arc::clone(&rate_limiter);
             let msgs = msgs.clone();
             let op_name = op_name.clone();
 
@@ -192,6 +210,9 @@ impl TxBroadcaster {
                 // Prepare transaction (allocates new sequence)
                 let prepared = tx_manager.prepare_transaction(msgs, &op_name).await?;
 
+                // Wait for rate limiter before gRPC call
+                rate_limiter.until_key_ready(&GRPC_RATE_LIMIT_KEY).await;
+
                 // Broadcast
                 let mut grpc = grpc_client;
                 let tx_hash = grpc.broadcast_tx(prepared.tx_bytes).await.map_err(|e| {
@@ -199,7 +220,7 @@ impl TxBroadcaster {
                     DydxError::Nautilus(e)
                 })?;
 
-                log::info!("{op_name} successfully: tx_hash={tx_hash}");
+                log::debug!("{op_name} successfully: tx_hash={tx_hash}");
                 Ok(tx_hash)
             }
         };
@@ -232,9 +253,17 @@ impl TxBroadcaster {
 
     /// Broadcasts a short-term order transaction without sequence management.
     ///
+    /// Short-term orders use Good-Til-Block (GTB) for replay protection, so sequence
+    /// numbers are not incremented. All short-term broadcasts use a cached sequence.
+    ///
+    /// Benign cancel errors are treated as success (the cancel is already handled):
+    /// - code=19: Transaction already in mempool cache (duplicate tx)
+    /// - code=9: Cancel already exists in memclob with >= GoodTilBlock
+    /// - code=3006: Order to cancel does not exist (already filled/expired/cancelled)
+    ///
     /// # Errors
     ///
-    /// Returns error if building or broadcasting fails.
+    /// Returns error if building or broadcasting fails (excluding benign cancel errors).
     pub async fn broadcast_short_term(
         &self,
         tx_manager: &TransactionManager,
@@ -246,14 +275,28 @@ impl TxBroadcaster {
             .build_transaction(msgs, cached_sequence, operation_name)
             .await?;
 
-        let mut grpc = self.grpc_client.clone();
-        let tx_hash = grpc.broadcast_tx(prepared.tx_bytes).await.map_err(|e| {
-            log::error!("gRPC broadcast failed for {operation_name}: {e}");
-            DydxError::Nautilus(e)
-        })?;
+        // Wait for rate limiter before gRPC call
+        self.wait_for_rate_limit().await;
 
-        log::info!("{operation_name} successfully: tx_hash={tx_hash}");
-        Ok(tx_hash)
+        let mut grpc = self.grpc_client.clone();
+        match grpc.broadcast_tx(prepared.tx_bytes).await {
+            Ok(tx_hash) => {
+                log::debug!("{operation_name} successfully: tx_hash={tx_hash}");
+                Ok(tx_hash)
+            }
+            Err(e) => {
+                let dydx_err = DydxError::Nautilus(e);
+                if dydx_err.is_benign_cancel_error() {
+                    log::debug!(
+                        "{operation_name}: benign cancel error, treating as success: {dydx_err}"
+                    );
+                    Ok(String::new())
+                } else {
+                    log::error!("gRPC broadcast failed for {operation_name}: {dydx_err}");
+                    Err(dydx_err)
+                }
+            }
+        }
     }
 
     /// Broadcasts a prepared transaction without retry.
@@ -272,6 +315,9 @@ impl TxBroadcaster {
         &self,
         prepared: &PreparedTransaction,
     ) -> Result<String, DydxError> {
+        // Wait for rate limiter before gRPC call
+        self.wait_for_rate_limit().await;
+
         let mut grpc = self.grpc_client.clone();
         let operation = &prepared.operation;
 
@@ -283,7 +329,7 @@ impl TxBroadcaster {
                 DydxError::Nautilus(e)
             })?;
 
-        log::info!("{operation} successfully: tx_hash={tx_hash}");
+        log::debug!("{operation} successfully: tx_hash={tx_hash}");
         Ok(tx_hash)
     }
 }

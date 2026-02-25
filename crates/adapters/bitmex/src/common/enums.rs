@@ -41,7 +41,13 @@ use strum::{AsRefStr, Display, EnumIter, EnumString};
 #[serde(rename_all = "PascalCase")]
 #[cfg_attr(
     feature = "python",
-    pyo3::pyclass(module = "nautilus_trader.core.nautilus_pyo3.bitmex", eq, eq_int)
+    pyo3::pyclass(
+        module = "nautilus_trader.core.nautilus_pyo3.bitmex",
+        eq,
+        eq_int,
+        from_py_object,
+        rename_all = "SCREAMING_SNAKE_CASE",
+    )
 )]
 pub enum BitmexSymbolStatus {
     /// Symbol is open for trading.
@@ -109,7 +115,12 @@ impl From<BitmexSide> for OrderSide {
 )]
 #[cfg_attr(
     feature = "python",
-    pyo3::pyclass(module = "nautilus_trader.core.nautilus_pyo3.bitmex", eq, eq_int)
+    pyo3::pyclass(
+        module = "nautilus_trader.core.nautilus_pyo3.bitmex",
+        eq,
+        eq_int,
+        from_py_object
+    )
 )]
 pub enum BitmexPositionSide {
     /// Long position.
@@ -1117,8 +1128,8 @@ mod tests {
     #[rstest]
     fn test_error_cases() {
         assert!(serde_json::from_str::<BitmexProductType>(r#""invalid_type""#).is_err());
-        assert!(serde_json::from_str::<BitmexProductType>(r"123").is_err());
-        assert!(serde_json::from_str::<BitmexProductType>(r"{}").is_err());
+        assert!(serde_json::from_str::<BitmexProductType>("123").is_err());
+        assert!(serde_json::from_str::<BitmexProductType>("{}").is_err());
     }
 
     #[rstest]

@@ -61,7 +61,7 @@ impl AccountsManager {
     pub fn update_balances(
         &self,
         account: AccountAny,
-        instrument: InstrumentAny,
+        instrument: &InstrumentAny,
         fill: OrderFilled,
     ) -> AccountState {
         let cache = self.cache.borrow();
@@ -78,7 +78,7 @@ impl AccountsManager {
 
         let position = cache.position(&position_id);
 
-        let pnls = account.calculate_pnls(instrument, fill, position.cloned());
+        let pnls = account.calculate_pnls(instrument, &fill, position.cloned());
 
         // Calculate final PnL including commissions
         match account.base_currency() {
@@ -114,7 +114,7 @@ impl AccountsManager {
     pub fn update_orders(
         &self,
         account: &AccountAny,
-        instrument: InstrumentAny,
+        instrument: &InstrumentAny,
         orders_open: Vec<&OrderAny>,
         ts_event: UnixNanos,
     ) -> Option<(AccountAny, AccountState)> {
@@ -141,7 +141,7 @@ impl AccountsManager {
     pub fn update_positions(
         &self,
         account: &MarginAccount,
-        instrument: InstrumentAny,
+        instrument: &InstrumentAny,
         positions: Vec<&Position>,
         ts_event: UnixNanos,
     ) -> Option<(MarginAccount, AccountState)> {
@@ -172,6 +172,22 @@ impl AccountsManager {
                     )
                     .ok()?,
                 InstrumentAny::BinaryOption(i) => account
+                    .calculate_maintenance_margin(
+                        i,
+                        position.quantity,
+                        instrument.make_price(position.avg_px_open),
+                        None,
+                    )
+                    .ok()?,
+                InstrumentAny::Cfd(i) => account
+                    .calculate_maintenance_margin(
+                        i,
+                        position.quantity,
+                        instrument.make_price(position.avg_px_open),
+                        None,
+                    )
+                    .ok()?,
+                InstrumentAny::Commodity(i) => account
                     .calculate_maintenance_margin(
                         i,
                         position.quantity,
@@ -235,6 +251,14 @@ impl AccountsManager {
                         None,
                     )
                     .ok()?,
+                InstrumentAny::IndexInstrument(i) => account
+                    .calculate_maintenance_margin(
+                        i,
+                        position.quantity,
+                        instrument.make_price(position.avg_px_open),
+                        None,
+                    )
+                    .ok()?,
                 InstrumentAny::OptionContract(i) => account
                     .calculate_maintenance_margin(
                         i,
@@ -251,6 +275,14 @@ impl AccountsManager {
                         None,
                     )
                     .ok()?,
+                InstrumentAny::PerpetualContract(i) => account
+                    .calculate_maintenance_margin(
+                        i,
+                        position.quantity,
+                        instrument.make_price(position.avg_px_open),
+                        None,
+                    )
+                    .ok()?,
             };
 
             let mut margin_maint = margin_maint.as_f64();
@@ -260,7 +292,7 @@ impl AccountsManager {
                     currency = base_currency;
                     base_xrate = self.calculate_xrate_to_base(
                         AccountAny::Margin(account.clone()),
-                        instrument.clone(),
+                        instrument,
                         position.entry.as_specified(),
                     );
                 }
@@ -295,7 +327,7 @@ impl AccountsManager {
     fn update_balance_locked(
         &self,
         account: &CashAccount,
-        instrument: InstrumentAny,
+        instrument: &InstrumentAny,
         orders_open: Vec<&OrderAny>,
         ts_event: UnixNanos,
     ) -> Option<(CashAccount, AccountState)> {
@@ -339,7 +371,7 @@ impl AccountsManager {
 
             let mut locked = account
                 .calculate_balance_locked(
-                    instrument.clone(),
+                    instrument,
                     order.order_side(),
                     order.quantity(),
                     price?,
@@ -352,7 +384,7 @@ impl AccountsManager {
                     currency = base_curr;
                     base_xrate = self.calculate_xrate_to_base(
                         AccountAny::Cash(account.clone()),
-                        instrument.clone(),
+                        instrument,
                         order.order_side_specified(),
                     );
                 }
@@ -400,7 +432,7 @@ impl AccountsManager {
     fn update_margin_init(
         &self,
         account: &MarginAccount,
-        instrument: InstrumentAny,
+        instrument: &InstrumentAny,
         orders_open: Vec<&OrderAny>,
         ts_event: UnixNanos,
     ) -> Option<(MarginAccount, AccountState)> {
@@ -438,6 +470,12 @@ impl AccountsManager {
                 InstrumentAny::BinaryOption(i) => account
                     .calculate_initial_margin(i, order.quantity(), price?, None)
                     .ok()?,
+                InstrumentAny::Cfd(i) => account
+                    .calculate_initial_margin(i, order.quantity(), price?, None)
+                    .ok()?,
+                InstrumentAny::Commodity(i) => account
+                    .calculate_initial_margin(i, order.quantity(), price?, None)
+                    .ok()?,
                 InstrumentAny::CryptoFuture(i) => account
                     .calculate_initial_margin(i, order.quantity(), price?, None)
                     .ok()?,
@@ -459,10 +497,16 @@ impl AccountsManager {
                 InstrumentAny::FuturesSpread(i) => account
                     .calculate_initial_margin(i, order.quantity(), price?, None)
                     .ok()?,
+                InstrumentAny::IndexInstrument(i) => account
+                    .calculate_initial_margin(i, order.quantity(), price?, None)
+                    .ok()?,
                 InstrumentAny::OptionContract(i) => account
                     .calculate_initial_margin(i, order.quantity(), price?, None)
                     .ok()?,
                 InstrumentAny::OptionSpread(i) => account
+                    .calculate_initial_margin(i, order.quantity(), price?, None)
+                    .ok()?,
+                InstrumentAny::PerpetualContract(i) => account
                     .calculate_initial_margin(i, order.quantity(), price?, None)
                     .ok()?,
             };
@@ -474,7 +518,7 @@ impl AccountsManager {
                     currency = base_currency;
                     base_xrate = self.calculate_xrate_to_base(
                         AccountAny::Margin(account.clone()),
-                        instrument.clone(),
+                        instrument,
                         order.order_side_specified(),
                     );
                 }
@@ -759,7 +803,7 @@ impl AccountsManager {
     fn calculate_xrate_to_base(
         &self,
         account: AccountAny,
-        instrument: InstrumentAny,
+        instrument: &InstrumentAny,
         side: OrderSideSpecified,
     ) -> Option<f64> {
         match account.base_currency() {
@@ -939,7 +983,7 @@ mod tests {
 
         let result = manager.update_orders(
             &AccountAny::Cash(account),
-            InstrumentAny::CurrencyPair(instrument),
+            &InstrumentAny::CurrencyPair(instrument),
             orders,
             UnixNanos::default(),
         );
@@ -1076,7 +1120,7 @@ mod tests {
         let orders_both: Vec<&OrderAny> = vec![&buy_order, &sell_order];
         let result = manager.update_orders(
             &AccountAny::Cash(account),
-            InstrumentAny::CurrencyPair(instrument),
+            &InstrumentAny::CurrencyPair(instrument.clone()),
             orders_both,
             UnixNanos::default(),
         );
@@ -1101,7 +1145,7 @@ mod tests {
         let orders_sell_only: Vec<&OrderAny> = vec![&sell_order];
         let result = manager.update_orders(
             &updated_account,
-            InstrumentAny::CurrencyPair(instrument),
+            &InstrumentAny::CurrencyPair(instrument),
             orders_sell_only,
             UnixNanos::default(),
         );
@@ -1249,7 +1293,7 @@ mod tests {
             Some(Money::new(20.0, usd)),
         );
 
-        let position = Position::new(&InstrumentAny::CurrencyPair(instrument), fill);
+        let position = Position::new(&InstrumentAny::CurrencyPair(instrument.clone()), fill);
         cache
             .borrow_mut()
             .add_position(position, OmsType::Netting)
@@ -1278,7 +1322,7 @@ mod tests {
         );
         let _state = manager.update_balances(
             AccountAny::Cash(account),
-            InstrumentAny::CurrencyPair(instrument),
+            &InstrumentAny::CurrencyPair(instrument),
             fill2,
         );
 
@@ -1363,7 +1407,7 @@ mod tests {
 
         let result = manager.update_orders(
             &AccountAny::Cash(account),
-            InstrumentAny::CurrencyPair(instrument),
+            &InstrumentAny::CurrencyPair(instrument.clone()),
             vec![&order],
             UnixNanos::default(),
         );
@@ -1387,7 +1431,7 @@ mod tests {
 
         let result = manager.update_orders(
             &updated_account,
-            InstrumentAny::CurrencyPair(instrument),
+            &InstrumentAny::CurrencyPair(instrument),
             vec![],
             UnixNanos::default(),
         );

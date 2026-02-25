@@ -2006,7 +2006,8 @@ class InteractiveBrokersExecutionClient(LiveExecutionClient):
 
             # 确定持仓方向
             side = PositionSide.LONG if new_quantity > 0 else PositionSide.SHORT
-
+            quantity = instrument.make_qty(abs(new_quantity))
+            
             # 如果可用，将 avg_cost 转换为 Price
             avg_px_open = self._convert_ib_avg_cost_to_price(ib_position.avg_cost, instrument)
 
@@ -2015,7 +2016,7 @@ class InteractiveBrokersExecutionClient(LiveExecutionClient):
                 account_id=self.account_id,
                 instrument_id=instrument.id,
                 position_side=side,
-                quantity=instrument.make_qty(new_quantity),
+                quantity=quantity,
                 avg_px_open=avg_px_open,
                 report_id=UUID4(),
                 ts_last=self._clock.timestamp_ns(),
@@ -2023,7 +2024,7 @@ class InteractiveBrokersExecutionClient(LiveExecutionClient):
             )
 
             self._log.info(
-                f"期权行权持仓已创建: {instrument.id} {side} {abs(new_quantity)} @ {ib_position.avg_cost}",
+                f"期权行权持仓已创建: {instrument.id} {side} {quantity} @ {ib_position.avg_cost}",
                 LogColor.CYAN,
             )
 

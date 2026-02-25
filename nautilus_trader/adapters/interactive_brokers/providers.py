@@ -675,7 +675,14 @@ class InteractiveBrokersInstrumentProvider(InstrumentProvider):
             )
             return []
 
-        option_details = [d for d in option_details if d.underConId == underlying.conId]  # type: ignore[assignment]
+        # These are raw ibapi ContractDetails (not yet converted to IBContractDetails).
+        # ibapi 10.43's protobuf decoder writes "underConid" (lowercase 'i') instead of
+        # the legacy "underConId" (uppercase 'I'), so we check both attribute names.
+        option_details = [  # type: ignore[assignment]
+            d
+            for d in option_details
+            if (d.underConId or getattr(d, "underConid", 0)) == underlying.conId
+        ]
         self._log.info(
             f"收到了 {len(option_details)} 个 {underlying.symbol}.{underlying.primaryExchange or underlying.exchange} "
             f"在 {last_trading_date} 到期的期权合约",
@@ -759,11 +766,10 @@ class InteractiveBrokersInstrumentProvider(InstrumentProvider):
         """
         processed_instrument_ids = []
         for details in copy.deepcopy(contract_details):
-            if not isinstance(details.contract, IBContract):
-                details.contract = IBContract(**details.contract.__dict__)
-
             if not isinstance(details, IBContractDetails):
-                details = IBContractDetails(**details.__dict__)
+                details = IBContractDetails.from_contract_details(details)
+            elif not isinstance(details.contract, IBContract):
+                details.contract = IBContract(**details.contract.__dict__)
 
             sec_type = details.contract.secType
             if self._is_filtered_sec_type(sec_type):

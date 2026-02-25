@@ -1025,12 +1025,6 @@ cdef class DataEngine(Component):
             self._setup_order_book(client, command)
 
     cpdef void _setup_order_book(self, MarketDataClient client, SubscribeOrderBook command):
-        cdef Instrument instrument = self._cache.instrument(command.instrument_id)
-        if instrument is None:
-            self._log.warning(
-                f"No instrument found for {command.instrument_id} on order book data subscription"
-            )
-
         cdef:
             list[Instrument] instruments
             str root
@@ -3284,7 +3278,7 @@ cdef class DataEngine(Component):
 
         update_interval_seconds = params.get("update_interval_seconds", 1)
         quote_build_delay = params.get("quote_build_delay", 0)
-        greeks_calculator = GreeksCalculator(self._msgbus, self._cache, self._clock)
+        greeks_calculator = GreeksCalculator(self._cache, self._clock)
         self._spread_quote_aggregators[key] = SpreadQuoteAggregator(
             spread_instrument=instrument,
             handler=self._handle_spread_quote,
@@ -3324,7 +3318,7 @@ cdef class DataEngine(Component):
             # independently from the system clock (which may be ahead)
             test_clock = TestClock()
             aggregator.set_clock(test_clock)
-            greeks_calculator = GreeksCalculator(self._msgbus, self._cache, test_clock)
+            greeks_calculator = GreeksCalculator(self._cache, test_clock)
             aggregator.set_historical_mode(historical, self.process_historical, greeks_calculator)
         else:
             if aggregator.historical_mode:
@@ -3333,7 +3327,7 @@ cdef class DataEngine(Component):
 
             aggregator.stop_timer()
             aggregator.set_clock(self._clock)
-            greeks_calculator = GreeksCalculator(self._msgbus, self._cache, self._clock)
+            greeks_calculator = GreeksCalculator(self._cache, self._clock)
             aggregator.set_historical_mode(historical, self._handle_spread_quote, greeks_calculator)
 
         # Subscribe aggregator to message bus to receive underlying data
@@ -3354,7 +3348,7 @@ cdef class DataEngine(Component):
     cpdef void _handle_spread_quote(self, Data quote):
         # We send the quote to a simulated exchanged so it can be processed for execution first
         # before being processed by the data engine, similarly to the logic in the backtest engine
-        self._msgbus.send(endpoint=f"SimulatedExchange.spread_quote.{quote.instrument_id.venue}", msg=quote)
+        self._msgbus.send(endpoint=f"SimulatedExchange.process_new_quote.{quote.instrument_id.venue}", msg=quote)
         self.process(quote)
 
     cpdef void _dispose_spread_quote_aggregator(self, InstrumentId spread_instrument_id, bint historical = False, UUID4 request_id = None):

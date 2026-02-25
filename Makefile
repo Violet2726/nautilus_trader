@@ -79,9 +79,9 @@ endif
 # Can be disabled: make cargo-test-core DEFI=false
 DEFI ?= true
 ifeq ($(DEFI),true)
-BASE_FEATURES := ffi,python,high-precision,defi
+BASE_FEATURES := ffi,python,high-precision,streaming,defi,examples
 else
-BASE_FEATURES := ffi,python,high-precision
+BASE_FEATURES := ffi,python,high-precision,streaming,examples
 endif
 
 # Combine base features with extra features
@@ -124,26 +124,26 @@ install-deps:  #-- Install Python dependencies only (no package build)
 install: export BUILD_MODE=release
 install:  #-- Install in release mode with all dependencies and extras
 	$(info $(M) Installing NautilusTrader in release mode...)
-	$Q uv sync --active --all-groups --all-extras
+	$Q uv sync --active --all-groups --all-extras --inexact
 
 .PHONY: install-debug
 install-debug: export BUILD_MODE=debug
 install-debug:  #-- Install in debug mode for development
 	$(info $(M) Installing NautilusTrader in debug mode...)
-	$Q uv sync --active --all-groups --all-extras
+	$Q uv sync --active --all-groups --all-extras --inexact
 
 #== Build
 
 .PHONY: build
 build: export BUILD_MODE=release
 build: export CARGO_TARGET_DIR=$(TARGET_DIR)
-build: install-deps  #-- Build the package in release mode
+build:  #-- Build the package in release mode
 	uv run --active --no-sync build.py
 
 .PHONY: build-debug
 build-debug: export BUILD_MODE=debug
 build-debug: export CARGO_TARGET_DIR=$(TARGET_DIR)
-build-debug: install-deps  #-- Build the package in debug mode (recommended for development)
+build-debug:  #-- Build the package in debug mode (recommended for development)
 ifeq ($(VERBOSE),true)
 	$(info $(M) Building in debug mode with verbose output...)
 	uv run --active --no-sync build.py
@@ -155,7 +155,7 @@ endif
 .PHONY: build-debug-pyo3
 build-debug-pyo3: export BUILD_MODE=debug-pyo3
 build-debug-pyo3: export CARGO_TARGET_DIR=$(TARGET_DIR)
-build-debug-pyo3: install-deps  #-- Build the package with PyO3 debug symbols (for debugging Rust code)
+build-debug-pyo3:  #-- Build the package with PyO3 debug symbols (for debugging Rust code)
 ifeq ($(VERBOSE),true)
 	$(info $(M) Building in debug mode with PyO3 debug symbols...)
 	uv run --active --no-sync build.py
@@ -318,7 +318,7 @@ install-tools:  #-- Install required development tools (Rust tools from Cargo.to
 security-audit: check-audit-installed check-deny-installed check-vet-installed check-osv-scanner-installed  #-- Run comprehensive security audit (cargo-audit, cargo-deny, cargo-vet, osv-scanner)
 	$(info $(M) Running security audit...)
 	@printf "$(CYAN)Running cargo audit...$(RESET)\n"
-	cargo audit --color never || true
+	cargo audit --color never
 	@printf "\n$(CYAN)Running cargo deny (advisories, licenses, sources, bans)...$(RESET)\n"
 	cargo deny --all-features check advisories licenses sources bans
 	@printf "\n$(CYAN)Running cargo vet (supply chain audit)...$(RESET)\n"
@@ -350,6 +350,7 @@ docs-rust:  #-- Build Rust documentation with cargo doc
 	cargo +nightly doc --all-features --no-deps --workspace
 
 .PHONY: docsrs-check
+docsrs-check: export DOCS_RS=1
 docsrs-check: export RUSTDOCFLAGS=--cfg docsrs -D warnings
 docsrs-check: check-hack-installed #-- Check documentation builds for docs.rs compatibility
 	cargo +nightly hack --workspace doc --no-deps --all-features
@@ -445,7 +446,7 @@ check-edit-installed:  #-- Verify cargo-edit is installed
 
 .PHONY: check-features
 check-features: check-hack-installed  #-- Verify crate feature combinations compile correctly
-	cargo hack check --each-feature
+	cargo hack --workspace check --each-feature
 
 .PHONY: check-capnp-schemas  #-- Verify Cap'n Proto schemas are up-to-date
 check-capnp-schemas:
@@ -513,7 +514,7 @@ cargo-test-core-debug:  #-- Run Rust tests for core crates (debug profile)
 cargo-test-lib: export RUST_BACKTRACE=1
 cargo-test-lib: check-nextest-installed
 cargo-test-lib:  #-- Run Rust library tests only with high precision
-	cargo nextest run --lib --workspace --no-default-features --features "ffi,python,high-precision,defi,stubs" $(FAIL_FAST_FLAG) --cargo-profile nextest
+	cargo nextest run --lib --workspace --no-default-features --features "ffi,python,high-precision,streaming,defi,stubs" $(FAIL_FAST_FLAG) --cargo-profile nextest
 
 .PHONY: cargo-test-standard-precision
 cargo-test-standard-precision: export RUST_BACKTRACE=1
@@ -525,7 +526,7 @@ cargo-test-standard-precision:  #-- Run Rust tests with standard precision (debu
 cargo-test-debug: export RUST_BACKTRACE=1
 cargo-test-debug: check-nextest-installed
 cargo-test-debug:  #-- Run Rust tests with high precision (debug profile)
-	cargo nextest run --workspace --features "ffi,python,high-precision,defi" $(FAIL_FAST_FLAG)
+	cargo nextest run --workspace --features "ffi,python,high-precision,streaming,defi" $(FAIL_FAST_FLAG)
 
 .PHONY: cargo-test-coverage
 cargo-test-coverage: check-nextest-installed check-llvm-cov-installed
@@ -652,6 +653,18 @@ pytest:  #-- Run Python tests with pytest in parallel with immediate failure rep
 .PHONY: test-performance
 test-performance:  #-- Run performance tests with codspeed benchmarking
 	uv run --active --no-sync pytest tests/performance_tests --benchmark-disable-gc --codspeed
+
+#== v2 (python/)
+
+.PHONY: build-debug-v2
+build-debug-v2:  #-- Build the v2 Python package in debug mode (fast incremental builds)
+	$(info $(M) Building v2 extension in debug mode...)
+	$Q cd python && uv run maturin develop
+
+.PHONY: pytest-v2
+pytest-v2:  #-- Run v2 Python tests
+	$(info $(M) Running v2 Python tests...)
+	$Q cd python && uv run --no-sync pytest tests/ -v
 
 #== CLI Tools
 

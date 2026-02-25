@@ -1138,6 +1138,7 @@ cdef class Cache(CacheFacade):
         self._index_instrument_position_snapshots.clear()
         self._index_strategy_orders.clear()
         self._index_strategy_positions.clear()
+        self._index_account_orders.clear()
         self._index_account_positions.clear()
         self._index_exec_algorithm_orders.clear()
         self._index_exec_spawn_orders.clear()
@@ -1185,6 +1186,8 @@ cdef class Cache(CacheFacade):
         self._order_lists.clear()
         self._positions.clear()
         self._position_snapshots.clear()
+        self._greeks.clear()
+        self._yield_curves.clear()
         self.clear_index()
 
         if self._drop_instruments_on_reset:
@@ -2391,7 +2394,7 @@ cdef class Cache(CacheFacade):
 
         if self._database is None:
             self._log.warning(
-                "Cannot snapshot position state for {position.id:r!} (no database configured)",
+                f"Cannot snapshot position state for {position.id!r} (no database configured)",
             )
             return
 
@@ -2417,7 +2420,7 @@ cdef class Cache(CacheFacade):
 
         if self._database is None:
             self._log.warning(
-                "Cannot snapshot order state for {order.client_order_id:r!} (no database configured)",
+                f"Cannot snapshot order state for {order.client_order_id!r} (no database configured)",
             )
             return
 

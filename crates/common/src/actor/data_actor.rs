@@ -27,7 +27,7 @@ use std::{
 use ahash::{AHashMap, AHashSet};
 use chrono::{DateTime, Utc};
 use indexmap::IndexMap;
-use nautilus_core::{UUID4, UnixNanos, correctness::check_predicate_true};
+use nautilus_core::{Params, UUID4, UnixNanos, correctness::check_predicate_true};
 #[cfg(feature = "defi")]
 use nautilus_model::defi::{
     Block, Blockchain, Pool, PoolLiquidityUpdate, PoolSwap, data::PoolFeeCollect, data::PoolFlash,
@@ -98,7 +98,11 @@ use crate::{
 #[derive(Debug, Clone)]
 #[cfg_attr(
     feature = "python",
-    pyo3::pyclass(module = "nautilus_trader.core.nautilus_pyo3.common", subclass)
+    pyo3::pyclass(
+        module = "nautilus_trader.core.nautilus_pyo3.common",
+        subclass,
+        from_py_object
+    )
 )]
 pub struct DataActorConfig {
     /// The custom identifier for the Actor.
@@ -123,7 +127,7 @@ impl Default for DataActorConfig {
 #[derive(Debug, Clone)]
 #[cfg_attr(
     feature = "python",
-    pyo3::pyclass(module = "nautilus_trader.core.nautilus_pyo3.common")
+    pyo3::pyclass(module = "nautilus_trader.core.nautilus_pyo3.common", from_py_object)
 )]
 pub struct ImportableActorConfig {
     /// The fully qualified name of the Actor class.
@@ -954,7 +958,7 @@ pub trait DataActor:
         &mut self,
         data_type: DataType,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) where
         Self: 'static + Debug + Sized,
     {
@@ -971,7 +975,7 @@ pub trait DataActor:
         &mut self,
         instrument_id: InstrumentId,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) where
         Self: 'static + Debug + Sized,
     {
@@ -994,7 +998,7 @@ pub trait DataActor:
         &mut self,
         venue: Venue,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) where
         Self: 'static + Debug + Sized,
     {
@@ -1017,7 +1021,7 @@ pub trait DataActor:
         &mut self,
         instrument_id: InstrumentId,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) where
         Self: 'static + Debug + Sized,
     {
@@ -1043,7 +1047,7 @@ pub trait DataActor:
         depth: Option<NonZeroUsize>,
         client_id: Option<ClientId>,
         managed: bool,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) where
         Self: 'static + Debug + Sized,
     {
@@ -1075,7 +1079,7 @@ pub trait DataActor:
         depth: Option<NonZeroUsize>,
         interval_ms: NonZeroUsize,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) where
         Self: 'static + Debug + Sized,
     {
@@ -1104,7 +1108,7 @@ pub trait DataActor:
         &mut self,
         instrument_id: InstrumentId,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) where
         Self: 'static + Debug + Sized,
     {
@@ -1123,7 +1127,7 @@ pub trait DataActor:
         &mut self,
         bar_type: BarType,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) where
         Self: 'static + Debug + Sized,
     {
@@ -1142,7 +1146,7 @@ pub trait DataActor:
         &mut self,
         instrument_id: InstrumentId,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) where
         Self: 'static + Debug + Sized,
     {
@@ -1168,7 +1172,7 @@ pub trait DataActor:
         &mut self,
         instrument_id: InstrumentId,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) where
         Self: 'static + Debug + Sized,
     {
@@ -1194,7 +1198,7 @@ pub trait DataActor:
         &mut self,
         instrument_id: InstrumentId,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) where
         Self: 'static + Debug + Sized,
     {
@@ -1220,7 +1224,7 @@ pub trait DataActor:
         &mut self,
         instrument_id: InstrumentId,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) where
         Self: 'static + Debug + Sized,
     {
@@ -1246,7 +1250,7 @@ pub trait DataActor:
         &mut self,
         instrument_id: InstrumentId,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) where
         Self: 'static + Debug + Sized,
     {
@@ -1307,7 +1311,7 @@ pub trait DataActor:
         &mut self,
         chain: Blockchain,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) where
         Self: 'static + Debug + Sized,
     {
@@ -1327,7 +1331,7 @@ pub trait DataActor:
         &mut self,
         instrument_id: InstrumentId,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) where
         Self: 'static + Debug + Sized,
     {
@@ -1347,7 +1351,7 @@ pub trait DataActor:
         &mut self,
         instrument_id: InstrumentId,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) where
         Self: 'static + Debug + Sized,
     {
@@ -1367,7 +1371,7 @@ pub trait DataActor:
         &mut self,
         instrument_id: InstrumentId,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) where
         Self: 'static + Debug + Sized,
     {
@@ -1394,7 +1398,7 @@ pub trait DataActor:
         &mut self,
         instrument_id: InstrumentId,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) where
         Self: 'static + Debug + Sized,
     {
@@ -1421,7 +1425,7 @@ pub trait DataActor:
         &mut self,
         instrument_id: InstrumentId,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) where
         Self: 'static + Debug + Sized,
     {
@@ -1447,7 +1451,7 @@ pub trait DataActor:
         &mut self,
         data_type: DataType,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) where
         Self: 'static + Debug + Sized,
     {
@@ -1459,7 +1463,7 @@ pub trait DataActor:
         &mut self,
         venue: Venue,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) where
         Self: 'static + Debug + Sized,
     {
@@ -1471,7 +1475,7 @@ pub trait DataActor:
         &mut self,
         instrument_id: InstrumentId,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) where
         Self: 'static + Debug + Sized,
     {
@@ -1483,7 +1487,7 @@ pub trait DataActor:
         &mut self,
         instrument_id: InstrumentId,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) where
         Self: 'static + Debug + Sized,
     {
@@ -1496,7 +1500,7 @@ pub trait DataActor:
         instrument_id: InstrumentId,
         interval_ms: NonZeroUsize,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) where
         Self: 'static + Debug + Sized,
     {
@@ -1514,7 +1518,7 @@ pub trait DataActor:
         &mut self,
         instrument_id: InstrumentId,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) where
         Self: 'static + Debug + Sized,
     {
@@ -1526,7 +1530,7 @@ pub trait DataActor:
         &mut self,
         instrument_id: InstrumentId,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) where
         Self: 'static + Debug + Sized,
     {
@@ -1538,7 +1542,7 @@ pub trait DataActor:
         &mut self,
         bar_type: BarType,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) where
         Self: 'static + Debug + Sized,
     {
@@ -1550,7 +1554,7 @@ pub trait DataActor:
         &mut self,
         instrument_id: InstrumentId,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) where
         Self: 'static + Debug + Sized,
     {
@@ -1562,7 +1566,7 @@ pub trait DataActor:
         &mut self,
         instrument_id: InstrumentId,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) where
         Self: 'static + Debug + Sized,
     {
@@ -1574,7 +1578,7 @@ pub trait DataActor:
         &mut self,
         instrument_id: InstrumentId,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) where
         Self: 'static + Debug + Sized,
     {
@@ -1586,7 +1590,7 @@ pub trait DataActor:
         &mut self,
         instrument_id: InstrumentId,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) where
         Self: 'static + Debug + Sized,
     {
@@ -1598,7 +1602,7 @@ pub trait DataActor:
         &mut self,
         instrument_id: InstrumentId,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) where
         Self: 'static + Debug + Sized,
     {
@@ -1627,7 +1631,7 @@ pub trait DataActor:
         &mut self,
         chain: Blockchain,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) where
         Self: 'static + Debug + Sized,
     {
@@ -1640,7 +1644,7 @@ pub trait DataActor:
         &mut self,
         instrument_id: InstrumentId,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) where
         Self: 'static + Debug + Sized,
     {
@@ -1653,7 +1657,7 @@ pub trait DataActor:
         &mut self,
         instrument_id: InstrumentId,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) where
         Self: 'static + Debug + Sized,
     {
@@ -1666,7 +1670,7 @@ pub trait DataActor:
         &mut self,
         instrument_id: InstrumentId,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) where
         Self: 'static + Debug + Sized,
     {
@@ -1679,7 +1683,7 @@ pub trait DataActor:
         &mut self,
         instrument_id: InstrumentId,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) where
         Self: 'static + Debug + Sized,
     {
@@ -1692,7 +1696,7 @@ pub trait DataActor:
         &mut self,
         instrument_id: InstrumentId,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) where
         Self: 'static + Debug + Sized,
     {
@@ -1711,7 +1715,7 @@ pub trait DataActor:
         start: Option<DateTime<Utc>>,
         end: Option<DateTime<Utc>>,
         limit: Option<NonZeroUsize>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) -> anyhow::Result<UUID4>
     where
         Self: 'static + Debug + Sized,
@@ -1737,7 +1741,7 @@ pub trait DataActor:
         start: Option<DateTime<Utc>>,
         end: Option<DateTime<Utc>>,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) -> anyhow::Result<UUID4>
     where
         Self: 'static + Debug + Sized,
@@ -1769,7 +1773,7 @@ pub trait DataActor:
         start: Option<DateTime<Utc>>,
         end: Option<DateTime<Utc>>,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) -> anyhow::Result<UUID4>
     where
         Self: 'static + Debug + Sized,
@@ -1792,7 +1796,7 @@ pub trait DataActor:
         instrument_id: InstrumentId,
         depth: Option<NonZeroUsize>,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) -> anyhow::Result<UUID4>
     where
         Self: 'static + Debug + Sized,
@@ -1817,7 +1821,7 @@ pub trait DataActor:
         end: Option<DateTime<Utc>>,
         limit: Option<NonZeroUsize>,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) -> anyhow::Result<UUID4>
     where
         Self: 'static + Debug + Sized,
@@ -1851,7 +1855,7 @@ pub trait DataActor:
         end: Option<DateTime<Utc>>,
         limit: Option<NonZeroUsize>,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) -> anyhow::Result<UUID4>
     where
         Self: 'static + Debug + Sized,
@@ -1885,7 +1889,7 @@ pub trait DataActor:
         end: Option<DateTime<Utc>>,
         limit: Option<NonZeroUsize>,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) -> anyhow::Result<UUID4>
     where
         Self: 'static + Debug + Sized,
@@ -1919,7 +1923,7 @@ pub trait DataActor:
         end: Option<DateTime<Utc>>,
         limit: Option<NonZeroUsize>,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) -> anyhow::Result<UUID4>
     where
         Self: 'static + Debug + Sized,
@@ -2808,7 +2812,7 @@ impl DataActorCore {
         handler: ShareableMessageHandler,
         data_type: DataType,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) {
         assert!(
             self.is_properly_registered(),
@@ -2847,7 +2851,7 @@ impl DataActorCore {
         handler: TypedHandler<QuoteTick>,
         instrument_id: InstrumentId,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) {
         self.check_registered();
 
@@ -2873,7 +2877,7 @@ impl DataActorCore {
         handler: ShareableMessageHandler,
         venue: Venue,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) {
         self.check_registered();
 
@@ -2898,7 +2902,7 @@ impl DataActorCore {
         handler: ShareableMessageHandler,
         instrument_id: InstrumentId,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) {
         self.check_registered();
 
@@ -2928,7 +2932,7 @@ impl DataActorCore {
         depth: Option<NonZeroUsize>,
         client_id: Option<ClientId>,
         managed: bool,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) {
         self.check_registered();
 
@@ -2961,7 +2965,7 @@ impl DataActorCore {
         depth: Option<NonZeroUsize>,
         interval_ms: NonZeroUsize,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) {
         self.check_registered();
 
@@ -2990,7 +2994,7 @@ impl DataActorCore {
         handler: TypedHandler<TradeTick>,
         instrument_id: InstrumentId,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) {
         self.check_registered();
 
@@ -3016,7 +3020,7 @@ impl DataActorCore {
         handler: TypedHandler<Bar>,
         bar_type: BarType,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) {
         self.check_registered();
 
@@ -3042,7 +3046,7 @@ impl DataActorCore {
         handler: TypedHandler<MarkPriceUpdate>,
         instrument_id: InstrumentId,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) {
         self.check_registered();
 
@@ -3068,7 +3072,7 @@ impl DataActorCore {
         handler: TypedHandler<IndexPriceUpdate>,
         instrument_id: InstrumentId,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) {
         self.check_registered();
 
@@ -3094,7 +3098,7 @@ impl DataActorCore {
         handler: TypedHandler<FundingRateUpdate>,
         instrument_id: InstrumentId,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) {
         self.check_registered();
 
@@ -3120,7 +3124,7 @@ impl DataActorCore {
         handler: ShareableMessageHandler,
         instrument_id: InstrumentId,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) {
         self.check_registered();
 
@@ -3146,7 +3150,7 @@ impl DataActorCore {
         handler: ShareableMessageHandler,
         instrument_id: InstrumentId,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) {
         self.check_registered();
 
@@ -3190,7 +3194,7 @@ impl DataActorCore {
         &mut self,
         data_type: DataType,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) {
         self.check_registered();
 
@@ -3219,7 +3223,7 @@ impl DataActorCore {
         &mut self,
         venue: Venue,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) {
         self.check_registered();
 
@@ -3243,7 +3247,7 @@ impl DataActorCore {
         &mut self,
         instrument_id: InstrumentId,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) {
         self.check_registered();
 
@@ -3268,7 +3272,7 @@ impl DataActorCore {
         &mut self,
         instrument_id: InstrumentId,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) {
         self.check_registered();
 
@@ -3294,7 +3298,7 @@ impl DataActorCore {
         instrument_id: InstrumentId,
         interval_ms: NonZeroUsize,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) {
         self.check_registered();
 
@@ -3319,7 +3323,7 @@ impl DataActorCore {
         &mut self,
         instrument_id: InstrumentId,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) {
         self.check_registered();
 
@@ -3344,7 +3348,7 @@ impl DataActorCore {
         &mut self,
         instrument_id: InstrumentId,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) {
         self.check_registered();
 
@@ -3369,7 +3373,7 @@ impl DataActorCore {
         &mut self,
         bar_type: BarType,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) {
         self.check_registered();
 
@@ -3394,7 +3398,7 @@ impl DataActorCore {
         &mut self,
         instrument_id: InstrumentId,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) {
         self.check_registered();
 
@@ -3419,7 +3423,7 @@ impl DataActorCore {
         &mut self,
         instrument_id: InstrumentId,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) {
         self.check_registered();
 
@@ -3444,7 +3448,7 @@ impl DataActorCore {
         &mut self,
         instrument_id: InstrumentId,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) {
         self.check_registered();
 
@@ -3469,7 +3473,7 @@ impl DataActorCore {
         &mut self,
         instrument_id: InstrumentId,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) {
         self.check_registered();
 
@@ -3494,7 +3498,7 @@ impl DataActorCore {
         &mut self,
         instrument_id: InstrumentId,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) {
         self.check_registered();
 
@@ -3543,7 +3547,7 @@ impl DataActorCore {
         start: Option<DateTime<Utc>>,
         end: Option<DateTime<Utc>>,
         limit: Option<NonZeroUsize>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
         handler: ShareableMessageHandler,
     ) -> anyhow::Result<UUID4> {
         self.check_registered();
@@ -3583,7 +3587,7 @@ impl DataActorCore {
         start: Option<DateTime<Utc>>,
         end: Option<DateTime<Utc>>,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
         handler: ShareableMessageHandler,
     ) -> anyhow::Result<UUID4> {
         self.check_registered();
@@ -3622,7 +3626,7 @@ impl DataActorCore {
         start: Option<DateTime<Utc>>,
         end: Option<DateTime<Utc>>,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
         handler: ShareableMessageHandler,
     ) -> anyhow::Result<UUID4> {
         self.check_registered();
@@ -3660,7 +3664,7 @@ impl DataActorCore {
         instrument_id: InstrumentId,
         depth: Option<NonZeroUsize>,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
         handler: ShareableMessageHandler,
     ) -> anyhow::Result<UUID4> {
         self.check_registered();
@@ -3697,7 +3701,7 @@ impl DataActorCore {
         end: Option<DateTime<Utc>>,
         limit: Option<NonZeroUsize>,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
         handler: ShareableMessageHandler,
     ) -> anyhow::Result<UUID4> {
         self.check_registered();
@@ -3739,7 +3743,7 @@ impl DataActorCore {
         end: Option<DateTime<Utc>>,
         limit: Option<NonZeroUsize>,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
         handler: ShareableMessageHandler,
     ) -> anyhow::Result<UUID4> {
         self.check_registered();
@@ -3781,7 +3785,7 @@ impl DataActorCore {
         end: Option<DateTime<Utc>>,
         limit: Option<NonZeroUsize>,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
         handler: ShareableMessageHandler,
     ) -> anyhow::Result<UUID4> {
         self.check_registered();
@@ -3823,7 +3827,7 @@ impl DataActorCore {
         end: Option<DateTime<Utc>>,
         limit: Option<NonZeroUsize>,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
         handler: ShareableMessageHandler,
     ) -> anyhow::Result<UUID4> {
         self.check_registered();

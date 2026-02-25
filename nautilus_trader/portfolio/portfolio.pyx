@@ -21,7 +21,6 @@
 
 投资组合可以满足对账户信息、保证金余额、总风险敞口和总净头寸的查询。
 """
-
 import pickle
 from collections import defaultdict
 from decimal import Decimal

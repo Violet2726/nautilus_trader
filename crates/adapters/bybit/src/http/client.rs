@@ -31,7 +31,7 @@ use ahash::{AHashMap, AHashSet};
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use nautilus_core::{
-    consts::NAUTILUS_USER_AGENT, env::get_or_env_var_opt, nanos::UnixNanos,
+    AtomicTime, consts::NAUTILUS_USER_AGENT, env::get_or_env_var_opt, nanos::UnixNanos,
     time::get_atomic_clock_realtime,
 };
 use nautilus_model::{
@@ -82,7 +82,7 @@ use super::{
 };
 use crate::common::{
     consts::{BYBIT_BASE_COIN, BYBIT_NAUTILUS_BROKER_ID, BYBIT_QUOTE_COIN},
-    credential::Credential,
+    credential::{Credential, credential_env_vars},
     enums::{
         BybitAccountType, BybitEnvironment, BybitMarginMode, BybitOpenOnly, BybitOrderFilter,
         BybitOrderSide, BybitOrderType, BybitPositionMode, BybitProductType, BybitTimeInForce,
@@ -106,14 +106,14 @@ const DEFAULT_RECV_WINDOW_MS: u64 = 5_000;
 /// Bybit implements rate limiting per endpoint with varying limits.
 /// We use a conservative 10 requests per second as a general default.
 pub static BYBIT_REST_QUOTA: LazyLock<Quota> = LazyLock::new(|| {
-    Quota::per_second(NonZeroU32::new(10).expect("Should be a valid non-zero u32"))
+    Quota::per_second(NonZeroU32::new(10).expect("non-zero")).expect("valid constant")
 });
 
 /// Bybit repay endpoint rate limit.
 ///
 /// Conservative limit to avoid hitting API restrictions when repaying small borrows.
 pub static BYBIT_REPAY_QUOTA: LazyLock<Quota> = LazyLock::new(|| {
-    Quota::per_second(NonZeroU32::new(1).expect("Should be a valid non-zero u32"))
+    Quota::per_second(NonZeroU32::new(1).expect("non-zero")).expect("valid constant")
 });
 
 const BYBIT_GLOBAL_RATE_KEY: &str = "bybit:global";
@@ -125,7 +125,7 @@ const BYBIT_REPAY_ROUTE_KEY: &str = "bybit:/v5/account/no-convert-repay";
 /// returning venue-specific response types. It does not parse to Nautilus domain types.
 #[cfg_attr(
     feature = "python",
-    pyo3::pyclass(module = "nautilus_trader.core.nautilus_pyo3.bybit")
+    pyo3::pyclass(module = "nautilus_trader.core.nautilus_pyo3.bybit", from_py_object)
 )]
 #[derive(Clone)]
 pub struct BybitRawHttpClient {
@@ -290,16 +290,16 @@ impl BybitRawHttpClient {
         recv_window_ms: Option<u64>,
         proxy_url: Option<String>,
     ) -> Result<Self, BybitHttpError> {
-        let (api_key_env, api_secret_env) = if demo {
-            ("BYBIT_DEMO_API_KEY", "BYBIT_DEMO_API_SECRET")
+        let environment = if demo {
+            BybitEnvironment::Demo
         } else if testnet {
-            ("BYBIT_TESTNET_API_KEY", "BYBIT_TESTNET_API_SECRET")
+            BybitEnvironment::Testnet
         } else {
-            ("BYBIT_API_KEY", "BYBIT_API_SECRET")
+            BybitEnvironment::Mainnet
         };
-
-        let key = get_or_env_var_opt(api_key, api_key_env);
-        let secret = get_or_env_var_opt(api_secret, api_secret_env);
+        let (key_var, secret_var) = credential_env_vars(environment);
+        let key = get_or_env_var_opt(api_key, key_var);
+        let secret = get_or_env_var_opt(api_secret, secret_var);
 
         if let (Some(k), Some(s)) = (key, secret) {
             Self::with_credentials(
@@ -1183,7 +1183,7 @@ impl BybitRawHttpClient {
 /// Provides a HTTP client for connecting to the [Bybit](https://bybit.com) REST API.
 #[cfg_attr(
     feature = "python",
-    pyo3::pyclass(module = "nautilus_trader.core.nautilus_pyo3.bybit")
+    pyo3::pyclass(module = "nautilus_trader.core.nautilus_pyo3.bybit", from_py_object)
 )]
 /// High-level HTTP client that wraps the raw client and provides Nautilus domain types.
 ///
@@ -1192,6 +1192,7 @@ impl BybitRawHttpClient {
 pub struct BybitHttpClient {
     pub(crate) inner: Arc<BybitRawHttpClient>,
     pub(crate) instruments_cache: Arc<DashMap<Ustr, InstrumentAny>>,
+    clock: &'static AtomicTime,
     cache_initialized: Arc<AtomicBool>,
     use_spot_position_reports: Arc<AtomicBool>,
 }
@@ -1203,6 +1204,7 @@ impl Clone for BybitHttpClient {
             instruments_cache: self.instruments_cache.clone(),
             cache_initialized: self.cache_initialized.clone(),
             use_spot_position_reports: self.use_spot_position_reports.clone(),
+            clock: self.clock,
         }
     }
 }
@@ -1251,6 +1253,7 @@ impl BybitHttpClient {
             instruments_cache: Arc::new(DashMap::new()),
             cache_initialized: Arc::new(AtomicBool::new(false)),
             use_spot_position_reports: Arc::new(AtomicBool::new(false)),
+            clock: get_atomic_clock_realtime(),
         })
     }
 
@@ -1286,6 +1289,7 @@ impl BybitHttpClient {
             instruments_cache: Arc::new(DashMap::new()),
             cache_initialized: Arc::new(AtomicBool::new(false)),
             use_spot_position_reports: Arc::new(AtomicBool::new(false)),
+            clock: get_atomic_clock_realtime(),
         })
     }
 
@@ -1315,16 +1319,16 @@ impl BybitHttpClient {
         recv_window_ms: Option<u64>,
         proxy_url: Option<String>,
     ) -> Result<Self, BybitHttpError> {
-        let (api_key_env, api_secret_env) = if demo {
-            ("BYBIT_DEMO_API_KEY", "BYBIT_DEMO_API_SECRET")
+        let environment = if demo {
+            BybitEnvironment::Demo
         } else if testnet {
-            ("BYBIT_TESTNET_API_KEY", "BYBIT_TESTNET_API_SECRET")
+            BybitEnvironment::Testnet
         } else {
-            ("BYBIT_API_KEY", "BYBIT_API_SECRET")
+            BybitEnvironment::Mainnet
         };
-
-        let key = get_or_env_var_opt(api_key, api_key_env);
-        let secret = get_or_env_var_opt(api_secret, api_secret_env);
+        let (key_var, secret_var) = credential_env_vars(environment);
+        let key = get_or_env_var_opt(api_key, key_var);
+        let secret = get_or_env_var_opt(api_secret, secret_var);
 
         match (key, secret) {
             (Some(k), Some(s)) => Self::with_credentials(
@@ -1410,7 +1414,7 @@ impl BybitHttpClient {
 
     #[must_use]
     fn generate_ts_init(&self) -> UnixNanos {
-        get_atomic_clock_realtime().get_time_ns()
+        self.clock.get_time_ns()
     }
 
     /// Fetches the current server time from Bybit.

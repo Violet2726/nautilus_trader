@@ -54,6 +54,7 @@ def get_cached_ib_client(
     client_id: int = 1,
     dockerized_gateway: DockerizedIBGatewayConfig | None = None,
     fetch_all_open_orders: bool = False,
+    request_timeout_secs: int = 60,
 ) -> InteractiveBrokersClient:
     """
     根据提供的键获取或创建一个缓存的 InteractiveBrokersClient。
@@ -85,6 +86,8 @@ def get_cached_ib_client(
     fetch_all_open_orders : bool, 默认 False
         如果为 True，使用 reqAllOpenOrders 从所有 API 客户端和 TWS GUI 获取订单。
         如果为 False，使用 reqOpenOrders 仅获取当前客户端 ID 会话的订单。
+    request_timeout_secs : int, 默认 60
+        等待请求响应（合同详情等）的超时时间（秒）。
 
     返回
     -------
@@ -124,6 +127,7 @@ def get_cached_ib_client(
             port=port,
             client_id=client_id,
             fetch_all_open_orders=fetch_all_open_orders,
+            request_timeout_secs=request_timeout_secs,
         )
         client.start()
         IB_CLIENTS[client_key] = client
@@ -221,6 +225,7 @@ class InteractiveBrokersLiveDataClientFactory(LiveDataClientFactory):
             port=config.ibg_port,
             client_id=config.ibg_client_id,
             dockerized_gateway=config.dockerized_gateway,
+            request_timeout_secs=config.request_timeout_secs,
         )
 
         # 获取工具提供者单例
@@ -242,7 +247,6 @@ class InteractiveBrokersLiveDataClientFactory(LiveDataClientFactory):
             config=config,
             name=name,
             connection_timeout=config.connection_timeout,
-            request_timeout=config.request_timeout,
         )
 
         return data_client
@@ -295,6 +299,7 @@ class InteractiveBrokersLiveExecClientFactory(LiveExecClientFactory):
             client_id=config.ibg_client_id,
             dockerized_gateway=config.dockerized_gateway,
             fetch_all_open_orders=config.fetch_all_open_orders,
+            request_timeout_secs=config.request_timeout_secs,
         )
 
         # 获取工具提供者单例

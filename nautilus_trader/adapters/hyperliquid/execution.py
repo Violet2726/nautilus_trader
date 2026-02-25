@@ -16,6 +16,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import math
 from decimal import ROUND_CEILING
 from decimal import ROUND_FLOOR
@@ -23,6 +24,7 @@ from decimal import Decimal
 from typing import Any
 
 from nautilus_trader.adapters.hyperliquid.config import HyperliquidExecClientConfig
+from nautilus_trader.adapters.hyperliquid.constants import BUILDER_FEE_TAKER_BP
 from nautilus_trader.adapters.hyperliquid.constants import HYPERLIQUID_BUILDER_FEE_NOT_APPROVED
 from nautilus_trader.adapters.hyperliquid.constants import HYPERLIQUID_POST_ONLY_WOULD_MATCH
 from nautilus_trader.adapters.hyperliquid.constants import HYPERLIQUID_VENUE
@@ -42,7 +44,6 @@ from nautilus_trader.execution.messages import GenerateOrderStatusReports
 from nautilus_trader.execution.messages import GeneratePositionStatusReports
 from nautilus_trader.execution.messages import ModifyOrder
 from nautilus_trader.execution.messages import QueryAccount
-from nautilus_trader.execution.messages import QueryOrder
 from nautilus_trader.execution.messages import SubmitOrder
 from nautilus_trader.execution.messages import SubmitOrderList
 from nautilus_trader.execution.reports import FillReport
@@ -129,6 +130,7 @@ class HyperliquidExecutionClient(LiveExecutionClient):
         # Log configuration details
         self._log.info(f"config.testnet={config.testnet}", LogColor.BLUE)
         self._log.info(f"config.http_timeout_secs={config.http_timeout_secs}", LogColor.BLUE)
+        self._log.info(f"config.normalize_prices={config.normalize_prices}", LogColor.BLUE)
         self._log.info(f"{config.http_proxy_url=}", LogColor.BLUE)
         self._log.info(f"{config.ws_proxy_url=}", LogColor.BLUE)
 
@@ -147,6 +149,8 @@ class HyperliquidExecutionClient(LiveExecutionClient):
         self._accepted_orders: nautilus_pyo3.FifoCache = nautilus_pyo3.FifoCache()
         self._terminal_orders: nautilus_pyo3.FifoCache = nautilus_pyo3.FifoCache()
         self._pending_filled: set[str] = set()
+
+        self._fee_refresh_task: asyncio.Task | None = None
 
         # Get user address from HTTP client for WebSocket subscriptions
         # Use vault address when vault trading, otherwise order/fill
@@ -195,6 +199,9 @@ class HyperliquidExecutionClient(LiveExecutionClient):
         await self._update_account_state()
         await self._await_account_registered()
 
+        # Fetch initial builder fee tier from HL
+        await self._fetch_and_update_builder_fee(log_always=True)
+
         self._sync_cloid_cache()
 
         instruments = self._instrument_provider.instruments_pyo3()
@@ -212,6 +219,21 @@ class HyperliquidExecutionClient(LiveExecutionClient):
             await self._ws_client.subscribe_user_events(self._user_address)
             self._log.info(
                 f"Subscribed to user events (includes fills) for {self._user_address}",
+                LogColor.BLUE,
+            )
+
+        # Start periodic builder fee refresh after successful connect
+        if self._fee_refresh_task is not None:
+            self._fee_refresh_task.cancel()
+            self._fee_refresh_task = None
+
+        refresh_mins = self._config.builder_fee_refresh_mins
+        if refresh_mins is not None:
+            self._fee_refresh_task = self.create_task(
+                self._builder_fee_refresh_loop(refresh_mins * 60),
+            )
+            self._log.info(
+                f"Builder fee refresh scheduled every {refresh_mins}m",
                 LogColor.BLUE,
             )
 
@@ -257,7 +279,72 @@ class HyperliquidExecutionClient(LiveExecutionClient):
                 f"Generated account state with {len(account_state.balances)} balance(s)",
             )
 
+    @staticmethod
+    def _fmt_bp(bp: Decimal) -> str:
+        return f"{bp:.1f} bp ({(bp / 100).normalize()}%)"
+
+    def _log_fee_summary(
+        self,
+        maker_rate: str,
+        taker_rate: str,
+        builder_maker_tenths_bp: int,
+    ) -> None:
+        maker_d = Decimal(maker_rate)
+        taker_d = Decimal(taker_rate)
+        hl_maker_bp = maker_d * 10_000
+        hl_taker_bp = taker_d * 10_000
+        builder_maker_bp = Decimal(builder_maker_tenths_bp) / 10
+        builder_taker_bp = BUILDER_FEE_TAKER_BP
+        self._log.info(
+            f"HL maker: {self._fmt_bp(hl_maker_bp)}, "
+            f"builder maker: {self._fmt_bp(builder_maker_bp)}, "
+            f"total maker: {self._fmt_bp(hl_maker_bp + builder_maker_bp)}",
+            LogColor.BLUE,
+        )
+        self._log.info(
+            f"HL taker: {self._fmt_bp(hl_taker_bp)}, "
+            f"builder taker: {self._fmt_bp(builder_taker_bp)}, "
+            f"total taker: {self._fmt_bp(hl_taker_bp + builder_taker_bp)}",
+            LogColor.BLUE,
+        )
+
+    async def _fetch_and_update_builder_fee(self, log_always: bool = False) -> None:
+        try:
+            json_str = await self._client.info_user_fees()
+            data = json.loads(json_str)
+            raw_add_rate = data.get("userAddRate")
+            if raw_add_rate is None:
+                raise ValueError("missing userAddRate in response")
+            raw_cross_rate = data.get("userCrossRate")
+            if raw_cross_rate is None:
+                raise ValueError("missing userCrossRate in response")
+
+            user_add_rate = float(raw_add_rate)
+            old, new = self._client.update_builder_maker_fee(user_add_rate)
+
+            if log_always or old != new:
+                self._log_fee_summary(raw_add_rate, raw_cross_rate, new)
+        except Exception as e:
+            bp = Decimal(self._client.builder_maker_tenths_bp()) / 10
+            self._log.warning(
+                f"Failed to query userFees, retaining builder maker fee: {self._fmt_bp(bp)}: {e}",
+            )
+
+    async def _builder_fee_refresh_loop(self, interval_secs: int) -> None:
+        try:
+            while True:
+                await asyncio.sleep(interval_secs)
+                await self._fetch_and_update_builder_fee()
+        except asyncio.CancelledError:
+            self._log.debug("Canceled task 'builder_fee_refresh'")
+            return
+
     async def _disconnect(self) -> None:
+        if self._fee_refresh_task is not None:
+            self._log.debug("Canceling task 'builder_fee_refresh'")
+            self._fee_refresh_task.cancel()
+            self._fee_refresh_task = None
+
         # Delay to allow websocket to send any unsubscribe messages
         await asyncio.sleep(1.0)
 
@@ -443,17 +530,11 @@ class HyperliquidExecutionClient(LiveExecutionClient):
         except Exception as e:
             self._log.error(f"Failed to request fill reports for {order.client_order_id}: {e}")
 
-    async def _query_order(self, command: QueryOrder) -> None:
-        self._log.info(
-            f"Direct order query not implemented for {command.client_order_id}, "
-            f"order state is maintained through WebSocket updates and reconciliation",
-        )
-
     async def _query_account(self, command: QueryAccount) -> None:
-        self._log.info(
-            "Direct account query not implemented, "
-            "account state is maintained through WebSocket updates and reconciliation",
-        )
+        try:
+            await self._update_account_state()
+        except Exception as e:
+            self._log.error(f"Failed to query account state: {e}")
 
     async def _wait_for_quote(
         self,
@@ -507,14 +588,23 @@ class HyperliquidExecutionClient(LiveExecutionClient):
                 f"No cached quote available for {order.instrument_id} to calculate market order price",
             )
 
+        # Use trigger price as base for trigger orders to ensure limit_px
+        # satisfies Hyperliquid's constraint (SELL: limit_px <= triggerPx,
+        # BUY: limit_px >= triggerPx)
+        if (
+            order.order_type in (OrderType.STOP_MARKET, OrderType.MARKET_IF_TOUCHED)
+            and order.has_trigger_price
+        ):
+            base_price = Decimal(str(order.trigger_price))
+        elif order.side == OrderSide.BUY:
+            base_price = Decimal(str(quote.ask_price))
+        else:
+            base_price = Decimal(str(quote.bid_price))
+
         # Calculate price with slippage
         if order.side == OrderSide.BUY:
-            # For buys, add slippage to the ask price
-            base_price = Decimal(str(quote.ask_price))
             price = base_price * (Decimal(1) + slippage_pct)
         else:
-            # For sells, subtract slippage from the bid price
-            base_price = Decimal(str(quote.bid_price))
             price = base_price * (Decimal(1) - slippage_pct)
 
         # Hyperliquid requires max 5 significant figures AND max decimal places
@@ -528,11 +618,14 @@ class HyperliquidExecutionClient(LiveExecutionClient):
         else:
             price = price.quantize(quantizer, rounding=ROUND_FLOOR)
 
+        # Strip trailing zeros to avoid exceeding 5 significant figures
+        price = price.normalize()
+
         self._log.debug(
             f"Calculated market order price: {price} (base: {base_price}, slippage: {slippage_pct})",
         )
 
-        return nautilus_pyo3.Price.from_str(str(price))
+        return nautilus_pyo3.Price.from_decimal(price)
 
     async def _submit_order(self, command: SubmitOrder) -> None:
         order = command.order
@@ -556,9 +649,12 @@ class HyperliquidExecutionClient(LiveExecutionClient):
             pyo3_quantity = nautilus_pyo3.Quantity.from_str(str(order.quantity))
             pyo3_time_in_force = time_in_force_to_pyo3(order.time_in_force)
 
-            # For market orders, calculate a slippage price from the cached quote
             if order.has_price:
-                pyo3_price = nautilus_pyo3.Price.from_str(str(order.price))
+                if self._config.normalize_prices:
+                    rounded = self._round_to_significant_figures(order.price.as_decimal())
+                    pyo3_price = nautilus_pyo3.Price.from_decimal(rounded)
+                else:
+                    pyo3_price = nautilus_pyo3.Price.from_str(str(order.price))
             elif order.order_type in (
                 OrderType.MARKET,
                 OrderType.STOP_MARKET,
@@ -568,11 +664,14 @@ class HyperliquidExecutionClient(LiveExecutionClient):
             else:
                 pyo3_price = None
 
-            pyo3_trigger_price = (
-                nautilus_pyo3.Price.from_str(str(order.trigger_price))
-                if order.has_trigger_price
-                else None
-            )
+            if order.has_trigger_price:
+                if self._config.normalize_prices:
+                    rounded = self._round_to_significant_figures(order.trigger_price.as_decimal())
+                    pyo3_trigger_price = nautilus_pyo3.Price.from_decimal(rounded)
+                else:
+                    pyo3_trigger_price = nautilus_pyo3.Price.from_str(str(order.trigger_price))
+            else:
+                pyo3_trigger_price = None
 
             # TODO: Refactor to use WebSocket trading API
             # Cache cloid mapping for WebSocket order/fill resolution
@@ -602,6 +701,11 @@ class HyperliquidExecutionClient(LiveExecutionClient):
                 )
 
             self._terminal_orders.add(order.client_order_id.value)
+
+            # Only clean up cloid on confirmed rejections, not transport
+            # failures where the exchange may have accepted the order
+            if not isinstance(e, (TimeoutError, OSError)):
+                self._cleanup_cloid_mapping(order.client_order_id)
 
             self.generate_order_rejected(
                 strategy_id=order.strategy_id,
@@ -650,8 +754,13 @@ class HyperliquidExecutionClient(LiveExecutionClient):
             error_str = str(e)
             due_post_only = HYPERLIQUID_POST_ONLY_WOULD_MATCH in error_str
 
+            is_transport_error = isinstance(e, (TimeoutError, OSError))
+
             for order in orders:
                 self._terminal_orders.add(order.client_order_id.value)
+
+                if not is_transport_error:
+                    self._cleanup_cloid_mapping(order.client_order_id)
 
                 self.generate_order_rejected(
                     strategy_id=order.strategy_id,
@@ -995,13 +1104,16 @@ class HyperliquidExecutionClient(LiveExecutionClient):
                 return
 
             self._terminal_orders.add(key)
-            self._pending_filled.add(key)
 
-            # FILLED status often arrives before the fill event
-            self._log.debug(
-                f"Received FILLED status for {report.client_order_id!r} "
-                f"(order is {order.status_string()}) - fill event expected shortly",
-            )
+            # If fill already arrived (order already closed), clean up now
+            if order.is_closed:
+                self._cleanup_cloid_mapping(report.client_order_id)
+            else:
+                self._pending_filled.add(key)
+                self._log.debug(
+                    f"Received FILLED status for {report.client_order_id!r} "
+                    f"(order is {order.status_string()}) - fill event expected shortly",
+                )
         elif report.order_status == OrderStatus.TRIGGERED:
             # Only STOP_LIMIT, TRAILING_STOP_LIMIT, LIMIT_IF_TOUCHED can be triggered
             if order.order_type not in (
@@ -1038,13 +1150,10 @@ class HyperliquidExecutionClient(LiveExecutionClient):
             f"trade_id={report.trade_id}, qty={report.last_qty}, px={report.last_px}",
         )
 
-        # Skip duplicate fills (Hyperliquid sometimes sends duplicate userEvents)
         trade_id_str = report.trade_id.value
         if trade_id_str in self._processed_trade_ids:
             self._log.debug(f"Skipping duplicate fill: trade_id={report.trade_id}")
             return
-
-        self._processed_trade_ids.add(trade_id_str)
 
         client_order_id = self._resolve_cloid(report.client_order_id)
         report.client_order_id = client_order_id
@@ -1056,11 +1165,13 @@ class HyperliquidExecutionClient(LiveExecutionClient):
                 report.client_order_id = client_order_id
 
         if self._is_external_order(client_order_id):
+            self._processed_trade_ids.add(trade_id_str)
             self._send_fill_report(report)
             return
 
         order = self._cache.order(client_order_id)
         if order is None:
+            # Don't mark as processed - order may arrive later
             self._log.error(
                 f"Cannot process fill report - order for {client_order_id!r} not found",
             )
@@ -1068,10 +1179,13 @@ class HyperliquidExecutionClient(LiveExecutionClient):
 
         instrument = self._cache.instrument(order.instrument_id)
         if instrument is None:
+            self._processed_trade_ids.add(trade_id_str)
             self._log.error(
                 f"Cannot process fill report - instrument {order.instrument_id} not found",
             )
             return
+
+        self._processed_trade_ids.add(trade_id_str)
 
         key = order.client_order_id.value
 

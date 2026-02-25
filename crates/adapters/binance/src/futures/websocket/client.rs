@@ -35,7 +35,10 @@ use arc_swap::ArcSwap;
 use dashmap::DashMap;
 use futures_util::Stream;
 use nautilus_common::live::get_runtime;
-use nautilus_core::time::get_atomic_clock_realtime;
+use nautilus_core::{
+    string::REDACTED,
+    time::{AtomicTime, get_atomic_clock_realtime},
+};
 use nautilus_model::instruments::{Instrument, InstrumentAny};
 use nautilus_network::{
     mode::ConnectionMode,
@@ -69,9 +72,10 @@ pub const MAX_STREAMS_PER_CONNECTION: usize = 200;
 #[derive(Clone)]
 #[cfg_attr(
     feature = "python",
-    pyo3::pyclass(module = "nautilus_trader.core.nautilus_pyo3.binance")
+    pyo3::pyclass(module = "nautilus_trader.core.nautilus_pyo3.binance", from_py_object)
 )]
 pub struct BinanceFuturesWebSocketClient {
+    clock: &'static AtomicTime,
     url: String,
     product_type: BinanceProductType,
     credential: Option<Arc<Credential>>,
@@ -92,10 +96,7 @@ impl Debug for BinanceFuturesWebSocketClient {
         f.debug_struct(stringify!(BinanceFuturesWebSocketClient))
             .field("url", &self.url)
             .field("product_type", &self.product_type)
-            .field(
-                "credential",
-                &self.credential.as_ref().map(|_| "<redacted>"),
-            )
+            .field("credential", &self.credential.as_ref().map(|_| REDACTED))
             .field("heartbeat", &self.heartbeat)
             .finish_non_exhaustive()
     }
@@ -137,6 +138,7 @@ impl BinanceFuturesWebSocketClient {
         let (cmd_tx, _cmd_rx) = tokio::sync::mpsc::unbounded_channel();
 
         Ok(Self {
+            clock: get_atomic_clock_realtime(),
             url,
             product_type,
             credential,
@@ -186,10 +188,8 @@ impl BinanceFuturesWebSocketClient {
     /// # Errors
     ///
     /// Returns an error if connection fails.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the internal output receiver mutex is poisoned.
+    // Mutex poisoning is not documented individually
+    #[allow(clippy::missing_panics_doc)]
     pub async fn connect(&mut self) -> BinanceWsResult<()> {
         self.signal.store(false, Ordering::Relaxed);
 
@@ -214,6 +214,7 @@ impl BinanceFuturesWebSocketClient {
             reconnect_backoff_factor: Some(2.0),
             reconnect_jitter_ms: Some(250),
             reconnect_max_attempts: None,
+            idle_timeout_ms: None,
         };
 
         // Configure rate limits for subscription operations
@@ -258,7 +259,7 @@ impl BinanceFuturesWebSocketClient {
         });
 
         let mut handler = BinanceFuturesDataWsFeedHandler::new(
-            get_atomic_clock_realtime(),
+            self.clock,
             self.signal.clone(),
             cmd_rx,
             bytes_rx,

@@ -49,7 +49,7 @@ The following normalized Tardis formats are supported by NautilusTrader:
 | [trade](https://docs.tardis.dev/api/tardis-machine#trade)                                                                   | `Trade`                                                              |
 | [trade_bar_*](https://docs.tardis.dev/api/tardis-machine#trade_bar_-aggregation_interval-suffix)                            | `Bar`                                                                |
 | [instrument](https://docs.tardis.dev/api/instruments-metadata-api)                                                          | `CurrencyPair`, `CryptoFuture`, `CryptoPerpetual`, `OptionContract` |
-| [derivative_ticker](https://docs.tardis.dev/api/tardis-machine#derivative_ticker)                                           | *Not yet supported*                                                  |
+| [derivative_ticker](https://docs.tardis.dev/api/tardis-machine#derivative_ticker)                                           | `FundingRateUpdate`                                                  |
 | [disconnect](https://docs.tardis.dev/api/tardis-machine#disconnect)                                                         | *Not applicable*                                                     |
 
 **Notes:**
@@ -98,8 +98,7 @@ For detailed symbology documentation per exchange:
 
 - [Binance symbology](./binance.md#symbology)
 - [Bybit symbology](./bybit.md#symbology)
-- [dYdX v3 symbology](./dydx_v3.md#symbology)
-- [dYdX v4 symbology](./dydx_v4.md#symbology)
+- [dYdX symbology](./dydx.md#symbology)
 
 ## Venues
 
@@ -572,19 +571,27 @@ To request instrument definitions in Rust, use code similar to the following.
 For a complete example, see the [example binary here](https://github.com/nautechsystems/nautilus_trader/blob/develop/crates/adapters/tardis/bin/example_http.rs).
 
 ```rust
-use nautilus_adapters::tardis::{enums::Exchange, http::client::TardisHttpClient};
+use nautilus_tardis::{
+    enums::TardisExchange,
+    http::client::TardisHttpClient,
+};
 
 #[tokio::main]
 async fn main() {
     nautilus_common::logging::ensure_logging_initialized();
 
-    let client = TardisHttpClient::new(None, None, None).unwrap();
+    let client = TardisHttpClient::new(None, None, None, true).unwrap();
 
-    // Nautilus instrument definitions
-    let resp = client.instruments(Exchange::Bitmex).await;
+    // Tardis instrument definitions
+    let resp = client
+        .instruments_info(TardisExchange::Bitmex, Some("XBTUSD"), None)
+        .await;
     println!("Received: {resp:?}");
 
-    let resp = client.instrument(Exchange::Bitmex, "ETHUSDT").await;
+    // Nautilus instrument definitions
+    let resp = client
+        .instruments(TardisExchange::Bitmex, Some("XBTUSD"), None, None, None, None, None, None)
+        .await;
     println!("Received: {resp:?}");
 }
 ```
@@ -650,6 +657,7 @@ It supports subscriptions to the following data types:
 - `QuoteTick`
 - `TradeTick`
 - `Bar` (trade bars with [Tardis-supported bar aggregations](#bars))
+- `FundingRateUpdate` (from derivative_ticker messages)
 
 ### Data WebSockets
 

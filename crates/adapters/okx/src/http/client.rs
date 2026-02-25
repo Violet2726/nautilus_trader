@@ -48,7 +48,8 @@ use ahash::{AHashMap, AHashSet};
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use nautilus_core::{
-    UnixNanos, consts::NAUTILUS_USER_AGENT, env::get_or_env_var, time::get_atomic_clock_realtime,
+    AtomicTime, UnixNanos, consts::NAUTILUS_USER_AGENT, env::get_or_env_var, string::REDACTED,
+    time::get_atomic_clock_realtime,
 };
 use nautilus_model::{
     data::{Bar, BarType, IndexPriceUpdate, MarkPriceUpdate, TradeTick},
@@ -151,8 +152,9 @@ fn resolve_okx_error_message(response_body: &[u8], top_level_msg: &str) -> Strin
 ///
 /// We use a conservative 250 requests per second (500 per 2 seconds) as a general limit
 /// that should accommodate most use cases while respecting OKX's documented limits.
-pub static OKX_REST_QUOTA: LazyLock<Quota> =
-    LazyLock::new(|| Quota::per_second(NonZeroU32::new(250).unwrap()));
+pub static OKX_REST_QUOTA: LazyLock<Quota> = LazyLock::new(|| {
+    Quota::per_second(NonZeroU32::new(250).expect("non-zero")).expect("valid constant")
+});
 
 const OKX_GLOBAL_RATE_KEY: &str = "okx:global";
 
@@ -190,7 +192,7 @@ impl Default for OKXRawHttpClient {
 
 impl Debug for OKXRawHttpClient {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let credential = self.credential.as_ref().map(|_| "<redacted>");
+        let credential = self.credential.as_ref().map(|_| REDACTED);
         f.debug_struct(stringify!(OKXRawHttpClient))
             .field("base_url", &self.base_url)
             .field("credential", &credential)
@@ -204,47 +206,47 @@ impl OKXRawHttpClient {
             (OKX_GLOBAL_RATE_KEY.to_string(), *OKX_REST_QUOTA),
             (
                 "okx:/api/v5/account/balance".to_string(),
-                Quota::per_second(NonZeroU32::new(5).unwrap()),
+                Quota::per_second(NonZeroU32::new(5).expect("non-zero")).expect("valid constant"),
             ),
             (
                 "okx:/api/v5/public/instruments".to_string(),
-                Quota::per_second(NonZeroU32::new(10).unwrap()),
+                Quota::per_second(NonZeroU32::new(10).expect("non-zero")).expect("valid constant"),
             ),
             (
                 "okx:/api/v5/market/candles".to_string(),
-                Quota::per_second(NonZeroU32::new(50).unwrap()),
+                Quota::per_second(NonZeroU32::new(50).expect("non-zero")).expect("valid constant"),
             ),
             (
                 "okx:/api/v5/market/history-candles".to_string(),
-                Quota::per_second(NonZeroU32::new(20).unwrap()),
+                Quota::per_second(NonZeroU32::new(20).expect("non-zero")).expect("valid constant"),
             ),
             (
                 "okx:/api/v5/market/history-trades".to_string(),
-                Quota::per_second(NonZeroU32::new(30).unwrap()),
+                Quota::per_second(NonZeroU32::new(30).expect("non-zero")).expect("valid constant"),
             ),
             (
                 "okx:/api/v5/trade/order".to_string(),
-                Quota::per_second(NonZeroU32::new(30).unwrap()), // 60 requests / 2 seconds (per instrument)
+                Quota::per_second(NonZeroU32::new(30).expect("non-zero")).expect("valid constant"), // 60 requests / 2 seconds (per instrument)
             ),
             (
                 "okx:/api/v5/trade/orders-pending".to_string(),
-                Quota::per_second(NonZeroU32::new(20).unwrap()),
+                Quota::per_second(NonZeroU32::new(20).expect("non-zero")).expect("valid constant"),
             ),
             (
                 "okx:/api/v5/trade/orders-history".to_string(),
-                Quota::per_second(NonZeroU32::new(20).unwrap()),
+                Quota::per_second(NonZeroU32::new(20).expect("non-zero")).expect("valid constant"),
             ),
             (
                 "okx:/api/v5/trade/fills".to_string(),
-                Quota::per_second(NonZeroU32::new(30).unwrap()),
+                Quota::per_second(NonZeroU32::new(30).expect("non-zero")).expect("valid constant"),
             ),
             (
                 "okx:/api/v5/trade/order-algo".to_string(),
-                Quota::per_second(NonZeroU32::new(10).unwrap()),
+                Quota::per_second(NonZeroU32::new(10).expect("non-zero")).expect("valid constant"),
             ),
             (
                 "okx:/api/v5/trade/cancel-algos".to_string(),
-                Quota::per_second(NonZeroU32::new(10).unwrap()),
+                Quota::per_second(NonZeroU32::new(10).expect("non-zero")).expect("valid constant"),
             ),
         ]
     }
@@ -398,8 +400,8 @@ impl OKXRawHttpClient {
             None => return Err(OKXHttpError::MissingCredentials),
         };
 
-        let api_key = credential.api_key.to_string();
-        let api_passphrase = credential.api_passphrase.clone();
+        let api_key = credential.api_key().to_string();
+        let api_passphrase = credential.api_passphrase().to_string();
 
         // OKX requires milliseconds in the timestamp (ISO 8601 with milliseconds)
         let now = Utc::now();
@@ -1012,11 +1014,12 @@ impl OKXRawHttpClient {
 #[derive(Debug)]
 #[cfg_attr(
     feature = "python",
-    pyo3::pyclass(module = "nautilus_trader.core.nautilus_pyo3.okx")
+    pyo3::pyclass(module = "nautilus_trader.core.nautilus_pyo3.okx", from_py_object)
 )]
 pub struct OKXHttpClient {
     pub(crate) inner: Arc<OKXRawHttpClient>,
     pub(crate) instruments_cache: Arc<DashMap<Ustr, InstrumentAny>>,
+    clock: &'static AtomicTime,
     cache_initialized: AtomicBool,
 }
 
@@ -1033,6 +1036,7 @@ impl Clone for OKXHttpClient {
             inner: self.inner.clone(),
             instruments_cache: self.instruments_cache.clone(),
             cache_initialized,
+            clock: self.clock,
         }
     }
 }
@@ -1075,12 +1079,13 @@ impl OKXHttpClient {
             )?),
             instruments_cache: Arc::new(DashMap::new()),
             cache_initialized: AtomicBool::new(false),
+            clock: get_atomic_clock_realtime(),
         })
     }
 
     /// Generates a timestamp for initialization.
     fn generate_ts_init(&self) -> UnixNanos {
-        get_atomic_clock_realtime().get_time_ns()
+        self.clock.get_time_ns()
     }
 
     /// Creates a new authenticated [`OKXHttpClient`] using environment variables and
@@ -1132,6 +1137,7 @@ impl OKXHttpClient {
             )?),
             instruments_cache: Arc::new(DashMap::new()),
             cache_initialized: AtomicBool::new(false),
+            clock: get_atomic_clock_realtime(),
         })
     }
 
@@ -1164,7 +1170,7 @@ impl OKXHttpClient {
 
     /// Returns the public API key being used by the client.
     pub fn api_key(&self) -> Option<&str> {
-        self.inner.credential.as_ref().map(|c| c.api_key.as_str())
+        self.inner.credential.as_ref().map(|c| c.api_key())
     }
 
     /// Returns a masked version of the API key for logging purposes.
@@ -1567,10 +1573,8 @@ impl OKXHttpClient {
     /// # Errors
     ///
     /// Returns an error if the HTTP request fails or trade parsing fails.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the API returns an empty response when debug logging is enabled.
+    // Guarded by is_empty check
+    #[allow(clippy::missing_panics_doc)]
     pub async fn request_trades(
         &self,
         instrument_id: InstrumentId,
@@ -1927,14 +1931,12 @@ impl OKXHttpClient {
     /// - Stops when: limit reached, time window covered, or API returns empty
     /// - Rate limit safety: ≥ 50ms between requests
     ///
-    /// # Panics
-    ///
-    /// May panic if internal data structures are in an unexpected state.
-    ///
     /// # References
     ///
     /// - <https://tr.okx.com/docs-v5/en/#order-book-trading-market-data-get-candlesticks>
     /// - <https://tr.okx.com/docs-v5/en/#order-book-trading-market-data-get-candlesticks-history>
+    // Guarded by non-empty page check
+    #[allow(clippy::missing_panics_doc)]
     pub async fn request_bars(
         &self,
         bar_type: BarType,
@@ -2864,7 +2866,6 @@ impl OKXHttpClient {
                 Ok(report) => reports.push(report),
                 Err(e) => {
                     log::error!("Failed to parse position status report: {e}");
-                    continue;
                 }
             };
         }
@@ -2939,7 +2940,6 @@ impl OKXHttpClient {
                         log::error!(
                             "Failed to parse spot margin position from balance for {ccy_str}: {e}"
                         );
-                        continue;
                     }
                 };
             }

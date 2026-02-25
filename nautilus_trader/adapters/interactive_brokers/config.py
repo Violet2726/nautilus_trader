@@ -216,8 +216,9 @@ class InteractiveBrokersDataClientConfig(LiveDataClientConfig, frozen=True):
         客户端的网关容器配置。
     connection_timeout : int, 默认 300
         等待客户端建立连接的超时时间（秒）。
-    request_timeout : int, 默认 60
-        等待历史数据响应的超时时间（秒）。
+    request_timeout_secs : int, 默认 60
+        等待历史数据响应的超时时间（秒）。也用于合同详情查询——
+        当请求大型期权链时请增加此值。
 
     """
 
@@ -233,7 +234,7 @@ class InteractiveBrokersDataClientConfig(LiveDataClientConfig, frozen=True):
     ignore_quote_tick_size_updates: bool = False
     dockerized_gateway: DockerizedIBGatewayConfig | None = None
     connection_timeout: int = 300
-    request_timeout: int = 60
+    request_timeout_secs: int = 60
 
 
 class InteractiveBrokersExecClientConfig(LiveExecClientConfig, frozen=True):
@@ -256,6 +257,9 @@ class InteractiveBrokersExecClientConfig(LiveExecClientConfig, frozen=True):
         客户端的网关容器配置。
     connection_timeout : int, 默认 300
         等待客户端建立连接的超时时间（秒）。
+    request_timeout_secs : int, 默认 60
+        等待请求响应（合同详情等）的超时时间（秒）。
+        当请求大型期权链时请增加此值。
     fetch_all_open_orders : bool, 默认 False
         如果为 True，使用 reqAllOpenOrders 获取来自所有 API 客户端和 TWS GUI 的订单。
         如果为 False，使用 reqOpenOrders 仅获取来自当前客户端 ID 会话的订单。
@@ -275,5 +279,6 @@ class InteractiveBrokersExecClientConfig(LiveExecClientConfig, frozen=True):
     account_id: str | None = None
     dockerized_gateway: DockerizedIBGatewayConfig | None = None
     connection_timeout: int = 300
+    request_timeout_secs: int = 60
     fetch_all_open_orders: bool = False
     track_option_exercise_from_position_update: bool = False

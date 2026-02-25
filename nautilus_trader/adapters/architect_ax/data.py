@@ -125,6 +125,7 @@ class AxDataClient(LiveMarketDataClient):
 
         self._update_instruments_interval_mins = config.update_instruments_interval_mins
         self._update_instruments_task: asyncio.Task | None = None
+        self._funding_rate_poll_interval_secs = (config.funding_rate_poll_interval_mins or 15) * 60
         self._funding_rate_tasks: dict[InstrumentId, asyncio.Task] = {}
         self._last_funding_rates: dict[InstrumentId, FundingRateUpdate] = {}
 
@@ -259,14 +260,14 @@ class AxDataClient(LiveMarketDataClient):
         instrument_id = self._get_pyo3_instrument_id(command.instrument_id)
 
         if command.book_type == BookType.L3_MBO:
-            level = nautilus_pyo3.AxMarketDataLevel.LEVEL_3
+            level = nautilus_pyo3.AxMarketDataLevel.LEVEL3
         elif command.book_type == BookType.L2_MBP:
-            level = nautilus_pyo3.AxMarketDataLevel.LEVEL_2
+            level = nautilus_pyo3.AxMarketDataLevel.LEVEL2
         else:
             self._log.warning(
                 f"Book type {book_type_to_str(command.book_type)} not supported, using L2",
             )
-            level = nautilus_pyo3.AxMarketDataLevel.LEVEL_2
+            level = nautilus_pyo3.AxMarketDataLevel.LEVEL2
 
         await self._ws_client.subscribe_book_deltas(instrument_id, level)
         self._log.debug(f"Subscribed to order book for {command.instrument_id} at {level}")
@@ -355,7 +356,7 @@ class AxDataClient(LiveMarketDataClient):
     async def _poll_funding_rates(self, instrument_id: InstrumentId) -> None:
         symbol = instrument_id.symbol.value
         pyo3_instrument_id = self._get_pyo3_instrument_id(instrument_id)
-        poll_interval_secs = 900  # 15 minutes
+        poll_interval_secs = self._funding_rate_poll_interval_secs
         lookback = timedelta(days=7)
 
         try:

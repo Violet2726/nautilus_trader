@@ -87,7 +87,7 @@ pub const LIMIT_ORDER_TYPES: &[OrderType] = &[
     OrderType::Limit,
     OrderType::StopLimit,
     OrderType::LimitIfTouched,
-    OrderType::MarketIfTouched,
+    OrderType::TrailingStopLimit,
 ];
 
 /// 本地活动订单（提交到交易所之前）的状态。

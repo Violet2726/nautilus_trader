@@ -32,6 +32,7 @@ use nautilus_model::{
     identifiers::InstrumentId,
     types::{Price, Quantity},
 };
+use nautilus_network::ratelimiter::quota::Quota;
 
 use crate::{
     error::DydxError,
@@ -90,10 +91,12 @@ impl OrderSubmitter {
     /// * `subaccount_number` - dYdX subaccount number (typically 0)
     /// * `chain_id` - dYdX chain ID
     /// * `block_time_monitor` - Block time monitor (provides current height and dynamic block time)
+    /// * `grpc_quota` - Optional rate limit quota for gRPC calls
     ///
     /// # Errors
     ///
     /// Returns error if wallet creation from private key fails.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         grpc_client: DydxGrpcClient,
         http_client: DydxHttpClient,
@@ -102,6 +105,7 @@ impl OrderSubmitter {
         subaccount_number: u32,
         chain_id: ChainId,
         block_time_monitor: Arc<BlockTimeMonitor>,
+        grpc_quota: Option<Quota>,
     ) -> Result<Self, DydxError> {
         // Create transaction manager (owns wallet and sequence management)
         let tx_manager = Arc::new(TransactionManager::new(
@@ -111,7 +115,7 @@ impl OrderSubmitter {
             chain_id,
         )?);
 
-        let broadcaster = Arc::new(TxBroadcaster::new(grpc_client));
+        let broadcaster = Arc::new(TxBroadcaster::new(grpc_client, grpc_quota));
 
         let order_builder = Arc::new(OrderMessageBuilder::new(
             http_client,
@@ -195,7 +199,7 @@ impl OrderSubmitter {
         side: OrderSide,
         quantity: Quantity,
     ) -> Result<String, DydxError> {
-        log::info!(
+        log::debug!(
             "Submitting market order: client_id={client_order_id}, meta={client_metadata:#x}, side={side:?}, quantity={quantity}"
         );
 
@@ -247,7 +251,7 @@ impl OrderSubmitter {
         reduce_only: bool,
         expire_time: Option<i64>,
     ) -> Result<String, DydxError> {
-        log::info!(
+        log::debug!(
             "Submitting limit order: client_id={client_order_id}, meta={client_metadata:#x}, side={side:?}, price={price}, \
              quantity={quantity}, tif={time_in_force:?}, post_only={post_only}, reduce_only={reduce_only}"
         );
@@ -402,7 +406,7 @@ impl OrderSubmitter {
         time_in_force: TimeInForce,
         expire_time_ns: Option<nautilus_core::UnixNanos>,
     ) -> Result<String, DydxError> {
-        log::info!("Cancelling order: client_id={client_order_id}, instrument={instrument_id}");
+        log::debug!("Cancelling order: client_id={client_order_id}, instrument={instrument_id}");
 
         let block_height = self.current_block_height();
 
@@ -435,9 +439,11 @@ impl OrderSubmitter {
         Ok(tx_hash)
     }
 
-    /// Cancels multiple orders in a single blockchain transaction.
+    /// Cancels multiple orders with optimal partitioned broadcasting.
     ///
-    /// Batches all cancellation messages into one transaction for efficiency.
+    /// Partitions orders into short-term and long-term groups:
+    /// - Short-term orders: single `MsgBatchCancel` via `broadcast_short_term()`
+    /// - Long-term orders: batched `MsgCancelOrder` messages via `broadcast_with_retry()`
     ///
     /// # Arguments
     ///
@@ -445,7 +451,7 @@ impl OrderSubmitter {
     ///
     /// # Returns
     ///
-    /// The transaction hash on success.
+    /// Comma-separated transaction hashes on success (one per partition).
     ///
     /// # Errors
     ///
@@ -463,26 +469,64 @@ impl OrderSubmitter {
             return Err(DydxError::Order("No orders to cancel".to_string()));
         }
 
-        log::info!(
-            "Batch cancelling {} orders in single transaction",
-            orders.len()
-        );
-
         let block_height = self.current_block_height();
 
-        // Build all cancel messages
-        let msgs = self
-            .order_builder
-            .build_cancel_orders_batch(orders, block_height)?;
+        // Partition into short-term and long-term orders
+        let (short_term, long_term): (Vec<_>, Vec<_>) =
+            orders.iter().partition(|(_, _, tif, expire_ns)| {
+                self.order_builder.is_short_term_cancel(*tif, *expire_ns)
+            });
 
-        // Broadcast with retry
-        let operation = format!("Cancel batch of {} orders", msgs.len());
-        let tx_hash = self
-            .broadcaster
-            .broadcast_with_retry(&self.tx_manager, msgs, &operation)
-            .await?;
+        log::info!(
+            "Batch cancelling {} orders (short_term={}, long_term={})",
+            orders.len(),
+            short_term.len(),
+            long_term.len(),
+        );
 
-        Ok(tx_hash)
+        let mut tx_hashes = Vec::new();
+
+        // Cancel short-term orders with MsgBatchCancel (single gRPC call)
+        if !short_term.is_empty() {
+            let st_pairs: Vec<_> = short_term
+                .iter()
+                .map(|(inst_id, client_id, _, _)| (*inst_id, *client_id))
+                .collect();
+
+            let msg = self
+                .order_builder
+                .build_batch_cancel_short_term(&st_pairs, block_height)?;
+
+            let operation = format!("BatchCancel {} short-term orders", st_pairs.len());
+            let tx_hash = self
+                .broadcaster
+                .broadcast_short_term(&self.tx_manager, vec![msg], &operation)
+                .await?;
+            tx_hashes.push(tx_hash);
+        }
+
+        // Cancel long-term orders with batched MsgCancelOrder (single gRPC call)
+        if !long_term.is_empty() {
+            let lt_orders: Vec<_> = long_term
+                .iter()
+                .map(|(inst_id, client_id, tif, expire_ns)| {
+                    (*inst_id, *client_id, *tif, *expire_ns)
+                })
+                .collect();
+
+            let msgs = self
+                .order_builder
+                .build_cancel_orders_batch(&lt_orders, block_height)?;
+
+            let operation = format!("BatchCancel {} long-term orders", lt_orders.len());
+            let tx_hash = self
+                .broadcaster
+                .broadcast_with_retry(&self.tx_manager, msgs, &operation)
+                .await?;
+            tx_hashes.push(tx_hash);
+        }
+
+        Ok(tx_hashes.join(","))
     }
 
     /// Submits a stop market order to dYdX via gRPC.
@@ -508,7 +552,7 @@ impl OrderSubmitter {
         reduce_only: bool,
         expire_time: Option<i64>,
     ) -> Result<String, DydxError> {
-        log::info!(
+        log::debug!(
             "Submitting stop market order: client_id={client_order_id}, meta={client_metadata:#x}, side={side:?}, \
              trigger={trigger_price}, qty={quantity}"
         );
@@ -562,7 +606,7 @@ impl OrderSubmitter {
         reduce_only: bool,
         expire_time: Option<i64>,
     ) -> Result<String, DydxError> {
-        log::info!(
+        log::debug!(
             "Submitting stop limit order: client_id={client_order_id}, meta={client_metadata:#x}, side={side:?}, \
              trigger={trigger_price}, limit={limit_price}, qty={quantity}"
         );
@@ -616,7 +660,7 @@ impl OrderSubmitter {
         reduce_only: bool,
         expire_time: Option<i64>,
     ) -> Result<String, DydxError> {
-        log::info!(
+        log::debug!(
             "Submitting take profit market order: client_id={client_order_id}, meta={client_metadata:#x}, side={side:?}, \
              trigger={trigger_price}, qty={quantity}"
         );
@@ -670,7 +714,7 @@ impl OrderSubmitter {
         reduce_only: bool,
         expire_time: Option<i64>,
     ) -> Result<String, DydxError> {
-        log::info!(
+        log::debug!(
             "Submitting take profit limit order: client_id={client_order_id}, meta={client_metadata:#x}, side={side:?}, \
              trigger={trigger_price}, limit={limit_price}, qty={quantity}"
         );

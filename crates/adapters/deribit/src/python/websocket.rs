@@ -48,7 +48,7 @@ use nautilus_model::{
     },
     types::{Price, Quantity},
 };
-use pyo3::{IntoPyObjectExt, exceptions::PyRuntimeError, prelude::*};
+use pyo3::{IntoPyObjectExt, prelude::*};
 
 use crate::{
     common::enums::DeribitTimeInForce,
@@ -206,7 +206,7 @@ impl DeribitWebSocketClient {
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             client.connect().await.map_err(to_pyruntime_err)?;
 
-            let stream = client.stream();
+            let stream = client.stream().map_err(to_pyruntime_err)?;
 
             // Keep client alive in the spawned task to prevent handler from dropping
             get_runtime().spawn(async move {
@@ -296,6 +296,9 @@ impl DeribitWebSocketClient {
                         NautilusWsMessage::AccountState(msg) => {
                             call_python_with_data(&callback, |py| msg.into_py_any(py));
                         }
+                        NautilusWsMessage::AuthenticationFailed(reason) => {
+                            log::error!("Authentication failed: {reason}");
+                        }
                     }
                 }
             });
@@ -316,7 +319,7 @@ impl DeribitWebSocketClient {
             client
                 .wait_until_active(timeout_secs)
                 .await
-                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+                .map_err(to_pyruntime_err)?;
             Ok(())
         })
     }

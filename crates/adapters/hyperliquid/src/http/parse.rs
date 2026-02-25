@@ -14,28 +14,29 @@
 // -------------------------------------------------------------------------------------------------
 
 use anyhow::Context;
-use nautilus_core::{UUID4, UnixNanos, time::get_atomic_clock_realtime};
+use nautilus_core::{UUID4, UnixNanos};
 use nautilus_model::{
     enums::{
         CurrencyType, LiquiditySide, OrderSide, OrderStatus, OrderType, PositionSideSpecified,
         TimeInForce, TriggerType,
     },
-    identifiers::{AccountId, ClientOrderId, InstrumentId, Symbol, TradeId, VenueOrderId},
+    identifiers::{AccountId, ClientOrderId, InstrumentId, Symbol, VenueOrderId},
     instruments::{CryptoPerpetual, CurrencyPair, Instrument, InstrumentAny},
     reports::{FillReport, OrderStatusReport, PositionStatusReport},
-    types::{Currency, Price, Quantity},
+    types::{Currency, Money, Price, Quantity},
 };
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use ustr::Ustr;
 
-use super::models::{HyperliquidFill, PerpMeta, SpotMeta};
+use super::models::{AssetPosition, HyperliquidFill, PerpMeta, SpotMeta};
 use crate::{
     common::{
         consts::HYPERLIQUID_VENUE,
         enums::{
             HyperliquidOrderStatus as HyperliquidOrderStatusEnum, HyperliquidSide, HyperliquidTpSl,
         },
+        parse::make_fill_trade_id,
     },
     websocket::messages::{WsBasicOrderData, WsOrderData},
 };
@@ -209,9 +210,6 @@ pub fn parse_spot_instruments(meta: &SpotMeta) -> Result<Vec<HyperliquidInstrume
     Ok(defs)
 }
 
-/// Compute 10^(-decimals) as a Decimal.
-///
-/// This uses integer arithmetic to avoid floating-point precision issues.
 fn pow10_neg(decimals: u32) -> Result<Decimal, String> {
     if decimals == 0 {
         return Ok(Decimal::ONE);
@@ -275,6 +273,7 @@ pub fn create_instrument_from_def(
             None,
             None,
             None,
+            None,
             ts_init, // Identical to ts_init for now
             ts_init,
         ))),
@@ -292,6 +291,7 @@ pub fn create_instrument_from_def(
                 def.size_decimals as u8,
                 price_increment,
                 size_increment,
+                None, // multiplier
                 None,
                 None,
                 None,
@@ -325,16 +325,15 @@ pub fn instruments_from_defs(
 
 /// Convert owned definitions into Nautilus instruments, consuming the input vector.
 #[must_use]
-pub fn instruments_from_defs_owned(defs: Vec<HyperliquidInstrumentDef>) -> Vec<InstrumentAny> {
-    let clock = get_atomic_clock_realtime();
-    let ts_init = clock.get_time_ns();
-
+pub fn instruments_from_defs_owned(
+    defs: Vec<HyperliquidInstrumentDef>,
+    ts_init: UnixNanos,
+) -> Vec<InstrumentAny> {
     defs.into_iter()
         .filter_map(|def| create_instrument_from_def(&def, ts_init))
         .collect()
 }
 
-/// Map Hyperliquid fill side to Nautilus OrderSide.
 fn parse_fill_side(side: &HyperliquidSide) -> OrderSide {
     match side {
         HyperliquidSide::Buy => OrderSide::Buy,
@@ -374,9 +373,6 @@ pub fn parse_order_status_report_from_basic(
     account_id: AccountId,
     ts_init: UnixNanos,
 ) -> anyhow::Result<OrderStatusReport> {
-    use nautilus_model::types::{Price, Quantity};
-    use rust_decimal::Decimal;
-
     let instrument_id = instrument.id();
     let venue_order_id = VenueOrderId::new(order.oid.to_string());
     let order_side = OrderSide::from(order.side);
@@ -490,23 +486,17 @@ pub fn parse_fill_report(
     account_id: AccountId,
     ts_init: UnixNanos,
 ) -> anyhow::Result<FillReport> {
-    use nautilus_model::types::{Money, Price, Quantity};
-    use rust_decimal::Decimal;
-
     let instrument_id = instrument.id();
     let venue_order_id = VenueOrderId::new(fill.oid.to_string());
 
-    // Combine hash + oid for unique TradeId (max 36 chars).
-    // Multiple fills can share the same hash (same transaction, funding fills)
-    // so the oid suffix ensures uniqueness per fill.
-    let oid_str = fill.oid.to_string();
-    let hash_budget = 36 - oid_str.len() - 1; // -1 for separator
-    let hash_part = if fill.hash.len() > hash_budget {
-        &fill.hash[fill.hash.len() - hash_budget..]
-    } else {
-        &fill.hash
-    };
-    let trade_id = TradeId::new(format!("{hash_part}-{oid_str}"));
+    let trade_id = make_fill_trade_id(
+        &fill.hash,
+        fill.oid,
+        &fill.px,
+        &fill.sz,
+        fill.time,
+        &fill.start_position,
+    );
     let order_side = parse_fill_side(&fill.side);
 
     let price_precision = instrument.price_precision();
@@ -526,14 +516,15 @@ pub fn parse_fill_report(
     let last_qty = Quantity::from_decimal_dp(sz.abs(), size_precision)
         .map_err(|e| anyhow::anyhow!("Failed to create quantity from fill sz: {e}"))?;
 
-    // Parse fee - Hyperliquid fees are typically in USDC for perps
     let fee_amount: Decimal = fill
         .fee
         .parse()
         .map_err(|e| anyhow::anyhow!("Failed to parse fee: {e}"))?;
 
-    // Determine fee currency - Hyperliquid perp fees are in USDC
-    let fee_currency = Currency::from("USDC");
+    let fee_currency: Currency = fill
+        .fee_token
+        .parse()
+        .map_err(|e| anyhow::anyhow!("Unknown fee token '{}': {e}", fill.fee_token))?;
     let commission = Money::from_decimal(fee_amount, fee_currency)
         .map_err(|e| anyhow::anyhow!("Failed to create commission from fee: {e}"))?;
 
@@ -578,10 +569,6 @@ pub fn parse_position_status_report(
     account_id: AccountId,
     ts_init: UnixNanos,
 ) -> anyhow::Result<PositionStatusReport> {
-    use nautilus_model::types::Quantity;
-
-    use super::models::AssetPosition;
-
     // Deserialize the position data
     let asset_position: AssetPosition = serde_json::from_value(position_data.clone())
         .context("failed to deserialize AssetPosition")?;

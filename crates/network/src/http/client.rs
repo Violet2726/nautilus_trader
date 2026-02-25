@@ -40,7 +40,7 @@ use crate::ratelimiter::{RateLimiter, clock::MonotonicClock, quota::Quota};
 #[derive(Clone, Debug)]
 #[cfg_attr(
     feature = "python",
-    pyo3::pyclass(module = "nautilus_trader.core.nautilus_pyo3.network")
+    pyo3::pyclass(module = "nautilus_trader.core.nautilus_pyo3.network", from_py_object)
 )]
 pub struct HttpClient {
     /// The underlying HTTP client used to make requests.
@@ -430,7 +430,7 @@ impl Default for InnerHttpClient {
         let client = reqwest::Client::new();
         Self {
             client,
-            header_keys: Default::default(),
+            header_keys: Arc::default(),
         }
     }
 }

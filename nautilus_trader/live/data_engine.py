@@ -371,8 +371,8 @@ class LiveDataEngine(DataEngine):
             self._log.warning("启动时循环（loop）未运行")
 
         self._cmd_queue_task = self._loop.create_task(self._run_cmd_queue(), name="cmd_queue")
-        self._req_queue_task = self._loop.create_task(self._run_res_queue(), name="res_queue")
-        self._res_queue_task = self._loop.create_task(self._run_req_queue(), name="req_queue")
+        self._req_queue_task = self._loop.create_task(self._run_req_queue(), name="req_queue")
+        self._res_queue_task = self._loop.create_task(self._run_res_queue(), name="res_queue")
         self._data_queue_task = self._loop.create_task(self._run_data_queue(), name="data_queue")
 
         self._log.debug(f"已调度任务 '{self._cmd_queue_task.get_name()}'")

@@ -42,7 +42,13 @@ use strum::{AsRefStr, Display, EnumIter, EnumString};
 #[serde(rename_all = "snake_case")]
 #[cfg_attr(
     feature = "python",
-    pyo3::pyclass(eq, eq_int, module = "nautilus_trader.core.nautilus_pyo3.deribit")
+    pyo3::pyclass(
+        eq,
+        eq_int,
+        module = "nautilus_trader.core.nautilus_pyo3.deribit",
+        from_py_object,
+        rename_all = "SCREAMING_SNAKE_CASE",
+    )
 )]
 pub enum DeribitUpdateInterval {
     /// Raw updates - immediate delivery of each event.
@@ -101,7 +107,12 @@ impl Display for DeribitUpdateInterval {
 )]
 #[cfg_attr(
     feature = "python",
-    pyo3::pyclass(eq, eq_int, module = "nautilus_trader.core.nautilus_pyo3.deribit")
+    pyo3::pyclass(
+        eq,
+        eq_int,
+        module = "nautilus_trader.core.nautilus_pyo3.deribit",
+        from_py_object
+    )
 )]
 pub enum DeribitWsChannel {
     // Public Market Data Channels
@@ -275,6 +286,20 @@ impl DeribitWsChannel {
                 | Self::UserAccessLog
         )
     }
+
+    /// Returns whether a channel string requires authentication.
+    ///
+    /// This includes private `user.*` channels and any channel with
+    /// a `.raw` interval (book, trades, ticker) which Deribit gates
+    /// behind auth.
+    #[must_use]
+    pub fn requires_auth(channel: &str) -> bool {
+        match Self::from_channel_string(channel) {
+            Some(ch) if ch.is_private() => true,
+            Some(_) => channel.ends_with(".raw"),
+            None => false,
+        }
+    }
 }
 
 /// Deribit JSON-RPC WebSocket methods.
@@ -401,6 +426,50 @@ pub enum DeribitBookMsgType {
     /// Incremental update.
     #[serde(rename = "change")]
     Change,
+}
+
+#[cfg(test)]
+mod tests {
+    use rstest::rstest;
+
+    use super::*;
+
+    #[rstest]
+    fn test_requires_auth_user_channels() {
+        assert!(DeribitWsChannel::requires_auth("user.orders.any.any.raw"));
+        assert!(DeribitWsChannel::requires_auth("user.trades.any.any.raw"));
+        assert!(DeribitWsChannel::requires_auth("user.portfolio.any"));
+        assert!(DeribitWsChannel::requires_auth("user.changes.any.any.raw"));
+        assert!(DeribitWsChannel::requires_auth("user.access_log"));
+    }
+
+    #[rstest]
+    fn test_requires_auth_raw_channels() {
+        assert!(DeribitWsChannel::requires_auth("book.BTC-PERPETUAL.raw"));
+        assert!(DeribitWsChannel::requires_auth("book.ETH-25DEC25.raw"));
+        assert!(DeribitWsChannel::requires_auth("trades.BTC-PERPETUAL.raw"));
+        assert!(DeribitWsChannel::requires_auth("ticker.BTC-PERPETUAL.raw"));
+    }
+
+    #[rstest]
+    fn test_requires_auth_public_channels() {
+        assert!(!DeribitWsChannel::requires_auth(
+            "book.BTC-PERPETUAL.none.10.100ms"
+        ));
+        assert!(!DeribitWsChannel::requires_auth(
+            "book.BTC-PERPETUAL.none.20.agg2"
+        ));
+        assert!(!DeribitWsChannel::requires_auth(
+            "trades.BTC-PERPETUAL.100ms"
+        ));
+        assert!(!DeribitWsChannel::requires_auth(
+            "ticker.BTC-PERPETUAL.100ms"
+        ));
+        assert!(!DeribitWsChannel::requires_auth("quote.BTC-PERPETUAL"));
+        assert!(!DeribitWsChannel::requires_auth("deribit_price_index.btc"));
+        assert!(!DeribitWsChannel::requires_auth("platform_state"));
+        assert!(!DeribitWsChannel::requires_auth("announcements"));
+    }
 }
 
 /// Deribit heartbeat types.

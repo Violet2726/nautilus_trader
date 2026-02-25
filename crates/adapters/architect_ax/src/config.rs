@@ -17,6 +17,8 @@
 
 use nautilus_model::identifiers::{AccountId, TraderId};
 
+use crate::common::credential::credential_env_vars;
+
 /// Configuration for the AX Exchange live data client.
 #[derive(Clone, Debug)]
 pub struct AxDataClientConfig {
@@ -50,6 +52,8 @@ pub struct AxDataClientConfig {
     pub recv_window_ms: Option<u64>,
     /// Optional interval (minutes) for instrument refresh from REST.
     pub update_instruments_interval_mins: Option<u64>,
+    /// Optional funding rate poll interval in minutes.
+    pub funding_rate_poll_interval_mins: Option<u64>,
 }
 
 impl Default for AxDataClientConfig {
@@ -70,6 +74,7 @@ impl Default for AxDataClientConfig {
             heartbeat_interval_secs: Some(20),
             recv_window_ms: Some(5_000),
             update_instruments_interval_mins: Some(60),
+            funding_rate_poll_interval_mins: Some(15),
         }
     }
 }
@@ -84,8 +89,9 @@ impl AxDataClientConfig {
     /// Returns `true` if both API key and secret are available.
     #[must_use]
     pub fn has_api_credentials(&self) -> bool {
-        let has_key = self.api_key.is_some() || std::env::var("AX_API_KEY").is_ok();
-        let has_secret = self.api_secret.is_some() || std::env::var("AX_API_SECRET").is_ok();
+        let (key_var, secret_var) = credential_env_vars();
+        let has_key = self.api_key.is_some() || std::env::var(key_var).is_ok();
+        let has_secret = self.api_secret.is_some() || std::env::var(secret_var).is_ok();
         has_key && has_secret
     }
 
@@ -196,8 +202,9 @@ impl AxExecClientConfig {
     /// Returns `true` if both API key and secret are available.
     #[must_use]
     pub fn has_api_credentials(&self) -> bool {
-        let has_key = self.api_key.is_some() || std::env::var("AX_API_KEY").is_ok();
-        let has_secret = self.api_secret.is_some() || std::env::var("AX_API_SECRET").is_ok();
+        let (key_var, secret_var) = credential_env_vars();
+        let has_key = self.api_key.is_some() || std::env::var(key_var).is_ok();
+        let has_secret = self.api_secret.is_some() || std::env::var(secret_var).is_ok();
         has_key && has_secret
     }
 

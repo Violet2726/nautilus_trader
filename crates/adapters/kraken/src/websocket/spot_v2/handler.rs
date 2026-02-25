@@ -228,7 +228,6 @@ impl SpotFeedHandler {
                             );
                         }
                     }
-                    continue;
                 }
 
                 msg = self.raw_rx.recv() => {
@@ -294,8 +293,6 @@ impl SpotFeedHandler {
                     if let Some(nautilus_msg) = self.parse_message(&text, ts_init) {
                         return Some(nautilus_msg);
                     }
-
-                    continue;
                 }
             }
         }
@@ -948,6 +945,7 @@ mod tests {
             8,
             Price::from("0.01"),
             Quantity::from("0.00000001"),
+            None,
             None,
             None,
             None,

@@ -513,6 +513,7 @@ class BaseMixin:
     _host: str
     _port: int
     _client_id: int
+    _request_timeout_secs: int
     _requests: Requests
     _instrument_provider: (
         Any  # InteractiveBrokersInstrumentProvider | None - 将由数据/执行客户端设置

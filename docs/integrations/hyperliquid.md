@@ -5,9 +5,7 @@ and spot exchange built on the Hyperliquid L1, a purpose-built blockchain optimi
 HyperCore provides a fully on-chain order book and matching engine. This integration supports
 live market data feeds and order execution on Hyperliquid.
 
-:::warning
-The Hyperliquid integration is under active development. Some features may be incomplete.
-:::
+This integration supports live market data ingest and order execution on Hyperliquid.
 
 ## Overview
 
@@ -29,32 +27,57 @@ Most users will define a configuration for a live trading node (as shown below)
 and won't need to work directly with these lower-level components.
 :::
 
+## Examples
+
+You can find live example scripts [here](https://github.com/nautechsystems/nautilus_trader/tree/develop/examples/live/hyperliquid/).
+
 ## Builder fees
 
-This integration is free and open source. NautilusTrader participates in the Hyperliquid
-[Builder Codes](https://hyperliquid.gitbook.io/hyperliquid-docs/trading/builder-codes) program,
-which routes a small 1 basis point (0.01%) fee on fills to support ongoing development and maintenance.
-This fee is charged by Hyperliquid in addition to standard fees, and applies to perpetuals and spot sells only.
+NautilusTrader participates in the Hyperliquid
+[Builder Codes](https://hyperliquid.gitbook.io/hyperliquid-docs/trading/builder-codes) program.
+A small proportional fee on perpetual fills funds ongoing development and maintenance of this integration.
+These fees are charged by Hyperliquid in addition to standard fees:
+
+- **Taker**: 1.0 bp (0.01%) on perpetual fills.
+- **Maker**: 0.4 bp (0.004%) base, scales down automatically with your Hyperliquid volume tier.
+- **Spot**: no builder fee.
+
+The maker fee scales down in step with Hyperliquid's own volume-based fee reductions.
+At the highest tier, where Hyperliquid charges 0% maker, the builder maker fee is also 0%:
+
+| 14d Volume | HL Maker Rate | HL Taker Rate | Builder Maker Fee | Builder Taker Fee |
+|------------|---------------|---------------|-------------------|-------------------|
+| Base       | 1.5 bp        | 3.5 bp        | 0.4 bp (4 tenths) | 1.0 bp            |
+| > $5M      | 1.2 bp        | 3.2 bp        | 0.3 bp (3 tenths) | 1.0 bp            |
+| > $25M     | 0.8 bp        | 2.8 bp        | 0.2 bp (2 tenths) | 1.0 bp            |
+| > $100M    | 0.4 bp        | 2.2 bp        | 0.1 bp (1 tenth)  | 1.0 bp            |
+| > $500M    | 0.0 bp        | 1.5 bp        | 0.0 bp (zero)     | 1.0 bp            |
+
+Your tier is detected automatically on connect and refreshed periodically
+(default: 60 minutes, configurable via `builder_fee_refresh_mins`).
+If a refresh fails, the current tier is retained until the next successful query.
 
 :::info
-This builder fee is at the low end of ecosystem norms (Hyperliquid allows up to 0.1% (10 bps) for perps and 1% (100 bps) for spot).
-See [Hyperliquid Builder Codes](https://hyperliquid.gitbook.io/hyperliquid-docs/trading/builder-codes)
-and [Hyperliquid Fees](https://hyperliquid.gitbook.io/hyperliquid-docs/trading/fees) for details.
+For reference, Hyperliquid allows builders to charge up to 10 bp on perps and 100 bp on spot.
+See [Builder Codes](https://hyperliquid.gitbook.io/hyperliquid-docs/trading/builder-codes)
+and [Fees](https://hyperliquid.gitbook.io/hyperliquid-docs/trading/fees) for details.
 :::
 
 ### Checking approval status
 
-You can check whether your wallet has approved the builder fee:
+You can check whether your wallet has approved the builder fee.
+
+By wallet address (no private key required):
 
 ```bash
-# Check by wallet address (no private key required)
 python nautilus_trader/adapters/hyperliquid/scripts/builder_fee_verify.py 0xYourWalletAddress
-
-# Or derive address from private key env var
-python nautilus_trader/adapters/hyperliquid/scripts/builder_fee_verify.py
 ```
 
-This queries the Hyperliquid API to verify your approval status.
+Or derive the address from the private key environment variable:
+
+```bash
+python nautilus_trader/adapters/hyperliquid/scripts/builder_fee_verify.py
+```
 
 ### Approving builder fees
 
@@ -71,11 +94,15 @@ This cannot be done with an API key or agent wallet.
 The script reads your private key from environment variables (`HYPERLIQUID_PK` or `HYPERLIQUID_TESTNET_PK`).
 It prompts for confirmation before submitting.
 
-```bash
-# Mainnet (uses HYPERLIQUID_PK)
-python nautilus_trader/adapters/hyperliquid/scripts/builder_fee_approve.py
+Mainnet (uses `HYPERLIQUID_PK`):
 
-# Testnet (uses HYPERLIQUID_TESTNET_PK)
+```bash
+python nautilus_trader/adapters/hyperliquid/scripts/builder_fee_approve.py
+```
+
+Testnet (uses `HYPERLIQUID_TESTNET_PK`):
+
+```bash
 HYPERLIQUID_TESTNET=true python nautilus_trader/adapters/hyperliquid/scripts/builder_fee_approve.py
 ```
 
@@ -83,12 +110,9 @@ The script outputs confirmation of the approval. Once approved, all subsequent o
 placed through NautilusTrader include the builder fee automatically.
 
 :::note
-The approval authorizes a 0.01% (1 basis point) fee rate which applies to perpetuals and spot sells.
-:::
-
-:::note
-You only need to run this script **once** per wallet per network. The approval persists until you
-explicitly revoke it.
+The approval authorizes a maximum 0.01% (1 basis point) fee rate which covers both taker and maker
+perpetual fills. You only need to run this script **once** per wallet per network. The approval
+persists until you explicitly revoke it.
 :::
 
 ### Revoking approval
@@ -97,11 +121,15 @@ If you need to revoke the builder fee approval, the script reads from the same e
 variables as the approval script (`HYPERLIQUID_PK` or `HYPERLIQUID_TESTNET_PK`).
 The script prompts for confirmation before submitting.
 
-```bash
-# Mainnet (uses HYPERLIQUID_PK)
-python nautilus_trader/adapters/hyperliquid/scripts/builder_fee_revoke.py
+Mainnet (uses `HYPERLIQUID_PK`):
 
-# Testnet (uses HYPERLIQUID_TESTNET_PK)
+```bash
+python nautilus_trader/adapters/hyperliquid/scripts/builder_fee_revoke.py
+```
+
+Testnet (uses `HYPERLIQUID_TESTNET_PK`):
+
+```bash
 HYPERLIQUID_TESTNET=true python nautilus_trader/adapters/hyperliquid/scripts/builder_fee_revoke.py
 ```
 
@@ -117,10 +145,6 @@ If you see an error mentioning "builder fee" when placing orders, this indicates
 has not been approved for your wallet. Run the approval script as described above to resolve this.
 
 You can verify your approval status at any time using the [verify script](#checking-approval-status).
-
-## Examples
-
-You can find live example scripts [here](https://github.com/nautechsystems/nautilus_trader/tree/develop/examples/live/hyperliquid/).
 
 ## Testnet setup
 
@@ -309,8 +333,45 @@ against the [mark price](https://hyperliquid.gitbook.io/hyperliquid-docs/trading
 
 :::note
 Market orders require cached quote data. The adapter uses the best ask (for buys) or best bid
-(for sells) with 0.5% slippage, rounded to 5 significant figures. Ensure you subscribe to
-quotes for any instrument you intend to trade with market orders.
+(for sells) with 0.5% slippage. Prices are rounded to 5 significant figures, which is a
+Hyperliquid API requirement for all limit prices. Ensure you subscribe to quotes for any
+instrument you intend to trade with market orders.
+:::
+
+:::note
+`STOP_MARKET` and `MARKET_IF_TOUCHED` orders do not carry a limit price. The adapter derives
+one from the trigger price with 0.5% slippage, rounds to 5 significant figures, and clamps to
+the instrument's price precision (ceiling for buys, floor for sells). This guarantees
+Hyperliquid's `limit_px >= trigger_px` (buys) / `limit_px <= trigger_px` (sells) constraint.
+:::
+
+:::warning
+**Price normalization is enabled by default.** Hyperliquid enforces a maximum of 5 significant
+figures on all order prices. This is a dynamic constraint that depends on the price magnitude
+and cannot be fully encoded in the static instrument price precision. For example, if ETH is
+trading at $2,600 (4 integer digits), only 1 decimal place is allowed despite the instrument
+having `price_precision=2`.
+
+By default, the adapter normalizes all outgoing limit and trigger prices to 5 significant
+figures to prevent order rejections. This means your submitted prices may shift slightly.
+To disable this and take full control of price formatting, set `normalize_prices=False`
+in your `HyperliquidExecClientConfig`.
+
+If you disable normalization, you can apply the same rounding in your strategy:
+
+```python
+from decimal import Decimal, ROUND_DOWN
+
+def round_to_sig_figs(price: Decimal, sig_figs: int = 5) -> Decimal:
+    if price == 0:
+        return Decimal(0)
+    shift = sig_figs - int(price.adjusted()) - 1
+    if shift <= 0:
+        factor = Decimal(10) ** (-shift)
+        return (price / factor).to_integral_value() * factor
+    return round(price, shift)
+```
+
 :::
 
 ### Time in force
@@ -351,6 +412,12 @@ Order modification exists in the Rust layer but is not yet wired through to the 
 execution client. Cancel all and batch cancel issue individual cancel requests per order.
 :::
 
+:::info
+Orders placed outside NautilusTrader (e.g. via the Hyperliquid web UI or another client)
+are detected and tracked as external orders. They appear in order status reports and position
+reconciliation.
+:::
+
 ## Order books
 
 Order books are maintained via L2 WebSocket subscription with delta updates.
@@ -363,6 +430,27 @@ Order book snapshot rebuilds are triggered on:
 :::note
 There is a limitation of one order book per instrument per trader instance.
 :::
+
+## Account and position management
+
+The adapter uses cross-margin mode and reports account state with USDC balances and margin
+usage. On connect, the execution client performs a full reconciliation of orders, fills, and
+positions against Hyperliquid's clearinghouse state. This ensures the local cache is
+consistent even after restarts or disconnections.
+
+:::note
+Leverage is managed directly through the Hyperliquid web UI or API, not through the adapter.
+Set your desired leverage per instrument on Hyperliquid before trading.
+:::
+
+## Connection management
+
+The adapter automatically reconnects on WebSocket disconnection using exponential backoff
+(starting at 250ms, up to 30s). On reconnect, all active subscriptions are resubscribed
+automatically, and order book snapshots are rebuilt. No manual intervention is required.
+
+A heartbeat ping is sent every 30 seconds to keep the connection alive (Hyperliquid closes
+idle connections after 60 seconds).
 
 ## API credentials
 
@@ -411,7 +499,6 @@ backoff (full jitter) on rate limit (429) and server error (5xx) responses.
 
 | Option              | Default | Description                                    |
 |---------------------|---------|------------------------------------------------|
-| `base_url_http`     | `None`  | Override for the REST base URL.                |
 | `base_url_ws`       | `None`  | Override for the WebSocket base URL.           |
 | `testnet`           | `False` | Connect to the Hyperliquid testnet when `True`.|
 | `http_timeout_secs` | `10`    | Timeout (seconds) applied to REST calls.       |
@@ -420,19 +507,20 @@ backoff (full jitter) on rate limit (429) and server error (5xx) responses.
 
 ### Execution client configuration options
 
-| Option                   | Default | Description                                                                                |
-|--------------------------|---------|--------------------------------------------------------------------------------------------|
-| `private_key`            | `None`  | EVM private key; loaded from `HYPERLIQUID_PK` or `HYPERLIQUID_TESTNET_PK` when omitted.    |
-| `vault_address`          | `None`  | Vault address; loaded from `HYPERLIQUID_VAULT` or `HYPERLIQUID_TESTNET_VAULT` if omitted.  |
-| `base_url_http`          | `None`  | Override for the REST base URL.                                                            |
-| `base_url_ws`            | `None`  | Override for the WebSocket base URL.                                                       |
-| `testnet`                | `False` | Connect to the Hyperliquid testnet when `True`.                                            |
-| `max_retries`            | `None`  | Maximum retry attempts for info requests.                                                  |
-| `retry_delay_initial_ms` | `None`  | Initial delay (milliseconds) between retries.                                              |
-| `retry_delay_max_ms`     | `None`  | Maximum delay (milliseconds) between retries.                                              |
-| `http_timeout_secs`      | `10`    | Timeout (seconds) applied to REST calls.                                                   |
-| `http_proxy_url`         | `None`  | Optional HTTP proxy URL.                                                                   |
-| `ws_proxy_url`           | `None`  | Reserved; WebSocket proxy not yet implemented.                                             |
+| Option                     | Default | Description                                                                               |
+|----------------------------|---------|-------------------------------------------------------------------------------------------|
+| `private_key`              | `None`  | EVM private key; loaded from `HYPERLIQUID_PK` or `HYPERLIQUID_TESTNET_PK` when omitted.   |
+| `vault_address`            | `None`  | Vault address; loaded from `HYPERLIQUID_VAULT` or `HYPERLIQUID_TESTNET_VAULT` if omitted. |
+| `base_url_ws`              | `None`  | Override for the WebSocket base URL.                                                      |
+| `testnet`                  | `False` | Connect to the Hyperliquid testnet when `True`.                                           |
+| `max_retries`              | `None`  | Maximum retry attempts for submit, cancel, or modify order requests.                      |
+| `retry_delay_initial_ms`   | `None`  | Initial delay (milliseconds) between retries.                                             |
+| `retry_delay_max_ms`       | `None`  | Maximum delay (milliseconds) between retries.                                             |
+| `http_timeout_secs`        | `10`    | Timeout (seconds) applied to REST calls.                                                  |
+| `normalize_prices`         | `True`  | Normalize order prices to 5 significant figures before submission.                        |
+| `builder_fee_refresh_mins` | `60`    | Interval (minutes) for refreshing builder fee tier from HL. `None` to disable.            |
+| `http_proxy_url`           | `None`  | Optional HTTP proxy URL.                                                                  |
+| `ws_proxy_url`             | `None`  | Reserved; WebSocket proxy not yet implemented.                                            |
 
 ### Configuration example
 
@@ -456,6 +544,7 @@ config = TradingNodeConfig(
             vault_address=None,  # Optional: loads from HYPERLIQUID_TESTNET_VAULT
             instrument_provider=InstrumentProviderConfig(load_all=True),
             testnet=True,  # Use testnet
+            normalize_prices=True,  # Rounds prices to 5 significant figures
         ),
     },
 )

@@ -20,7 +20,6 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use ahash::AHashSet;
 pub use config::StrategyConfig;
-use indexmap::IndexMap;
 use nautilus_common::{
     actor::DataActor,
     component::Component,
@@ -33,7 +32,7 @@ use nautilus_common::{
     msgbus,
     timer::TimeEvent,
 };
-use nautilus_core::UUID4;
+use nautilus_core::{Params, UUID4};
 use nautilus_model::{
     enums::{OrderSide, OrderStatus, PositionSide, TimeInForce, TriggerType},
     events::{
@@ -100,7 +99,7 @@ pub trait Strategy: DataActor {
         position_id: Option<PositionId>,
         client_id: Option<ClientId>,
     ) -> anyhow::Result<()> {
-        self.submit_order_with_params(order, position_id, client_id, IndexMap::new())
+        self.submit_order_with_params(order, position_id, client_id, Params::new())
     }
 
     /// 提交带特定适配器参数的订单。
@@ -113,7 +112,7 @@ pub trait Strategy: DataActor {
         order: OrderAny,
         position_id: Option<PositionId>,
         client_id: Option<ClientId>,
-        params: IndexMap<String, String>,
+        params: Params,
     ) -> anyhow::Result<()> {
         let core = self.core_mut();
 
@@ -287,7 +286,7 @@ pub trait Strategy: DataActor {
         mut orders: Vec<OrderAny>,
         position_id: Option<PositionId>,
         client_id: Option<ClientId>,
-        params: IndexMap<String, String>,
+        params: Params,
     ) -> anyhow::Result<()> {
         let should_deny = {
             let core = self.core_mut();
@@ -410,7 +409,7 @@ pub trait Strategy: DataActor {
             price,
             trigger_price,
             client_id,
-            IndexMap::new(),
+            Params::new(),
         )
     }
 
@@ -426,7 +425,7 @@ pub trait Strategy: DataActor {
         price: Option<Price>,
         trigger_price: Option<Price>,
         client_id: Option<ClientId>,
-        params: IndexMap<String, String>,
+        params: Params,
     ) -> anyhow::Result<()> {
         let core = self.core_mut();
 
@@ -473,7 +472,7 @@ pub trait Strategy: DataActor {
     ///
     /// 如果策略未注册或订单取消失败，则返回错误。
     fn cancel_order(&mut self, order: OrderAny, client_id: Option<ClientId>) -> anyhow::Result<()> {
-        self.cancel_order_with_params(order, client_id, IndexMap::new())
+        self.cancel_order_with_params(order, client_id, Params::new())
     }
 
     /// 取消带特定适配器参数的订单。
@@ -485,7 +484,7 @@ pub trait Strategy: DataActor {
         &mut self,
         order: OrderAny,
         client_id: Option<ClientId>,
-        params: IndexMap<String, String>,
+        params: Params,
     ) -> anyhow::Result<()> {
         let core = self.core_mut();
 
@@ -535,7 +534,7 @@ pub trait Strategy: DataActor {
         &mut self,
         mut orders: Vec<OrderAny>,
         client_id: Option<ClientId>,
-        params: Option<IndexMap<String, String>>,
+        params: Option<Params>,
     ) -> anyhow::Result<()> {
         if orders.is_empty() {
             anyhow::bail!("无法批量取消空订单列表");
@@ -620,7 +619,7 @@ pub trait Strategy: DataActor {
         order_side: Option<OrderSide>,
         client_id: Option<ClientId>,
     ) -> anyhow::Result<()> {
-        self.cancel_all_orders_with_params(instrument_id, order_side, client_id, IndexMap::new())
+        self.cancel_all_orders_with_params(instrument_id, order_side, client_id, Params::new())
     }
 
     /// 取消给定交易工具的所有挂单，带特定适配器参数。
@@ -633,7 +632,7 @@ pub trait Strategy: DataActor {
         instrument_id: InstrumentId,
         order_side: Option<OrderSide>,
         client_id: Option<ClientId>,
-        params: IndexMap<String, String>,
+        params: Params,
     ) -> anyhow::Result<()> {
         let params = if params.is_empty() {
             None
@@ -1819,9 +1818,9 @@ mod tests {
             client_order_id: ClientOrderId::from("O-001"),
             account_id: AccountId::from("ACC-001"),
             reason: "Test rejection".into(),
-            event_id: Default::default(),
-            ts_event: Default::default(),
-            ts_init: Default::default(),
+            event_id: UUID4::default(),
+            ts_event: UnixNanos::default(),
+            ts_init: UnixNanos::default(),
             reconciliation: 0,
             due_post_only: 0,
         });
@@ -1846,14 +1845,14 @@ mod tests {
             entry: OrderSide::Buy,
             side: PositionSide::Long,
             signed_qty: 1.0,
-            quantity: Default::default(),
-            last_qty: Default::default(),
-            last_px: Default::default(),
+            quantity: Quantity::default(),
+            last_qty: Quantity::default(),
+            last_px: Price::default(),
             currency: Currency::from("USD"),
             avg_px_open: 0.0,
-            event_id: Default::default(),
-            ts_event: Default::default(),
-            ts_init: Default::default(),
+            event_id: UUID4::default(),
+            ts_event: UnixNanos::default(),
+            ts_init: UnixNanos::default(),
         });
 
         strategy.handle_position_event(event);
@@ -1865,20 +1864,20 @@ mod tests {
     fn test_strategy_default_handlers_do_not_panic() {
         let mut strategy = create_test_strategy();
 
-        strategy.on_order_initialized(Default::default());
-        strategy.on_order_denied(Default::default());
-        strategy.on_order_emulated(Default::default());
-        strategy.on_order_released(Default::default());
-        strategy.on_order_submitted(Default::default());
-        strategy.on_order_rejected(Default::default());
-        let _ = DataActor::on_order_canceled(&mut strategy, &Default::default());
-        strategy.on_order_expired(Default::default());
-        strategy.on_order_triggered(Default::default());
-        strategy.on_order_pending_update(Default::default());
-        strategy.on_order_pending_cancel(Default::default());
-        strategy.on_order_modify_rejected(Default::default());
-        strategy.on_order_cancel_rejected(Default::default());
-        strategy.on_order_updated(Default::default());
+        strategy.on_order_initialized(OrderInitialized::default());
+        strategy.on_order_denied(OrderDenied::default());
+        strategy.on_order_emulated(OrderEmulated::default());
+        strategy.on_order_released(OrderReleased::default());
+        strategy.on_order_submitted(OrderSubmitted::default());
+        strategy.on_order_rejected(OrderRejected::default());
+        let _ = DataActor::on_order_canceled(&mut strategy, &OrderCanceled::default());
+        strategy.on_order_expired(OrderExpired::default());
+        strategy.on_order_triggered(OrderTriggered::default());
+        strategy.on_order_pending_update(OrderPendingUpdate::default());
+        strategy.on_order_pending_cancel(OrderPendingCancel::default());
+        strategy.on_order_modify_rejected(OrderModifyRejected::default());
+        strategy.on_order_cancel_rejected(OrderCancelRejected::default());
+        strategy.on_order_updated(OrderUpdated::default());
     }
 
     // -- GTD EXPIRY TESTS ----------------------------------------------------------------------------
@@ -1954,13 +1953,13 @@ mod tests {
             position_id: None,
             order_side: OrderSide::Buy,
             order_type: OrderType::Market,
-            last_qty: Default::default(),
-            last_px: Default::default(),
+            last_qty: Quantity::default(),
+            last_px: Price::default(),
             currency: Currency::from("USD"),
             liquidity_side: LiquiditySide::Taker,
-            event_id: Default::default(),
-            ts_event: Default::default(),
-            ts_init: Default::default(),
+            event_id: UUID4::default(),
+            ts_event: UnixNanos::default(),
+            ts_init: UnixNanos::default(),
             reconciliation: false,
             commission: None,
         });
@@ -1985,11 +1984,11 @@ mod tests {
             strategy_id: StrategyId::from("TEST-001"),
             instrument_id: InstrumentId::from("BTCUSDT.BINANCE"),
             client_order_id,
-            venue_order_id: Default::default(),
+            venue_order_id: Option::default(),
             account_id: Some(AccountId::from("ACC-001")),
-            event_id: Default::default(),
-            ts_event: Default::default(),
-            ts_init: Default::default(),
+            event_id: UUID4::default(),
+            ts_event: UnixNanos::default(),
+            ts_init: UnixNanos::default(),
             reconciliation: 0,
         });
         strategy.handle_order_event(event);
@@ -2015,9 +2014,9 @@ mod tests {
             client_order_id,
             account_id: AccountId::from("ACC-001"),
             reason: "Test rejection".into(),
-            event_id: Default::default(),
-            ts_event: Default::default(),
-            ts_init: Default::default(),
+            event_id: UUID4::default(),
+            ts_event: UnixNanos::default(),
+            ts_init: UnixNanos::default(),
             reconciliation: 0,
             due_post_only: 0,
         });
@@ -2042,11 +2041,11 @@ mod tests {
             strategy_id: StrategyId::from("TEST-001"),
             instrument_id: InstrumentId::from("BTCUSDT.BINANCE"),
             client_order_id,
-            venue_order_id: Default::default(),
+            venue_order_id: Option::default(),
             account_id: Some(AccountId::from("ACC-001")),
-            event_id: Default::default(),
-            ts_event: Default::default(),
-            ts_init: Default::default(),
+            event_id: UUID4::default(),
+            ts_event: UnixNanos::default(),
+            ts_init: UnixNanos::default(),
             reconciliation: 0,
         });
         strategy.handle_order_event(event);
@@ -2450,8 +2449,8 @@ mod tests {
         let event = TimeEvent::new(
             Ustr::from("MARKET_EXIT_CHECK:TEST-001"),
             UUID4::new(),
-            Default::default(),
-            Default::default(),
+            UnixNanos::default(),
+            UnixNanos::default(),
         );
         strategy.check_market_exit(event);
 
@@ -2479,8 +2478,8 @@ mod tests {
         let event = TimeEvent::new(
             Ustr::from("MARKET_EXIT_CHECK:TEST-001"),
             UUID4::new(),
-            Default::default(),
-            Default::default(),
+            UnixNanos::default(),
+            UnixNanos::default(),
         );
         strategy.check_market_exit(event);
 
@@ -2499,8 +2498,8 @@ mod tests {
         let event = TimeEvent::new(
             Ustr::from("MARKET_EXIT_CHECK:TEST-001"),
             UUID4::new(),
-            Default::default(),
-            Default::default(),
+            UnixNanos::default(),
+            UnixNanos::default(),
         );
         strategy.check_market_exit(event);
 

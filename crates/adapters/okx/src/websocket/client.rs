@@ -40,6 +40,7 @@ use nautilus_common::live::get_runtime;
 use nautilus_core::{
     consts::NAUTILUS_USER_AGENT,
     env::{get_env_var, get_or_env_var},
+    string::REDACTED,
 };
 use nautilus_model::{
     data::BarType,
@@ -89,22 +90,24 @@ use crate::common::{
 /// Default OKX WebSocket connection rate limit: 3 requests per second.
 ///
 /// This applies to establishing WebSocket connections, not to subscribe/unsubscribe operations.
-pub static OKX_WS_CONNECTION_QUOTA: LazyLock<Quota> =
-    LazyLock::new(|| Quota::per_second(NonZeroU32::new(3).unwrap()));
+pub static OKX_WS_CONNECTION_QUOTA: LazyLock<Quota> = LazyLock::new(|| {
+    Quota::per_second(NonZeroU32::new(3).expect("non-zero")).expect("valid constant")
+});
 
 /// OKX WebSocket subscription rate limit: 480 requests per hour per connection.
 ///
 /// This applies to subscribe/unsubscribe/login operations.
 /// 480 per hour = 8 per minute, but we use per-hour for accurate limiting.
 pub static OKX_WS_SUBSCRIPTION_QUOTA: LazyLock<Quota> =
-    LazyLock::new(|| Quota::per_hour(NonZeroU32::new(480).unwrap()));
+    LazyLock::new(|| Quota::per_hour(NonZeroU32::new(480).expect("non-zero")));
 
 /// Rate limit for order-related WebSocket operations: 250 requests per second.
 ///
 /// Based on OKX documentation for sub-account order limits (1000 per 2 seconds,
 /// so we use half for conservative rate limiting).
-pub static OKX_WS_ORDER_QUOTA: LazyLock<Quota> =
-    LazyLock::new(|| Quota::per_second(NonZeroU32::new(250).unwrap()));
+pub static OKX_WS_ORDER_QUOTA: LazyLock<Quota> = LazyLock::new(|| {
+    Quota::per_second(NonZeroU32::new(250).expect("non-zero")).expect("valid constant")
+});
 
 /// Pre-interned rate limit key for subscription operations (subscribe/unsubscribe/login).
 ///
@@ -136,7 +139,7 @@ pub static OKX_RATE_LIMIT_KEY_AMEND: LazyLock<[Ustr; 1]> = LazyLock::new(|| [Ust
 #[derive(Clone)]
 #[cfg_attr(
     feature = "python",
-    pyo3::pyclass(module = "nautilus_trader.core.nautilus_pyo3.okx")
+    pyo3::pyclass(module = "nautilus_trader.core.nautilus_pyo3.okx", from_py_object)
 )]
 pub struct OKXWebSocketClient {
     url: String,
@@ -173,10 +176,7 @@ impl Debug for OKXWebSocketClient {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct(stringify!(OKXWebSocketClient))
             .field("url", &self.url)
-            .field(
-                "credential",
-                &self.credential.as_ref().map(|_| "<redacted>"),
-            )
+            .field("credential", &self.credential.as_ref().map(|_| REDACTED))
             .field("heartbeat", &self.heartbeat)
             .finish_non_exhaustive()
     }
@@ -316,7 +316,7 @@ impl OKXWebSocketClient {
 
     /// Returns the public API key being used by the client.
     pub fn api_key(&self) -> Option<&str> {
-        self.credential.clone().map(|c| c.api_key.as_str())
+        self.credential.as_ref().map(|c| c.api_key())
     }
 
     /// Returns a masked version of the API key for logging purposes.
@@ -440,6 +440,7 @@ impl OKXWebSocketClient {
             reconnect_backoff_factor: None,   // Use default
             reconnect_jitter_ms: None,        // Use default
             reconnect_max_attempts: None,
+            idle_timeout_ms: None,
         };
 
         // Configure rate limits for different operation types
@@ -635,8 +636,8 @@ impl OKXWebSocketClient {
                                 let auth_message = super::messages::OKXAuthentication {
                                     op: "login",
                                     args: vec![super::messages::OKXAuthenticationArg {
-                                        api_key: cred.api_key.to_string(),
-                                        passphrase: cred.api_passphrase.clone(),
+                                        api_key: cred.api_key().to_string(),
+                                        passphrase: cred.api_passphrase().to_string(),
                                         timestamp,
                                         sign: signature,
                                     }],
@@ -661,8 +662,6 @@ impl OKXWebSocketClient {
                             // TODO: Implement proper Reconnected event forwarding to consumers.
                             // Currently intercepted for internal housekeeping only. Will add new
                             // message type from WebSocketClient to notify consumers of reconnections.
-
-                            continue;
                         }
                         Some(NautilusWsMessage::Authenticated) => {
                             if has_reconnected {
@@ -673,7 +672,6 @@ impl OKXWebSocketClient {
                             // reconnection flow coordination. Downstream consumers have access to
                             // authentication state via AuthTracker if needed. The execution client's
                             // Authenticated handler only logs at debug level (no critical logic).
-                            continue;
                         }
                         Some(msg) => {
                             if handler.send(msg).is_err() {
@@ -740,8 +738,8 @@ impl OKXWebSocketClient {
         let auth_message = OKXAuthentication {
             op: "login",
             args: vec![OKXAuthenticationArg {
-                api_key: credential.api_key.to_string(),
-                passphrase: credential.api_passphrase.clone(),
+                api_key: credential.api_key().to_string(),
+                passphrase: credential.api_passphrase().to_string(),
                 timestamp,
                 sign: signature,
             }],

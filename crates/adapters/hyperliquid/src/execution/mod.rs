@@ -21,19 +21,17 @@ use std::{
     time::{Duration, Instant},
 };
 
-use ahash::AHashSet;
 use anyhow::Context;
 use async_trait::async_trait;
 use nautilus_common::{
+    cache::fifo::FifoCache,
     clients::ExecutionClient,
+    enums::LogColor,
     live::{runner::get_exec_event_sender, runtime::get_runtime},
-    messages::{
-        ExecutionEvent, ExecutionReport as NautilusExecutionReport,
-        execution::{
-            BatchCancelOrders, CancelAllOrders, CancelOrder, GenerateFillReports,
-            GenerateOrderStatusReport, GenerateOrderStatusReports, GeneratePositionStatusReports,
-            ModifyOrder, QueryAccount, QueryOrder, SubmitOrder, SubmitOrderList,
-        },
+    messages::execution::{
+        BatchCancelOrders, CancelAllOrders, CancelOrder, GenerateFillReports,
+        GenerateOrderStatusReport, GenerateOrderStatusReports, GeneratePositionStatusReports,
+        ModifyOrder, QueryAccount, QueryOrder, SubmitOrder, SubmitOrderList,
     },
 };
 use nautilus_core::{
@@ -43,31 +41,33 @@ use nautilus_core::{
 use nautilus_live::{ExecutionClientCore, ExecutionEventEmitter};
 use nautilus_model::{
     accounts::AccountAny,
-    enums::{AccountType, OmsType, OrderStatus, OrderType},
+    enums::{AccountType, OmsType, OrderSide, OrderStatus, OrderType},
     identifiers::{AccountId, ClientId, ClientOrderId, Venue},
     orders::{Order, any::OrderAny},
     reports::{ExecutionMassStatus, FillReport, OrderStatusReport, PositionStatusReport},
     types::{AccountBalance, MarginBalance},
 };
+use rust_decimal::Decimal;
 use tokio::task::JoinHandle;
 use ustr::Ustr;
 
 use crate::{
     common::{
-        consts::{HYPERLIQUID_VENUE, NAUTILUS_BUILDER_FEE_ADDRESS, NAUTILUS_BUILDER_FEE_TENTHS_BP},
+        builder_fee::{resolve_builder_fee, resolve_builder_fee_batch},
+        consts::{HYPERLIQUID_VENUE, NAUTILUS_BUILDER_FEE_TAKER_TENTHS_BP},
         credential::Secrets,
         parse::{
-            client_order_id_to_cancel_request_with_asset, extract_error_message,
-            is_response_successful, order_to_hyperliquid_request_with_asset,
-            parse_account_balances_and_margins,
+            client_order_id_to_cancel_request_with_asset, derive_market_order_price,
+            extract_error_message, extract_inner_error, extract_inner_errors, normalize_price,
+            order_to_hyperliquid_request_with_asset, parse_account_balances_and_margins,
         },
     },
     config::HyperliquidExecClientConfig,
     http::{
         client::HyperliquidHttpClient,
         models::{
-            ClearinghouseState, Cloid, HyperliquidExecAction, HyperliquidExecBuilderFee,
-            HyperliquidExecGrouping, HyperliquidExecModifyOrderRequest,
+            ClearinghouseState, Cloid, HyperliquidExecAction, HyperliquidExecGrouping,
+            HyperliquidExecModifyOrderRequest,
         },
     },
     websocket::{ExecutionReport, NautilusWsMessage, client::HyperliquidWebSocketClient},
@@ -83,6 +83,7 @@ pub struct HyperliquidExecutionClient {
     ws_client: HyperliquidWebSocketClient,
     pending_tasks: Mutex<Vec<JoinHandle<()>>>,
     ws_stream_handle: Mutex<Option<JoinHandle<()>>>,
+    fee_refresh_handle: Mutex<Option<JoinHandle<()>>>,
 }
 
 impl HyperliquidExecutionClient {
@@ -155,15 +156,12 @@ impl HyperliquidExecutionClient {
         core: ExecutionClientCore,
         config: HyperliquidExecClientConfig,
     ) -> anyhow::Result<Self> {
-        if !config.has_credentials() {
-            anyhow::bail!("Hyperliquid execution client requires private key");
-        }
-
-        let secrets = Secrets::from_json(&format!(
-            r#"{{"privateKey": "{}", "isTestnet": {}}}"#,
-            config.private_key, config.is_testnet
-        ))
-        .context("failed to create secrets from private key")?;
+        let secrets = Secrets::resolve(
+            config.private_key.as_deref(),
+            config.vault_address.as_deref(),
+            config.is_testnet,
+        )
+        .context("Hyperliquid execution client requires private key")?;
 
         let mut http_client = HyperliquidHttpClient::with_secrets(
             &secrets,
@@ -174,9 +172,17 @@ impl HyperliquidExecutionClient {
 
         http_client.set_account_id(core.account_id);
 
-        // Create WebSocket client for order/execution updates
+        // Apply URL overrides from config (used for testing with mock servers)
+        if let Some(url) = &config.base_url_http {
+            http_client.set_base_info_url(url.clone());
+        }
+        if let Some(url) = &config.base_url_exchange {
+            http_client.set_base_exchange_url(url.clone());
+        }
+
+        let ws_url = config.base_url_ws.clone();
         let ws_client =
-            HyperliquidWebSocketClient::new(None, config.is_testnet, Some(core.account_id));
+            HyperliquidWebSocketClient::new(ws_url, config.is_testnet, Some(core.account_id));
 
         let clock = get_atomic_clock_realtime();
         let emitter = ExecutionEventEmitter::new(
@@ -196,6 +202,7 @@ impl HyperliquidExecutionClient {
             ws_client,
             pending_tasks: Mutex::new(Vec::new()),
             ws_stream_handle: Mutex::new(None),
+            fee_refresh_handle: Mutex::new(None),
         })
     }
 
@@ -326,6 +333,69 @@ impl HyperliquidExecutionClient {
             handle.abort();
         }
     }
+
+    async fn fetch_and_update_builder_fee(&self) -> anyhow::Result<(f64, f64, u32, u32)> {
+        let account_address = self.get_account_address()?;
+        fetch_and_update_builder_fee(&self.http_client, &account_address).await
+    }
+}
+
+async fn fetch_and_update_builder_fee(
+    http_client: &HyperliquidHttpClient,
+    account_address: &str,
+) -> anyhow::Result<(f64, f64, u32, u32)> {
+    let json = http_client
+        .info_user_fees(account_address)
+        .await
+        .context("failed to query userFees")?;
+
+    let user_add_rate = json
+        .get("userAddRate")
+        .and_then(|v| v.as_str())
+        .and_then(|s| s.parse::<f64>().ok())
+        .ok_or_else(|| anyhow::anyhow!("missing or invalid userAddRate in response"))?;
+
+    let user_cross_rate = json
+        .get("userCrossRate")
+        .and_then(|v| v.as_str())
+        .and_then(|s| s.parse::<f64>().ok())
+        .ok_or_else(|| anyhow::anyhow!("missing or invalid userCrossRate in response"))?;
+
+    let (old, new) = http_client.update_builder_maker_fee(user_add_rate);
+    Ok((user_add_rate, user_cross_rate, old, new))
+}
+
+fn fmt_pct(value: f64) -> String {
+    let s = format!("{value:.6}");
+    let s = s.trim_end_matches('0');
+    s.trim_end_matches('.').to_string()
+}
+
+fn fmt_bp(bp: f64) -> String {
+    format!("{bp:.1} bp ({}%)", fmt_pct(bp / 100.0))
+}
+
+fn log_fee_summary(maker_rate: f64, taker_rate: f64, builder_maker_tenths_bp: u32) {
+    let hl_maker_bp = maker_rate * 10_000.0;
+    let hl_taker_bp = taker_rate * 10_000.0;
+    let builder_maker_bp = builder_maker_tenths_bp as f64 / 10.0;
+    let builder_taker_bp = NAUTILUS_BUILDER_FEE_TAKER_TENTHS_BP as f64 / 10.0;
+    let total_maker_bp = hl_maker_bp + builder_maker_bp;
+    let total_taker_bp = hl_taker_bp + builder_taker_bp;
+    log::info!(
+        color = LogColor::Blue as u8;
+        "HL maker: {}, builder maker: {}, total maker: {}",
+        fmt_bp(hl_maker_bp),
+        fmt_bp(builder_maker_bp),
+        fmt_bp(total_maker_bp),
+    );
+    log::info!(
+        color = LogColor::Blue as u8;
+        "HL taker: {}, builder taker: {}, total taker: {}",
+        fmt_bp(hl_taker_bp),
+        fmt_bp(builder_taker_bp),
+        fmt_bp(total_taker_bp),
+    );
 }
 
 #[async_trait(?Send)]
@@ -395,12 +465,14 @@ impl ExecutionClient for HyperliquidExecutionClient {
 
         log::info!("Stopping Hyperliquid execution client");
 
-        // Stop WebSocket stream
+        if let Some(handle) = self.fee_refresh_handle.lock().expect(MUTEX_POISONED).take() {
+            handle.abort();
+        }
+
         if let Some(handle) = self.ws_stream_handle.lock().expect(MUTEX_POISONED).take() {
             handle.abort();
         }
 
-        // Abort any pending tasks
         self.abort_pending_tasks();
 
         // Disconnect WebSocket
@@ -455,7 +527,13 @@ impl ExecutionClient for HyperliquidExecutionClient {
         };
 
         // Validate order conversion before marking as submitted
-        let hyperliquid_order = match order_to_hyperliquid_request_with_asset(&order, asset) {
+        let price_decimals = http_client.get_price_precision(&symbol).unwrap_or(2);
+        let mut hyperliquid_order = match order_to_hyperliquid_request_with_asset(
+            &order,
+            asset,
+            price_decimals,
+            self.config.normalize_prices,
+        ) {
             Ok(req) => req,
             Err(e) => {
                 self.emitter
@@ -463,6 +541,39 @@ impl ExecutionClient for HyperliquidExecutionClient {
                 return Ok(());
             }
         };
+
+        // Market orders need a limit price derived from the cached quote
+        if order.order_type() == OrderType::Market {
+            let instrument_id = order.instrument_id();
+            let cache = self.core.cache();
+            match cache.quote(&instrument_id) {
+                Some(quote) => {
+                    let is_buy = order.order_side() == OrderSide::Buy;
+                    hyperliquid_order.price =
+                        derive_market_order_price(quote, is_buy, price_decimals);
+                }
+                None => {
+                    self.emitter.emit_order_denied(
+                        &order,
+                        &format!(
+                            "No cached quote for {instrument_id}: \
+                             subscribe to quote data before submitting market orders"
+                        ),
+                    );
+                    return Ok(());
+                }
+            }
+        }
+
+        log::info!(
+            "Submitting order: id={}, type={:?}, side={:?}, price={}, size={}, kind={:?}",
+            order.client_order_id(),
+            order.order_type(),
+            order.order_side(),
+            hyperliquid_order.price,
+            hyperliquid_order.size,
+            hyperliquid_order.kind,
+        );
 
         // Cache cloid mapping before emitting submitted so WS handler
         // can resolve order/fill reports back to this client_order_id
@@ -472,10 +583,11 @@ impl ExecutionClient for HyperliquidExecutionClient {
 
         self.emitter.emit_order_submitted(&order);
 
-        let builder_fee = HyperliquidExecBuilderFee {
-            address: NAUTILUS_BUILDER_FEE_ADDRESS.to_string(),
-            fee_tenths_bp: NAUTILUS_BUILDER_FEE_TENTHS_BP,
-        };
+        let builder = resolve_builder_fee(
+            &symbol,
+            order.is_post_only(),
+            self.http_client.builder_maker_tenths_bp(),
+        );
 
         let emitter = self.emitter.clone();
         let clock = self.clock;
@@ -486,13 +598,20 @@ impl ExecutionClient for HyperliquidExecutionClient {
             let action = HyperliquidExecAction::Order {
                 orders: vec![hyperliquid_order],
                 grouping: HyperliquidExecGrouping::Na,
-                builder: Some(builder_fee),
+                builder,
             };
 
             match http_client.post_action_exec(&action).await {
                 Ok(response) => {
-                    if is_response_successful(&response) {
-                        log::info!("Order submitted successfully: {response:?}");
+                    if response.is_ok() {
+                        if let Some(inner_error) = extract_inner_error(&response) {
+                            log::warn!("Order submission rejected by exchange: {inner_error}");
+                            let ts = clock.get_time_ns();
+                            emitter.emit_order_rejected(&order, &inner_error, ts, false);
+                            ws_client.remove_cloid_mapping(&cloid_hex);
+                        } else {
+                            log::info!("Order submitted successfully: {response:?}");
+                        }
                     } else {
                         let error_msg = extract_error_message(&response);
                         log::warn!("Order submission rejected by exchange: {error_msg}");
@@ -540,7 +659,14 @@ impl ExecutionClient for HyperliquidExecutionClient {
                 }
             };
 
-            match order_to_hyperliquid_request_with_asset(order, asset) {
+            let price_decimals = http_client.get_price_precision(&symbol).unwrap_or(2);
+
+            match order_to_hyperliquid_request_with_asset(
+                order,
+                asset,
+                price_decimals,
+                self.config.normalize_prices,
+            ) {
                 Ok(req) => {
                     hyperliquid_orders.push(req);
                     valid_orders.push(order.clone());
@@ -564,10 +690,14 @@ impl ExecutionClient for HyperliquidExecutionClient {
             self.emitter.emit_order_submitted(order);
         }
 
-        let builder_fee = HyperliquidExecBuilderFee {
-            address: NAUTILUS_BUILDER_FEE_ADDRESS.to_string(),
-            fee_tenths_bp: NAUTILUS_BUILDER_FEE_TENTHS_BP,
-        };
+        let order_props: Vec<(String, bool)> = valid_orders
+            .iter()
+            .map(|o| (o.instrument_id().symbol.to_string(), o.is_post_only()))
+            .collect();
+        let batch_refs: Vec<(&str, bool)> =
+            order_props.iter().map(|(s, p)| (s.as_str(), *p)).collect();
+        let builder =
+            resolve_builder_fee_batch(&batch_refs, self.http_client.builder_maker_tenths_bp());
 
         let emitter = self.emitter.clone();
         let clock = self.clock;
@@ -581,14 +711,32 @@ impl ExecutionClient for HyperliquidExecutionClient {
             let action = HyperliquidExecAction::Order {
                 orders: hyperliquid_orders,
                 grouping: HyperliquidExecGrouping::Na,
-                builder: Some(builder_fee),
+                builder,
             };
             match http_client.post_action_exec(&action).await {
                 Ok(response) => {
-                    if is_response_successful(&response) {
-                        log::info!("Order list submitted successfully: {response:?}");
+                    if response.is_ok() {
+                        let inner_errors = extract_inner_errors(&response);
+                        if inner_errors.iter().any(|e| e.is_some()) {
+                            let ts = clock.get_time_ns();
+                            for (i, error) in inner_errors.iter().enumerate() {
+                                if let Some(error_msg) = error {
+                                    if let Some(order) = valid_orders.get(i) {
+                                        log::warn!(
+                                            "Order {} rejected by exchange: {error_msg}",
+                                            order.client_order_id(),
+                                        );
+                                        emitter.emit_order_rejected(order, error_msg, ts, false);
+                                    }
+                                    if let Some(cloid_hex) = cloid_hexes.get(i) {
+                                        ws_client.remove_cloid_mapping(cloid_hex);
+                                    }
+                                }
+                            }
+                        } else {
+                            log::info!("Order list submitted successfully: {response:?}");
+                        }
                     } else {
-                        // Hyperliquid batch endpoint rejects all-or-nothing
                         let error_msg = extract_error_message(&response);
                         log::warn!("Order list submission rejected by exchange: {error_msg}");
                         let ts = clock.get_time_ns();
@@ -638,6 +786,7 @@ impl ExecutionClient for HyperliquidExecutionClient {
         let price = cmd.price;
         let quantity = cmd.quantity;
         let symbol = cmd.instrument_id.symbol.to_string();
+        let should_normalize = self.config.normalize_prices;
 
         self.spawn_task("modify_order", async move {
             let asset = match http_client.get_asset_index(&symbol) {
@@ -650,11 +799,21 @@ impl ExecutionClient for HyperliquidExecutionClient {
                 }
             };
 
+            let normalized_price = price.map(|p| {
+                let raw: Decimal = (*p).into();
+                if should_normalize {
+                    let decimals = http_client.get_price_precision(&symbol).unwrap_or(2);
+                    normalize_price(raw, decimals).normalize()
+                } else {
+                    raw.normalize()
+                }
+            });
+
             // Build typed modify request with new price and/or quantity
             let modify_request = HyperliquidExecModifyOrderRequest {
                 asset,
                 oid,
-                price: price.map(|p| (*p).into()),
+                price: normalized_price,
                 size: quantity.map(|q| (*q).into()),
                 reduce_only: None,
                 kind: None,
@@ -666,18 +825,19 @@ impl ExecutionClient for HyperliquidExecutionClient {
 
             match http_client.post_action_exec(&action).await {
                 Ok(response) => {
-                    if is_response_successful(&response) {
-                        log::info!("Order modified successfully: {response:?}");
-                        // Order update events will be generated from WebSocket updates
+                    if response.is_ok() {
+                        if let Some(inner_error) = extract_inner_error(&response) {
+                            log::warn!("Order modification rejected by exchange: {inner_error}");
+                        } else {
+                            log::info!("Order modified successfully: {response:?}");
+                        }
                     } else {
                         let error_msg = extract_error_message(&response);
                         log::warn!("Order modification rejected by exchange: {error_msg}");
-                        // Order modify rejected events will be generated from WebSocket updates
                     }
                 }
                 Err(e) => {
                     log::warn!("Order modification HTTP request failed: {e}");
-                    // WebSocket reconciliation will handle recovery
                 }
             }
 
@@ -713,8 +873,12 @@ impl ExecutionClient for HyperliquidExecutionClient {
 
             match http_client.post_action_exec(&action).await {
                 Ok(response) => {
-                    if is_response_successful(&response) {
-                        log::info!("Order cancelled successfully: {response:?}");
+                    if response.is_ok() {
+                        if let Some(inner_error) = extract_inner_error(&response) {
+                            log::warn!("Order cancellation rejected by exchange: {inner_error}");
+                        } else {
+                            log::info!("Order cancelled successfully: {response:?}");
+                        }
                     } else {
                         let error_msg = extract_error_message(&response);
                         log::warn!("Order cancellation rejected by exchange: {error_msg}");
@@ -849,7 +1013,6 @@ impl ExecutionClient for HyperliquidExecutionClient {
     fn query_account(&self, cmd: &QueryAccount) -> anyhow::Result<()> {
         log::debug!("Querying account: {cmd:?}");
 
-        // Use existing infrastructure to refresh account state
         let runtime = get_runtime();
         runtime.block_on(async {
             if let Err(e) = self.refresh_account_state().await {
@@ -863,7 +1026,6 @@ impl ExecutionClient for HyperliquidExecutionClient {
     fn query_order(&self, cmd: &QueryOrder) -> anyhow::Result<()> {
         log::debug!("Querying order: {cmd:?}");
 
-        // Get venue order ID from cache
         let cache = self.core.cache();
         let venue_order_id = cache.venue_order_id(&cmd.client_order_id);
 
@@ -879,7 +1041,6 @@ impl ExecutionClient for HyperliquidExecutionClient {
         };
         drop(cache);
 
-        // Parse venue order ID to u64
         let oid = match u64::from_str(venue_order_id.as_ref()) {
             Ok(id) => id,
             Err(e) => {
@@ -926,6 +1087,62 @@ impl ExecutionClient for HyperliquidExecutionClient {
         self.refresh_account_state().await?;
         self.await_account_registered(30.0).await?;
 
+        // Fetch initial builder fee tier from HL
+        match self.fetch_and_update_builder_fee().await {
+            Ok((maker_rate, taker_rate, _old, new)) => {
+                log_fee_summary(maker_rate, taker_rate, new);
+            }
+            Err(e) => {
+                let bp = self.http_client.builder_maker_tenths_bp() as f64 / 10.0;
+                log::warn!(
+                    "Failed to query userFees, \
+                     retaining builder maker fee: {}: {e}",
+                    fmt_bp(bp),
+                );
+            }
+        }
+
+        // Spawn periodic builder fee refresh if configured
+        if let Some(mins) = self.config.builder_fee_refresh_mins {
+            anyhow::ensure!(mins > 0, "builder_fee_refresh_mins must be > 0");
+            let http_client = self.http_client.clone();
+            let account_address = self.get_account_address()?;
+            let interval = Duration::from_mins(mins);
+
+            let handle = get_runtime().spawn(async move {
+                let mut ticker = tokio::time::interval(interval);
+                ticker.tick().await; // Skip immediate first tick
+
+                loop {
+                    ticker.tick().await;
+
+                    let result = fetch_and_update_builder_fee(&http_client, &account_address).await;
+
+                    match result {
+                        Ok((maker_rate, taker_rate, old, new)) => {
+                            if old == new {
+                                let bp = new as f64 / 10.0;
+                                log::trace!("Builder maker fee unchanged: {bp:.1} bp");
+                            } else {
+                                log_fee_summary(maker_rate, taker_rate, new);
+                            }
+                        }
+                        Err(e) => {
+                            let bp = http_client.builder_maker_tenths_bp() as f64 / 10.0;
+                            log::warn!(
+                                "Failed to query userFees, \
+                                 retaining builder maker fee: {}: {e}",
+                                fmt_bp(bp),
+                            );
+                        }
+                    }
+                }
+            });
+
+            *self.fee_refresh_handle.lock().expect(MUTEX_POISONED) = Some(handle);
+            log::info!("Builder fee refresh scheduled every {mins}m");
+        }
+
         self.core.set_connected();
 
         log::info!("Connected: client_id={}", self.core.client_id);
@@ -938,6 +1155,11 @@ impl ExecutionClient for HyperliquidExecutionClient {
         }
 
         log::info!("Disconnecting Hyperliquid execution client");
+
+        // Abort fee refresh task
+        if let Some(handle) = self.fee_refresh_handle.lock().expect(MUTEX_POISONED).take() {
+            handle.abort();
+        }
 
         // Disconnect WebSocket
         self.ws_client.disconnect().await?;
@@ -1148,10 +1370,19 @@ impl HyperliquidExecutionClient {
             .await?;
         log::info!("Subscribed to Hyperliquid execution updates for {subscription_address}");
 
+        // Transfer task handle to original so disconnect() can await it
+        if let Some(handle) = ws_client.take_task_handle() {
+            self.ws_client.set_task_handle(handle);
+        }
+
+        let emitter = self.emitter.clone();
         let runtime = get_runtime();
         let handle = runtime.spawn(async move {
-            // Orders with FILLED status awaiting their final fill
-            let mut pending_filled: AHashSet<ClientOrderId> = AHashSet::new();
+            // Deferred cloid cleanup for FILLED orders. We keep the
+            // mapping alive until a fill arrives after the FILLED
+            // status so partial fills don't lose client_order_id.
+            // Auto-eviction at capacity bounds orphaned entries.
+            let mut pending_filled: FifoCache<ClientOrderId, 10_000> = FifoCache::new();
 
             loop {
                 let event = ws_client.next_event().await;
@@ -1160,82 +1391,50 @@ impl HyperliquidExecutionClient {
                     Some(msg) => {
                         match msg {
                             NautilusWsMessage::ExecutionReports(reports) => {
-                                let mut terminal_ids: Vec<ClientOrderId> = Vec::new();
-                                let mut filled_ids: Vec<ClientOrderId> = Vec::new();
-                                let mut fill_ids: Vec<ClientOrderId> = Vec::new();
+                                let mut immediate_cleanup: Vec<ClientOrderId> = Vec::new();
 
                                 for report in &reports {
-                                    match report {
-                                        ExecutionReport::Order(order_report) => {
-                                            if let Some(id) = order_report.client_order_id
-                                                && !order_report.order_status.is_open()
-                                            {
-                                                if order_report.order_status
-                                                    == OrderStatus::Filled
-                                                {
-                                                    filled_ids.push(id);
-                                                } else {
-                                                    terminal_ids.push(id);
-                                                }
-                                            }
+                                    if let ExecutionReport::Order(order_report) = report
+                                        && let Some(id) = order_report.client_order_id
+                                        && !order_report.order_status.is_open()
+                                    {
+                                        if order_report.order_status == OrderStatus::Filled {
+                                            pending_filled.add(id);
+                                        } else {
+                                            immediate_cleanup.push(id);
                                         }
-                                        ExecutionReport::Fill(fill_report) => {
-                                            if let Some(id) = fill_report.client_order_id {
-                                                fill_ids.push(id);
-                                            }
-                                        }
+                                    }
+                                }
+
+                                for report in &reports {
+                                    if let ExecutionReport::Fill(fill_report) = report
+                                        && let Some(id) = fill_report.client_order_id
+                                        && pending_filled.contains(&id)
+                                    {
+                                        pending_filled.remove(&id);
+                                        immediate_cleanup.push(id);
                                     }
                                 }
 
                                 for report in reports {
-                                    dispatch_execution_report(report);
-                                }
-
-                                for id in terminal_ids {
-                                    let cloid = Cloid::from_client_order_id(id);
-                                    ws_client.remove_cloid_mapping(&Ustr::from(
-                                        &cloid.to_hex(),
-                                    ));
-                                }
-
-                                // Track FILLED status for deferred cleanup
-                                for id in filled_ids {
-                                    pending_filled.insert(id);
-                                }
-
-                                // Clean up only after FILLED has been observed
-                                for id in fill_ids {
-                                    if pending_filled.remove(&id) {
-                                        let cloid = Cloid::from_client_order_id(id);
-                                        ws_client.remove_cloid_mapping(&Ustr::from(
-                                            &cloid.to_hex(),
-                                        ));
+                                    match report {
+                                        ExecutionReport::Order(r) => {
+                                            emitter.send_order_status_report(r);
+                                        }
+                                        ExecutionReport::Fill(r) => {
+                                            emitter.send_fill_report(r);
+                                        }
                                     }
                                 }
-                            }
-                            NautilusWsMessage::Reconnected => {
-                                log::info!("WebSocket reconnected, resubscribing to user channels");
 
-                                if let Err(e) = ws_client
-                                    .subscribe_order_updates(&subscription_address)
-                                    .await
-                                {
-                                    log::error!(
-                                        "Failed to resubscribe to order updates after reconnect: {e}"
-                                    );
+                                for id in immediate_cleanup {
+                                    let cloid = Cloid::from_client_order_id(id);
+                                    ws_client.remove_cloid_mapping(&Ustr::from(&cloid.to_hex()));
                                 }
-
-                                if let Err(e) = ws_client
-                                    .subscribe_user_events(&subscription_address)
-                                    .await
-                                {
-                                    log::error!(
-                                        "Failed to resubscribe to user events after reconnect: {e}"
-                                    );
-                                }
-
-                                log::info!("Resubscribed to execution channels");
                             }
+                            // Reconnected is handled by WS client internally
+                            // (resubscribe_all) and never forwarded here
+                            NautilusWsMessage::Reconnected => {}
                             NautilusWsMessage::Error(e) => {
                                 log::error!("WebSocket error: {e}");
                             }
@@ -1263,20 +1462,35 @@ impl HyperliquidExecutionClient {
     }
 }
 
-fn dispatch_execution_report(report: ExecutionReport) {
-    let sender = get_exec_event_sender();
-    match report {
-        ExecutionReport::Order(order_report) => {
-            let exec_report = NautilusExecutionReport::Order(Box::new(order_report));
-            if let Err(e) = sender.send(ExecutionEvent::Report(exec_report)) {
-                log::warn!("Failed to send order status report: {e}");
-            }
-        }
-        ExecutionReport::Fill(fill_report) => {
-            let exec_report = NautilusExecutionReport::Fill(Box::new(fill_report));
-            if let Err(e) = sender.send(ExecutionEvent::Report(exec_report)) {
-                log::warn!("Failed to send fill report: {e}");
-            }
-        }
+#[cfg(test)]
+mod tests {
+    use rstest::rstest;
+
+    use super::*;
+
+    #[rstest]
+    #[case(0.015, "0.015")]
+    #[case(0.004, "0.004")]
+    #[case(0.019, "0.019")]
+    #[case(0.01, "0.01")]
+    #[case(0.1, "0.1")]
+    #[case(1.0, "1")]
+    #[case(0.0, "0")]
+    #[case(0.045, "0.045")]
+    #[case(0.055, "0.055")]
+    fn test_fmt_pct(#[case] value: f64, #[case] expected: &str) {
+        assert_eq!(fmt_pct(value), expected);
+    }
+
+    #[rstest]
+    #[case(1.5, "1.5 bp (0.015%)")]
+    #[case(0.4, "0.4 bp (0.004%)")]
+    #[case(1.9, "1.9 bp (0.019%)")]
+    #[case(1.0, "1.0 bp (0.01%)")]
+    #[case(0.0, "0.0 bp (0%)")]
+    #[case(3.5, "3.5 bp (0.035%)")]
+    #[case(4.5, "4.5 bp (0.045%)")]
+    fn test_fmt_bp(#[case] bp: f64, #[case] expected: &str) {
+        assert_eq!(fmt_bp(bp), expected);
     }
 }

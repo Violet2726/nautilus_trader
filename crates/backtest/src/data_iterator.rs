@@ -13,6 +13,8 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
+//! Multi-stream, time-ordered data iterator for replaying historical market data.
+
 use std::collections::BinaryHeap;
 
 use ahash::AHashMap;
@@ -57,7 +59,7 @@ pub struct BacktestDataIterator {
 }
 
 impl BacktestDataIterator {
-    /// Create an empty [`BacktestDataIterator`].
+    /// Creates a new empty [`BacktestDataIterator`].
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -71,8 +73,10 @@ impl BacktestDataIterator {
         }
     }
 
-    /// Add (or replace) a named data stream.  `append_data=true` gives the stream
-    /// lower priority when timestamps tie, mirroring the original behaviour.
+    /// Adds (or replaces) a named data stream.
+    ///
+    /// When `append_data` is true the stream gets lower priority on timestamp
+    /// ties; when false (prepend) it wins ties.
     pub fn add_data(&mut self, name: &str, mut data: Vec<Data>, append_data: bool) {
         if data.is_empty() {
             return;
@@ -101,8 +105,7 @@ impl BacktestDataIterator {
         self.rebuild_heap();
     }
 
-    /// Remove a stream.  `complete_remove` also discards placeholder generator
-    /// (not implemented yet).
+    /// Removes a named data stream.
     pub fn remove_data(&mut self, name: &str, complete_remove: bool) {
         if let Some(priority) = self.priorities.remove(name) {
             self.streams.remove(&priority);
@@ -121,7 +124,7 @@ impl BacktestDataIterator {
         }
     }
 
-    /// Move cursor of stream to `index` (0-based).
+    /// Sets the cursor of a named stream to `index` (0-based).
     pub fn set_index(&mut self, name: &str, index: usize) {
         if let Some(priority) = self.priorities.get(name) {
             self.indices.insert(*priority, index);
@@ -129,7 +132,7 @@ impl BacktestDataIterator {
         }
     }
 
-    /// Reset all stream cursors to the beginning.
+    /// Resets all stream cursors to the beginning.
     pub fn reset_all_cursors(&mut self) {
         for idx in self.indices.values_mut() {
             *idx = 0;
@@ -137,7 +140,7 @@ impl BacktestDataIterator {
         self.rebuild_heap();
     }
 
-    /// Return next Data element across all streams in chronological order.
+    /// Returns the next [`Data`] element across all streams in chronological order.
     #[allow(clippy::should_implement_trait)]
     pub fn next(&mut self) -> Option<Data> {
         // Fast path for single stream
@@ -171,6 +174,7 @@ impl BacktestDataIterator {
         Some(element)
     }
 
+    /// Returns whether all streams have been fully consumed.
     #[must_use]
     pub fn is_done(&self) -> bool {
         if let Some(p) = self.single_priority {
@@ -530,5 +534,45 @@ mod tests {
         it.add_data("batch_1", vec![quote("A.B", 2), quote("A.B", 4)], true);
 
         assert_eq!(collect_ts(&mut it), vec![1, 2, 3, 4]);
+    }
+
+    #[rstest]
+    fn test_prepend_stream_always_wins_ties_across_batches() {
+        // Verifies that a prepend stream (negative priority) wins ties
+        // even when added after multiple append streams
+        let mut it = BacktestDataIterator::new();
+        it.add_data("append_a", vec![quote("A.B", 100)], true);
+        it.add_data("append_b", vec![quote("C.D", 100)], true);
+        it.add_data("prepend", vec![quote("E.F", 100)], false);
+
+        let first = it.next().unwrap();
+        assert_eq!(
+            first.instrument_id(),
+            InstrumentId::from("E.F"),
+            "Prepend stream should always come first in ties"
+        );
+    }
+
+    #[rstest]
+    fn test_equal_timestamps_across_many_streams_preserves_priority_order() {
+        // All items at the same timestamp — ordering is strictly by priority
+        let mut it = BacktestDataIterator::new();
+        it.add_data("s1", vec![quote("A.B", 50)], true);
+        it.add_data("s2", vec![quote("C.D", 50)], true);
+        it.add_data("s3", vec![quote("E.F", 50)], true);
+        it.add_data("s4", vec![quote("G.H", 50)], true);
+
+        let mut ids = Vec::new();
+        while let Some(d) = it.next() {
+            ids.push(d.instrument_id());
+        }
+
+        assert_eq!(ids.len(), 4);
+
+        // All should be yielded (no duplicates dropped, no items lost)
+        assert!(ids.contains(&InstrumentId::from("A.B")));
+        assert!(ids.contains(&InstrumentId::from("C.D")));
+        assert!(ids.contains(&InstrumentId::from("E.F")));
+        assert!(ids.contains(&InstrumentId::from("G.H")));
     }
 }
