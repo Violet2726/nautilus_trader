@@ -35,7 +35,11 @@
 
 pub mod config;
 pub mod core;
+pub mod iceberg;
+pub mod is;
+pub mod pov;
 pub mod twap;
+pub mod vwap;
 
 pub use core::{ExecutionAlgorithmCore, StrategyEventHandlers};
 
@@ -62,7 +66,11 @@ use nautilus_model::{
     orders::{LimitOrder, MarketOrder, MarketToLimitOrder, Order, OrderAny, OrderList},
     types::{Price, Quantity},
 };
+pub use iceberg::{IcebergAlgorithm, IcebergAlgorithmConfig};
+pub use is::{IsAlgorithm, IsAlgorithmConfig};
+pub use pov::{PovAlgorithm, PovAlgorithmConfig};
 pub use twap::{TwapAlgorithm, TwapAlgorithmConfig};
+pub use vwap::{VwapAlgorithm, VwapAlgorithmConfig};
 use ustr::Ustr;
 
 /// 用于在 NautilusTrader 中实现执行算法的核心 trait。
