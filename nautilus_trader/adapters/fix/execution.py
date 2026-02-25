@@ -58,6 +58,21 @@ from nautilus_trader.model.objects import Price
 from nautilus_trader.model.objects import Quantity
 from nautilus_trader.model.orders.base import Order
 
+# Nautilus Venue -> XtQuant Market Code
+VENUE_TO_MARKET = {
+    "SSE": "SH",     # 上交所
+    "SZSE": "SZ",    # 深交所
+    "BSE": "BJ",     # 北交所
+    "SHFE": "SF",    # 上期所
+    "DCE": "DF",     # 大商所
+    "CZCE": "ZF",    # 郑商所
+    "CFFEX": "IF",   # 中金所
+    "INE": "INE",    # 能源中心
+    "GFEX": "GF",    # 广期所
+}
+
+MARKET_TO_VENUE = {v: k for k, v in VENUE_TO_MARKET.items()}
+
 
 def _parse_fix_kv(raw: str) -> dict[str, str]:
     if "\x01" in raw:
@@ -74,6 +89,45 @@ def _parse_fix_kv(raw: str) -> dict[str, str]:
         k, v = p.split("=", 1)
         out[k] = v
     return out
+
+
+def _nt_to_fix_symbol(instrument_id: InstrumentId) -> str:
+    symbol = instrument_id.symbol.value
+    venue_str = instrument_id.venue.value
+    if venue_str in VENUE_TO_MARKET:
+        market = VENUE_TO_MARKET[venue_str]
+        return f"{symbol}.{market}"
+
+    if symbol.startswith("6"):
+        return f"{symbol}.SH"
+    elif symbol.startswith(("0", "3")):
+        return f"{symbol}.SZ"
+    elif symbol.startswith(("8", "4")):
+        return f"{symbol}.BJ"
+    elif len(symbol) <= 4:
+        return f"{symbol}.IF"
+    return f"{symbol}.SH"
+
+
+def _map_fix_symbol_to_nt(symbol: str) -> str:
+    if not symbol:
+        return symbol
+
+    if "." in symbol:
+        code, xt_market = symbol.split(".", 1)
+        if xt_market in MARKET_TO_VENUE:
+            return f"{code}.{MARKET_TO_VENUE[xt_market]}"
+        return symbol
+
+    if symbol.startswith("6"):
+        return f"{symbol}.SSE"
+    elif symbol.startswith(("0", "3")):
+        return f"{symbol}.SZSE"
+    elif symbol.startswith(("8", "4")):
+        return f"{symbol}.BSE"
+    elif len(symbol) <= 4:
+        return f"{symbol}.CFFEX"
+    return f"{symbol}.SSE"
 
 
 def _parse_utc_datetime_ns(value: str | None) -> int | None:
@@ -358,6 +412,7 @@ class FixExecutionClient(LiveExecutionClient):
             instrument_id=order.instrument_id,
             client_order_id=order.client_order_id,
             venue_order_id=venue_order_id,
+            venue_position_id=None,
             trade_id=TradeId(exec_id),
             order_side=order.side,
             order_type=order.order_type,
@@ -450,7 +505,7 @@ class FixExecutionClient(LiveExecutionClient):
         opt_ype = 23 if order.side == OrderSide.BUY else 24
         pr_type = 11 if order.order_type == OrderType.LIMIT else 14
 
-        order_code = f"{order.instrument_id.symbol.value}.{order.instrument_id.venue.value}"
+        order_code = _nt_to_fix_symbol(order.instrument_id)
 
         price = order.price.as_double() if order.has_price else None
         volume = order.quantity.as_double()
@@ -463,7 +518,7 @@ class FixExecutionClient(LiveExecutionClient):
                 pr_type=pr_type,
                 price=price,
                 volume=volume,
-                user_order_id=order.client_order_id.to_str(),
+                user_order_id=order.client_order_id.value,
             )
 
         venue_order_id_str = await asyncio.to_thread(send_order)
@@ -792,7 +847,7 @@ class FixExecutionClient(LiveExecutionClient):
             venue_order_id_str = o.get("OrderID")
             if not symbol or not venue_order_id_str:
                 continue
-
+            symbol = _map_fix_symbol_to_nt(symbol)
             instrument_id = InstrumentId.from_str(symbol)
             self._ensure_instrument_cached(instrument_id)
 
