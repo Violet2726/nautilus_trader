@@ -4,30 +4,31 @@
 
 use std::{cell::UnsafeCell, rc::Rc};
 
-use nautilus_common::actor::{Actor, DataActor, data_actor::DataActorCore};
 use pyo3::prelude::*;
 
 use crate::algorithm::{
-    ExecutionAlgorithm, ExecutionAlgorithmConfig, ExecutionAlgorithmCore, TwapAlgorithm,
-    TwapAlgorithmConfig,
+    ExecutionAlgorithmConfig, TwapAlgorithm, TwapAlgorithmConfig,
 };
 
 /// Inner state of PyTwapAlgorithm, shared between Python wrapper and Rust registries.
+#[derive(Debug)]
+#[allow(dead_code)]
 pub struct PyTwapAlgorithmInner {
-    core: TwapAlgorithm,
+    pub(crate) core: TwapAlgorithm,
     py_self: Option<Py<PyAny>>,
 }
 
 /// Python-facing wrapper for TwapAlgorithm.
 #[allow(non_camel_case_types)]
 #[pyo3::pyclass(module = "nautilus_trader.trading", name = "TwapAlgorithm", unsendable)]
+#[derive(Debug)]
 pub struct PyTwapAlgorithm {
     inner: Rc<UnsafeCell<PyTwapAlgorithmInner>>,
 }
 
 impl PyTwapAlgorithm {
     #[inline]
-    #[allow(unsafe_code)]
+    #[allow(unsafe_code, dead_code)]
     pub(crate) fn inner(&self) -> &PyTwapAlgorithmInner {
         unsafe { &*self.inner.get() }
     }
