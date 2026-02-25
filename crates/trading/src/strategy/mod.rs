@@ -16,11 +16,15 @@ pub mod config;
 pub mod core;
 
 pub use core::StrategyCore;
+use std::panic::{AssertUnwindSafe, catch_unwind};
 
+use ahash::AHashSet;
 pub use config::StrategyConfig;
 use indexmap::IndexMap;
 use nautilus_common::{
     actor::DataActor,
+    component::Component,
+    enums::ComponentState,
     logging::{EVT, RECV},
     messages::execution::{
         BatchCancelOrders, CancelAllOrders, CancelOrder, ModifyOrder, QueryAccount, QueryOrder,
@@ -66,6 +70,12 @@ use ustr::Ustr;
 /// 对其内部 [`StrategyCore`] 的访问，该核心处理与
 /// 交易引擎的集成。所有订单和持仓管理方法均作为默认实现提供。
 pub trait Strategy: DataActor {
+    /// 提供对内部 `StrategyCore` 的不可变访问。
+    ///
+    /// 此方法必须由用户的策略结构体实现，通常是
+    /// 返回其 `StrategyCore` 成员的引用。
+    fn core(&self) -> &StrategyCore;
+
     /// 提供对内部 `StrategyCore` 的可变访问。
     ///
     /// 此方法必须由用户的策略结构体实现，通常是
@@ -111,6 +121,16 @@ pub trait Strategy: DataActor {
         let strategy_id = StrategyId::from(core.actor_id().inner().as_str());
         let ts_init = core.clock().timestamp_ns();
 
+        let market_exit_tag = core.market_exit_tag;
+        let is_market_exit_order = order
+            .tags()
+            .is_some_and(|tags| tags.contains(&market_exit_tag));
+        if core.is_exiting && !order.is_reduce_only() && !is_market_exit_order {
+            self.deny_order(&order, Ustr::from("MARKET_EXIT_IN_PROGRESS"));
+            return Ok(());
+        }
+
+        let core = self.core_mut();
         let params = if params.is_empty() {
             None
         } else {
@@ -137,9 +157,7 @@ pub trait Strategy: DataActor {
             ts_init,
         );
 
-        let Some(manager) = &mut core.order_manager else {
-            anyhow::bail!("Strategy not registered: OrderManager missing");
-        };
+        let manager = core.order_manager();
 
         if matches!(order.emulation_trigger(), Some(trigger) if trigger != TriggerType::NoTrigger) {
             manager.send_emulator_command(TradingCommand::SubmitOrder(command));
@@ -160,15 +178,36 @@ pub trait Strategy: DataActor {
     /// 如果策略未注册、订单列表无效或订单列表提交失败，则返回错误。
     fn submit_order_list(
         &mut self,
-        order_list: OrderList,
+        mut orders: Vec<OrderAny>,
         position_id: Option<PositionId>,
         client_id: Option<ClientId>,
     ) -> anyhow::Result<()> {
-        let core = self.core_mut();
+        let should_deny = {
+            let core = self.core_mut();
+            let tag = core.market_exit_tag;
+            core.is_exiting
+                && orders.iter().any(|o| {
+                    !o.is_reduce_only() && !o.tags().is_some_and(|tags| tags.contains(&tag))
+                })
+        };
 
+        if should_deny {
+            self.deny_order_list(&orders, Ustr::from("MARKET_EXIT_IN_PROGRESS"));
+            return Ok(());
+        }
+
+        let core = self.core_mut();
         let trader_id = core.trader_id().expect("未设置交易员 ID");
         let strategy_id = StrategyId::from(core.actor_id().inner().as_str());
         let ts_init = core.clock().timestamp_ns();
+
+        // TODO: Replace with fluent builder API for order list construction
+        let order_list = if orders.first().is_some_and(|o| o.order_list_id().is_some()) {
+            OrderList::from_orders(&orders, ts_init)
+        } else {
+            core.order_factory().create_list(&mut orders, ts_init)
+        };
+
         {
             let cache_rc = core.cache_rc();
             let cache = cache_rc.borrow();
@@ -176,7 +215,7 @@ pub trait Strategy: DataActor {
                 anyhow::bail!("拒绝订单列表：重复的 {}", order_list.id);
             }
 
-            for order in &order_list.orders {
+            for order in &orders {
                 if order.status() != OrderStatus::Initialized {
                     anyhow::bail!(
                         "拒绝列表中的订单：{} 状态无效，预期为 INITIALIZED",
@@ -193,20 +232,21 @@ pub trait Strategy: DataActor {
             let cache_rc = core.cache_rc();
             let mut cache = cache_rc.borrow_mut();
             cache.add_order_list(order_list.clone())?;
-            for order in &order_list.orders {
+            for order in &orders {
                 cache.add_order(order.clone(), position_id, client_id, true)?;
             }
         }
 
-        let first_order = order_list.orders.first();
+        let first_order = orders.first();
+        let order_inits: Vec<_> = orders.iter().map(|o| o.init_event().clone()).collect();
         let exec_algorithm_id = first_order.and_then(|o| o.exec_algorithm_id());
 
         let command = SubmitOrderList::new(
             trader_id,
             client_id,
             strategy_id,
-            order_list.instrument_id,
-            order_list.clone(),
+            order_list,
+            order_inits,
             exec_algorithm_id,
             position_id,
             None, // params
@@ -214,14 +254,12 @@ pub trait Strategy: DataActor {
             ts_init,
         );
 
-        let has_emulated_order = order_list.orders.iter().any(|o| {
+        let has_emulated_order = orders.iter().any(|o| {
             matches!(o.emulation_trigger(), Some(trigger) if trigger != TriggerType::NoTrigger)
                 || o.is_emulated()
         });
 
-        let Some(manager) = &mut core.order_manager else {
-            anyhow::bail!("Strategy not registered: OrderManager missing");
-        };
+        let manager = core.order_manager();
 
         if has_emulated_order {
             manager.send_emulator_command(TradingCommand::SubmitOrderList(command));
@@ -232,7 +270,7 @@ pub trait Strategy: DataActor {
             manager.send_risk_command(TradingCommand::SubmitOrderList(command));
         }
 
-        for order in &order_list.orders {
+        for order in &orders {
             self.set_gtd_expiry(order)?;
         }
 
@@ -246,16 +284,38 @@ pub trait Strategy: DataActor {
     /// 如果策略未注册、订单列表无效或订单列表提交失败，则返回错误。
     fn submit_order_list_with_params(
         &mut self,
-        order_list: OrderList,
+        mut orders: Vec<OrderAny>,
         position_id: Option<PositionId>,
         client_id: Option<ClientId>,
         params: IndexMap<String, String>,
     ) -> anyhow::Result<()> {
+        let should_deny = {
+            let core = self.core_mut();
+            let tag = core.market_exit_tag;
+            core.is_exiting
+                && orders.iter().any(|o| {
+                    !o.is_reduce_only() && !o.tags().is_some_and(|tags| tags.contains(&tag))
+                })
+        };
+
+        if should_deny {
+            self.deny_order_list(&orders, Ustr::from("MARKET_EXIT_IN_PROGRESS"));
+            return Ok(());
+        }
+
         let core = self.core_mut();
 
         let trader_id = core.trader_id().expect("未设置交易员 ID");
         let strategy_id = StrategyId::from(core.actor_id().inner().as_str());
         let ts_init = core.clock().timestamp_ns();
+
+        // TODO: Replace with fluent builder API for order list construction
+        let order_list = if orders.first().is_some_and(|o| o.order_list_id().is_some()) {
+            OrderList::from_orders(&orders, ts_init)
+        } else {
+            core.order_factory().create_list(&mut orders, ts_init)
+        };
+
         {
             let cache_rc = core.cache_rc();
             let cache = cache_rc.borrow();
@@ -263,7 +323,7 @@ pub trait Strategy: DataActor {
                 anyhow::bail!("拒绝订单列表：重复的 {}", order_list.id);
             }
 
-            for order in &order_list.orders {
+            for order in &orders {
                 if order.status() != OrderStatus::Initialized {
                     anyhow::bail!(
                         "拒绝列表中的订单：{} 状态无效，预期为 INITIALIZED",
@@ -280,7 +340,7 @@ pub trait Strategy: DataActor {
             let cache_rc = core.cache_rc();
             let mut cache = cache_rc.borrow_mut();
             cache.add_order_list(order_list.clone())?;
-            for order in &order_list.orders {
+            for order in &orders {
                 cache.add_order(order.clone(), position_id, client_id, true)?;
             }
         }
@@ -291,15 +351,16 @@ pub trait Strategy: DataActor {
             Some(params)
         };
 
-        let first_order = order_list.orders.first();
+        let first_order = orders.first();
+        let order_inits: Vec<_> = orders.iter().map(|o| o.init_event().clone()).collect();
         let exec_algorithm_id = first_order.and_then(|o| o.exec_algorithm_id());
 
         let command = SubmitOrderList::new(
             trader_id,
             client_id,
             strategy_id,
-            order_list.instrument_id,
-            order_list.clone(),
+            order_list,
+            order_inits,
             exec_algorithm_id,
             position_id,
             params_opt,
@@ -307,14 +368,12 @@ pub trait Strategy: DataActor {
             ts_init,
         );
 
-        let has_emulated_order = order_list.orders.iter().any(|o| {
+        let has_emulated_order = orders.iter().any(|o| {
             matches!(o.emulation_trigger(), Some(trigger) if trigger != TriggerType::NoTrigger)
                 || o.is_emulated()
         });
 
-        let Some(manager) = &mut core.order_manager else {
-            anyhow::bail!("Strategy not registered: OrderManager missing");
-        };
+        let manager = core.order_manager();
 
         if has_emulated_order {
             manager.send_emulator_command(TradingCommand::SubmitOrderList(command));
@@ -325,7 +384,7 @@ pub trait Strategy: DataActor {
             manager.send_risk_command(TradingCommand::SubmitOrderList(command));
         }
 
-        for order in &order_list.orders {
+        for order in &orders {
             self.set_gtd_expiry(order)?;
         }
 
@@ -396,9 +455,7 @@ pub trait Strategy: DataActor {
             params,
         );
 
-        let Some(manager) = &mut core.order_manager else {
-            anyhow::bail!("Strategy not registered: OrderManager missing");
-        };
+        let manager = core.order_manager();
 
         if matches!(order.emulation_trigger(), Some(trigger) if trigger != TriggerType::NoTrigger) {
             manager.send_emulator_command(TradingCommand::ModifyOrder(command));
@@ -454,9 +511,7 @@ pub trait Strategy: DataActor {
             params,
         );
 
-        let Some(manager) = &mut core.order_manager else {
-            anyhow::bail!("Strategy not registered: OrderManager missing");
-        };
+        let manager = core.order_manager();
 
         if matches!(order.emulation_trigger(), Some(trigger) if trigger != TriggerType::NoTrigger)
             || order.is_emulated()
@@ -491,9 +546,7 @@ pub trait Strategy: DataActor {
         let strategy_id = StrategyId::from(core.actor_id().inner().as_str());
         let ts_init = core.clock().timestamp_ns();
 
-        let Some(manager) = &mut core.order_manager else {
-            anyhow::bail!("Strategy not registered: OrderManager missing");
-        };
+        let manager = core.order_manager();
 
         let first = orders.remove(0);
         let instrument_id = first.instrument_id();
@@ -646,9 +699,7 @@ pub trait Strategy: DataActor {
             return Ok(());
         }
 
-        let Some(manager) = &mut core.order_manager else {
-            anyhow::bail!("Strategy not registered: OrderManager missing");
-        };
+        let manager = core.order_manager();
 
         let side_str = order_side.map(|s| format!(" {s}")).unwrap_or_default();
 
@@ -717,9 +768,6 @@ pub trait Strategy: DataActor {
         quote_quantity: Option<bool>,
     ) -> anyhow::Result<()> {
         let core = self.core_mut();
-        let Some(order_factory) = &mut core.order_factory else {
-            anyhow::bail!("Strategy not registered: OrderFactory missing");
-        };
 
         if position.is_closed() {
             log::warn!("无法平仓（已平仓）：{}", position.id);
@@ -728,7 +776,7 @@ pub trait Strategy: DataActor {
 
         let closing_side = OrderCore::closing_side(position.side);
 
-        let order = order_factory.market(
+        let order = core.order_factory().market(
             position.instrument_id,
             closing_side,
             position.quantity,
@@ -795,12 +843,8 @@ pub trait Strategy: DataActor {
             }
 
             let core = self.core_mut();
-            let Some(order_factory) = &mut core.order_factory else {
-                anyhow::bail!("Strategy not registered: OrderFactory missing");
-            };
-
             let closing_side = OrderCore::closing_side(pos_side);
-            let order = order_factory.market(
+            let order = core.order_factory().market(
                 pos_instrument_id,
                 closing_side,
                 pos_quantity,
@@ -839,11 +883,8 @@ pub trait Strategy: DataActor {
 
         let command = QueryAccount::new(trader_id, client_id, account_id, UUID4::new(), ts_init);
 
-        let Some(manager) = &mut core.order_manager else {
-            anyhow::bail!("Strategy not registered: OrderManager missing");
-        };
-
-        manager.send_exec_command(TradingCommand::QueryAccount(command));
+        core.order_manager()
+            .send_exec_command(TradingCommand::QueryAccount(command));
         Ok(())
     }
 
@@ -873,11 +914,8 @@ pub trait Strategy: DataActor {
             ts_init,
         );
 
-        let Some(manager) = &mut core.order_manager else {
-            anyhow::bail!("Strategy not registered: OrderManager missing");
-        };
-
-        manager.send_exec_command(TradingCommand::QueryOrder(command));
+        core.order_manager()
+            .send_exec_command(TradingCommand::QueryOrder(command));
         Ok(())
     }
 
@@ -885,8 +923,17 @@ pub trait Strategy: DataActor {
     fn handle_order_event(&mut self, event: OrderEventAny) {
         {
             let core = self.core_mut();
-            if core.config.log_events {
-                let id = &core.actor.actor_id;
+            let id = &core.actor.actor_id;
+            let is_warning = matches!(
+                &event,
+                OrderEventAny::Denied(_)
+                    | OrderEventAny::Rejected(_)
+                    | OrderEventAny::CancelRejected(_)
+                    | OrderEventAny::ModifyRejected(_)
+            );
+            if is_warning {
+                log::warn!("{id} {RECV}{EVT} {event}");
+            } else if core.config.log_events {
                 log::info!("{id} {RECV}{EVT} {event}");
             }
         }
@@ -978,7 +1025,8 @@ pub trait Strategy: DataActor {
 
     /// 当接收到时间事件时调用。
     ///
-    /// 将 GTD 过期定时器事件路由到过期处理器。
+    /// 将 GTD 过期定时器事件路由到过期处理器，将市场退出定时器事件
+    /// 路由到市场退出检查器。
     ///
     /// # Errors
     ///
@@ -986,6 +1034,8 @@ pub trait Strategy: DataActor {
     fn on_time_event(&mut self, event: &TimeEvent) -> anyhow::Result<()> {
         if event.name.starts_with("GTD-EXPIRY:") {
             self.expire_gtd_order(event.clone());
+        } else if event.name.starts_with("MARKET_EXIT_CHECK:") {
+            self.check_market_exit(event.clone());
         }
         Ok(())
     }
@@ -1095,6 +1145,402 @@ pub trait Strategy: DataActor {
     /// 覆盖此方法以实现当持仓关闭时的自定义逻辑。
     #[allow(unused_variables)]
     fn on_position_closed(&mut self, event: PositionClosed) {}
+
+    /// Called when a market exit has been initiated.
+    ///
+    /// Override this method to implement custom logic when a market exit begins.
+    fn on_market_exit(&mut self) {}
+
+    /// Called after a market exit has completed.
+    ///
+    /// Override this method to implement custom logic after a market exit completes.
+    fn post_market_exit(&mut self) {}
+
+    /// Returns whether the strategy is currently executing a market exit.
+    ///
+    /// Strategies can check this to avoid submitting new orders during exit.
+    fn is_exiting(&self) -> bool {
+        self.core().is_exiting
+    }
+
+    /// Initiates an iterative market exit for the strategy.
+    ///
+    /// Will cancel all open orders and close all open positions, and wait for
+    /// all in-flight orders to resolve and positions to close. The strategy
+    /// remains running after the exit completes.
+    ///
+    /// The `on_market_exit` hook is called when the exit process begins.
+    /// The `post_market_exit` hook is called when the exit process completes.
+    ///
+    /// Uses `market_exit_time_in_force` and `market_exit_reduce_only` from
+    /// the strategy config for closing market orders.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the market exit cannot be initiated.
+    fn market_exit(&mut self) -> anyhow::Result<()> {
+        let core = self.core_mut();
+        let strategy_id = StrategyId::from(core.actor_id().inner().as_str());
+
+        if core.actor.state() != ComponentState::Running {
+            log::warn!("{strategy_id} Cannot market exit: strategy is not running");
+            return Ok(());
+        }
+
+        if core.is_exiting {
+            log::warn!("{strategy_id} Market exit called when already in progress");
+            return Ok(());
+        }
+
+        core.is_exiting = true;
+        core.market_exit_attempts = 0;
+        let time_in_force = core.config.market_exit_time_in_force;
+        let reduce_only = core.config.market_exit_reduce_only;
+
+        log::info!("{strategy_id} Initiating market exit...");
+
+        self.on_market_exit();
+
+        let core = self.core_mut();
+        let cache = core.cache();
+
+        let open_orders = cache.orders_open(None, None, Some(&strategy_id), None, None);
+        let inflight_orders = cache.orders_inflight(None, None, Some(&strategy_id), None, None);
+        let open_positions = cache.positions_open(None, None, Some(&strategy_id), None, None);
+
+        let mut instruments: AHashSet<InstrumentId> = AHashSet::new();
+
+        for order in &open_orders {
+            instruments.insert(order.instrument_id());
+        }
+        for order in &inflight_orders {
+            instruments.insert(order.instrument_id());
+        }
+        for position in &open_positions {
+            instruments.insert(position.instrument_id);
+        }
+
+        let market_exit_tag = core.market_exit_tag;
+        let instruments: Vec<_> = instruments.into_iter().collect();
+        drop(cache);
+
+        for instrument_id in instruments {
+            if let Err(e) = self.cancel_all_orders(instrument_id, None, None) {
+                log::error!("Error canceling orders for {instrument_id}: {e}");
+            }
+            if let Err(e) = self.close_all_positions(
+                instrument_id,
+                None,
+                None,
+                Some(vec![market_exit_tag]),
+                Some(time_in_force),
+                Some(reduce_only),
+                None,
+            ) {
+                log::error!("Error closing positions for {instrument_id}: {e}");
+            }
+        }
+
+        let core = self.core_mut();
+        let interval_ms = core.config.market_exit_interval_ms;
+        let timer_name = core.market_exit_timer_name;
+
+        log::info!("{strategy_id} Setting market exit timer at {interval_ms}ms intervals");
+
+        let interval_ns = interval_ms * 1_000_000;
+        let result = core.clock().set_timer_ns(
+            timer_name.as_str(),
+            interval_ns,
+            None,
+            None,
+            None,
+            None,
+            None,
+        );
+
+        if let Err(e) = result {
+            // Reset exit state on timer failure (caller handles pending_stop)
+            core.is_exiting = false;
+            core.market_exit_attempts = 0;
+            return Err(e);
+        }
+
+        Ok(())
+    }
+
+    /// Checks if the market exit is complete and finalizes if so.
+    ///
+    /// This method is called by the market exit timer.
+    fn check_market_exit(&mut self, _event: TimeEvent) {
+        // Guard against stale timer events after cancel_market_exit
+        if !self.is_exiting() {
+            return;
+        }
+
+        let core = self.core_mut();
+        let strategy_id = StrategyId::from(core.actor_id().inner().as_str());
+
+        core.market_exit_attempts += 1;
+        let attempts = core.market_exit_attempts;
+        let max_attempts = core.config.market_exit_max_attempts;
+
+        log::debug!(
+            "{strategy_id} Market exit check triggered (attempt {attempts}/{max_attempts})"
+        );
+
+        if attempts >= max_attempts {
+            let cache = core.cache();
+            let open_orders_count = cache
+                .orders_open(None, None, Some(&strategy_id), None, None)
+                .len();
+            let inflight_orders_count = cache
+                .orders_inflight(None, None, Some(&strategy_id), None, None)
+                .len();
+            let open_positions_count = cache
+                .positions_open(None, None, Some(&strategy_id), None, None)
+                .len();
+            drop(cache);
+
+            log::warn!(
+                "{strategy_id} Market exit max attempts ({max_attempts}) reached, \
+                completing with open orders: {open_orders_count}, \
+                inflight orders: {inflight_orders_count}, \
+                open positions: {open_positions_count}"
+            );
+
+            self.finalize_market_exit();
+            return;
+        }
+
+        let cache = core.cache();
+        let open_orders = cache.orders_open(None, None, Some(&strategy_id), None, None);
+        let inflight_orders = cache.orders_inflight(None, None, Some(&strategy_id), None, None);
+
+        if !open_orders.is_empty() || !inflight_orders.is_empty() {
+            return;
+        }
+
+        let open_positions = cache.positions_open(None, None, Some(&strategy_id), None, None);
+
+        if !open_positions.is_empty() {
+            // If there are open positions but no orders, re-send close orders
+            let positions_data: Vec<_> = open_positions
+                .iter()
+                .map(|p| (p.id, p.instrument_id, p.side, p.quantity, p.is_closed()))
+                .collect();
+
+            drop(cache);
+
+            for (pos_id, instrument_id, side, quantity, is_closed) in positions_data {
+                if is_closed {
+                    continue;
+                }
+
+                let core = self.core_mut();
+                let time_in_force = core.config.market_exit_time_in_force;
+                let reduce_only = core.config.market_exit_reduce_only;
+                let market_exit_tag = core.market_exit_tag;
+                let closing_side = OrderCore::closing_side(side);
+                let order = core.order_factory().market(
+                    instrument_id,
+                    closing_side,
+                    quantity,
+                    Some(time_in_force),
+                    Some(reduce_only),
+                    None,
+                    None,
+                    None,
+                    Some(vec![market_exit_tag]),
+                    None,
+                );
+
+                if let Err(e) = self.submit_order(order, Some(pos_id), None) {
+                    log::error!("Error re-submitting close order for position {pos_id}: {e}");
+                }
+            }
+            return;
+        }
+
+        drop(cache);
+        self.finalize_market_exit();
+    }
+
+    /// Finalizes the market exit process.
+    ///
+    /// Cancels the market exit timer, resets state, calls the post_market_exit hook,
+    /// and stops the strategy if a stop was pending.
+    fn finalize_market_exit(&mut self) {
+        let (strategy_id, should_stop) = {
+            let core = self.core_mut();
+            let strategy_id = StrategyId::from(core.actor_id().inner().as_str());
+            let should_stop = core.pending_stop;
+            (strategy_id, should_stop)
+        };
+
+        self.cancel_market_exit();
+
+        let hook_result = catch_unwind(AssertUnwindSafe(|| {
+            self.post_market_exit();
+        }));
+
+        if let Err(e) = hook_result {
+            log::error!("{strategy_id} Error in post_market_exit: {e:?}");
+        }
+
+        if should_stop {
+            log::info!("{strategy_id} Market exit complete, stopping strategy");
+            if let Err(e) = Component::stop(self) {
+                log::error!("{strategy_id} Failed to stop: {e}");
+            }
+        }
+
+        let core = self.core_mut();
+        debug_assert!(
+            !(core.pending_stop
+                && !core.is_exiting
+                && core.actor.state() == ComponentState::Running),
+            "INVARIANT: stuck state after finalize_market_exit"
+        );
+    }
+
+    /// Cancels an active market exit without calling hooks.
+    ///
+    /// Used when stop() is called during an active market exit to avoid state leaks.
+    fn cancel_market_exit(&mut self) {
+        let core = self.core_mut();
+        let timer_name = core.market_exit_timer_name;
+
+        if core.clock().timer_names().contains(&timer_name.as_str()) {
+            core.clock().cancel_timer(timer_name.as_str());
+        }
+
+        core.is_exiting = false;
+        core.pending_stop = false;
+        core.market_exit_attempts = 0;
+    }
+
+    /// Stops the strategy with optional managed stop behavior.
+    ///
+    /// If `manage_stop` is enabled in the config, the strategy will first complete
+    /// any active market exit (or initiate one) before stopping. If `manage_stop`
+    /// is disabled, the strategy stops immediately, cleaning up any active market
+    /// exit state.
+    ///
+    /// # Returns
+    ///
+    /// Returns `true` if the strategy should proceed with stopping, `false` if
+    /// the stop is being deferred until market exit completes.
+    fn stop(&mut self) -> bool {
+        let (manage_stop, is_exiting, should_initiate_exit) = {
+            let core = self.core_mut();
+            let strategy_id = StrategyId::from(core.actor_id().inner().as_str());
+            let manage_stop = core.config.manage_stop;
+            let state = core.actor.state();
+            let pending_stop = core.pending_stop;
+            let is_exiting = core.is_exiting;
+
+            if manage_stop {
+                if state != ComponentState::Running {
+                    return true; // Proceed with stop
+                }
+
+                if pending_stop {
+                    return false; // Already waiting for market exit
+                }
+
+                core.pending_stop = true;
+                let should_initiate_exit = !is_exiting;
+
+                if should_initiate_exit {
+                    log::info!("{strategy_id} Initiating market exit before stop");
+                }
+
+                (manage_stop, is_exiting, should_initiate_exit)
+            } else {
+                (manage_stop, is_exiting, false)
+            }
+        };
+
+        if manage_stop {
+            if should_initiate_exit && let Err(e) = self.market_exit() {
+                log::warn!("Market exit failed during stop: {e}, proceeding with stop");
+                self.core_mut().pending_stop = false;
+                return true;
+            }
+            debug_assert!(
+                self.is_exiting(),
+                "INVARIANT: deferring stop but not exiting"
+            );
+            return false; // Defer stop until market exit completes
+        }
+
+        // manage_stop is false - clean up any active market exit
+        if is_exiting {
+            self.cancel_market_exit();
+        }
+
+        true // Proceed with stop
+    }
+
+    /// Denies an order by generating an OrderDenied event.
+    ///
+    /// This method creates an OrderDenied event, applies it to the order,
+    /// and updates the cache.
+    fn deny_order(&mut self, order: &OrderAny, reason: Ustr) {
+        let core = self.core_mut();
+        let trader_id = core.trader_id().expect("Trader ID not set");
+        let strategy_id = StrategyId::from(core.actor_id().inner().as_str());
+        let ts_now = core.clock().timestamp_ns();
+
+        let event = OrderDenied::new(
+            trader_id,
+            strategy_id,
+            order.instrument_id(),
+            order.client_order_id(),
+            reason,
+            UUID4::new(),
+            ts_now,
+            ts_now,
+        );
+
+        log::warn!(
+            "{strategy_id} Order {} denied: {reason}",
+            order.client_order_id()
+        );
+
+        // Add order to cache if not exists, then update with denied event
+        {
+            let cache_rc = core.cache_rc();
+            let mut cache = cache_rc.borrow_mut();
+            if !cache.order_exists(&order.client_order_id()) {
+                let _ = cache.add_order(order.clone(), None, None, true);
+            }
+        }
+
+        // Apply event and update cache
+        let mut order_clone = order.clone();
+        if let Err(e) = order_clone.apply(OrderEventAny::Denied(event)) {
+            log::warn!("Failed to apply OrderDenied event: {e}");
+            return;
+        }
+
+        {
+            let cache_rc = core.cache_rc();
+            let mut cache = cache_rc.borrow_mut();
+            let _ = cache.update_order(&order_clone);
+        }
+    }
+
+    /// Denies all orders in an order list.
+    ///
+    /// This method denies each non-closed order in the list.
+    fn deny_order_list(&mut self, orders: &[OrderAny], reason: Ustr) {
+        for order in orders {
+            if !order.is_closed() {
+                self.deny_order(order, reason);
+            }
+        }
+    }
 
     // -- GTD EXPIRY MANAGEMENT -------------------------------------------------------------------
 
@@ -1239,15 +1685,19 @@ mod tests {
     use nautilus_common::{
         actor::{DataActor, DataActorCore},
         cache::Cache,
-        clock::TestClock,
+        clock::{Clock, TestClock},
+        component::Component,
+        timer::{TimeEvent, TimeEventCallback},
     };
+    use nautilus_core::UnixNanos;
     use nautilus_model::{
         enums::{LiquiditySide, OrderSide, OrderType, PositionSide},
-        events::OrderRejected,
+        events::{OrderCanceled, OrderFilled, OrderRejected},
         identifiers::{
             AccountId, ClientOrderId, InstrumentId, PositionId, StrategyId, TradeId, TraderId,
             VenueOrderId,
         },
+        orders::MarketOrder,
         stubs::TestDefault,
         types::Currency,
     };
@@ -1276,19 +1726,23 @@ mod tests {
     impl Deref for TestStrategy {
         type Target = DataActorCore;
         fn deref(&self) -> &Self::Target {
-            &self.core.actor
+            &self.core
         }
     }
 
     impl DerefMut for TestStrategy {
         fn deref_mut(&mut self) -> &mut Self::Target {
-            &mut self.core.actor
+            &mut self.core
         }
     }
 
     impl DataActor for TestStrategy {}
 
     impl Strategy for TestStrategy {
+        fn core(&self) -> &StrategyCore {
+            &self.core
+        }
+
         fn core_mut(&mut self) -> &mut StrategyCore {
             &mut self.core
         }
@@ -1325,6 +1779,11 @@ mod tests {
             .core
             .register(trader_id, clock, cache, portfolio)
             .unwrap();
+        strategy.initialize().unwrap();
+    }
+
+    fn start_strategy(strategy: &mut TestStrategy) {
+        strategy.start().unwrap();
     }
 
     #[rstest]
@@ -1475,8 +1934,6 @@ mod tests {
 
     #[rstest]
     fn test_handle_order_event_cancels_gtd_timer_on_filled() {
-        use nautilus_model::events::OrderFilled;
-
         let mut strategy = create_test_strategy();
         register_strategy(&mut strategy);
 
@@ -1514,8 +1971,6 @@ mod tests {
 
     #[rstest]
     fn test_handle_order_event_cancels_gtd_timer_on_canceled() {
-        use nautilus_model::events::OrderCanceled;
-
         let mut strategy = create_test_strategy();
         register_strategy(&mut strategy);
 
@@ -1658,8 +2113,6 @@ mod tests {
 
     #[rstest]
     fn test_query_order_when_registered() {
-        use nautilus_model::{orders::MarketOrder, stubs::TestDefault};
-
         let mut strategy = create_test_strategy();
         register_strategy(&mut strategy);
 
@@ -1672,8 +2125,6 @@ mod tests {
 
     #[rstest]
     fn test_query_order_with_client_id() {
-        use nautilus_model::{orders::MarketOrder, stubs::TestDefault};
-
         let mut strategy = create_test_strategy();
         register_strategy(&mut strategy);
 
@@ -1683,5 +2134,718 @@ mod tests {
         let result = strategy.query_order(&order, Some(client_id));
 
         assert!(result.is_ok());
+    }
+
+    #[rstest]
+    fn test_is_exiting_returns_false_by_default() {
+        let strategy = create_test_strategy();
+        assert!(!strategy.is_exiting());
+    }
+
+    #[rstest]
+    fn test_is_exiting_returns_true_when_set_manually() {
+        let mut strategy = create_test_strategy();
+        register_strategy(&mut strategy);
+
+        // Manually set the exiting state (as market_exit would do)
+        strategy.core.is_exiting = true;
+
+        assert!(strategy.is_exiting());
+    }
+
+    #[rstest]
+    fn test_market_exit_sets_is_exiting_flag() {
+        // Test the state changes that market_exit would make
+        let mut strategy = create_test_strategy();
+        register_strategy(&mut strategy);
+
+        assert!(!strategy.core.is_exiting);
+
+        // Simulate what market_exit does to the state
+        strategy.core.is_exiting = true;
+        strategy.core.market_exit_attempts = 0;
+
+        assert!(strategy.core.is_exiting);
+        assert_eq!(strategy.core.market_exit_attempts, 0);
+    }
+
+    #[rstest]
+    fn test_market_exit_uses_config_time_in_force_and_reduce_only() {
+        let config = StrategyConfig {
+            strategy_id: Some(StrategyId::from("TEST-001")),
+            order_id_tag: Some("001".to_string()),
+            market_exit_time_in_force: TimeInForce::Ioc,
+            market_exit_reduce_only: false,
+            ..Default::default()
+        };
+        let strategy = TestStrategy::new(config);
+
+        assert_eq!(
+            strategy.core.config.market_exit_time_in_force,
+            TimeInForce::Ioc
+        );
+        assert!(!strategy.core.config.market_exit_reduce_only);
+    }
+
+    #[rstest]
+    fn test_market_exit_resets_attempt_counter() {
+        let mut strategy = create_test_strategy();
+        register_strategy(&mut strategy);
+
+        // Manually set attempts to simulate prior exit
+        strategy.core.market_exit_attempts = 50;
+
+        // Reset via the reset method
+        strategy.core.reset_market_exit_state();
+
+        assert_eq!(strategy.core.market_exit_attempts, 0);
+    }
+
+    #[rstest]
+    fn test_market_exit_second_call_returns_early_when_exiting() {
+        let mut strategy = create_test_strategy();
+        register_strategy(&mut strategy);
+
+        // First set exiting to true to simulate an in-progress exit
+        strategy.core.is_exiting = true;
+
+        // Second call should return Ok and not change state
+        let result = strategy.market_exit();
+        assert!(result.is_ok());
+        assert!(strategy.core.is_exiting);
+    }
+
+    #[rstest]
+    fn test_finalize_market_exit_resets_state() {
+        let mut strategy = create_test_strategy();
+        register_strategy(&mut strategy);
+
+        // Set up exiting state
+        strategy.core.is_exiting = true;
+        strategy.core.pending_stop = true;
+        strategy.core.market_exit_attempts = 50;
+
+        strategy.finalize_market_exit();
+
+        assert!(!strategy.core.is_exiting);
+        assert!(!strategy.core.pending_stop);
+        assert_eq!(strategy.core.market_exit_attempts, 0);
+    }
+
+    #[rstest]
+    fn test_market_exit_config_defaults() {
+        let config = StrategyConfig::default();
+
+        assert!(!config.manage_stop);
+        assert_eq!(config.market_exit_interval_ms, 100);
+        assert_eq!(config.market_exit_max_attempts, 100);
+    }
+
+    #[rstest]
+    fn test_market_exit_with_custom_config() {
+        let config = StrategyConfig {
+            strategy_id: Some(StrategyId::from("TEST-001")),
+            manage_stop: true,
+            market_exit_interval_ms: 50,
+            market_exit_max_attempts: 200,
+            ..Default::default()
+        };
+        let strategy = TestStrategy::new(config);
+
+        assert!(strategy.core.config.manage_stop);
+        assert_eq!(strategy.core.config.market_exit_interval_ms, 50);
+        assert_eq!(strategy.core.config.market_exit_max_attempts, 200);
+    }
+
+    #[derive(Debug)]
+    struct MarketExitHookTrackingStrategy {
+        core: StrategyCore,
+        on_market_exit_called: bool,
+        post_market_exit_called: bool,
+    }
+
+    impl MarketExitHookTrackingStrategy {
+        fn new(config: StrategyConfig) -> Self {
+            Self {
+                core: StrategyCore::new(config),
+                on_market_exit_called: false,
+                post_market_exit_called: false,
+            }
+        }
+    }
+
+    impl Deref for MarketExitHookTrackingStrategy {
+        type Target = DataActorCore;
+        fn deref(&self) -> &Self::Target {
+            &self.core
+        }
+    }
+
+    impl DerefMut for MarketExitHookTrackingStrategy {
+        fn deref_mut(&mut self) -> &mut Self::Target {
+            &mut self.core
+        }
+    }
+
+    impl DataActor for MarketExitHookTrackingStrategy {}
+
+    impl Strategy for MarketExitHookTrackingStrategy {
+        fn core(&self) -> &StrategyCore {
+            &self.core
+        }
+
+        fn core_mut(&mut self) -> &mut StrategyCore {
+            &mut self.core
+        }
+
+        fn on_market_exit(&mut self) {
+            self.on_market_exit_called = true;
+        }
+
+        fn post_market_exit(&mut self) {
+            self.post_market_exit_called = true;
+        }
+    }
+
+    #[rstest]
+    fn test_market_exit_calls_on_market_exit_hook() {
+        let config = StrategyConfig {
+            strategy_id: Some(StrategyId::from("TEST-001")),
+            order_id_tag: Some("001".to_string()),
+            ..Default::default()
+        };
+        let mut strategy = MarketExitHookTrackingStrategy::new(config);
+
+        let trader_id = TraderId::from("TRADER-001");
+        let clock = Rc::new(RefCell::new(TestClock::new()));
+        let cache = Rc::new(RefCell::new(Cache::default()));
+        let portfolio = Rc::new(RefCell::new(Portfolio::new(
+            cache.clone(),
+            clock.clone(),
+            None,
+        )));
+        strategy
+            .core
+            .register(trader_id, clock, cache, portfolio)
+            .unwrap();
+        strategy.initialize().unwrap();
+        strategy.start().unwrap();
+
+        let _ = strategy.market_exit();
+
+        assert!(strategy.on_market_exit_called);
+    }
+
+    #[rstest]
+    fn test_finalize_market_exit_calls_post_market_exit_hook() {
+        let config = StrategyConfig {
+            strategy_id: Some(StrategyId::from("TEST-001")),
+            order_id_tag: Some("001".to_string()),
+            ..Default::default()
+        };
+        let mut strategy = MarketExitHookTrackingStrategy::new(config);
+
+        let trader_id = TraderId::from("TRADER-001");
+        let clock = Rc::new(RefCell::new(TestClock::new()));
+        let cache = Rc::new(RefCell::new(Cache::default()));
+        let portfolio = Rc::new(RefCell::new(Portfolio::new(
+            cache.clone(),
+            clock.clone(),
+            None,
+        )));
+        strategy
+            .core
+            .register(trader_id, clock, cache, portfolio)
+            .unwrap();
+
+        strategy.core.is_exiting = true;
+        strategy.finalize_market_exit();
+
+        assert!(strategy.post_market_exit_called);
+    }
+
+    #[derive(Debug)]
+    struct FailingPostExitStrategy {
+        core: StrategyCore,
+    }
+
+    impl FailingPostExitStrategy {
+        fn new(config: StrategyConfig) -> Self {
+            Self {
+                core: StrategyCore::new(config),
+            }
+        }
+    }
+
+    impl Deref for FailingPostExitStrategy {
+        type Target = DataActorCore;
+        fn deref(&self) -> &Self::Target {
+            &self.core
+        }
+    }
+
+    impl DerefMut for FailingPostExitStrategy {
+        fn deref_mut(&mut self) -> &mut Self::Target {
+            &mut self.core
+        }
+    }
+
+    impl DataActor for FailingPostExitStrategy {}
+
+    impl Strategy for FailingPostExitStrategy {
+        fn core(&self) -> &StrategyCore {
+            &self.core
+        }
+
+        fn core_mut(&mut self) -> &mut StrategyCore {
+            &mut self.core
+        }
+
+        fn post_market_exit(&mut self) {
+            panic!("Simulated error in post_market_exit");
+        }
+    }
+
+    #[rstest]
+    fn test_finalize_market_exit_handles_hook_panic() {
+        let config = StrategyConfig {
+            strategy_id: Some(StrategyId::from("TEST-001")),
+            order_id_tag: Some("001".to_string()),
+            ..Default::default()
+        };
+        let mut strategy = FailingPostExitStrategy::new(config);
+
+        let trader_id = TraderId::from("TRADER-001");
+        let clock = Rc::new(RefCell::new(TestClock::new()));
+        let cache = Rc::new(RefCell::new(Cache::default()));
+        let portfolio = Rc::new(RefCell::new(Portfolio::new(
+            cache.clone(),
+            clock.clone(),
+            None,
+        )));
+        strategy
+            .core
+            .register(trader_id, clock, cache, portfolio)
+            .unwrap();
+
+        strategy.core.is_exiting = true;
+        strategy.core.pending_stop = true;
+
+        // This should not panic - it should catch the panic in post_market_exit
+        strategy.finalize_market_exit();
+
+        // State should still be reset
+        assert!(!strategy.core.is_exiting);
+        assert!(!strategy.core.pending_stop);
+    }
+
+    #[rstest]
+    fn test_check_market_exit_increments_attempts_before_finalizing() {
+        let mut strategy = create_test_strategy();
+        register_strategy(&mut strategy);
+
+        strategy.core.is_exiting = true;
+        assert_eq!(strategy.core.market_exit_attempts, 0);
+
+        let event = TimeEvent::new(
+            Ustr::from("MARKET_EXIT_CHECK:TEST-001"),
+            UUID4::new(),
+            Default::default(),
+            Default::default(),
+        );
+        strategy.check_market_exit(event);
+
+        // With no orders/positions, check_market_exit will finalize immediately
+        // which resets attempts to 0. This is correct behavior.
+        // The attempt WAS incremented to 1 during the check, then reset on finalize.
+        assert!(!strategy.core.is_exiting);
+        assert_eq!(strategy.core.market_exit_attempts, 0);
+    }
+
+    #[rstest]
+    fn test_check_market_exit_finalizes_when_max_attempts_reached() {
+        let config = StrategyConfig {
+            strategy_id: Some(StrategyId::from("TEST-001")),
+            order_id_tag: Some("001".to_string()),
+            market_exit_max_attempts: 3,
+            ..Default::default()
+        };
+        let mut strategy = TestStrategy::new(config);
+        register_strategy(&mut strategy);
+
+        strategy.core.is_exiting = true;
+        strategy.core.market_exit_attempts = 2; // One below max
+
+        let event = TimeEvent::new(
+            Ustr::from("MARKET_EXIT_CHECK:TEST-001"),
+            UUID4::new(),
+            Default::default(),
+            Default::default(),
+        );
+        strategy.check_market_exit(event);
+
+        // Should have finalized since attempts >= max_attempts
+        assert!(!strategy.core.is_exiting);
+        assert_eq!(strategy.core.market_exit_attempts, 0);
+    }
+
+    #[rstest]
+    fn test_check_market_exit_finalizes_when_no_orders_or_positions() {
+        let mut strategy = create_test_strategy();
+        register_strategy(&mut strategy);
+
+        strategy.core.is_exiting = true;
+
+        let event = TimeEvent::new(
+            Ustr::from("MARKET_EXIT_CHECK:TEST-001"),
+            UUID4::new(),
+            Default::default(),
+            Default::default(),
+        );
+        strategy.check_market_exit(event);
+
+        // Should have finalized since there are no orders or positions
+        assert!(!strategy.core.is_exiting);
+    }
+
+    #[rstest]
+    fn test_market_exit_timer_name_format() {
+        let config = StrategyConfig {
+            strategy_id: Some(StrategyId::from("MY-STRATEGY-001")),
+            ..Default::default()
+        };
+        let strategy = TestStrategy::new(config);
+
+        assert_eq!(
+            strategy.core.market_exit_timer_name.as_str(),
+            "MARKET_EXIT_CHECK:MY-STRATEGY-001"
+        );
+    }
+
+    #[rstest]
+    fn test_reset_market_exit_state() {
+        let mut strategy = create_test_strategy();
+
+        strategy.core.is_exiting = true;
+        strategy.core.pending_stop = true;
+        strategy.core.market_exit_attempts = 50;
+
+        strategy.core.reset_market_exit_state();
+
+        assert!(!strategy.core.is_exiting);
+        assert!(!strategy.core.pending_stop);
+        assert_eq!(strategy.core.market_exit_attempts, 0);
+    }
+
+    #[rstest]
+    fn test_cancel_market_exit_resets_state_without_hooks() {
+        let config = StrategyConfig {
+            strategy_id: Some(StrategyId::from("TEST-001")),
+            order_id_tag: Some("001".to_string()),
+            ..Default::default()
+        };
+        let mut strategy = MarketExitHookTrackingStrategy::new(config);
+
+        let trader_id = TraderId::from("TRADER-001");
+        let clock = Rc::new(RefCell::new(TestClock::new()));
+        let cache = Rc::new(RefCell::new(Cache::default()));
+        let portfolio = Rc::new(RefCell::new(Portfolio::new(
+            cache.clone(),
+            clock.clone(),
+            None,
+        )));
+        strategy
+            .core
+            .register(trader_id, clock, cache, portfolio)
+            .unwrap();
+
+        // Set up exiting state
+        strategy.core.is_exiting = true;
+        strategy.core.pending_stop = true;
+        strategy.core.market_exit_attempts = 50;
+
+        // Call cancel_market_exit
+        strategy.cancel_market_exit();
+
+        // State should be reset
+        assert!(!strategy.core.is_exiting);
+        assert!(!strategy.core.pending_stop);
+        assert_eq!(strategy.core.market_exit_attempts, 0);
+
+        // Hooks should NOT have been called
+        assert!(!strategy.on_market_exit_called);
+        assert!(!strategy.post_market_exit_called);
+    }
+
+    #[rstest]
+    fn test_market_exit_returns_early_when_not_running() {
+        let mut strategy = create_test_strategy();
+        register_strategy(&mut strategy);
+
+        // State is not Running (default is PreInitialized)
+        assert_ne!(strategy.core.actor.state(), ComponentState::Running);
+
+        let result = strategy.market_exit();
+
+        // Should return Ok but not set is_exiting
+        assert!(result.is_ok());
+        assert!(!strategy.core.is_exiting);
+    }
+
+    #[rstest]
+    fn test_stop_with_manage_stop_false_cleans_up_active_exit() {
+        let config = StrategyConfig {
+            strategy_id: Some(StrategyId::from("TEST-001")),
+            order_id_tag: Some("001".to_string()),
+            manage_stop: false,
+            ..Default::default()
+        };
+        let mut strategy = TestStrategy::new(config);
+        register_strategy(&mut strategy);
+
+        // Simulate an active market exit
+        strategy.core.is_exiting = true;
+        strategy.core.market_exit_attempts = 5;
+
+        // Call stop
+        let should_proceed = Strategy::stop(&mut strategy);
+
+        // Should clean up state and allow stop to proceed
+        assert!(should_proceed);
+        assert!(!strategy.core.is_exiting);
+        assert_eq!(strategy.core.market_exit_attempts, 0);
+    }
+
+    #[rstest]
+    fn test_stop_with_manage_stop_true_defers_when_running() {
+        let config = StrategyConfig {
+            strategy_id: Some(StrategyId::from("TEST-001")),
+            order_id_tag: Some("001".to_string()),
+            manage_stop: true,
+            ..Default::default()
+        };
+        let mut strategy = TestStrategy::new(config);
+
+        // Custom setup with a default callback so timer scheduling succeeds
+        let trader_id = TraderId::from("TRADER-001");
+        let clock = Rc::new(RefCell::new(TestClock::new()));
+        clock
+            .borrow_mut()
+            .register_default_handler(TimeEventCallback::from(|_event: TimeEvent| {}));
+        let cache = Rc::new(RefCell::new(Cache::default()));
+        let portfolio = Rc::new(RefCell::new(Portfolio::new(
+            cache.clone(),
+            clock.clone(),
+            None,
+        )));
+        strategy
+            .core
+            .register(trader_id, clock, cache, portfolio)
+            .unwrap();
+        strategy.initialize().unwrap();
+        strategy.start().unwrap();
+
+        let should_proceed = Strategy::stop(&mut strategy);
+
+        // Should set pending_stop and defer
+        assert!(!should_proceed);
+        assert!(strategy.core.pending_stop);
+    }
+
+    #[rstest]
+    fn test_stop_with_manage_stop_true_returns_early_if_pending() {
+        let config = StrategyConfig {
+            strategy_id: Some(StrategyId::from("TEST-001")),
+            order_id_tag: Some("001".to_string()),
+            manage_stop: true,
+            ..Default::default()
+        };
+        let mut strategy = TestStrategy::new(config);
+        register_strategy(&mut strategy);
+        start_strategy(&mut strategy);
+        strategy.core.pending_stop = true;
+
+        // Call stop again
+        let should_proceed = Strategy::stop(&mut strategy);
+
+        // Should return early without changing state
+        assert!(!should_proceed);
+        assert!(strategy.core.pending_stop);
+    }
+
+    #[rstest]
+    fn test_stop_with_manage_stop_true_proceeds_when_not_running() {
+        let config = StrategyConfig {
+            strategy_id: Some(StrategyId::from("TEST-001")),
+            order_id_tag: Some("001".to_string()),
+            manage_stop: true,
+            ..Default::default()
+        };
+        let mut strategy = TestStrategy::new(config);
+        register_strategy(&mut strategy);
+
+        // State is not Running (default)
+        assert_ne!(strategy.core.actor.state(), ComponentState::Running);
+
+        let should_proceed = Strategy::stop(&mut strategy);
+
+        // Should proceed with stop
+        assert!(should_proceed);
+    }
+
+    #[rstest]
+    fn test_finalize_market_exit_stops_strategy_when_pending() {
+        let config = StrategyConfig {
+            strategy_id: Some(StrategyId::from("TEST-001")),
+            order_id_tag: Some("001".to_string()),
+            ..Default::default()
+        };
+        let mut strategy = TestStrategy::new(config);
+        register_strategy(&mut strategy);
+        start_strategy(&mut strategy);
+
+        // Simulate a market exit with pending stop
+        strategy.core.is_exiting = true;
+        strategy.core.pending_stop = true;
+
+        strategy.finalize_market_exit();
+
+        // Should have transitioned to Stopped
+        assert_eq!(strategy.core.actor.state(), ComponentState::Stopped);
+        assert!(!strategy.core.is_exiting);
+        assert!(!strategy.core.pending_stop);
+    }
+
+    #[rstest]
+    fn test_finalize_market_exit_stays_running_when_not_pending() {
+        let config = StrategyConfig {
+            strategy_id: Some(StrategyId::from("TEST-001")),
+            order_id_tag: Some("001".to_string()),
+            ..Default::default()
+        };
+        let mut strategy = TestStrategy::new(config);
+        register_strategy(&mut strategy);
+        start_strategy(&mut strategy);
+
+        // Simulate a market exit without pending stop
+        strategy.core.is_exiting = true;
+        strategy.core.pending_stop = false;
+
+        strategy.finalize_market_exit();
+
+        // Should stay Running
+        assert_eq!(strategy.core.actor.state(), ComponentState::Running);
+        assert!(!strategy.core.is_exiting);
+    }
+
+    #[rstest]
+    fn test_submit_order_denied_during_market_exit_when_not_reduce_only() {
+        let mut strategy = create_test_strategy();
+        register_strategy(&mut strategy);
+        start_strategy(&mut strategy);
+        strategy.core.is_exiting = true;
+
+        let order = OrderAny::Market(MarketOrder::new(
+            TraderId::from("TRADER-001"),
+            StrategyId::from("TEST-001"),
+            InstrumentId::from("BTCUSDT.BINANCE"),
+            ClientOrderId::from("O-20250208-0001"),
+            OrderSide::Buy,
+            Quantity::from(100_000),
+            TimeInForce::Gtc,
+            UUID4::new(),
+            UnixNanos::default(),
+            false, // not reduce_only
+            false,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        ));
+        let client_order_id = order.client_order_id();
+        let result = strategy.submit_order(order, None, None);
+
+        assert!(result.is_ok());
+        let cache = strategy.core.cache();
+        let cached_order = cache.order(&client_order_id).unwrap();
+        assert_eq!(cached_order.status(), OrderStatus::Denied);
+    }
+
+    #[rstest]
+    fn test_submit_order_allowed_during_market_exit_when_reduce_only() {
+        let mut strategy = create_test_strategy();
+        register_strategy(&mut strategy);
+        start_strategy(&mut strategy);
+        strategy.core.is_exiting = true;
+
+        let order = OrderAny::Market(MarketOrder::new(
+            TraderId::from("TRADER-001"),
+            StrategyId::from("TEST-001"),
+            InstrumentId::from("BTCUSDT.BINANCE"),
+            ClientOrderId::from("O-20250208-0001"),
+            OrderSide::Buy,
+            Quantity::from(100_000),
+            TimeInForce::Gtc,
+            UUID4::new(),
+            UnixNanos::default(),
+            true, // reduce_only
+            false,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        ));
+        let client_order_id = order.client_order_id();
+        let result = strategy.submit_order(order, None, None);
+
+        assert!(result.is_ok());
+        let cache = strategy.core.cache();
+        let cached_order = cache.order(&client_order_id).unwrap();
+        assert_ne!(cached_order.status(), OrderStatus::Denied);
+    }
+
+    #[rstest]
+    fn test_submit_order_allowed_during_market_exit_when_tagged() {
+        let mut strategy = create_test_strategy();
+        register_strategy(&mut strategy);
+        start_strategy(&mut strategy);
+        strategy.core.is_exiting = true;
+
+        let order = OrderAny::Market(MarketOrder::new(
+            TraderId::from("TRADER-001"),
+            StrategyId::from("TEST-001"),
+            InstrumentId::from("BTCUSDT.BINANCE"),
+            ClientOrderId::from("O-20250208-0002"),
+            OrderSide::Buy,
+            Quantity::from(100_000),
+            TimeInForce::Gtc,
+            UUID4::new(),
+            UnixNanos::default(),
+            false, // not reduce_only
+            false,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(vec![Ustr::from("MARKET_EXIT")]),
+        ));
+        let client_order_id = order.client_order_id();
+        let result = strategy.submit_order(order, None, None);
+
+        assert!(result.is_ok());
+        let cache = strategy.core.cache();
+        let cached_order = cache.order(&client_order_id).unwrap();
+        assert_ne!(cached_order.status(), OrderStatus::Denied);
     }
 }

@@ -29,7 +29,7 @@ mod tests;
 
 use std::{
     collections::VecDeque,
-    fmt::Debug,
+    fmt::{Debug, Display},
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -956,9 +956,9 @@ impl Cache {
         for order_list_id in affected_order_list_ids {
             if let Some(order_list) = self.order_lists.get(&order_list_id) {
                 let all_purged = order_list
-                    .orders
+                    .client_order_ids
                     .iter()
-                    .all(|o| !self.orders.contains_key(&o.client_order_id()));
+                    .all(|id| !self.orders.contains_key(id));
                 if all_purged {
                     self.order_lists.remove(&order_list_id);
                     log::info!("Purged {order_list_id}");
@@ -1389,7 +1389,7 @@ impl Cache {
     ///
     /// Returns an error if persisting the trade ticks to the backing database fails.
     pub fn add_funding_rates(&mut self, funding_rates: &[FundingRateUpdate]) -> anyhow::Result<()> {
-        check_slice_not_empty(funding_rates, stringify!(trades))?;
+        check_slice_not_empty(funding_rates, stringify!(funding_rates))?;
 
         let instrument_id = funding_rates[0].instrument_id;
         log::debug!(
@@ -1994,6 +1994,9 @@ impl Cache {
     ///
     /// Returns an error if updating the account in the database fails.
     pub fn update_account(&mut self, account: AccountAny) -> anyhow::Result<()> {
+        let account_id = account.id();
+        self.accounts.insert(account_id, account.clone());
+
         if let Some(database) = &mut self.database {
             database.update_account(&account)?;
         }
@@ -2637,6 +2640,23 @@ impl Cache {
         self.orders.get(client_order_id)
     }
 
+    /// Gets cloned orders for the given `client_order_ids`, logging an error for any missing.
+    #[must_use]
+    pub fn orders_for_ids(
+        &self,
+        client_order_ids: &[ClientOrderId],
+        context: &dyn Display,
+    ) -> Vec<OrderAny> {
+        let mut orders = Vec::with_capacity(client_order_ids.len());
+        for id in client_order_ids {
+            match self.orders.get(id) {
+                Some(order) => orders.push(order.clone()),
+                None => log::error!("Order {id} not found in cache for {context}"),
+            }
+        }
+        orders
+    }
+
     /// Gets a reference to the order with the `client_order_id` (if found).
     #[must_use]
     pub fn mut_order(&mut self, client_order_id: &ClientOrderId) -> Option<&mut OrderAny> {
@@ -2884,8 +2904,11 @@ impl Cache {
 
         if let Some(account_id) = account_id {
             order_lists.retain(|ol| {
-                ol.first()
-                    .is_some_and(|order| order.account_id().as_ref() == Some(account_id))
+                ol.client_order_ids.iter().any(|client_order_id| {
+                    self.orders
+                        .get(client_order_id)
+                        .is_some_and(|order| order.account_id().as_ref() == Some(account_id))
+                })
             });
         }
 

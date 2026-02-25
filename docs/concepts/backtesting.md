@@ -339,6 +339,18 @@ Failing to do so will result in data aggregation: L2 data will be reduced to a s
 
 In the main backtesting loop, new market data is processed for order execution before being dispatched to actors/strategies via the data engine.
 
+#### Command settling
+
+When an order fill triggers a strategy callback that submits additional orders (e.g., a stop-loss submitted
+in `on_order_filled`), those cascading commands are settled within the same timestamp/event cycle. The engine
+repeatedly drains venue command queues and any newly generated commands until no commands remain pending
+for the current timestamp. Simulation modules are run only once per cycle, after all commands have settled.
+
+When a `LatencyModel` is configured, commands are placed in the venue's inflight queue with a future
+timestamp derived from the simulated latency. The settle loop considers inflight commands that are due
+at the current timestamp as pending, so zero-latency or same-tick latency configurations still settle
+correctly. Commands with future timestamps are deferred and processed when the engine reaches that time.
+
 ### Fill modeling philosophy
 
 NautilusTrader treats historical order book and trade data as **immutable** during backtesting. What happened in the market is preserved exactly as recorded—fills never modify the underlying book state.
@@ -596,6 +608,30 @@ When processing a fill:
 4. A delta updates ask 100.00 to 120 units. Engine resets: `(original=120, consumed=0)`.
 5. New orders can now fill against the fresh 120 units.
 
+**Passive limit order fills on L1 data:**
+
+With L1 data (quotes, trades, bars), the book has only a single price level per side. When the market
+moves through a passive (MAKER) limit order's price, the engine must decide how to handle remaining
+order quantity after exhausting displayed liquidity.
+
+| `liquidity_consumption` | Behavior when market moves through passive limit |
+|-------------------------|--------------------------------------------------|
+| `False` (default)       | Fill entire order at limit price. Assumes market movement implies sufficient liquidity existed. |
+| `True`                  | Fill only against displayed liquidity. Order remains open for subsequent fills. |
+
+**Example scenario** (`liquidity_consumption=True`):
+
+1. Quote shows ask 100.10 with 50 units.
+2. You place BUY LIMIT at 100.05 for 1000 units (passive, resting below ask).
+3. Next quote shows ask 100.00 with 30 units (market moved through your limit).
+4. Order fills 30 units against displayed liquidity. 970 units remain open.
+5. Next quote shows ask 99.95 with 200 units.
+6. Order fills another 200 units. 770 units remain open.
+7. Fills continue as fresh liquidity arrives at crossed price levels.
+
+This behavior provides conservative fill simulation—your order only fills against liquidity
+actually observed in the data, rather than inferring liquidity from price movements.
+
 **Trade tick liquidity:**
 
 Trade ticks provide evidence of executable liquidity at the trade price. When a trade occurs at a price level
@@ -622,9 +658,26 @@ not reflect sustained availability.
 
 ### Trade based execution
 
-When you have trade tick data, enable `trade_execution=True` in your venue configuration to trigger order fills
-based on trade activity. A trade tick indicates that liquidity was accessed at the trade price, allowing resting
-limit orders to match.
+Trade tick data triggers order fills by default (`trade_execution=True`). A trade tick indicates that liquidity
+was accessed at the trade price, allowing resting limit orders to match. This mirrors the default behavior
+for bar data (`bar_execution=True`).
+
+Advanced users who want to isolate execution to L1 book data only (quotes or order book updates) can disable
+trade-based execution:
+
+```python
+venue_config = BacktestVenueConfig(
+    name="SIM",
+    oms_type="NETTING",
+    account_type="CASH",
+    starting_balances=["100_000 USD"],
+    trade_execution=False,  # Disable trade-based fills
+)
+```
+
+When `trade_execution=False` or `bar_execution=False`, the respective data types skip order matching
+and maintenance operations (GTD order expiry, trailing stop activation, instrument expiration checks).
+Quote ticks always trigger maintenance, so this is typically acceptable when using multiple data types.
 
 The matching engine uses a "transient override" mechanism: during the matching process, it temporarily adjusts
 the matching core's Best Bid (for BUYER trades) or Best Ask (for SELLER trades) toward the trade price. This allows
@@ -657,18 +710,6 @@ the trade price. This means repeated trades at or beyond the spread can progress
 - **BUYER trade at P**: The engine sets the core's Best Bid to P (if P > current bid). Resting SELL LIMIT orders at P or lower will fill at their limit price (if book doesn't have that level) or at book prices (if book does).
 
 This conservative approach ensures fills occur at the order's limit price rather than potentially better trade prices. For example, a BUY LIMIT at 100.05 triggered by a SELLER trade at 100.00 will fill at 100.05, not 100.00.
-
-**Example:**
-
-```python
-engine.add_venue(
-    venue=venue,
-    oms_type=OmsType.NETTING,
-    account_type=AccountType.CASH,
-    starting_balances=[Money(10_000, USDT)],
-    trade_execution=True,
-)
-```
 
 :::tip
 Combine trade data with book or quote data for best results: book/quote data establishes the baseline spread,
@@ -926,6 +967,18 @@ Useful when tick data clusters at round interval timestamps.
 
 :::note
 Only affects internally aggregated bars (`AggregationSource.INTERNAL`).
+:::
+
+### Timer-only backtests
+
+The backtest engine supports running with timers but no market data. This is useful for scheduled
+operations or testing timer-based logic. Timers fire in chronological order, and timer callbacks
+can dynamically add data via `add_data_iterator()` which will be processed in sequence.
+
+:::warning
+Data added by timer callbacks at the exact start time should have timestamps **after** the start time.
+The engine reads the first data point before processing start-time timers, so dynamically added data
+with timestamps at or before the start time may not be processed in the expected order.
 :::
 
 ### Fill models

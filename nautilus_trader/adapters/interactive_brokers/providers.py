@@ -565,7 +565,11 @@ class InteractiveBrokersInstrumentProvider(InstrumentProvider):
         ) or (self._build_futures_chain or self._build_options_chain):
             # 返回具有期货链的底层合约详情
             future_chain_details = await self.get_future_chain_details(qualified.contract)
-            details.extend(future_chain_details)
+
+            if future_chain_details is not None:
+                details.extend(future_chain_details)
+            else:
+                self._log.warning(f"Failed to fetch future chain details for {qualified.contract}")
 
         if (
             contract.secType in ["STK", "CONTFUT", "FUT", "IND"] and contract.build_options_chain

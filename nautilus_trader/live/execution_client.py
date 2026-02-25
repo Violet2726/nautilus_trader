@@ -556,6 +556,14 @@ class LiveExecutionClient(ExecutionClient):
     def _log_account_registered(self) -> None:
         self._log.info(f"账户 {self.account_id} 已在缓存中注册", LogColor.GREEN)
 
+    def _log_report_error(self, e: BaseException, report_type: str) -> None:
+        if isinstance(e, asyncio.CancelledError) or (
+            isinstance(e, ValueError) and "request canceled" in str(e).lower()
+        ):
+            self._log.debug(f"{report_type} request cancelled during shutdown")
+        else:
+            self._log.exception(f"Failed to generate {report_type}", e)
+
     def _log_report_receipt(
         self,
         count: int,

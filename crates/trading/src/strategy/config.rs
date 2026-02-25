@@ -14,7 +14,7 @@
 
 use nautilus_core::serialization::{default_false, default_true};
 use nautilus_model::{
-    enums::OmsType,
+    enums::{OmsType, TimeInForce},
     identifiers::{InstrumentId, StrategyId},
 };
 use serde::{Deserialize, Serialize};
@@ -51,6 +51,24 @@ pub struct StrategyConfig {
     /// 如果为 True，将确保未结订单在启动时重新激活其 GTD 定时器。
     #[serde(default = "default_false")]
     pub manage_gtd_expiry: bool,
+    /// 策略停止时是否应自动执行市场退出（market exit）。
+    /// 如果为 true，调用 stop() 会先取消所有订单并关闭所有仓位，
+    /// 然后策略才会转换到 STOPPED 状态。
+    #[serde(default = "default_false")]
+    pub manage_stop: bool,
+    /// 市场退出期间检查在途订单和持仓的时间间隔（毫秒）。
+    #[serde(default = "default_market_exit_interval_ms")]
+    pub market_exit_interval_ms: u64,
+    /// 市场退出期间等待订单和仓位关闭的最大尝试次数。
+    /// 默认为 100 次（以 100ms 间隔计算为 10 秒）。
+    #[serde(default = "default_market_exit_max_attempts")]
+    pub market_exit_max_attempts: u64,
+    /// 市场退出期间关闭市价单的有效时间类型（Time in Force）。
+    #[serde(default = "default_market_exit_time_in_force")]
+    pub market_exit_time_in_force: TimeInForce,
+    /// 市场退出期间的关闭市价单是否应为仅减仓（reduce only）。
+    #[serde(default = "default_true")]
+    pub market_exit_reduce_only: bool,
     /// 策略是否应记录事件日志。
     /// 如果为 False，则仅记录警告及以上级别的事件。
     #[serde(default = "default_true")]
@@ -61,6 +79,18 @@ pub struct StrategyConfig {
     /// 是否应将 `due_post_only` 为 True 的订单拒绝事件记录为警告。
     #[serde(default = "default_true")]
     pub log_rejected_due_post_only_as_warning: bool,
+}
+
+const fn default_market_exit_interval_ms() -> u64 {
+    100
+}
+
+const fn default_market_exit_max_attempts() -> u64 {
+    100
+}
+
+const fn default_market_exit_time_in_force() -> TimeInForce {
+    TimeInForce::Gtc
 }
 
 impl Default for StrategyConfig {
@@ -74,6 +104,11 @@ impl Default for StrategyConfig {
             external_order_claims: None,
             manage_contingent_orders: false,
             manage_gtd_expiry: false,
+            manage_stop: false,
+            market_exit_interval_ms: default_market_exit_interval_ms(),
+            market_exit_max_attempts: default_market_exit_max_attempts(),
+            market_exit_time_in_force: TimeInForce::Gtc,
+            market_exit_reduce_only: true,
             log_events: true,
             log_commands: true,
             log_rejected_due_post_only_as_warning: true,
@@ -99,6 +134,11 @@ mod tests {
         assert!(config.external_order_claims.is_none());
         assert!(!config.manage_contingent_orders);
         assert!(!config.manage_gtd_expiry);
+        assert!(!config.manage_stop);
+        assert_eq!(config.market_exit_interval_ms, 100);
+        assert_eq!(config.market_exit_max_attempts, 100);
+        assert_eq!(config.market_exit_time_in_force, TimeInForce::Gtc);
+        assert!(config.market_exit_reduce_only);
         assert!(config.log_events);
         assert!(config.log_commands);
         assert!(config.log_rejected_due_post_only_as_warning);

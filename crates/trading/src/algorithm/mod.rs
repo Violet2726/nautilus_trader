@@ -44,6 +44,8 @@ pub mod vwap;
 pub use core::{ExecutionAlgorithmCore, StrategyEventHandlers};
 
 pub use config::ExecutionAlgorithmConfig;
+pub use iceberg::{IcebergAlgorithm, IcebergAlgorithmConfig};
+pub use is::{IsAlgorithm, IsAlgorithmConfig};
 use nautilus_common::{
     actor::{DataActor, registry::try_get_actor_unchecked},
     enums::ComponentState,
@@ -66,12 +68,10 @@ use nautilus_model::{
     orders::{LimitOrder, MarketOrder, MarketToLimitOrder, Order, OrderAny, OrderList},
     types::{Price, Quantity},
 };
-pub use iceberg::{IcebergAlgorithm, IcebergAlgorithmConfig};
-pub use is::{IsAlgorithm, IsAlgorithmConfig};
 pub use pov::{PovAlgorithm, PovAlgorithmConfig};
 pub use twap::{TwapAlgorithm, TwapAlgorithmConfig};
-pub use vwap::{VwapAlgorithm, VwapAlgorithmConfig};
 use ustr::Ustr;
+pub use vwap::{VwapAlgorithm, VwapAlgorithmConfig};
 
 /// 用于在 NautilusTrader 中实现执行算法的核心 trait。
 ///
@@ -131,7 +131,8 @@ pub trait ExecutionAlgorithm: DataActor {
             }
             TradingCommand::SubmitOrderList(cmd) => {
                 self.subscribe_to_strategy_events(cmd.strategy_id);
-                self.on_order_list(cmd.order_list)
+                let orders = self.core_mut().get_orders_for_list(&cmd.order_list)?;
+                self.on_order_list(cmd.order_list, orders)
             }
             TradingCommand::CancelOrder(cmd) => self.handle_cancel_order(cmd),
             _ => {
@@ -158,8 +159,12 @@ pub trait ExecutionAlgorithm: DataActor {
     /// # Errors
     ///
     /// 如果订单列表处理失败，则返回错误。
-    fn on_order_list(&mut self, order_list: OrderList) -> anyhow::Result<()> {
-        for order in order_list.orders {
+    fn on_order_list(
+        &mut self,
+        _order_list: OrderList,
+        orders: Vec<OrderAny>,
+    ) -> anyhow::Result<()> {
+        for order in orders {
             self.on_order(order)?;
         }
         Ok(())

@@ -248,6 +248,20 @@ impl HyperliquidRawHttpClient {
             .address()
     }
 
+    /// Gets the account address for queries: vault address if configured,
+    /// otherwise the user (EOA) address.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Auth`] if the client has no signer configured.
+    pub fn get_account_address(&self) -> Result<String> {
+        if let Some(vault) = &self.vault_address {
+            Ok(vault.to_hex())
+        } else {
+            self.get_user_address()
+        }
+    }
+
     /// Builds the default headers to include with each request (e.g., `User-Agent`).
     fn default_headers() -> HashMap<String, String> {
         HashMap::from([
@@ -895,6 +909,16 @@ impl HyperliquidHttpClient {
     /// Returns [`Error::Auth`] if the client has no signer configured.
     pub fn get_user_address(&self) -> Result<String> {
         self.inner.get_user_address()
+    }
+
+    /// Gets the account address for queries: vault address if configured,
+    /// otherwise the user (EOA) address.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Auth`] if the client has no signer configured.
+    pub fn get_account_address(&self) -> Result<String> {
+        self.inner.get_account_address()
     }
 
     /// Caches a single instrument.
@@ -1642,7 +1666,10 @@ impl HyperliquidHttpClient {
         let instrument_id = bar_type.instrument_id();
         let symbol = instrument_id.symbol;
 
-        let coin = Ustr::from(
+        let product_type = HyperliquidProductType::from_symbol(symbol.as_str()).ok();
+
+        // Extract base currency for lookup, then use raw_symbol for the API call
+        let base = Ustr::from(
             symbol
                 .as_str()
                 .split('-')
@@ -1650,12 +1677,17 @@ impl HyperliquidHttpClient {
                 .ok_or_else(|| Error::bad_request("Invalid instrument symbol"))?,
         );
 
-        let product_type = HyperliquidProductType::from_symbol(symbol.as_str()).ok();
         let instrument = self
-            .get_or_create_instrument(&coin, product_type)
+            .get_or_create_instrument(&base, product_type)
             .ok_or_else(|| {
                 Error::bad_request(format!("Instrument not found in cache: {instrument_id}"))
             })?;
+
+        // Use raw_symbol which has the correct Hyperliquid API format:
+        // - Perps: base currency (e.g., "BTC")
+        // - Spot PURR: slash format (e.g., "PURR/USDC")
+        // - Spot others: @{index} format (e.g., "@107")
+        let coin = instrument.raw_symbol().inner();
 
         let price_precision = instrument.price_precision();
         let size_precision = instrument.size_precision();
@@ -1719,8 +1751,7 @@ impl HyperliquidHttpClient {
         );
         Ok(bars)
     }
-    /// Uses the existing order conversion logic from `common::parse::order_to_hyperliquid_request`
-    /// to avoid code duplication and ensure consistency.
+    /// Submits an order to the exchange.
     ///
     /// # Errors
     ///
@@ -1778,8 +1809,8 @@ impl HyperliquidHttpClient {
                     match time_in_force {
                         TimeInForce::Gtc => HyperliquidExecTif::Gtc,
                         TimeInForce::Ioc => HyperliquidExecTif::Ioc,
-                        TimeInForce::Fok => HyperliquidExecTif::Ioc, // Hyperliquid doesn't have FOK
-                        TimeInForce::Day
+                        TimeInForce::Fok
+                        | TimeInForce::Day
                         | TimeInForce::Gtd
                         | TimeInForce::AtTheOpen
                         | TimeInForce::AtTheClose => {

@@ -332,6 +332,7 @@ class BacktestNode:
             "request_quote_ticks",
             "request_trade_ticks",
             "request_order_book_depth",
+            "request_order_book_deltas",
         ]
 
         if request_function not in compatible_request_functions:
@@ -412,6 +413,7 @@ class BacktestNode:
                 queue_position=venue_config.queue_position,
                 allow_cash_borrowing=venue_config.allow_cash_borrowing,
                 price_protection_points=get_price_protection_points(venue_config),
+                settlement_prices=venue_config.settlement_prices,
             )
 
         # Add instruments

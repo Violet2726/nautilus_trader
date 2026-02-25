@@ -38,21 +38,6 @@ class ContractId(int):
     """
 
 
-# https://interactivebrokers.github.io/tws-api/tick_types.html
-TickTypeMapping = {
-    0: "Bid Size",
-    1: "Bid Price",
-    2: "Ask Price",
-    3: "Ask Size",
-    4: "Last Price",
-    5: "Last Size",
-    6: "High",
-    7: "Low",
-    8: "Volume",
-    9: "Close Price",
-}
-
-
 class ComboLeg(NautilusConfig, frozen=True, omit_defaults=True, repr_omit_defaults=True):
     """
     表示组合订单（combo orders）中一条腿（leg）的类。

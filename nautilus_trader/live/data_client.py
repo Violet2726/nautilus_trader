@@ -42,6 +42,7 @@ from nautilus_trader.data.messages import RequestData
 from nautilus_trader.data.messages import RequestFundingRates
 from nautilus_trader.data.messages import RequestInstrument
 from nautilus_trader.data.messages import RequestInstruments
+from nautilus_trader.data.messages import RequestOrderBookDeltas
 from nautilus_trader.data.messages import RequestOrderBookDepth
 from nautilus_trader.data.messages import RequestOrderBookSnapshot
 from nautilus_trader.data.messages import RequestQuoteTicks
@@ -822,6 +823,42 @@ class LiveMarketDataClient(MarketDataClient):
             log_msg=f"请求: {request.venue} 标的列表",
         )
 
+    def request_order_book_deltas(self, request: RequestOrderBookDeltas) -> None:
+        time_range_str = format_utc_timerange(request.start, request.end)
+        limit_str = f" limit={request.limit}" if request.limit != 0 else ""
+        self._log.info(
+            f"请求 {request.instrument_id} 订单簿增量{time_range_str}{limit_str}",
+            LogColor.BLUE,
+        )
+        self.create_task(
+            self._request_order_book_deltas(request),
+            log_msg=f"请求: 订单簿增量 {request.instrument_id}",
+        )
+
+    def request_order_book_depth(self, request: RequestOrderBookDepth) -> None:
+        time_range_str = format_utc_timerange(request.start, request.end)
+        limit_str = f" limit={request.limit}" if request.limit != 0 else ""
+        depth_str = f" depth={request.depth}"
+        self._log.info(
+            f"请求 {request.instrument_id} 订单簿深度{time_range_str}{limit_str}{depth_str}",
+            LogColor.BLUE,
+        )
+        self.create_task(
+            self._request_order_book_depth(request),
+            log_msg=f"请求: 订单簿深度 {request.instrument_id}",
+        )
+
+    def request_order_book_snapshot(self, request: RequestOrderBookSnapshot) -> None:
+        limit_str = f" limit={request.limit}" if request.limit != 0 else ""
+        self._log.info(
+            f"请求 {request.instrument_id} 订单簿快照{limit_str}",
+            LogColor.BLUE,
+        )
+        self.create_task(
+            self._request_order_book_snapshot(request),
+            log_msg=f"请求: 订单簿快照 {request.instrument_id}",
+        )
+
     def request_quote_ticks(self, request: RequestQuoteTicks) -> None:
         time_range_str = format_utc_timerange(request.start, request.end)
         limit_str = f" limit={request.limit}" if request.limit != 0 else ""
@@ -867,29 +904,6 @@ class LiveMarketDataClient(MarketDataClient):
             log_msg=f"请求: K 线 {request.bar_type}",
         )
 
-    def request_order_book_snapshot(self, request: RequestOrderBookSnapshot) -> None:
-        limit_str = f" limit={request.limit}" if request.limit != 0 else ""
-        self._log.info(
-            f"请求 {request.instrument_id} 订单簿快照{limit_str}",
-            LogColor.BLUE,
-        )
-        self.create_task(
-            self._request_order_book_snapshot(request),
-            log_msg=f"请求: 订单簿快照 {request.instrument_id}",
-        )
-
-    def request_order_book_depth(self, request: RequestOrderBookDepth) -> None:
-        time_range_str = format_utc_timerange(request.start, request.end)
-        limit_str = f" limit={request.limit}" if request.limit != 0 else ""
-        depth_str = f" depth={request.depth}"
-        self._log.info(
-            f"请求 {request.instrument_id} 订单簿深度{time_range_str}{limit_str}{depth_str}",
-            LogColor.BLUE,
-        )
-        self.create_task(
-            self._request_order_book_depth(request),
-            log_msg=f"请求: 订单簿深度 {request.instrument_id}",
-        )
 
     ############################################################################
     # Coroutines to implement
@@ -1069,14 +1083,19 @@ class LiveMarketDataClient(MarketDataClient):
             "请实现 `_request_bars` 协程",  # pragma: no cover
         )
 
-    async def _request_order_book_snapshot(self, request: RequestOrderBookSnapshot) -> None:
-        raise NotImplementedError(
-            "请实现 `_request_order_book_snapshot` 协程",  # pragma: no cover
+    async def _request_order_book_deltas(self, request: RequestOrderBookDeltas) -> None:
+        raise NotImplementedError(  # pragma: no cover
+            "请实现 `_request_order_book_deltas` 协程",  # pragma: no cover
         )
 
     async def _request_order_book_depth(self, request: RequestOrderBookDepth) -> None:
         raise NotImplementedError(  # pragma: no cover
             "请实现 `_request_order_book_depth` 协程",  # pragma: no cover
+        )
+
+    async def _request_order_book_snapshot(self, request: RequestOrderBookSnapshot) -> None:
+        raise NotImplementedError(
+            "请实现 `_request_order_book_snapshot` 协程",  # pragma: no cover
         )
 
     async def cancel_pending_tasks(self, timeout_secs: float = 5.0) -> None:

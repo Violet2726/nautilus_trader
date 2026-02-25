@@ -780,18 +780,6 @@ impl DeribitWebSocketClient {
         self.send_subscribe(vec![channel]).await
     }
 
-    /// Subscribes to raw trade updates (requires authentication).
-    ///
-    /// Convenience method equivalent to `subscribe_trades(id, Some(DeribitUpdateInterval::Raw))`.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if not authenticated or subscription fails.
-    pub async fn subscribe_trades_raw(&self, instrument_id: InstrumentId) -> DeribitWsResult<()> {
-        self.subscribe_trades(instrument_id, Some(DeribitUpdateInterval::Raw))
-            .await
-    }
-
     /// Unsubscribes from trade updates for an instrument.
     ///
     /// # Errors
@@ -830,18 +818,6 @@ impl DeribitWebSocketClient {
         self.send_subscribe(vec![channel]).await
     }
 
-    /// Subscribes to raw order book updates (requires authentication).
-    ///
-    /// Convenience method equivalent to `subscribe_book(id, Some(DeribitUpdateInterval::Raw))`.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if not authenticated or subscription fails.
-    pub async fn subscribe_book_raw(&self, instrument_id: InstrumentId) -> DeribitWsResult<()> {
-        self.subscribe_book(instrument_id, Some(DeribitUpdateInterval::Raw))
-            .await
-    }
-
     /// Unsubscribes from order book updates for an instrument.
     ///
     /// # Errors
@@ -862,6 +838,8 @@ impl DeribitWebSocketClient {
     ///
     /// Uses the Deribit grouped book channel format: `book.{instrument}.{group}.{depth}.{interval}`
     ///
+    /// Depth is normalized to Deribit supported values: 1, 10, or 20.
+    ///
     /// # Errors
     ///
     /// Returns an error if subscription fails or raw is requested without authentication.
@@ -872,19 +850,34 @@ impl DeribitWebSocketClient {
         depth: u32,
         interval: Option<DeribitUpdateInterval>,
     ) -> DeribitWsResult<()> {
-        let interval = interval.unwrap_or_default();
-        self.check_auth_requirement(interval)?;
+        // Grouped book channel only supports 100ms and agg2, not raw
+        let interval = match interval {
+            Some(DeribitUpdateInterval::Raw) | None => DeribitUpdateInterval::Ms100,
+            Some(i) => i,
+        };
+
+        let normalized_depth = if depth < 5 {
+            1
+        } else if depth < 15 {
+            10
+        } else {
+            20
+        };
+
         let channel = format!(
             "book.{}.{}.{}.{}",
             instrument_id.symbol,
             group,
-            depth,
+            normalized_depth,
             interval.as_str()
         );
+        log::debug!("Subscribing to grouped book channel: {channel}");
         self.send_subscribe(vec![channel]).await
     }
 
     /// Unsubscribes from grouped (depth-limited) order book updates for an instrument.
+    ///
+    /// Depth is normalized to Deribit supported values: 1, 10, or 20.
     ///
     /// # Errors
     ///
@@ -896,12 +889,25 @@ impl DeribitWebSocketClient {
         depth: u32,
         interval: Option<DeribitUpdateInterval>,
     ) -> DeribitWsResult<()> {
-        let interval = interval.unwrap_or_default();
+        // Grouped book channel only supports 100ms and agg2, not raw
+        let interval = match interval {
+            Some(DeribitUpdateInterval::Raw) | None => DeribitUpdateInterval::Ms100,
+            Some(i) => i,
+        };
+
+        let normalized_depth = if depth < 5 {
+            1
+        } else if depth < 15 {
+            10
+        } else {
+            20
+        };
+
         let channel = format!(
             "book.{}.{}.{}.{}",
             instrument_id.symbol,
             group,
-            depth,
+            normalized_depth,
             interval.as_str()
         );
         self.send_unsubscribe(vec![channel]).await
@@ -927,18 +933,6 @@ impl DeribitWebSocketClient {
         let channel =
             DeribitWsChannel::Ticker.format_channel(instrument_id.symbol.as_str(), Some(interval));
         self.send_subscribe(vec![channel]).await
-    }
-
-    /// Subscribes to raw ticker updates (requires authentication).
-    ///
-    /// Convenience method equivalent to `subscribe_ticker(id, Some(DeribitUpdateInterval::Raw))`.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if not authenticated or subscription fails.
-    pub async fn subscribe_ticker_raw(&self, instrument_id: InstrumentId) -> DeribitWsResult<()> {
-        self.subscribe_ticker(instrument_id, Some(DeribitUpdateInterval::Raw))
-            .await
     }
 
     /// Unsubscribes from ticker updates for an instrument.

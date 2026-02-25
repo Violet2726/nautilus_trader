@@ -154,35 +154,12 @@ impl KrakenSpotExecutionClient {
         tasks.push(handle);
     }
 
-    fn validate_order_venue(&self, order: &OrderAny) -> bool {
-        if order.instrument_id().venue != *KRAKEN_VENUE {
-            let ts_event = self.clock.get_time_ns();
-            self.emitter.emit_order_rejected_event(
-                order.strategy_id(),
-                order.instrument_id(),
-                order.client_order_id(),
-                &format!(
-                    "Instrument {} does not belong to KRAKEN venue",
-                    order.instrument_id()
-                ),
-                ts_event,
-                false,
-            );
-            return false;
-        }
-        true
-    }
-
     fn submit_single_order(&self, order: &OrderAny, task_name: &'static str) -> anyhow::Result<()> {
         if order.is_closed() {
             log::warn!(
                 "Cannot submit closed order: client_order_id={}",
                 order.client_order_id()
             );
-            return Ok(());
-        }
-
-        if !self.validate_order_venue(order) {
             return Ok(());
         }
 
@@ -688,13 +665,15 @@ impl ExecutionClient for KrakenSpotExecutionClient {
     }
 
     fn submit_order_list(&self, cmd: &SubmitOrderList) -> anyhow::Result<()> {
+        let orders = self.core.get_orders_for_list(&cmd.order_list)?;
+
         log::info!(
             "Submitting order list: order_list_id={}, count={}",
             cmd.order_list.id,
-            cmd.order_list.orders.len()
+            orders.len()
         );
 
-        for order in &cmd.order_list.orders {
+        for order in &orders {
             self.submit_single_order(order, "submit_order_list")?;
         }
 

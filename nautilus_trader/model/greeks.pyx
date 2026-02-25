@@ -18,6 +18,7 @@ from typing import Callable
 from nautilus_trader.core.nautilus_pyo3 import black_scholes_greeks
 from nautilus_trader.core.nautilus_pyo3 import imply_vol_and_greeks
 from nautilus_trader.core.nautilus_pyo3 import refine_vol_and_greeks
+from nautilus_trader.model.enums import AssetClass
 from nautilus_trader.model.enums import InstrumentClass
 from nautilus_trader.model.enums import PriceType
 from nautilus_trader.model.greeks_data import GreeksData
@@ -249,7 +250,7 @@ cdef class GreeksCalculator:
 
             greeks_data = GreeksData(utc_now_ns, utc_now_ns, instrument_id, is_call, strike, expiry_int, expiry_in_days, expiry_in_years, multiplier, 1.0,
                                      underlying_price, interest_rate, cost_of_carry, greeks.vol, 0., greeks.price, delta, gamma, vega, greeks.theta,
-                                     abs(greeks.delta / multiplier))
+                                     greeks.itm_prob)
 
             # adding greeks to cache
             if cache_greeks:
@@ -276,7 +277,7 @@ cdef class GreeksCalculator:
                                      greeks_data.instrument_id, greeks_data.is_call, greeks_data.strike, greeks_data.expiry,
                                      int(shocked_time_to_expiry * 365.25), shocked_time_to_expiry, greeks_data.multiplier, greeks_data.quantity, shocked_underlying_price,
                                      greeks_data.interest_rate, greeks_data.cost_of_carry, shocked_vol, 0., greeks.price, delta, gamma, vega,
-                                     greeks.theta, abs(greeks.delta / greeks_data.multiplier))
+                                     greeks.theta, greeks.itm_prob)
 
         if position is not None:
             greeks_data.pnl = greeks_data.price - greeks_data.multiplier * position.avg_px_open
@@ -284,6 +285,14 @@ cdef class GreeksCalculator:
         return greeks_data
 
     cdef object _get_price(self, InstrumentId instrument_id):
+        # Check if the instrument is an index - if so, use index price
+        instrument = self._cache.instrument(instrument_id)
+        if instrument is not None and instrument.asset_class is AssetClass.INDEX:
+            index_price = self._cache.index_price(instrument_id)
+            if index_price is not None:
+                return index_price.value
+            # If no index price, fall through to regular price lookup
+
         # Try MID price first, then LAST price as fallback
         price_obj = self._cache.price(instrument_id, PriceType.MID)
         if price_obj is None:

@@ -29,6 +29,7 @@ from nautilus_trader.core.uuid cimport UUID4
 from nautilus_trader.data.messages cimport DataCommand
 from nautilus_trader.data.messages cimport DataResponse
 from nautilus_trader.data.messages cimport RequestData
+from nautilus_trader.data.messages cimport RequestOrderBookDeltas
 from nautilus_trader.indicators.base cimport Indicator
 from nautilus_trader.model.book cimport OrderBook
 from nautilus_trader.model.data cimport Bar
@@ -40,6 +41,7 @@ from nautilus_trader.model.data cimport IndexPriceUpdate
 from nautilus_trader.model.data cimport InstrumentClose
 from nautilus_trader.model.data cimport InstrumentStatus
 from nautilus_trader.model.data cimport MarkPriceUpdate
+from nautilus_trader.model.data cimport OrderBookDeltas
 from nautilus_trader.model.data cimport OrderBookDepth10
 from nautilus_trader.model.data cimport QuoteTick
 from nautilus_trader.model.data cimport TradeTick
@@ -254,12 +256,15 @@ cdef class Actor(Component):
         UUID4 request_id=*,
         dict[str, object] params=*,
     )
-    cpdef UUID4 request_order_book_snapshot(
+    cpdef UUID4 request_order_book_deltas(
         self,
         InstrumentId instrument_id,
+        datetime start,
+        datetime end=*,
         int limit=*,
         ClientId client_id=*,
         callback=*,
+        bint update_catalog=*,
         bint join_request=*,
         UUID4 request_id=*,
         dict[str, object] params=*,
@@ -274,6 +279,16 @@ cdef class Actor(Component):
         ClientId client_id=*,
         callback=*,
         bint update_catalog=*,
+        bint join_request=*,
+        UUID4 request_id=*,
+        dict[str, object] params=*,
+    )
+    cpdef UUID4 request_order_book_snapshot(
+        self,
+        InstrumentId instrument_id,
+        int limit=*,
+        ClientId client_id=*,
+        callback=*,
         bint join_request=*,
         UUID4 request_id=*,
         dict[str, object] params=*,
@@ -365,7 +380,8 @@ cdef class Actor(Component):
 
     cpdef void handle_instrument(self, Instrument instrument)
     cpdef void handle_order_book(self, OrderBook order_book)
-    cpdef void handle_order_book_deltas(self, deltas)
+    cpdef void handle_order_book_deltas(self, deltas, bint historical=*)
+    cpdef void handle_historical_order_book_deltas(self, OrderBookDeltas deltas)
     cpdef void handle_historical_order_book_depth(self, OrderBookDepth10 depth)
     cpdef void handle_order_book_depth(self, OrderBookDepth10 depth, bint historical=*)
     cpdef void handle_historical_quote_tick(self, QuoteTick tick)
@@ -393,6 +409,7 @@ cdef class Actor(Component):
     cpdef void _handle_quote_ticks_response(self, DataResponse response)
     cpdef void _handle_trade_ticks_response(self, DataResponse response)
     cpdef void _handle_funding_rates_response(self, DataResponse response)
+    cpdef void _handle_order_book_deltas_response(self, DataResponse response)
     cpdef void _handle_order_book_depth_response(self, DataResponse response)
     cpdef void _handle_order_book_snapshot_response(self, DataResponse response)
     cpdef void _handle_bars_response(self, DataResponse response)

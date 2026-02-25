@@ -103,15 +103,18 @@ from nautilus_trader.core.rust.model cimport LiquiditySide
 from nautilus_trader.core.rust.model cimport MarketStatus
 from nautilus_trader.core.rust.model cimport MarketStatusAction
 from nautilus_trader.core.rust.model cimport OmsType
+from nautilus_trader.core.rust.model cimport OptionKind
 from nautilus_trader.core.rust.model cimport OrderSide
 from nautilus_trader.core.rust.model cimport OrderStatus
 from nautilus_trader.core.rust.model cimport OrderType
 from nautilus_trader.core.rust.model cimport OtoTriggerMode
+from nautilus_trader.core.rust.model cimport PositionSide
 from nautilus_trader.core.rust.model cimport Price_t
 from nautilus_trader.core.rust.model cimport PriceRaw
 from nautilus_trader.core.rust.model cimport PriceType
 from nautilus_trader.core.rust.model cimport QuantityRaw
 from nautilus_trader.core.rust.model cimport TimeInForce
+from nautilus_trader.core.rust.model cimport TriggerType
 from nautilus_trader.core.rust.model cimport orderbook_best_ask_price
 from nautilus_trader.core.rust.model cimport orderbook_best_bid_price
 from nautilus_trader.core.rust.model cimport orderbook_has_ask
@@ -172,12 +175,15 @@ from nautilus_trader.model.identifiers cimport TradeId
 from nautilus_trader.model.identifiers cimport TraderId
 from nautilus_trader.model.identifiers cimport Venue
 from nautilus_trader.model.identifiers cimport VenueOrderId
-from nautilus_trader.model.instruments.base cimport EXPIRING_INSTRUMENT_CLASSES
+from nautilus_trader.model.instruments.base cimport ENGINE_EXPIRING_INSTRUMENT_CLASSES
 from nautilus_trader.model.instruments.base cimport Instrument
 from nautilus_trader.model.instruments.crypto_future cimport CryptoFuture
+from nautilus_trader.model.instruments.crypto_option cimport CryptoOption
 from nautilus_trader.model.instruments.crypto_perpetual cimport CryptoPerpetual
 from nautilus_trader.model.instruments.currency_pair cimport CurrencyPair
 from nautilus_trader.model.instruments.equity cimport Equity
+from nautilus_trader.model.instruments.index cimport IndexInstrument
+from nautilus_trader.model.instruments.option_contract cimport OptionContract
 from nautilus_trader.model.objects cimport AccountBalance
 from nautilus_trader.model.objects cimport Currency
 from nautilus_trader.model.objects cimport Money
@@ -508,12 +514,13 @@ cdef class BacktestEngine:
         use_market_order_acks: bool = False,
         bar_execution: bool = True,
         bar_adaptive_high_low_ordering: bool = False,
-        trade_execution: bool = False,
+        trade_execution: bool = True,
         liquidity_consumption: bool = False,
         queue_position: bool = False,
         allow_cash_borrowing: bool = False,
         frozen_account: bool = False,
-        price_protection_points=None,
+        price_protection_points = None,
+        settlement_prices: dict[InstrumentId, float] | None = None,
     ) -> None:
         """
         Add a `SimulatedExchange` with the given parameters to the backtest engine.
@@ -582,7 +589,7 @@ cdef class BacktestEngine:
             If True, the processing order adapts with the heuristic:
             - If High is closer to Open than Low then the processing order is Open, High, Low, Close.
             - If Low is closer to Open than High then the processing order is Open, Low, High, Close.
-        trade_execution : bool, default False
+        trade_execution : bool, default True
             If trades should be processed by the matching engine(s) (and move the market).
         liquidity_consumption : bool, default False
             If liquidity consumption should be tracked per price level. When enabled, fills
@@ -600,6 +607,10 @@ cdef class BacktestEngine:
         price_protection_points : int, optional
             Defines an exchange-calculated price boundary (in points) to prevent
             marketable orders from executing at excessively aggressive prices.
+        settlement_prices : dict[InstrumentId, float], optional
+            Map of instrument ID to settlement price for expiring instruments.
+            For futures, positions close at this price instead of market.
+            For options, the option leg settles at this price.
 
         Raises
         ------
@@ -666,6 +677,7 @@ cdef class BacktestEngine:
             liquidity_consumption=liquidity_consumption,
             queue_position=queue_position,
             price_protection_points=price_protection_points,
+            settlement_prices=settlement_prices,
         )
 
         self._venues[venue] = exchange
@@ -838,7 +850,6 @@ cdef class BacktestEngine:
 
         if validate:
             first = data[0]
-
             if hasattr(first, "instrument_id"):
                 Condition.is_true(
                     first.instrument_id in self._kernel.cache.instrument_ids(),
@@ -931,8 +942,8 @@ cdef class BacktestEngine:
         self._log.info(f"Added {data_name} stream generator")
 
     cpdef void _handle_data_command(self, DataCommand command):
-        if not(command.data_type.type in [Bar, QuoteTick, TradeTick, OrderBookDepth10]
-               or type(command) in [SubscribeData, UnsubscribeData, SubscribeInstruments, UnsubscribeInstruments]):
+        if not(command.data_type.type in [Bar, QuoteTick, TradeTick, OrderBookDelta, OrderBookDeltas, OrderBookDepth10]
+               or isinstance(command, (SubscribeData, UnsubscribeData, SubscribeInstruments, UnsubscribeInstruments))):
             return
 
         if isinstance(command, SubscribeData):
@@ -1367,8 +1378,7 @@ cdef class BacktestEngine:
 
         try:
             # Process remaining messages
-            for exchange in self._venues.values():
-                exchange.process(self._kernel.clock.timestamp_ns())
+            self._process_and_settle_venues(self._kernel.clock.timestamp_ns())
         except AccountError:
             pass
 
@@ -1547,12 +1557,31 @@ cdef class BacktestEngine:
                     break
 
         # -- MAIN BACKTEST LOOP -----------------------------------------------#
-        self._last_ns = 0
         cdef uint64_t raw_handlers_count = 0
-        cdef Data data = self._data_iterator.next()
         cdef CVec raw_handlers
+        cdef bint done
+        raw_handlers.ptr = NULL
+        raw_handlers.len = 0
+        raw_handlers.cap = 0
+        cdef Data data = self._data_iterator.next()
+
+        # Initialize _last_ns to ensure timers before first data are processed.
+        # For no-data backtests, start_ns allows _process_next_timer to work correctly.
+        if data is not None:
+            self._last_ns = data.ts_init - 1 if data.ts_init > 0 else 0
+        else:
+            self._last_ns = start_ns
+
         try:
-            while data is not None:
+            while True:
+                if data is None:
+                    done = self._process_next_timer()
+                    data = self._data_iterator.next()
+                    if data is None and done:
+                        break
+
+                    continue
+
                 if data.ts_init > end_ns:
                     # End of backtest
                     break
@@ -1595,8 +1624,7 @@ cdef class BacktestEngine:
                 self._data_engine.process(data)
 
                 # Process all exchange messages
-                for exchange in self._venues.values():
-                    exchange.process(data.ts_init)
+                self._process_and_settle_venues(data.ts_init)
 
                 data = self._data_iterator.next()
 
@@ -1608,6 +1636,7 @@ cdef class BacktestEngine:
                     )
                     if raw_handlers.ptr != NULL:
                         vec_time_event_handlers_drop(raw_handlers)
+
                     raw_handlers_count = 0
 
                 self._iteration += 1
@@ -1624,12 +1653,10 @@ cdef class BacktestEngine:
             return
 
         # Process remaining messages
-        for exchange in self._venues.values():
-            exchange.process(self._kernel.clock.timestamp_ns())
+        self._process_and_settle_venues(self._kernel.clock.timestamp_ns())
 
-        # Flush remaining events at the last data timestamp
-        if self._last_ns > 0:
-            self._flush_accumulator_events(self._last_ns)
+        # Flush remaining timer events up to end time
+        self._flush_accumulator_events(end_ns)
 
     cdef CVec _advance_time(self, uint64_t ts_now):
         # Advance clocks and process all events before ts_now in timestamp order.
@@ -1686,8 +1713,7 @@ cdef class BacktestEngine:
 
             if ts_event != ts_last:
                 ts_last = ts_event
-                for exchange in self._venues.values():
-                    exchange.process(ts_event)
+                self._process_and_settle_venues(ts_event)
 
             # Re-advance to capture timers scheduled by callback
             for clock in clocks:
@@ -1711,6 +1737,62 @@ cdef class BacktestEngine:
         empty_vec.len = 0
         empty_vec.cap = 0
         return empty_vec
+
+    cdef bint _process_next_timer(self):
+        # Process the next chronological timer when data is exhausted.
+        #
+        # This method is used when the data stream is empty, but timers (alerts) might
+        # still be active. Instead of jumping to the end of the backtest, it finds the
+        # absolute next timer time across all component clocks and advances to it.
+        #
+        # This allows for scenarios where a timer callback might load new data on-the-fly
+        # (e.g. via a subscription), which should then be processed in proper sequence.
+        #
+        # Returns True if there are no more timers within the backtest range (should break),
+        # False otherwise (should continue the backtest loop to check for new data).
+
+        cdef list[TestClock] clocks = get_component_clocks(self._instance_id)
+        cdef TestClock clock
+        cdef list[str] timer_names
+        cdef uint64_t min_next_time = 0
+        cdef uint64_t next_timer_time
+        cdef str name
+
+        self._flush_accumulator_events(self._last_ns)
+
+        for clock in clocks:
+            timer_names = clock.timer_names
+            for name in timer_names:
+                next_timer_time = clock.next_time_ns(name)
+                if next_timer_time > self._last_ns:
+                    if min_next_time == 0 or next_timer_time < min_next_time:
+                        min_next_time = next_timer_time
+
+        if min_next_time == 0 or min_next_time > self._end_ns:
+            return True
+
+        self._last_ns = min_next_time
+        self._flush_accumulator_events(min_next_time)
+
+        return False
+
+    cdef void _process_and_settle_venues(self, uint64_t ts_now):
+        cdef SimulatedExchange exchange
+        cdef SimulationModule module
+
+        # Settle all cascading commands (without running modules)
+        while True:
+            for exchange in self._venues.values():
+                exchange._drain_commands(ts_now)
+
+            if not any(ex.has_pending_commands(ts_now) for ex in self._venues.values()):
+                break
+
+        # Run modules and expirations once after all commands are settled
+        for exchange in self._venues.values():
+            for module in exchange.modules:
+                module.process(ts_now)
+            exchange._process_instrument_expirations(ts_now)
 
     cdef void _flush_accumulator_events(self, uint64_t ts_now):
         cdef list[TestClock] clocks = get_component_clocks(self._instance_id)
@@ -1761,8 +1843,7 @@ cdef class BacktestEngine:
 
             if ts_event != ts_last:
                 ts_last = ts_event
-                for exchange in self._venues.values():
-                    exchange.process(ts_event)
+                self._process_and_settle_venues(ts_event)
 
             # Re-advance clocks to capture chained alerts scheduled by callback
             for clock in clocks:
@@ -1826,8 +1907,7 @@ cdef class BacktestEngine:
 
             if ts_event != ts_last:
                 ts_last = ts_event
-                for exchange in self._venues.values():
-                    exchange.process(ts_event)
+                self._process_and_settle_venues(ts_event)
 
             # Re-advance to capture timers scheduled by callback
             for clock in clocks:
@@ -2565,7 +2645,7 @@ cdef class SimulatedExchange:
     price_protection_points : int, optional
         Defines an exchange-calculated price boundary (in points) to prevent
         marketable orders from executing at excessively aggressive prices.
-    trade_execution : bool, default False
+    trade_execution : bool, default True
         If trades should be processed by the matching engine(s) (and move the market).
     liquidity_consumption : bool, default False
         If liquidity consumption should be tracked per price level. When enabled, fills
@@ -2576,6 +2656,10 @@ cdef class SimulatedExchange:
         execution mode. When enabled, limit orders only fill after the quantity ahead
         of them (at order placement time) has been traded through or the price level
         is deleted. Requires trade_execution=True.
+    settlement_prices : dict[InstrumentId, float], optional
+        Map of instrument ID to settlement price for expiring instruments.
+        For futures, positions close at this price instead of market.
+        For options, the option leg settles at this price.
 
     Raises
     ------
@@ -2625,10 +2709,11 @@ cdef class SimulatedExchange:
         bint use_market_order_acks = False,
         bint bar_execution = True,
         bint bar_adaptive_high_low_ordering = False,
-        bint trade_execution = False,
+        bint trade_execution = True,
         bint liquidity_consumption = False,
         bint queue_position = False,
         price_protection_points=None,
+        settlement_prices: dict[InstrumentId, float] | None = None,
     ) -> None:
         Condition.not_empty(starting_balances, "starting_balances")
         Condition.list_type(starting_balances, Money, "starting_balances")
@@ -2642,6 +2727,7 @@ cdef class SimulatedExchange:
         self._log = Logger(name=f"{type(self).__name__}({venue})")
 
         self.id = venue
+        self.settlement_prices = settlement_prices or {}
         self.oms_type = oms_type
         self._log.info(f"OmsType={oms_type_to_str(oms_type)}")
         self.book_type = book_type
@@ -2691,9 +2777,9 @@ cdef class SimulatedExchange:
                 cache=cache,
                 clock=clock,
             )
-            # The OptionExerciseModule subscribes to position events in the `register_venue` method.
-            # The msgbus needs to be available to subscribe to the events.
-            # Thus, `register_base` is called before `register_venue`.
+            # Simulation modules may subscribe
+            # to position events in `register_venue`. The msgbus must be available, so
+            # `register_base` is called before `register_venue`.
             module.register_venue(self)
             self.modules.append(module)
             self._log.info(f"Loaded {module}")
@@ -2701,6 +2787,9 @@ cdef class SimulatedExchange:
         # Markets
         self.instruments: dict[InstrumentId, Instrument] = {}
         self._matching_engines: dict[InstrumentId, OrderMatchingEngine] = {}
+
+        self._has_next_instrument_expiration = False
+        self._next_instrument_expiration_ns = 0
 
         self._message_queue = deque()
         self._inflight_queue: list[tuple[(uint64_t, uint64_t), TradingCommand]] = []
@@ -2838,9 +2927,12 @@ cdef class SimulatedExchange:
             liquidity_consumption=self.liquidity_consumption,
             queue_position=self.queue_position,
             price_protection_points=self.price_protection_points,
+            settlement_prices=self.settlement_prices,
         )
 
         self._matching_engines[instrument.id] = matching_engine
+
+        self._update_next_instrument_expiration(matching_engine)
 
         self._log.info(f"Added instrument {instrument.id} and created matching engine")
 
@@ -3118,6 +3210,13 @@ cdef class SimulatedExchange:
 
         matching_engine.update_instrument(instrument)
 
+    cpdef bint has_pending_commands(self, uint64_t ts_now):
+        if self._message_queue:
+            return True
+        if self._inflight_queue and self._inflight_queue[0][0][0] <= ts_now:
+            return True
+        return False
+
     cpdef void send(self, TradingCommand command):
         """
         Send the given trading command into the exchange.
@@ -3390,15 +3489,22 @@ cdef class SimulatedExchange:
             The current UNIX timestamp (nanoseconds).
 
         """
+        self._drain_commands(ts_now)
+
+        cdef SimulationModule module
+        for module in self.modules:
+            module.process(ts_now)
+
+        self._process_instrument_expirations(ts_now)
+
+    cdef void _drain_commands(self, uint64_t ts_now):
         self._clock.set_time(ts_now)
 
         cdef:
             uint64_t ts
         while self._inflight_queue:
-            # Peek at timestamp of next in-flight message
             ts = self._inflight_queue[0][0][0]
             if ts <= ts_now:
-                # Place message on queue to be processed
                 self._message_queue.appendleft(self._inflight_queue.pop(0)[1])
                 self._inflight_counter.pop(ts, None)
             else:
@@ -3409,10 +3515,46 @@ cdef class SimulatedExchange:
             command = self._message_queue.pop()
             self._process_trading_command(command)
 
-        # Iterate over modules
-        cdef SimulationModule module
-        for module in self.modules:
-            module.process(ts_now)
+    cdef void _process_instrument_expirations(self, uint64_t ts_now):
+        # Check instrument expiration for matching engines with expiring instruments at ts_now.
+        # Only call when at or past the next known expiration to avoid scanning all engines
+        # on every time step.
+        if self._has_next_instrument_expiration and ts_now < self._next_instrument_expiration_ns:
+            return
+
+        cdef uint64_t earliest = 0
+        cdef uint64_t expiration_ns
+        cdef bint found = False
+
+        cdef OrderMatchingEngine matching_engine
+        for matching_engine in self._matching_engines.values():
+            if not matching_engine._instrument_has_expiration:
+                continue
+
+            # Trigger expiration once the engine reaches/passes its expiration time.
+            if not matching_engine._expiration_processed and ts_now >= matching_engine.instrument.expiration_ns:
+                matching_engine.check_instrument_expiration(ts_now)
+
+            # Track the next (future) expiration among instruments which have not yet been processed.
+            if not matching_engine._expiration_processed:
+                expiration_ns = matching_engine.instrument.expiration_ns
+                if expiration_ns > ts_now:
+                    if not found or expiration_ns < earliest:
+                        earliest = expiration_ns
+                        found = True
+
+        self._has_next_instrument_expiration = found
+        if found:
+            self._next_instrument_expiration_ns = earliest
+
+    cdef void _update_next_instrument_expiration(self, OrderMatchingEngine matching_engine):
+        cdef uint64_t expiration_ns
+        if matching_engine._instrument_has_expiration and not matching_engine._expiration_processed:
+            expiration_ns = matching_engine.instrument.expiration_ns
+            if expiration_ns > 0:
+                if not self._has_next_instrument_expiration or expiration_ns < self._next_instrument_expiration_ns:
+                    self._has_next_instrument_expiration = True
+                    self._next_instrument_expiration_ns = expiration_ns
 
     cpdef void reset(self):
         """
@@ -3433,6 +3575,13 @@ cdef class SimulatedExchange:
         self._message_queue = deque()
         self._inflight_queue.clear()
         self._inflight_counter.clear()
+
+        # Recompute next instrument expiration tracking from matching engines.
+        self._has_next_instrument_expiration = False
+        self._next_instrument_expiration_ns = 0
+
+        for matching_engine in self._matching_engines.values():
+            self._update_next_instrument_expiration(matching_engine)
 
         self._log.info("Reset")
 
@@ -3610,7 +3759,7 @@ cdef class OrderMatchingEngine:
         The logger for the matching engine.
     bar_execution : bool, default True
         If bars should be processed by the matching engine (and move the market).
-    trade_execution : bool, default False
+    trade_execution : bool, default True
         If trades should be processed by the matching engine (and move the market).
     liquidity_consumption : bool, default False
         If liquidity consumption should be tracked per price level.
@@ -3634,6 +3783,10 @@ cdef class OrderMatchingEngine:
         If True, the processing order adapts with the heuristic:
         - If High is closer to Open than Low then the processing order is Open, High, Low, Close.
         - If Low is closer to Open than High then the processing order is Open, Low, High, Close.
+    settlement_prices : dict[InstrumentId, float], optional
+        Map of instrument ID to settlement price for expiring instruments.
+        For futures, positions close at this price instead of market.
+        For options, the option leg settles at this price.
 
     """
 
@@ -3659,10 +3812,11 @@ cdef class OrderMatchingEngine:
         bint use_market_order_acks = False,
         bint bar_execution = True,
         bint bar_adaptive_high_low_ordering = False,
-        bint trade_execution = False,
+        bint trade_execution = True,
         bint liquidity_consumption = False,
         bint queue_position = False,
         price_protection_points=None,
+        settlement_prices: dict[InstrumentId, float] | None = None,
     ) -> None:
         self._clock = clock
         self._log = Logger(name=f"{type(self).__name__}({instrument.id.venue})")
@@ -3677,8 +3831,10 @@ cdef class OrderMatchingEngine:
         self.account_type = account_type
         self.market_status = MarketStatus.OPEN
 
-        self._instrument_has_expiration = instrument.instrument_class in EXPIRING_INSTRUMENT_CLASSES
+        self._settlement_prices = settlement_prices or {}
+        self._instrument_has_expiration = instrument.instrument_class in ENGINE_EXPIRING_INSTRUMENT_CLASSES
         self._instrument_close = None
+        self._expiration_processed = False
         self._reject_stop_orders = reject_stop_orders
         self._support_gtd_orders = support_gtd_orders
         self._support_contingent_orders = support_contingent_orders
@@ -3768,6 +3924,9 @@ cdef class OrderMatchingEngine:
         self._position_count = 0
         self._order_count = 0
         self._execution_count = 0
+
+        self._expiration_processed = False
+        self._instrument_close = None
 
         self._log.info(f"Reset OrderMatchingEngine {self.instrument.id}")
 
@@ -4124,7 +4283,12 @@ cdef class OrderMatchingEngine:
         """
         Process the exchanges market for the given trade tick.
 
-        The internal order book will only be updated if the venue `book_type` is 'L1_MBP'.
+        The internal order book is always updated if the venue `book_type` is 'L1_MBP'.
+        When `trade_execution` is disabled, the trade tick updates market state (book and
+        last price) but does not trigger order matching or maintenance operations (GTD
+        order expiry, trailing stop activation, instrument expiration checks). These
+        maintenance operations will run on the next quote tick or bar. When `trade_execution`
+        is enabled, resting orders can fill against the trade price.
 
         Parameters
         ----------
@@ -4164,64 +4328,73 @@ cdef class OrderMatchingEngine:
 
         self._core.set_last_raw(price_raw)
 
-        if self._trade_execution:
-            aggressor_side = tick.aggressor_side
+        if not self._trade_execution:
+            # Sync core to L1 book, skip order matching
+            if self.book_type == BookType.L1_MBP:
+                best_bid = self._book.best_bid_price()
+                best_ask = self._book.best_ask_price()
+                if best_bid is not None:
+                    self._core.set_bid_raw(best_bid.raw)
+                if best_ask is not None:
+                    self._core.set_ask_raw(best_ask.raw)
+            self._clock.set_time(tick.ts_init)
+            return
 
-            # Update the natural side based on trade
-            if aggressor_side == AggressorSide.BUYER:
-                if not self._core.is_ask_initialized or price_raw > self._core.ask_raw:
-                    self._core.set_ask_raw(price_raw)
-                if not self._core.is_bid_initialized or price_raw < self._core.bid_raw:
-                    self._core.set_bid_raw(price_raw)
-            elif aggressor_side == AggressorSide.SELLER:
-                if not self._core.is_bid_initialized or price_raw < self._core.bid_raw:
-                    self._core.set_bid_raw(price_raw)
-                if not self._core.is_ask_initialized or price_raw > self._core.ask_raw:
-                    self._core.set_ask_raw(price_raw)
-            elif aggressor_side == AggressorSide.NO_AGGRESSOR:
-                if not self._core.is_bid_initialized or price_raw <= self._core.bid_raw:
-                    self._core.set_bid_raw(price_raw)
-                if not self._core.is_ask_initialized or price_raw >= self._core.ask_raw:
-                    self._core.set_ask_raw(price_raw)
-            else:
-                aggressor_side_str = aggressor_side_to_str(aggressor_side)
-                raise RuntimeError(  # pragma: no cover (design-time error)
-                    f"invalid `AggressorSide` for trade execution, was {aggressor_side_str}",  # pragma: no cover
-                )
+        aggressor_side = tick.aggressor_side
 
-            # Transient override: temporarily drag the opposite side to the trade price
-            original_bid = self._core.bid_raw
-            original_ask = self._core.ask_raw
-
-            if aggressor_side == AggressorSide.SELLER and price_raw < original_ask:
+        if aggressor_side == AggressorSide.BUYER:
+            if not self._core.is_ask_initialized or price_raw > self._core.ask_raw:
                 self._core.set_ask_raw(price_raw)
-            elif aggressor_side == AggressorSide.BUYER and price_raw > original_bid:
+            if not self._core.is_bid_initialized or price_raw < self._core.bid_raw:
                 self._core.set_bid_raw(price_raw)
-            elif aggressor_side == AggressorSide.NO_AGGRESSOR:
-                # Set both sides to trade price so both BUY and SELL orders can match
+        elif aggressor_side == AggressorSide.SELLER:
+            if not self._core.is_bid_initialized or price_raw < self._core.bid_raw:
                 self._core.set_bid_raw(price_raw)
+            if not self._core.is_ask_initialized or price_raw > self._core.ask_raw:
                 self._core.set_ask_raw(price_raw)
+        elif aggressor_side == AggressorSide.NO_AGGRESSOR:
+            if not self._core.is_bid_initialized or price_raw <= self._core.bid_raw:
+                self._core.set_bid_raw(price_raw)
+            if not self._core.is_ask_initialized or price_raw >= self._core.ask_raw:
+                self._core.set_ask_raw(price_raw)
+        else:
+            aggressor_side_str = aggressor_side_to_str(aggressor_side)
+            raise RuntimeError(  # pragma: no cover (design-time error)
+                f"invalid `AggressorSide` for trade execution, was {aggressor_side_str}",  # pragma: no cover
+            )
 
-            self._last_trade_size = tick.size
-            self._trade_consumption = 0
+        # Transient override: temporarily drag the opposite side to the trade price
+        original_bid = self._core.bid_raw
+        original_ask = self._core.ask_raw
 
-            # Buyer trades consume ask-side (SELL orders), seller trades consume bid-side (BUY orders)
-            if self._queue_position:
-                self._decrement_queue_on_trade(price_raw, tick._mem.size.raw, aggressor_side)
+        if aggressor_side == AggressorSide.SELLER and price_raw < original_ask:
+            self._core.set_ask_raw(price_raw)
+        elif aggressor_side == AggressorSide.BUYER and price_raw > original_bid:
+            self._core.set_bid_raw(price_raw)
+        elif aggressor_side == AggressorSide.NO_AGGRESSOR:
+            # Set both sides to trade price so both BUY and SELL orders can match
+            self._core.set_bid_raw(price_raw)
+            self._core.set_ask_raw(price_raw)
+
+        self._last_trade_size = tick.size
+        self._trade_consumption = 0
+
+        # Buyer trades consume ask-side (SELL orders), seller trades consume bid-side (BUY orders)
+        if self._queue_position:
+            self._decrement_queue_on_trade(price_raw, tick._mem.size.raw, aggressor_side)
 
         self.iterate(tick.ts_init, aggressor_side)
 
-        if self._trade_execution:
-            self._last_trade_size = None
-            self._trade_consumption = 0
+        self._last_trade_size = None
+        self._trade_consumption = 0
 
-            if aggressor_side == AggressorSide.SELLER and price_raw < original_ask:
-                self._core.set_ask_raw(original_ask)
-            elif aggressor_side == AggressorSide.BUYER and price_raw > original_bid:
-                self._core.set_bid_raw(original_bid)
-            elif aggressor_side == AggressorSide.NO_AGGRESSOR:
-                self._core.set_bid_raw(original_bid)
-                self._core.set_ask_raw(original_ask)
+        if aggressor_side == AggressorSide.SELLER and price_raw < original_ask:
+            self._core.set_ask_raw(original_ask)
+        elif aggressor_side == AggressorSide.BUYER and price_raw > original_bid:
+            self._core.set_bid_raw(original_bid)
+        elif aggressor_side == AggressorSide.NO_AGGRESSOR:
+            self._core.set_bid_raw(original_bid)
+            self._core.set_ask_raw(original_ask)
 
     cpdef void process_bar(self, Bar bar):
         """
@@ -4804,6 +4977,21 @@ cdef class OrderMatchingEngine:
 
         return Price(protection_value, precision=self._price_prec)
 
+    cdef Price _get_trailing_activation_price(self, Order order):
+        cdef Price market_price = None
+
+        if order.trigger_type == TriggerType.LAST_PRICE:
+            market_price = self._core.last
+        elif order.trigger_type == TriggerType.LAST_OR_BID_ASK:
+            market_price = self._core.last
+            if market_price is None:
+                market_price = self._core.ask if order.side == OrderSide.BUY else self._core.bid
+        else:
+            # DEFAULT, BID_ASK, DOUBLE_BID_ASK
+            market_price = self._core.ask if order.side == OrderSide.BUY else self._core.bid
+
+        return market_price
+
     cdef list _filter_fills_by_protection(
         self,
         list fills,
@@ -4972,16 +5160,13 @@ cdef class OrderMatchingEngine:
 
         cdef Price market_price = None
         if order.activation_price is None:
-            # If activation price is not given,
-            # set the activation price to the last price, and activate order
-            market_price = self._core.ask if order.side == OrderSide.BUY else self._core.bid
+            market_price = self._get_trailing_activation_price(order)
 
             if market_price is None:
-                # If there is no market price, we cannot process the order
                 raise RuntimeError(  # pragma: no cover (design-time error)
                     f"cannot process trailing stop, "
-                    f"no BID or ASK price for {order.instrument_id} "
-                    f"(add quotes or use bars)",
+                    f"no market price for {order.instrument_id} "
+                    f"(add quotes, trades, or bars)",
                 )
 
             order.set_activated_c(market_price)
@@ -5239,14 +5424,13 @@ cdef class OrderMatchingEngine:
                 # NOTE
                 # The activation price should have been set in OrderMatchingEngine._process_trailing_stop_order()
                 # However, the implementation of the emulator bypass this step, and directly call this method through match_order().
-                market_price = self._core.ask if order.side == OrderSide.BUY else self._core.bid
+                market_price = self._get_trailing_activation_price(order)
 
                 if market_price is None:
-                    # If there is no market price, we cannot process the order
                     raise RuntimeError(  # pragma: no cover (design-time error)
                         f"cannot process trailing stop, "
-                        f"no BID or ASK price for {order.instrument_id} "
-                        f"(add quotes or use bars)",
+                        f"no market price for {order.instrument_id} "
+                        f"(add quotes, trades, or bars)",
                     )
 
                 order.set_activated_c(market_price)
@@ -5339,30 +5523,214 @@ cdef class OrderMatchingEngine:
         self._target_last = 0
         self._has_targets = False
 
-        # Instrument expiration
-        if (self._instrument_has_expiration and timestamp_ns > self.instrument.expiration_ns) or self._instrument_close is not None:
+        self.check_instrument_expiration(timestamp_ns)
+
+    cpdef void check_instrument_expiration(self, uint64_t timestamp_ns):
+        """Run instrument expiration at timestamp_ns (option exercise/expiry or futures close)."""
+        if self._expiration_processed:
+            return
+
+        if (self._instrument_has_expiration and timestamp_ns >= self.instrument.expiration_ns) or self._instrument_close is not None:
+            self._expiration_processed = True
             self._log.info(f"{self.instrument.id} reached expiration")
 
             # Cancel all open orders
             for order in self.get_open_orders():
                 self.cancel_order(order)
 
-            # Close all open positions
-            for position in self.cache.positions_open(None, self.instrument.id):
-                order = MarketOrder(
-                    trader_id=position.trader_id,
-                    strategy_id=position.strategy_id,
-                    instrument_id=position.instrument_id,
-                    client_order_id=ClientOrderId(f"EXPIRATION-LEG-{uuid.uuid4()}"),
-                    order_side=Order.closing_side_c(position.side),
-                    quantity=position.quantity,
-                    init_id=UUID4(),
-                    ts_init=self._clock.timestamp_ns(),
-                    reduce_only=True,
-                    tags=[f"EXPIRATION_{self.venue}_CLOSE"],
+            # Close positions: option exercise/expiry or futures close at market/custom
+            if isinstance(self.instrument, (OptionContract, CryptoOption)):
+                self._process_option_expiry(timestamp_ns)
+            else:
+                for position in self.cache.positions_open(None, self.instrument.id):
+                    order = MarketOrder(
+                        trader_id=position.trader_id,
+                        strategy_id=position.strategy_id,
+                        instrument_id=position.instrument_id,
+                        client_order_id=ClientOrderId(f"EXPIRATION-LEG-{uuid.uuid4()}"),
+                        order_side=Order.closing_side_c(position.side),
+                        quantity=position.quantity,
+                        init_id=UUID4(),
+                        ts_init=self._clock.timestamp_ns(),
+                        reduce_only=True,
+                        tags=[f"EXPIRATION_{self.venue}_CLOSE"],
+                    )
+                    self.cache.add_order(order, position_id=position.id)
+                    if self._settlement_prices and self.instrument.id in self._settlement_prices:
+                        self._generate_order_accepted(order, venue_order_id=self._get_venue_order_id(order))
+                        settlement_price = Price(
+                            self._settlement_prices[self.instrument.id],
+                            self._price_prec,
+                        )
+                        self.apply_fills(
+                            order=order,
+                            fills=[(settlement_price, position.quantity)],
+                            liquidity_side=LiquiditySide.TAKER,
+                            venue_position_id=position.id,
+                            position=position,
+                        )
+                    else:
+                        self.fill_market_order(order)
+
+            self._instrument_close = None
+
+    cdef void _process_option_expiry(self, uint64_t ts_now):
+        """Process option expiration: ITM exercise (cash/physical) or OTM expire worthless."""
+        cdef list positions = self.cache.positions_open(venue=None, instrument_id=self.instrument.id)
+        if not positions:
+            return
+
+        cdef Instrument underlying_instrument = self._get_option_underlying_instrument()
+        if underlying_instrument is None:
+            self._log.error(f"No underlying instrument for option {self.instrument.id}")
+            return
+
+        cdef Price underlying_price = self.cache.price(underlying_instrument.id, PriceType.LAST)
+        if underlying_price is None:
+            self._log.error(f"No underlying price for option {self.instrument.id}")
+            return
+
+        cdef Price custom_option_price = None
+        if self._settlement_prices and self.instrument.id in self._settlement_prices:
+            custom_option_price = Price(
+                self._settlement_prices[self.instrument.id],
+                self._price_prec,
+            )
+
+        cdef Position position
+        for position in positions:
+            if self._option_should_exercise(underlying_price):
+                self._log.info(
+                    f"Exercising {self.instrument.id}: {position.side} {position.quantity} @ strike {self.instrument.strike_price}"
                 )
-                self.cache.add_order(order, position_id=position.id)
-                self.fill_market_order(order)
+                self._option_exercise_position(position, underlying_instrument, underlying_price, ts_now, custom_option_price)
+            else:
+                self._option_otm_expiry(position, ts_now, custom_option_price)
+
+    cdef Instrument _get_option_underlying_instrument(self):
+        cdef InstrumentId underlying_id = InstrumentId.from_str(f"{self.instrument.underlying}.{self.instrument.id.venue.value}")
+        return self.cache.instrument(underlying_id)
+
+    cdef bint _option_should_exercise(self, Price underlying_price):
+        cdef double strike = self.instrument.strike_price.as_double()
+        cdef double spot = underlying_price.as_double()
+        if self.instrument.option_kind == OptionKind.CALL:
+            return spot > strike
+
+        return strike > spot
+
+    cdef void _option_otm_expiry(self, Position position, uint64_t ts_now, Price custom_option_price=None):
+        cdef str venue = self.instrument.id.venue.value
+        cdef str short_id = str(UUID4())[:8]
+        cdef str trade_id = f"{venue}-LEG-OTM-{short_id}"
+        cdef Price close_px = custom_option_price if custom_option_price is not None else Price(0.0, self.instrument.price_precision)
+        cdef OrderFilled fill = self._option_create_close_fill(position, close_px, trade_id, ts_now)
+        self._option_send_events([fill])
+
+    cdef void _option_exercise_position(
+        self, Position position, Instrument underlying_instrument,
+        Price underlying_price, uint64_t ts_now, Price custom_option_price=None
+    ):
+        cdef bint is_cash = isinstance(underlying_instrument, IndexInstrument)
+        if is_cash:
+            self._option_cash_settlement(position, underlying_price, ts_now, custom_option_price)
+        else:
+            self._option_physical_settlement(position, underlying_instrument, underlying_price, ts_now, custom_option_price)
+
+    cdef void _option_cash_settlement(self, Position position, Price underlying_price, uint64_t ts_now, Price custom_option_price=None):
+        cdef str venue = self.instrument.id.venue.value
+        cdef str short_id = str(UUID4())[:8]
+        cdef str trade_id = f"{venue}-LEG-CASH-{short_id}"
+        cdef Price close_px = custom_option_price if custom_option_price is not None else self._option_settlement_price(underlying_price, True)
+        cdef OrderFilled fill = self._option_create_close_fill(position, close_px, trade_id, ts_now)
+        self._option_send_events([fill])
+
+    cdef void _option_physical_settlement(
+        self, Position position, Instrument underlying_instrument,
+        Price underlying_price, uint64_t ts_now, Price custom_option_price=None
+    ):
+        cdef Quantity underlying_qty
+        cdef PositionSide underlying_side
+        cdef double base_qty = position.quantity.as_double() * self.instrument.multiplier.as_double()
+        underlying_qty = Quantity.from_str(str(base_qty))
+        if self.instrument.option_kind == OptionKind.CALL:
+            underlying_side = position.side
+        else:
+            underlying_side = PositionSide.SHORT if position.side == PositionSide.LONG else PositionSide.LONG
+
+        cdef str venue = self.instrument.id.venue.value
+        cdef str short_id = str(UUID4())[:8]
+        cdef str trade_base = f"{venue}-LEG-EX-{short_id}"
+        cdef Price settlement_px = self._option_settlement_price(underlying_price, False)
+        cdef Price option_close_px = custom_option_price if custom_option_price is not None else Price(position.avg_px_open, self.instrument.price_precision)
+        cdef OrderFilled option_fill = self._option_create_close_fill(position, option_close_px, f"{trade_base}-CLOSE", ts_now)
+        cdef OrderFilled underlying_fill = self._option_create_underlying_fill(position, underlying_instrument, underlying_qty, underlying_side, settlement_px, f"{trade_base}-OPEN", ts_now)
+        self._option_send_events([option_fill, underlying_fill])
+
+    cdef Price _option_settlement_price(self, Price underlying_price, bint cash_settled):
+        if cash_settled:
+            if self.instrument.option_kind == OptionKind.CALL:
+                return Price(max(0.0, underlying_price.as_double() - self.instrument.strike_price.as_double()), self.instrument.strike_price.precision)
+
+            return Price(max(0.0, self.instrument.strike_price.as_double() - underlying_price.as_double()), self.instrument.strike_price.precision)
+
+        return self.instrument.strike_price
+
+    cdef OrderFilled _option_create_close_fill(self, Position position, Price price, str trade_id, uint64_t ts_now):
+        cdef OrderSide close_side = OrderSide.SELL if position.side == PositionSide.LONG else OrderSide.BUY
+
+        return OrderFilled(
+            trader_id=position.trader_id,
+            strategy_id=position.strategy_id,
+            instrument_id=self.instrument.id,
+            client_order_id=ClientOrderId(trade_id),
+            venue_order_id=VenueOrderId(trade_id),
+            account_id=position.account_id,
+            trade_id=TradeId(trade_id),
+            position_id=position.id,
+            order_side=close_side,
+            order_type=OrderType.MARKET,
+            last_qty=position.quantity,
+            last_px=price,
+            currency=self.instrument.quote_currency,
+            commission=Money(0, self.instrument.quote_currency),
+            liquidity_side=LiquiditySide.TAKER,
+            event_id=UUID4(),
+            ts_event=ts_now,
+            ts_init=ts_now,
+        )
+
+    cdef OrderFilled _option_create_underlying_fill(
+        self, Position position, Instrument underlying_instrument,
+        Quantity quantity, PositionSide side, Price price, str trade_id_suffix, uint64_t ts_now
+    ):
+        cdef OrderSide order_side = OrderSide.BUY if side == PositionSide.LONG else OrderSide.SELL
+
+        return OrderFilled(
+            trader_id=position.trader_id,
+            strategy_id=position.strategy_id,
+            instrument_id=underlying_instrument.id,
+            client_order_id=ClientOrderId(trade_id_suffix),
+            venue_order_id=VenueOrderId(trade_id_suffix),
+            account_id=position.account_id,
+            trade_id=TradeId(trade_id_suffix),
+            position_id=None,
+            order_side=order_side,
+            order_type=OrderType.MARKET,
+            last_qty=quantity,
+            last_px=price,
+            currency=underlying_instrument.quote_currency,
+            commission=Money(0, underlying_instrument.quote_currency),
+            liquidity_side=LiquiditySide.TAKER,
+            event_id=UUID4(),
+            ts_event=ts_now,
+            ts_init=ts_now,
+        )
+
+    cdef void _option_send_events(self, list events):
+        cdef object event
+        for event in events:
+            self.msgbus.send(endpoint="ExecEngine.process", msg=event)
 
     cpdef void fill_market_order(self, Order order):
         """
@@ -6281,6 +6649,10 @@ cdef class OrderMatchingEngine:
                 position=position,
             )
 
+        # TODO: Refactor this section - nested conditionals for order types, top-of-book checks,
+        # MAKER vs TAKER, liquidity consumption, spread leg generation, and queue cleanup are
+        # becoming hard to reason about. Consider extracting into smaller focused methods.
+
         # Check LIMIT order on exhausted book volume
         if (
             order.is_open_c()
@@ -6297,8 +6669,21 @@ cdef class OrderMatchingEngine:
                 return  # Limit price is equal to top-of-book, no further fills
 
             if order.liquidity_side == LiquiditySide.MAKER:
-                # Market moved through limit price, assumption is there was enough liquidity to fill entire order
-                fill_px = order.price
+                if self._liquidity_consumption:
+                    # When liquidity_consumption is enabled, don't assume unlimited liquidity
+                    # for passive MAKER orders - skip fill, order remains open for subsequent data
+                    pass
+                else:
+                    # Market moved through limit price, assumption is there was enough liquidity to fill entire order
+                    fill_px = order.price
+                    self.fill_order(
+                        order=order,
+                        last_px=fill_px,
+                        last_qty=order.leaves_qty,
+                        liquidity_side=order.liquidity_side,
+                        venue_position_id=venue_position_id,
+                        position=position,
+                    )
             else:  # Marketable limit order
                 # Exhausted simulated book volume (continue aggressive filling into next level)
                 # This is a very basic implementation of slipping by a single tick, in the future
@@ -6312,14 +6697,14 @@ cdef class OrderMatchingEngine:
                         f"invalid `OrderSide`, was {order.side}",  # pragma: no cover (design-time error)
                     )
 
-            self.fill_order(
-                order=order,
-                last_px=fill_px,
-                last_qty=order.leaves_qty,
-                liquidity_side=order.liquidity_side,
-                venue_position_id=venue_position_id,
-                position=position,
-            )
+                self.fill_order(
+                    order=order,
+                    last_px=fill_px,
+                    last_qty=order.leaves_qty,
+                    liquidity_side=order.liquidity_side,
+                    venue_position_id=venue_position_id,
+                    position=position,
+                )
 
         cdef Instrument instrument = self.cache.instrument(order.instrument_id)
         if instrument is None:

@@ -226,6 +226,7 @@ class InteractiveBrokersExecutionClient(LiveExecutionClient):
         self._set_account_id(account_id)
         self._account_summary_tags = {
             "NetLiquidation",
+            "TotalCashValue",
             "FullAvailableFunds",
             "FullInitMarginReq",
             "FullMaintMarginReq",
@@ -1332,14 +1333,15 @@ class InteractiveBrokersExecutionClient(LiveExecutionClient):
 
             if self._account_summary_tags - set(self._account_summary[currency].keys()) == set():
                 self._log.debug(f"{self._account_summary}", LogColor.GREEN)
-                total = self._account_summary[currency]["NetLiquidation"]
-                free = self._account_summary[currency]["FullAvailableFunds"]
+                cur = Currency.from_str(currency)
+                total = Money(self._account_summary[currency]["NetLiquidation"], cur)
+                free = Money(self._account_summary[currency]["FullAvailableFunds"], cur)
                 locked = total - free
 
                 account_balance = AccountBalance(
-                    total=Money(total, Currency.from_str(currency)),
-                    free=Money(free, Currency.from_str(currency)),
-                    locked=Money(locked, Currency.from_str(currency)),
+                    total=total,
+                    free=free,
+                    locked=locked,
                 )
                 margin_balance = MarginBalance(
                     initial=Money(
@@ -1356,6 +1358,9 @@ class InteractiveBrokersExecutionClient(LiveExecutionClient):
                     margins=[margin_balance],
                     reported=True,
                     ts_event=self._clock.timestamp_ns(),
+                    info={
+                        "TotalCashValue": self._account_summary[currency]["TotalCashValue"],
+                    },
                 )
 
                 # 将所有可用字段存储到缓存中（目前的临时方案，直到有永久解决方案）
@@ -1670,7 +1675,7 @@ class InteractiveBrokersExecutionClient(LiveExecutionClient):
             ),
             liquidity_side=LiquiditySide.NO_LIQUIDITY_SIDE,
             ts_event=timestring_to_timestamp(execution.time).value,
-            info=info if info else None,
+            info=info or None,
         )
 
         # 更新持仓跟踪以避免重复处理
@@ -1825,7 +1830,7 @@ class InteractiveBrokersExecutionClient(LiveExecutionClient):
                 commission=commission,
                 liquidity_side=LiquiditySide.NO_LIQUIDITY_SIDE,
                 ts_event=timestring_to_timestamp(execution.time).value,
-                info=info if info else None,
+                info=info or None,
             )
         except Exception as e:
             self._log.error(f"生成组合成交时出错：{e}")
@@ -1911,7 +1916,7 @@ class InteractiveBrokersExecutionClient(LiveExecutionClient):
                 commission=commission,
                 liquidity_side=LiquiditySide.NO_LIQUIDITY_SIDE,
                 ts_event=timestring_to_timestamp(execution.time).value,
-                info=info if info else None,
+                info=info or None,
             )
 
             # 更新持仓跟踪以避免重复处理

@@ -254,7 +254,7 @@ VENUES_FUT = [
 ]
 VENUES_CASH = ["IDEALPRO"]
 VENUES_CRYPTO = ["PAXOS"]
-VENUES_OPT = ["SMART"]
+VENUES_OPT = ["SMART", "EUREX"]
 VENUES_CFD = ["IBCFD"]  # 自定义名称，解析时实际上映射到 "SMART"
 VENUES_CMDTY = ["IBCMDTY"]  # 自定义名称，解析时实际上映射到 "SMART"
 
@@ -263,6 +263,9 @@ RE_CFD_CASH = re.compile(r"^(?P<symbol>[A-Z]{3})\.(?P<currency>[A-Z]{3})$")  # "
 RE_OPT = re.compile(
     r"^(?P<symbol>[A-Z.]{1,6}) *(?P<expiry>\d{6})(?P<right>[CP])(?P<strike>\d{5})(?P<decimal>\d{3})$",
 )  # "AAPL220617C00155000" or "SPXW  260120P06835000" (OCC format with padding)
+RE_OPT2 = re.compile(
+    r"^(?P<right>[CP])\s+(?P<tradingClass>[A-Z0-9]{3,6})\s+(?P<expiry>\d{8})\s+(?P<strike>\d+(?:\.\d+)?)(?:\s+(?P<style>[A-Z]))?$",
+)  # "C OESX 20260213 4775" or "P OEXP 20260212 6480 W"
 RE_FUT_UNDERLYING = re.compile(r"^(?P<symbol>\w{1,3})$")  # "ES"
 RE_FUT = re.compile(r"^(?P<symbol>\w{1,3})(?P<month>[FGHJKMNQUVXZ])(?P<year>\d{2})$")  # "ESM23"
 RE_FUT_ORIGINAL = re.compile(
@@ -277,6 +280,11 @@ RE_FUT2_ORIGINAL = re.compile(
 RE_FUT3_ORIGINAL = re.compile(
     r"^(?P<symbol>[A-Z]+)(?P<year>\d{2})(?P<month>(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC))FUT$",
 )  # "NIFTY25MARFUT"
+RE_FUT4 = re.compile(
+    r"^(?P<underlying>[A-Z0-9]{2,10})\s+"
+    r"(?P<tradingClass>[A-Z0-9]{2,6})\s+"
+    r"(?P<expiry>\d{8})$",
+)
 RE_FOP = re.compile(
     r"^(?P<symbol>\w{1,3})(?P<month>[FGHJKMNQUVXZ])(?P<year>\d{2})(?P<right>[CP])(?P<strike>.{4,6})$",
 )  # "ESM23C4200"
@@ -339,7 +347,11 @@ def parse_instrument(  # noqa: C901
             instrument_id=instrument_id,
         )
     elif security_type in ("OPT", "FOP"):
-        return parse_option_contract(contract_details=contract_details, instrument_id=instrument_id)
+        return parse_option_contract(
+            contract_details=contract_details,
+            instrument_id=instrument_id,
+            symbology_method=symbology_method,
+        )
     elif security_type == "CASH":
         return parse_forex_contract(contract_details=contract_details, instrument_id=instrument_id)
     elif security_type == "CRYPTO":
@@ -453,6 +465,7 @@ def parse_futures_contract(
 def parse_option_contract(
     contract_details: IBContractDetails,
     instrument_id: InstrumentId,
+    symbology_method: SymbologyMethod = SymbologyMethod.IB_SIMPLIFIED,
 ) -> OptionContract:
     price_precision: int = _tick_size_to_precision(contract_details.minTick)
     timestamp = time.time_ns()
@@ -467,6 +480,15 @@ def parse_option_contract(
     # 对于期权，乘数代表手数 (例如，每张合约 100 股)
     multiplier = Quantity.from_str(contract_details.contract.multiplier)
 
+    # Add ^ prefix for index underlyings to match IB simplified symbology
+    underlying = contract_details.underSymbol
+    if (
+        symbology_method == SymbologyMethod.IB_SIMPLIFIED
+        and contract_details.underSecType == "IND"
+        and not underlying.startswith("^")
+    ):
+        underlying = f"^{underlying}"
+
     return OptionContract(
         instrument_id=instrument_id,
         raw_symbol=Symbol(contract_details.contract.localSymbol),
@@ -476,7 +498,7 @@ def parse_option_contract(
         price_increment=Price(contract_details.minTick, price_precision),
         multiplier=multiplier,
         lot_size=multiplier,  # 对于期权，手数等于乘数
-        underlying=contract_details.underSymbol,
+        underlying=underlying,
         strike_price=Price(contract_details.contract.strike, price_precision),
         activation_ns=activation.value,
         expiration_ns=expiration.value,
@@ -1062,12 +1084,18 @@ def ib_contract_to_instrument_id_simplified_symbology(  # noqa: C901 (too comple
         symbol = (contract.localSymbol or contract.symbol).replace(" ", "-")
     elif security_type == "IND":
         symbol = f"^{(contract.localSymbol or contract.symbol)}"
-    elif security_type == "OPT":
+    elif security_type == "OPT" and contract.localSymbol:
         symbol = contract.localSymbol
+    elif security_type == "OPT":
+        symbol = f"{contract.right} {contract.tradingClass} {contract.lastTradeDateOrContractMonth} {contract.strike}"
     elif security_type == "CONTFUT":
         symbol = contract.symbol
     elif security_type == "FUT" and (m := RE_FUT_ORIGINAL.match(contract.localSymbol)):
         symbol = f"{m['symbol']}{m['month']}{m['year']}"
+    elif security_type == "FUT" and len(contract.lastTradeDateOrContractMonth) == 8:
+        symbol = (
+            f"{contract.symbol} {contract.tradingClass} {contract.lastTradeDateOrContractMonth}"
+        )
     elif (security_type == "FUT" and (m := RE_FUT2_ORIGINAL.match(contract.localSymbol))) or (
         security_type == "FUT" and (m := RE_FUT3_ORIGINAL.match(contract.localSymbol))
     ):
@@ -1210,12 +1238,37 @@ def instrument_id_to_ib_contract_simplified_symbology(  # noqa: C901 (too comple
             exchange=exchange,
             localSymbol=f"{m['symbol']}.{m['currency']}",
         )
-    elif exchange in VENUES_OPT and (m := RE_OPT.match(instrument_id.symbol.value)):
+    elif str(instrument_id.symbol).startswith("^"):
         return IBContract(
-            secType="OPT",
+            secType="IND",
             exchange=exchange,
-            localSymbol=f"{m['symbol'].ljust(6)}{m['expiry']}{m['right']}{m['strike']}{m['decimal']}",
+            localSymbol=instrument_id.symbol.value[1:],
         )
+    elif exchange in VENUES_FUT and (m := RE_FUT4.match(instrument_id.symbol.value)):
+        return IBContract(
+            secType="FUT",
+            exchange=exchange,
+            symbol=m["underlying"],
+            tradingClass=m["tradingClass"],
+            lastTradeDateOrContractMonth=m["expiry"],
+        )
+    elif exchange in VENUES_OPT:
+        if m := RE_OPT.match(instrument_id.symbol.value):
+            return IBContract(
+                secType="OPT",
+                exchange=exchange,
+                localSymbol=f"{m['symbol'].ljust(6)}{m['expiry']}{m['right']}{m['strike']}{m['decimal']}",
+            )
+        elif m := RE_OPT2.match(instrument_id.symbol.value):
+            return IBContract(
+                secType="OPT",
+                exchange=exchange,
+                symbol=m["tradingClass"],
+                tradingClass=m["tradingClass"],
+                right=m["right"],
+                strike=m["strike"],
+                lastTradeDateOrContractMonth=m["expiry"],
+            )
     elif exchange in VENUES_FUT:
         if m := RE_FUT_ORIGINAL.match(instrument_id.symbol.value):
             return IBContract(
@@ -1256,12 +1309,6 @@ def instrument_id_to_ib_contract_simplified_symbology(  # noqa: C901 (too comple
             secType="CMDTY",
             exchange="SMART",
             symbol=f"{instrument_id.symbol.value}".replace("-", " "),
-        )
-    elif str(instrument_id.symbol).startswith("^"):
-        return IBContract(
-            secType="IND",
-            exchange=exchange,
-            localSymbol=instrument_id.symbol.value[1:],
         )
 
     # 默认为股票 (Stock)

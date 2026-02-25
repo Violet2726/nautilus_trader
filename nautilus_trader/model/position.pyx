@@ -600,7 +600,7 @@ cdef class Position:
                 self.id,
                 self.account_id,
                 PositionAdjustmentType.COMMISSION,
-                fill.commission.as_decimal(),
+                -fill.commission.as_decimal(),
                 None,
                 str(fill.client_order_id),
                 UUID4(),
@@ -614,18 +614,19 @@ cdef class Position:
         if self.quantity._mem.raw > self.peak_qty._mem.raw:
             self.peak_qty = self.quantity
 
-        if self.signed_qty > 0.0:
+        if self.quantity._mem.raw == 0 or self.signed_qty == 0.0:
+            # 仓位已平
+            self.side = PositionSide.FLAT
+            self.signed_qty = 0.0  # 正常化
+            self.closing_order_id = fill.client_order_id
+            self.ts_closed = fill.ts_event
+            self.duration_ns = self.ts_closed - self.ts_opened
+        elif self.signed_qty > 0.0:
             self.entry = OrderSide.BUY
             self.side = PositionSide.LONG
         elif self.signed_qty < 0.0:
             self.entry = OrderSide.SELL
             self.side = PositionSide.SHORT
-        else:
-            # 仓位已平
-            self.side = PositionSide.FLAT
-            self.closing_order_id = fill.client_order_id
-            self.ts_closed = fill.ts_event
-            self.duration_ns = self.ts_closed - self.ts_opened
 
         self.ts_last = fill.ts_event
 
@@ -650,6 +651,7 @@ cdef class Position:
         # 如果存在数量变化则应用
         if adjustment.quantity_change is not None:
             self.signed_qty += float(adjustment.quantity_change)
+            self.signed_qty = round(self.signed_qty, self.size_precision)
 
             self.quantity = Quantity(abs(self.signed_qty), self.size_precision)
 
@@ -667,7 +669,10 @@ cdef class Position:
             )
 
         # 根据新的有符号数量更新仓位状态
-        if self.signed_qty > 0.0:
+        if self.quantity._mem.raw == 0:
+            self.side = PositionSide.FLAT
+            self.signed_qty = 0.0  # 正常化
+        elif self.signed_qty > 0.0:
             self.side = PositionSide.LONG
             if self.entry == OrderSide.NO_ORDER_SIDE:
                 self.entry = OrderSide.BUY
