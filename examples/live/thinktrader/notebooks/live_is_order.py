@@ -1,4 +1,3 @@
-import importlib
 import os
 import random
 import warnings
@@ -29,11 +28,8 @@ from nautilus_trader.model.identifiers import InstrumentId
 from nautilus_trader.model.identifiers import TraderId
 from nautilus_trader.model.instruments import Instrument
 from nautilus_trader.trading.strategy import Strategy
-
-# 动态导入 is.py，因为 "is" 是 Python 中的保留关键字，无法直接使用 from ... import 导入
-is_algo_module = importlib.import_module("nautilus_trader.examples.algorithms.is")
-ISExecAlgorithm = is_algo_module.ISExecAlgorithm
-ISExecAlgorithmConfig = is_algo_module.ISExecAlgorithmConfig
+from nautilus_trader.examples.algorithms.is_algo import ISExecAlgorithm
+from nautilus_trader.examples.algorithms.is_algo import ISExecAlgorithmConfig
 
 def _load_dotenv() -> None:
     try:

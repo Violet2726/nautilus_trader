@@ -127,8 +127,8 @@ account_id = os.environ.get("MINIQMT_ACCOUNT_ID", "211800003313")
 account_type = "STOCK"
 session_id = random.randint(100000, 999999)
 
-# 标的: 001330.SZSE
-instrument_id_str = "001330.SZSE"
+# 标的: 000001.SZSE
+instrument_id_str = "000001.SZSE"
 instrument_id = InstrumentId.from_str(instrument_id_str)
 
 instrument_provider = ThinkTraderInstrumentProviderConfig(
