@@ -45,7 +45,7 @@ from nautilus_trader.config import StrategyConfig
 from nautilus_trader.config import TradingNodeConfig
 from nautilus_trader.live.node import TradingNode
 from nautilus_trader.model.data import QuoteTick
-from nautilus_trader.model.enums import OrderSide
+from nautilus_trader.model.enums import OrderSide, OrderStatus, PositionSide
 from nautilus_trader.model.identifiers import AccountId
 from nautilus_trader.model.identifiers import InstrumentId
 from nautilus_trader.model.identifiers import TraderId
@@ -109,6 +109,13 @@ class LiveThinkTraderFixStrategy(Strategy):
             callback=self._on_buy_alert
         )
         
+        # 每30秒查询一次持仓和订单情况
+        self.clock.set_time_alert(
+            name="query_status_alert",
+            alert_time=self.clock.utc_now() + timedelta(seconds=30),
+            callback=self._on_query_status_alert
+        )
+        
         # 60秒后停止
         self.clock.set_time_alert(
             name="stop_alert",
@@ -120,8 +127,60 @@ class LiveThinkTraderFixStrategy(Strategy):
         self.unsubscribe_quote_ticks(self.instrument_id)
         self.log.info("策略已停止")
 
+    def _on_query_status_alert(self, event):
+        positions = self.cache.positions_open()
+        if self._account_id:
+            positions = [p for p in positions if p.account_id == self._account_id]
+        
+        pos_msg = f"\n{'='*50}\n[当前持仓情况] (共 {len(positions)} 个)\n{'-'*50}\n"
+        if not positions:
+            pos_msg += "  (无持仓)\n"
+        for p in positions:
+            side_str = "多头" if p.side == PositionSide.LONG else "空头" if p.side == PositionSide.SHORT else "平仓"
+            pos_msg += f"  - 合约: {p.instrument_id} | 方向: {side_str} | 数量: {p.quantity} | 均价: {p.avg_px_open:.2f}\n"
+        pos_msg += f"{'='*50}"
+        self.log.info(pos_msg)
+
+        orders = self.cache.orders()
+        if self._account_id:
+            orders = [o for o in orders if o.account_id == self._account_id]
+        
+        status_map = {
+            OrderStatus.INITIALIZED: "初始化",
+            OrderStatus.SUBMITTED: "已提交",
+            OrderStatus.ACCEPTED: "已接受",
+            OrderStatus.PARTIALLY_FILLED: "部分成交",
+            OrderStatus.FILLED: "完全成交",
+            OrderStatus.CANCELED: "已撤销",
+            OrderStatus.REJECTED: "已拒绝",
+            OrderStatus.PENDING_CANCEL: "待撤销",
+            OrderStatus.PENDING_UPDATE: "待更新",
+            OrderStatus.EXPIRED: "已过期",
+        }
+        
+        ord_msg = f"\n{'='*50}\n[当前所有订单情况] (共 {len(orders)} 个)\n{'-'*50}\n"
+        if not orders:
+            ord_msg += "  (无订单)\n"
+        for o in orders:
+            side_str = "买入" if getattr(o, "side", getattr(o, "order_side", None)) == OrderSide.BUY else "卖出"
+            status_str = status_map.get(o.status, str(o.status).split('.')[-1])
+            ord_msg += f"  - 订单号: {o.client_order_id} | 方向: {side_str} | 状态: {status_str} | 数量: {o.quantity} | 价格: {o.price}\n"
+        ord_msg += f"{'='*50}"
+        self.log.info(ord_msg)
+
+        self.clock.set_time_alert(
+            name=f"query_status_alert_{self.clock.timestamp_ns()}",
+            alert_time=self.clock.utc_now() + timedelta(seconds=30),
+            callback=self._on_query_status_alert
+        )
+
     def on_quote_tick(self, tick: QuoteTick):
         self._last_quote = tick
+        self.log.info(
+            f"[实时行情] {tick.instrument_id} | "
+            f"买价: {tick.bid_price.as_double():.2f} (量: {tick.bid_size}) | "
+            f"卖价: {tick.ask_price.as_double():.2f} (量: {tick.ask_size})"
+        )
 
     def _on_buy_alert(self, event):
         if self._last_quote is None or self._last_quote.ask_price.as_double() == 0:
