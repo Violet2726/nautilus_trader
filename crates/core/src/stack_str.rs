@@ -13,30 +13,28 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! A stack-allocated ASCII string type for efficient identifier storage.
+//! 一种用于高效存储标识符的栈分配 ASCII 字符串类型。
 //!
-//! This module provides [`StackStr`], a fixed-capacity string type optimized for
-//! short identifier strings. Designed for use cases where:
+//! 此模块提供了 [`StackStr`]，这是一种为短标识符字符串优化的固定容量字符串类型。适用于以下场景：
 //!
-//! - Strings are known to be short (≤36 characters).
-//! - Stack allocation is preferred over heap allocation.
-//! - `Copy` semantics are beneficial.
-//! - C FFI compatibility is required.
+//! - 已知字符串较短（≤36 个字符）。
+//! - 相比堆分配，更倾向于栈分配。
+//! - 需要 `Copy` 语义。
+//! - 需要 C FFI 兼容性。
 //!
-//! # ASCII requirement
+//! # 关于 ASCII 的要求
 //!
-//! `StackStr` only accepts ASCII strings. This guarantees that 1 character == 1 byte,
-//! ensuring the buffer always holds exactly the capacity in characters. This aligns
-//! with identifier conventions which are inherently ASCII.
+//! `StackStr` 仅接受 ASCII 字符串。这保证了 1 个字符等于 1 个字节，
+//! 确保缓冲区始终能容纳刚好其容量大小的字符数。这与标识符通常本质上是 ASCII 的惯例相吻合。
 //!
-//! | Property              | ASCII    | UTF-8               |
-//! |-----------------------|----------|---------------------|
-//! | Bytes per char        | Always 1 | 1-4                 |
-//! | 36 bytes holds        | 36 chars | 9-36 chars          |
-//! | Slice at any byte     | Safe     | May split codepoint |
-//! | `len()` == char count | Yes      | No                  |
+//! | 属性              | ASCII    | UTF-8               |
+//! |-------------------|----------|---------------------|
+//! | 每字符字节数      | 始终为 1 | 1-4                 |
+//! | 36 字节可容纳     | 36 字符  | 9-36 字符           |
+//! | 任意字节处切片   | 安全     | 可能切断码点 (codepoint) |
+//! | `len()` == 字符数 | 是       | 否                  |
 
-// Required for C FFI pointer handling and unchecked UTF-8/CStr conversions
+// 处理 C FFI 指针以及未经检查的 UTF-8/CStr 转换所需
 #![allow(unsafe_code)]
 
 use std::{
@@ -52,91 +50,90 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::correctness::FAILED;
 
-/// Maximum capacity in characters for a [`StackStr`].
+/// [`StackStr`] 的最大字符容量。
 pub const STACKSTR_CAPACITY: usize = 36;
 
-/// Fixed buffer size including null terminator (capacity + 1).
+/// 包含 null 终止符在内的固定缓冲区大小（容量 + 1）。
 const STACKSTR_BUFFER_SIZE: usize = STACKSTR_CAPACITY + 1;
 
-/// A stack-allocated ASCII string with a maximum capacity of 36 characters.
+/// 一种栈分配的 ASCII 字符串，最大容量为 36 个字符。
 ///
-/// Optimized for short identifier strings with:
-/// - Stack allocation (no heap).
-/// - `Copy` semantics.
-/// - O(1) length access.
-/// - C FFI compatibility (null-terminated).
+/// 针对短标识符字符串进行了以下优化：
+/// - 栈分配（无堆分配）。
+/// - `Copy` 语义。
+/// - O(1) 时间复杂度的长度访问。
+/// - C FFI 兼容性（以 null 结尾）。
 ///
-/// ASCII is required to guarantee 1 character == 1 byte, ensuring the buffer
-/// always holds exactly the capacity in characters. This aligns with identifier
-/// conventions which are inherently ASCII.
+/// 要求 ASCII 是为了保证 1 个字符等于 1 个字节，确保缓冲区始终能够容纳刚好其容量大小的字符数。
+/// 这与标识符通常本质上是 ASCII 的惯例相吻合。
 ///
-/// # Memory Layout
+/// # 内存布局
 ///
-/// The `value` field is placed first so the struct pointer equals the string
-/// pointer, making C FFI more natural: `(char*)&stack_str` works directly.
+/// `value` 字段被放置在最前面，因此结构体指针等于字符串指针，
+/// 使得 C FFI 更加自然：`(char*)&stack_str` 可以直接工作。
 #[derive(Clone, Copy)]
 #[repr(C)]
 pub struct StackStr {
-    /// ASCII data with null terminator for C FFI.
+    /// 带有 null 终止符的 ASCII 数据，用于 C FFI。
     value: [u8; 37], // STACKSTR_CAPACITY + 1
-    /// Length of the string in bytes (0-36).
+    /// 字符串的字节长度 (0-36)。
     len: u8,
 }
 
 impl StackStr {
-    /// Maximum length in characters.
+    /// 最大字符长度。
     pub const MAX_LEN: usize = STACKSTR_CAPACITY;
 
-    /// Creates a new [`StackStr`] from a string slice.
+    /// 从字符串切片创建一个新的 [`StackStr`]。
     ///
     /// # Panics
     ///
-    /// Panics if:
-    /// - `s` is empty or contains only whitespace.
-    /// - `s` contains non-ASCII characters or interior NUL bytes.
-    /// - `s` exceeds 36 characters.
+    /// 在以下情况下触发 panic：
+    /// - `s` 为空或仅包含空白字符。
+    /// - `s` 包含非 ASCII 字符或内部含有 NUL 字节。
+    /// - `s` 超过了 36 个字符。
     #[must_use]
     pub fn new(s: &str) -> Self {
         Self::new_checked(s).expect(FAILED)
     }
 
-    /// Creates a new [`StackStr`] with validation, returning an error on failure.
+    /// 创建一个带验证的新 [`StackStr`]，失败时返回错误。
     ///
     /// # Errors
     ///
-    /// Returns an error if:
-    /// - `s` is empty or contains only whitespace.
-    /// - `s` contains non-ASCII characters or interior NUL bytes.
-    /// - `s` exceeds 36 characters.
+    /// 在以下情况下返回错误：
+    /// - `s` 为空或仅包含空白字符。
+    /// - `s` 包含非 ASCII 字符或内部含有 NUL 字节。
+    /// - `s` 超过了 36 个字符。
     pub fn new_checked(s: &str) -> anyhow::Result<Self> {
         if s.is_empty() {
-            anyhow::bail!("String is empty");
+            anyhow::bail!("字符串为空");
         }
 
         if s.len() > STACKSTR_CAPACITY {
             anyhow::bail!(
-                "String exceeds maximum length of {} characters, was {}",
+                "字符串超过了最大长度限制 {} 字符，实际为 {}",
                 STACKSTR_CAPACITY,
                 s.len()
             );
         }
 
         if !s.is_ascii() {
-            anyhow::bail!("String contains non-ASCII character");
+            anyhow::bail!("字符串包含非 ASCII 字符");
         }
 
         let bytes = s.as_bytes();
         if bytes.contains(&0) {
-            anyhow::bail!("String contains interior NUL byte");
+            anyhow::bail!("字符串内部包含 NUL 字节");
         }
 
         if bytes.iter().all(|b| b.is_ascii_whitespace()) {
-            anyhow::bail!("String contains only whitespace");
+            anyhow::bail!("字符串仅包含空白字符");
         }
 
         let mut value = [0u8; STACKSTR_BUFFER_SIZE];
         value[..s.len()].copy_from_slice(bytes);
-        // Null terminator is already set (array initialized to 0)
+        // Null 终止符已设置（数组初始化为 0）
 
         Ok(Self {
             value,
@@ -144,122 +141,121 @@ impl StackStr {
         })
     }
 
-    /// Creates a [`StackStr`] from a byte slice.
+    /// 从字节切片创建一个 [`StackStr`]。
     ///
     /// # Errors
     ///
-    /// Returns an error if:
-    /// - `bytes` is empty or contains only whitespace.
-    /// - `bytes` contains non-ASCII characters or interior NUL bytes.
-    /// - `bytes` exceeds 36 bytes (excluding trailing null terminator).
+    /// 在以下情况下返回错误：
+    /// - `bytes` 为空或仅包含空白字符。
+    /// - `bytes` 包含非 ASCII 字符或内部含有 NUL 字节。
+    /// - `bytes` 超过了 36 字节（不包括末尾的 null 终止符）。
     pub fn from_bytes(bytes: &[u8]) -> anyhow::Result<Self> {
-        // Strip trailing null terminator if present
+        // 如果存在末尾的 null 终止符，则将其剥离
         let bytes = if bytes.last() == Some(&0) {
             &bytes[..bytes.len() - 1]
         } else {
             bytes
         };
 
-        let s = std::str::from_utf8(bytes).map_err(|e| anyhow::anyhow!("Invalid UTF-8: {e}"))?;
+        let s = std::str::from_utf8(bytes).map_err(|e| anyhow::anyhow!("无效的 UTF-8 编码：{e}"))?;
 
         Self::new_checked(s)
     }
 
-    /// Creates a [`StackStr`] from a C string pointer.
+    /// 从 C 字符串指针创建一个 [`StackStr`]。
     ///
-    /// For untrusted input from C code, use [`from_c_ptr_checked`](Self::from_c_ptr_checked)
-    /// to avoid panics crossing FFI boundaries.
+    /// 对于来自 C 代码的不可信输入，请使用 [`from_c_ptr_checked`](Self::from_c_ptr_checked)
+    /// 以避免跨越 FFI 边界时触发 panic。
     ///
     /// # Safety
     ///
-    /// - `ptr` must be a valid pointer to a null-terminated C string.
-    /// - The string must contain only valid ASCII (no interior NUL bytes).
-    /// - The string must not exceed 36 characters.
+    /// - `ptr` 必须是一个指向以 null 结尾的有效 C 字符串指针。
+    /// - 字符串必须仅包含有效 ASCII（且不得含有内部 NUL 字节）。
+    /// - 字符串不得超过 36 个字符。
     ///
-    /// Violating these requirements causes a panic. If this function is called
-    /// from C code, such a panic is undefined behavior.
+    /// 违反这些要求将导致 panic。如果此函数是从 C 代码调用的，此类 panic 属于未定义行为。
     #[must_use]
     pub unsafe fn from_c_ptr(ptr: *const c_char) -> Self {
-        // SAFETY: Caller guarantees ptr is valid and null-terminated
+        // 安全性：调用者需保证 ptr 有效且以 null 结尾
         let cstr = unsafe { CStr::from_ptr(ptr) };
-        let s = cstr.to_str().expect("Invalid UTF-8 in C string");
+        let s = cstr.to_str().expect("C 字符串中包含无效的 UTF-8 编码");
         Self::new(s)
     }
 
-    /// Creates a [`StackStr`] from a C string pointer with validation.
+    /// 从带验证的 C 字符串指针创建一个 [`StackStr`]。
     ///
-    /// Returns `None` if the string is invalid. This is safe to call from C code
-    /// as it never panics on invalid input.
+    /// 如果字符串无效，则返回 `None`。此函数可以安全地从 C 代码调用，
+    /// 因为它永远不会因无效输入而触发 panic。
     ///
     /// # Safety
     ///
-    /// - `ptr` must be a valid pointer to a null-terminated C string.
+    /// - `ptr` 必须是一个指向以 null 结尾的有效 C 字符串指针。
     #[must_use]
     pub unsafe fn from_c_ptr_checked(ptr: *const c_char) -> Option<Self> {
-        // SAFETY: Caller guarantees ptr is valid and null-terminated
+        // 安全性：调用者需保证 ptr 有效且以 null 结尾
         let cstr = unsafe { CStr::from_ptr(ptr) };
         let s = cstr.to_str().ok()?;
         Self::new_checked(s).ok()
     }
 
-    /// Returns the string as a `&str`.
+    /// 将字符串作为 `&str` 返回。
     ///
-    /// This is an O(1) operation.
+    /// 这是一个 O(1) 操作。
     #[inline]
     #[must_use]
     pub fn as_str(&self) -> &str {
         debug_assert!(
             self.len as usize <= STACKSTR_CAPACITY,
-            "StackStr len {} exceeds capacity {}",
+            "StackStr 长度 {} 超过了容量 {}",
             self.len,
             STACKSTR_CAPACITY
         );
-        // SAFETY: We guarantee only valid ASCII is stored via check_valid_string_ascii
-        // on construction. ASCII is always valid UTF-8.
+        // 安全性：我们通过在构造时的 check_valid_string_ascii 保证了仅存储有效的 ASCII。
+        // ASCII 始终是有效的 UTF-8。
         unsafe { std::str::from_utf8_unchecked(&self.value[..self.len as usize]) }
     }
 
-    /// Returns the length in bytes (equal to character count for ASCII).
+    /// 返回以字节为单位的长度（对于 ASCII，等同于字符数）。
     ///
-    /// This is an O(1) operation.
+    /// 这是一个 O(1) 操作。
     #[inline]
     #[must_use]
     pub const fn len(&self) -> usize {
         self.len as usize
     }
 
-    /// Returns `true` if the string is empty.
+    /// 如果字符串为空，则返回 `true`。
     #[inline]
     #[must_use]
     pub const fn is_empty(&self) -> bool {
         self.len == 0
     }
 
-    /// Returns a pointer to the null-terminated C string.
+    /// 返回一个指向以 null 结尾的 C 字符串指针。
     #[inline]
     #[must_use]
     pub const fn as_ptr(&self) -> *const c_char {
         self.value.as_ptr().cast::<c_char>()
     }
 
-    /// Returns the value as a C string slice.
+    /// 将该值作为 C 字符串切片返回。
     #[inline]
     #[must_use]
     pub fn as_cstr(&self) -> &CStr {
         debug_assert!(
             self.len as usize <= STACKSTR_CAPACITY,
-            "StackStr len {} exceeds capacity {}",
+            "StackStr 长度 {} 超过了容量 {}",
             self.len,
             STACKSTR_CAPACITY
         );
         debug_assert!(
             self.value[self.len as usize] == 0,
-            "StackStr missing null terminator at position {}",
+            "StackStr 在位置 {} 处缺少 null 终止符",
             self.len
         );
-        // SAFETY: We guarantee the string is null-terminated (buffer initialized to 0,
-        // and we only write up to len bytes leaving the null terminator intact),
-        // and no interior NUL bytes (rejected during construction).
+        // 安全性：我们保证字符串是以 null 结尾的（缓冲区初始化为 0，
+        // 且我们最多只写入 len 个字节，从而保持 null 终止符完好），
+        // 且没有内部 NUL 字节（在构造时会被拒绝）。
         unsafe { CStr::from_bytes_with_nul_unchecked(&self.value[..=self.len as usize]) }
     }
 }
@@ -277,7 +273,7 @@ impl Eq for StackStr {}
 impl Hash for StackStr {
     #[inline]
     fn hash<H: Hasher>(&self, state: &mut H) {
-        // Only hash actual content, not padding
+        // 仅对实际内容进行哈希，不包括填充部分
         self.value[..self.len as usize].hash(state);
     }
 }
@@ -338,10 +334,10 @@ impl Borrow<str> for StackStr {
 }
 
 impl Default for StackStr {
-    /// Creates an empty [`StackStr`] with length 0.
+    /// 创建一个长度为 0 的空 [`StackStr`]。
     ///
-    /// Note: While [`StackStr::new`] rejects empty strings, `default()` creates
-    /// an empty placeholder. Use [`is_empty`](StackStr::is_empty) to check for this state.
+    /// 注意：虽然 [`StackStr::new`] 拒绝空字符串，但 `default()` 会创建一个空的占位符。
+    /// 使用 [`is_empty`](StackStr::is_empty) 来检查这种状态。
     fn default() -> Self {
         Self {
             value: [0u8; STACKSTR_BUFFER_SIZE],
@@ -425,7 +421,7 @@ mod tests {
     #[rstest]
     #[should_panic]
     fn test_non_ascii() {
-        let _ = StackStr::new("hello\u{1F600}"); // emoji
+        let _ = StackStr::new("hello\u{1F600}"); // 表情符号
     }
 
     #[rstest]
@@ -587,15 +583,15 @@ mod tests {
     #[rstest]
     fn test_copy_semantics() {
         let a = StackStr::new("test");
-        let b = a; // Copy, not move
-        assert_eq!(a, b); // Both are still valid
+        let b = a; // 复制，而非移动
+        assert_eq!(a, b); // 两者均依然有效
     }
 
     #[rstest]
     #[case("BINANCE")]
     #[case("ETH-PERP")]
     #[case("O-20231215-001")]
-    #[case("123456789012345678901234567890123456")] // 36 chars (max)
+    #[case("123456789012345678901234567890123456")] // 36 字符（最大）
     fn test_valid_identifiers(#[case] s: &str) {
         let stack_str = StackStr::new(s);
         assert_eq!(stack_str.as_str(), s);
@@ -648,7 +644,7 @@ mod tests {
     fn test_null_terminator_present() {
         let s = StackStr::new("test");
         let ptr = s.as_ptr();
-        // Read byte at position 4 (after "test")
+        // 读取位置 4 的字节（在 "test" 之后）
         let null_byte = unsafe { *ptr.offset(4) };
         assert_eq!(null_byte, 0);
     }
@@ -668,7 +664,7 @@ mod tests {
 
     #[rstest]
     fn test_from_bytes_non_ascii() {
-        let result = StackStr::from_bytes(&[0x80, 0x81]); // Non-ASCII bytes
+        let result = StackStr::from_bytes(&[0x80, 0x81]); // 非 ASCII 字节
         assert!(result.is_err());
     }
 
@@ -757,7 +753,7 @@ mod tests {
 
     #[rstest]
     fn test_ascii_control_chars_tab() {
-        // Tab is whitespace but valid ASCII
+        // 制表符是空白字符，但也是有效的 ASCII
         let result = StackStr::new_checked("a\tb");
         assert!(result.is_ok());
         assert_eq!(result.unwrap().as_str(), "a\tb");

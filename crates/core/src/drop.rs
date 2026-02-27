@@ -13,21 +13,19 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! Explicit, manually-invocable cleanup hook used to break reference cycles before `Drop`.
+//! 显式的、可手动调用的清理挂钩，用于在触发 `Drop` 之前打破引用循环。
 //!
-//! Many long-lived components register callbacks or handlers that retain strong references back to
-//! them, creating reference-count cycles that prevent Rust’s automatic destructor (`Drop`) from
-//! running.  The `CleanDrop` trait provides an *object-safe* method, `clean_drop`, that can be
-//! called explicitly (e.g. during an orderly shutdown) to release such resources.  Implementations
-//! should also call `clean_drop` from their `Drop` impl as a final safety net.
+//! 许多长生命周期的组件会注册回调或处理程序，这些处理程序会保留指向其自身的强引用，从而产生引用计数循环，
+//! 导致 Rust 的自动析构函数 (`Drop`) 无法运行。`CleanDrop` trait 提供了一个*对象安全*（object-safe）的方法 `clean_drop`，
+//! 可以显式调用该方法（例如在正常关机期间）以释放此类资源。实现类还应当在其 `Drop` 实现中调用 `clean_drop`
+//! 作为最后一道安全保障。
 //!
-//! Design contract:
-//! 1. **Idempotent** – multiple calls must be safe.
-//! 2. Perform all externally-observable cleanup here (unregister handlers, abort tasks, clear
-//!    callbacks, downgrade `Rc`/`Arc` references, etc.).
+//! 设计契约：
+//! 1. **幂等性** – 多次调用必须是安全的。
+//! 2. 在此处执行所有外部可观察到的清理工作（注销处理程序、中止任务、清除回调、降级 `Rc`/`Arc` 引用等）。
 
-/// Trait providing an explicit cleanup method that may be invoked prior to `Drop`.
+/// 提供可在 `Drop` 之前调用的显式清理方法的 trait。
 pub trait CleanDrop {
-    /// Perform custom cleanup, releasing external resources and breaking strong reference cycles.
+    /// 执行自定义清理，释放外部资源并打破强引用循环。
     fn clean_drop(&mut self);
 }

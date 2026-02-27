@@ -13,14 +13,13 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! Common serialization traits and functions.
+//! 常用的序列化 trait 和函数。
 //!
-//! This module provides custom serde deserializers and serializers for common
-//! patterns encountered when parsing exchange API responses, particularly:
+//! 此模块提供了自定义的 serde 反序列化器和序列化器，用于处理解析交易平台 API 响应时遇到的常见模式，特别是：
 //!
-//! - Empty strings that should be interpreted as `None` or zero.
-//! - Type conversions from strings to primitives.
-//! - Decimal values represented as strings.
+//! - 应当被解释为 `None` 或零的空字符串。
+//! - 从字符串到原始类型的类型转换。
+//! - 以字符串形式表示的十进制 (Decimal) 数值。
 
 use std::str::FromStr;
 
@@ -35,25 +34,25 @@ use ustr::Ustr;
 
 struct BoolVisitor;
 
-/// Zero-allocation decimal visitor for maximum deserialization performance.
+/// 零分配的十进制数 (Decimal) 访问器，用于最大化反序列化性能。
 ///
-/// Directly visits JSON tokens without intermediate `serde_json::Value` allocation.
-/// Handles all JSON numeric representations: strings, integers, floats, and null.
+/// 直接访问 JSON 令牌，而不产生中间的 `serde_json::Value` 分配。
+/// 处理所有 JSON 数值表示形式：字符串、整数、浮点数以及 null。
 struct DecimalVisitor;
 
 impl Visitor<'_> for DecimalVisitor {
     type Value = Decimal;
 
     fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-        formatter.write_str("a decimal number as string, integer, or float")
+        formatter.write_str("以字符串、整数或浮点数形式表示的十进制数字")
     }
 
-    // Fast path: borrowed string (zero-copy)
+    // 快速路径：借用型字符串 (zero-copy)
     fn visit_str<E: Error>(self, v: &str) -> Result<Self::Value, E> {
         if v.is_empty() {
             return Ok(Decimal::ZERO);
         }
-        // Check for scientific notation
+        // 检查是否为科学计数法
         if v.contains('e') || v.contains('E') {
             Decimal::from_scientific(v).map_err(E::custom)
         } else {
@@ -61,12 +60,12 @@ impl Visitor<'_> for DecimalVisitor {
         }
     }
 
-    // Owned string (rare case, delegates to visit_str)
+    // 所有型字符串（极少见情况，委托给 visit_str 处理）
     fn visit_string<E: Error>(self, v: String) -> Result<Self::Value, E> {
         self.visit_str(&v)
     }
 
-    // Direct integer handling - no string conversion needed
+    // 直接处理整数 - 不需要进行字符串转换
     fn visit_i64<E: Error>(self, v: i64) -> Result<Self::Value, E> {
         Ok(Decimal::from(v))
     }
@@ -83,7 +82,7 @@ impl Visitor<'_> for DecimalVisitor {
         Ok(Decimal::from(v))
     }
 
-    // Float handling - direct conversion
+    // 浮点数处理 - 直接转换
     fn visit_f64<E: Error>(self, v: f64) -> Result<Self::Value, E> {
         if v.is_nan() {
             return Err(E::invalid_value(Unexpected::Float(v), &self));
@@ -94,7 +93,7 @@ impl Visitor<'_> for DecimalVisitor {
         Decimal::try_from(v).map_err(E::custom)
     }
 
-    // Null → zero (matches existing behavior)
+    // Null → 零 (与现有行为保持一致)
     fn visit_unit<E: Error>(self) -> Result<Self::Value, E> {
         Ok(Decimal::ZERO)
     }
@@ -104,21 +103,21 @@ impl Visitor<'_> for DecimalVisitor {
     }
 }
 
-/// Zero-allocation optional decimal visitor for maximum deserialization performance.
+/// 零分配的可选级十进制数 (Optional Decimal) 访问器，用于最大化反序列化性能。
 ///
-/// Handles null values as `None` and empty strings as `None`.
-/// Uses `deserialize_any` approach to handle all JSON value types uniformly.
+/// 将 null 值处理为 `None`，将空字符串处理为 `None`。
+/// 使用 `deserialize_any` 方法来统统处理所有 JSON 值类型。
 struct OptionalDecimalVisitor;
 
 impl Visitor<'_> for OptionalDecimalVisitor {
     type Value = Option<Decimal>;
 
     fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-        formatter.write_str("null or a decimal number as string, integer, or float")
+        formatter.write_str("null 或以字符串、整数、浮点数形式表示的十进制数字")
     }
 
-    // Fast path: borrowed string (zero-copy)
-    // Empty string → None (different from DecimalVisitor which returns ZERO)
+    // 快速路径：借用型字符串 (zero-copy)
+    // 空字符串 → None (与返回 ZERO 的 DecimalVisitor 不同)
     fn visit_str<E: Error>(self, v: &str) -> Result<Self::Value, E> {
         if v.is_empty() {
             return Ok(None);
@@ -160,22 +159,22 @@ impl Visitor<'_> for OptionalDecimalVisitor {
     }
 }
 
-/// Represents types which are serializable for JSON specifications.
+/// 表示符合 JSON 规范且可序列化的类型。
 pub trait Serializable: Serialize + for<'de> Deserialize<'de> {
-    /// Deserialize an object from JSON encoded bytes.
+    /// 从 JSON 编码的字节反序列化对象。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns serialization errors.
+    /// 返回序列化错误。
     fn from_json_bytes(data: &[u8]) -> Result<Self, serde_json::Error> {
         serde_json::from_slice(data)
     }
 
-    /// Serialize an object to JSON encoded bytes.
+    /// 将对象序列化为 JSON 编码的字节。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns serialization errors.
+    /// 返回序列化错误。
     fn to_json_bytes(&self) -> Result<Bytes, serde_json::Error> {
         serde_json::to_vec(self).map(Bytes::from)
     }
@@ -183,43 +182,42 @@ pub trait Serializable: Serialize + for<'de> Deserialize<'de> {
 
 pub use self::msgpack::{FromMsgPack, MsgPackSerializable, ToMsgPack};
 
-/// Provides MsgPack serialization support for types implementing [`Serializable`].
+/// 为实现 [`Serializable`] 的类型提供 MsgPack 序列化支持。
 ///
-/// This module contains traits for MsgPack serialization and deserialization,
-/// separated from the core [`Serializable`] trait to allow independent opt-in.
+/// 此模块包含用于 MsgPack 序列化和反序列化的 trait，与核心 [`Serializable`] trait 分离开，允许独立启用。
 pub mod msgpack {
     use bytes::Bytes;
     use serde::{Deserialize, Serialize};
 
     use super::Serializable;
 
-    /// Provides deserialization from MsgPack encoded bytes.
+    /// 提供从 MsgPack 编码字节的反序列化能力。
     pub trait FromMsgPack: for<'de> Deserialize<'de> + Sized {
-        /// Deserialize an object from MsgPack encoded bytes.
+        /// 从 MsgPack 编码的字节反序列化对象。
         ///
-        /// # Errors
+        /// # 错误
         ///
-        /// Returns serialization errors.
+        /// 返回序列化错误。
         fn from_msgpack_bytes(data: &[u8]) -> Result<Self, rmp_serde::decode::Error> {
             rmp_serde::from_slice(data)
         }
     }
 
-    /// Provides serialization to MsgPack encoded bytes.
+    /// 提供向 MsgPack 编码字节的序列化能力。
     pub trait ToMsgPack: Serialize {
-        /// Serialize an object to MsgPack encoded bytes.
+        /// 将对象序列化为 MsgPack 编码的字节。
         ///
-        /// # Errors
+        /// # 错误
         ///
-        /// Returns serialization errors.
+        /// 返回序列化错误。
         fn to_msgpack_bytes(&self) -> Result<Bytes, rmp_serde::encode::Error> {
             rmp_serde::to_vec_named(self).map(Bytes::from)
         }
     }
 
-    /// Marker trait combining [`Serializable`], [`FromMsgPack`], and [`ToMsgPack`].
+    /// 结合了 [`Serializable`], [`FromMsgPack`] 和 [`ToMsgPack`] 的标记性 (marker) trait。
     ///
-    /// This trait is automatically implemented for all types that implement [`Serializable`].
+    /// 为所有实现 [`Serializable`] 的类型自动实现此 trait。
     pub trait MsgPackSerializable: Serializable + FromMsgPack + ToMsgPack {}
 
     impl<T> FromMsgPack for T where T: Serializable {}
@@ -233,7 +231,7 @@ impl Visitor<'_> for BoolVisitor {
     type Value = u8;
 
     fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str("a boolean as u8")
+        formatter.write_str("以 u8 类型表示的布尔值")
     }
 
     fn visit_bool<E>(self, value: bool) -> Result<Self::Value, E>
@@ -245,16 +243,14 @@ impl Visitor<'_> for BoolVisitor {
 
     #[allow(
         clippy::cast_possible_truncation,
-        reason = "Intentional for parsing, value range validated"
+        reason = "用于解析，是有意为之，且已验证过值范围"
     )]
     fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E>
     where
         E: serde::de::Error,
     {
-        // Only 0 or 1 are considered valid representations when provided as an
-        // integer. We deliberately reject values outside this range to avoid
-        // silently truncating larger integers into impl-defined boolean
-        // semantics.
+        // 只有 0 或 1 被视为作为整数提供时的有效表示。
+        // 我们有意拒绝此范围之外的值，以避免将较大的整数静默截断为实现定义的布尔语义。
         if value > 1 {
             Err(E::invalid_value(Unexpected::Unsigned(value), &self))
         } else {
@@ -263,27 +259,27 @@ impl Visitor<'_> for BoolVisitor {
     }
 }
 
-/// Serde default value function that returns `true`.
+/// Serde 默认值函数，返回 `true`。
 ///
-/// Use with `#[serde(default = "default_true")]` on boolean fields.
+/// 在布尔字段上使用 `#[serde(default = "default_true")]`。
 #[must_use]
 pub const fn default_true() -> bool {
     true
 }
 
-/// Serde default value function that returns `false`.
+/// Serde 默认值函数，返回 `false`。
 ///
-/// Use with `#[serde(default = "default_false")]` on boolean fields.
+/// 在布尔字段上使用 `#[serde(default = "default_false")]`。
 #[must_use]
 pub const fn default_false() -> bool {
     false
 }
 
-/// Deserialize the boolean value as a `u8`.
+/// 将布尔值作为 `u8` 反序列化。
 ///
-/// # Errors
+/// # 错误
 ///
-/// Returns serialization errors.
+/// 返回序列化错误。
 pub fn from_bool_as_u8<'de, D>(deserializer: D) -> Result<u8, D::Error>
 where
     D: Deserializer<'de>,
@@ -291,27 +287,27 @@ where
     deserializer.deserialize_any(BoolVisitor)
 }
 
-/// Deserializes a `Decimal` from either a JSON string or number.
+/// 从 JSON 字符串或数字中反序列化为一个 `Decimal`。
 ///
-/// High-performance implementation using a custom visitor that avoids intermediate
-/// `serde_json::Value` allocations. Handles all JSON numeric representations:
+/// 高性能实现，使用自定义反序列化器，避免中间的 `serde_json::Value` 分配。
+/// 处理所有的 JSON 数值表示形式：
 ///
-/// - JSON string: `"123.456"` → Decimal (zero-copy for borrowed strings)
-/// - JSON integer: `123` → Decimal (direct conversion, no string allocation)
-/// - JSON float: `123.456` → Decimal
+/// - JSON 字符串: `"123.456"` → Decimal (对于借用字符串为零拷贝)
+/// - JSON 整数: `123` → Decimal (直接转换，无字符串分配)
+/// - JSON 浮点数: `123.456` → Decimal
 /// - JSON null: → `Decimal::ZERO`
-/// - Scientific notation: `"1.5e-8"` → Decimal
+/// - 科学计数法: `"1.5e-8"` → Decimal
 ///
-/// # Performance
+/// # 性能
 ///
-/// This implementation is optimized for high-frequency trading scenarios:
-/// - Zero allocations for string values (uses borrowed `&str`)
-/// - Direct integer conversion without string intermediary
-/// - No intermediate `serde_json::Value` heap allocation
+/// 此实现针对高频交易场景进行了优化：
+/// - 字符串值零分配（使用借用的 `&str`）
+/// - 无需通过字符串中间体，直接进行整数转换
+/// - 不产生中间的 `serde_json::Value` 堆分配
 ///
-/// # Errors
+/// # 错误
 ///
-/// Returns an error if the value cannot be parsed as a valid decimal.
+/// 如果值无法解析为有效的十进制数，则返回错误。
 pub fn deserialize_decimal<'de, D>(deserializer: D) -> Result<Decimal, D::Error>
 where
     D: Deserializer<'de>,
@@ -319,53 +315,53 @@ where
     deserializer.deserialize_any(DecimalVisitor)
 }
 
-/// Deserializes an `Option<Decimal>` from a JSON string, number, or null.
+/// 从 JSON 字符串、数字或 null 反序列化为一个 `Option<Decimal>`。
 ///
-/// High-performance implementation using a custom visitor that avoids intermediate
-/// `serde_json::Value` allocations. Handles all JSON numeric representations:
+/// 高性能实现，使用自定义反序列化器，避免中间的 `serde_json::Value` 分配。
+/// 处理所有的 JSON 数值表示形式：
 ///
-/// - JSON string: `"123.456"` → Some(Decimal) (zero-copy for borrowed strings)
-/// - JSON integer: `123` → Some(Decimal) (direct conversion)
-/// - JSON float: `123.456` → Some(Decimal)
+/// - JSON 字符串: `"123.456"` → Some(Decimal) (对于借用字符串为零拷贝)
+/// - JSON 整数: `123` → Some(Decimal) (直接转换)
+/// - JSON 浮点数: `123.456` → Some(Decimal)
 /// - JSON null: → `None`
-/// - Empty string: `""` → `None`
-/// - Scientific notation: `"1.5e-8"` → Some(Decimal)
+/// - 空字符串: `""` → `None`
+/// - 科学计数法: `"1.5e-8"` → Some(Decimal)
 ///
-/// # Performance
+/// # 性能
 ///
-/// This implementation is optimized for high-frequency trading scenarios:
-/// - Zero allocations for string values (uses borrowed `&str`)
-/// - Direct integer conversion without string intermediary
-/// - No intermediate `serde_json::Value` heap allocation
+/// 此实现针对高频交易场景进行了优化：
+/// - 字符串值零分配（使用借用的 `&str`）
+/// - 无需通过字符串中间体，直接进行整数转换
+/// - 不产生中间的 `serde_json::Value` 堆分配
 ///
-/// # Errors
+/// # 错误
 ///
-/// Returns an error if the value cannot be parsed as a valid decimal.
+/// 如果值无法解析为有效的十进制数，则返回错误。
 pub fn deserialize_optional_decimal<'de, D>(deserializer: D) -> Result<Option<Decimal>, D::Error>
 where
     D: Deserializer<'de>,
 {
-    // Use deserialize_any to handle all JSON value types uniformly
-    // (deserialize_option would route non-null through visit_some, losing empty string handling)
+    // 使用 deserialize_any 以统统处理所有的 JSON 值类型
+    // (deserialize_option 会将非 null 路由到 visit_some，从而丢失对空字符串的处理)
     deserializer.deserialize_any(OptionalDecimalVisitor)
 }
 
-/// Serializes a `Decimal` as a JSON number (float).
+/// 将 `Decimal` 序列化为 JSON 数字（浮点数）。
 ///
-/// Used for outgoing requests where exchange APIs expect JSON numbers.
+/// 用于交易平台 API 期望获得 JSON 数字的出站请求。
 ///
-/// # Errors
+/// # 错误
 ///
-/// Returns an error if serialization fails.
+/// 如果序列化失败，则返回错误。
 pub fn serialize_decimal<S: Serializer>(d: &Decimal, s: S) -> Result<S::Ok, S::Error> {
     rust_decimal::serde::float::serialize(d, s)
 }
 
-/// Serializes an `Option<Decimal>` as a JSON number or null.
+/// 将 `Option<Decimal>` 序列化为 JSON 数字或 null。
 ///
-/// # Errors
+/// # 错误
 ///
-/// Returns an error if serialization fails.
+/// 如果序列化失败，则返回错误。
 pub fn serialize_optional_decimal<S: Serializer>(
     d: &Option<Decimal>,
     s: S,
@@ -376,14 +372,13 @@ pub fn serialize_optional_decimal<S: Serializer>(
     }
 }
 
-/// Deserializes a `Decimal` from a JSON string.
+/// 从 JSON 字符串反序列化 `Decimal`。
 ///
-/// This is the strict form that requires the value to be a string, rejecting
-/// numeric JSON values to avoid precision loss.
+/// 这是严格形式，要求值必须是字符串，拒绝数值型的 JSON 值，以避免精度丢失。
 ///
-/// # Errors
+/// # 错误
 ///
-/// Returns an error if the string cannot be parsed as a valid decimal.
+/// 如果字符串无法解析为有效的十进制数，则返回错误。
 pub fn deserialize_decimal_from_str<'de, D>(deserializer: D) -> Result<Decimal, D::Error>
 where
     D: Deserializer<'de>,
@@ -392,13 +387,13 @@ where
     Decimal::from_str(&s).map_err(D::Error::custom)
 }
 
-/// Deserializes a `Decimal` from a string field that might be empty.
+/// 从可能为空的字符串字段中反序列化 `Decimal`。
 ///
-/// Handles edge cases where empty string "" or "0" becomes `Decimal::ZERO`.
+/// 处理边界情况，使空字符串 "" 或 "0" 变为 `Decimal::ZERO`。
 ///
-/// # Errors
+/// # 错误
 ///
-/// Returns an error if the string cannot be parsed as a valid decimal.
+/// 如果字符串无法解析为有效的十进制数，则返回错误。
 pub fn deserialize_decimal_or_zero<'de, D>(deserializer: D) -> Result<Decimal, D::Error>
 where
     D: Deserializer<'de>,
@@ -411,15 +406,15 @@ where
     }
 }
 
-/// Deserializes an optional `Decimal` from a string field.
+/// 从字符串字段中反序列化可选级 `Decimal`。
 ///
-/// Returns `None` if the string is empty or "0", otherwise parses to `Decimal`.
-/// This is a strict string-only deserializer; for flexible handling of strings,
-/// numbers, and null, use [`deserialize_optional_decimal`].
+/// 如果字符串为空或为 "0"，则返回 `None`；否则解析为 `Decimal`。
+/// 这是一个严格的仅限字符串的反序列化器；如需灵活处理字符串、数字以及 null，
+/// 请使用 [`deserialize_optional_decimal`]。
 ///
-/// # Errors
+/// # 错误
 ///
-/// Returns an error if the string cannot be parsed as a valid decimal.
+/// 如果字符串无法解析为有效的十进制数，则返回错误。
 pub fn deserialize_optional_decimal_str<'de, D>(
     deserializer: D,
 ) -> Result<Option<Decimal>, D::Error>
@@ -434,14 +429,13 @@ where
     }
 }
 
-/// Deserializes an optional `Decimal` from a string-only field.
+/// 从仅限字符串的字段中反序列化可选级 `Decimal`。
 ///
-/// Returns `None` if the value is null or the string is empty, otherwise
-/// parses to `Decimal`.
+/// 如果值为 null 或字符串为空，则返回 `None`；否则解析为 `Decimal`。
 ///
-/// # Errors
+/// # 错误
 ///
-/// Returns an error if the string cannot be parsed as a valid decimal.
+/// 如果字符串无法解析为有效的十进制数，则返回错误。
 pub fn deserialize_optional_decimal_from_str<'de, D>(
     deserializer: D,
 ) -> Result<Option<Decimal>, D::Error>
@@ -455,13 +449,13 @@ where
     }
 }
 
-/// Deserializes a `Decimal` from an optional string field, defaulting to zero.
+/// 从可选级字符串字段中反序列化 `Decimal`，默认值为零。
 ///
-/// Handles edge cases: `None`, empty string "", or "0" all become `Decimal::ZERO`.
+/// 处理边界情况：`None`、空字符串 "" 或 "0" 均会变为 `Decimal::ZERO`。
 ///
-/// # Errors
+/// # 错误
 ///
-/// Returns an error if the string cannot be parsed as a valid decimal.
+/// 如果字符串无法解析为有效的十进制数，则返回错误。
 pub fn deserialize_optional_decimal_or_zero<'de, D>(deserializer: D) -> Result<Decimal, D::Error>
 where
     D: Deserializer<'de>,
@@ -474,11 +468,11 @@ where
     }
 }
 
-/// Deserializes a `Vec<Decimal>` from a JSON array of strings.
+/// 从 JSON 字符串数组中反序列化 `Vec<Decimal>`。
 ///
-/// # Errors
+/// # 错误
 ///
-/// Returns an error if any string cannot be parsed as a valid decimal.
+/// 如果任何字符串无法解析为有效的十进制数，则返回错误。
 pub fn deserialize_vec_decimal_from_str<'de, D>(deserializer: D) -> Result<Vec<Decimal>, D::Error>
 where
     D: Deserializer<'de>,
@@ -490,11 +484,11 @@ where
         .collect()
 }
 
-/// Serializes a `Decimal` as a string (lossless, no scientific notation).
+/// 将 `Decimal` 序列化为字符串（无损，不使用科学计数法）。
 ///
-/// # Errors
+/// # 错误
 ///
-/// Returns an error if serialization fails.
+/// 如果序列化失败，则返回错误。
 pub fn serialize_decimal_as_str<S>(decimal: &Decimal, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
@@ -502,11 +496,11 @@ where
     serializer.serialize_str(&decimal.to_string())
 }
 
-/// Serializes an optional `Decimal` as a string.
+/// 将可选级 `Decimal` 序列化为字符串。
 ///
-/// # Errors
+/// # 错误
 ///
-/// Returns an error if serialization fails.
+/// 如果序列化失败，则返回错误。
 pub fn serialize_optional_decimal_as_str<S>(
     decimal: &Option<Decimal>,
     serializer: S,
@@ -520,11 +514,11 @@ where
     }
 }
 
-/// Serializes a `Vec<Decimal>` as an array of strings.
+/// 将 `Vec<Decimal>` 序列化为字符串数组。
 ///
-/// # Errors
+/// # 错误
 ///
-/// Returns an error if serialization fails.
+/// 如果序列化失败，则返回错误。
 pub fn serialize_vec_decimal_as_str<S>(
     decimals: &Vec<Decimal>,
     serializer: S,
@@ -539,20 +533,20 @@ where
     seq.end()
 }
 
-/// Parses a string to `Decimal`, returning an error if parsing fails.
+/// 将字符串解析为 `Decimal`，如果解析失败则返回错误。
 ///
-/// # Errors
+/// # 错误
 ///
-/// Returns an error if the string cannot be parsed as a Decimal.
+/// 如果字符串无法解析为十进制数，则返回错误。
 pub fn parse_decimal(s: &str) -> anyhow::Result<Decimal> {
-    Decimal::from_str(s).map_err(|e| anyhow::anyhow!("Failed to parse decimal from '{s}': {e}"))
+    Decimal::from_str(s).map_err(|e| anyhow::anyhow!("无法从 '{s}' 解析十进制数：{e}"))
 }
 
-/// Parses an optional string to `Decimal`, returning `None` if the string is `None` or empty.
+/// 将可选级字符串解析为 `Decimal`，如果字符串为 `None` 或为空，则返回 `None`。
 ///
-/// # Errors
+/// # 错误
 ///
-/// Returns an error if the string cannot be parsed as a Decimal.
+/// 如果字符串无法解析为十进制数，则返回错误。
 pub fn parse_optional_decimal(s: &Option<String>) -> anyhow::Result<Option<Decimal>> {
     match s {
         None => Ok(None),
@@ -561,17 +555,15 @@ pub fn parse_optional_decimal(s: &Option<String>) -> anyhow::Result<Option<Decim
     }
 }
 
-/// Deserializes an empty string into `None`.
+/// 将空字符串反序列化为 `None`。
 ///
-/// Many exchange APIs represent null string fields as an empty string (`""`).
-/// When such a payload is mapped onto `Option<String>` the default behavior
-/// would yield `Some("")`, which is semantically different from the intended
-/// absence of a value. This helper ensures that empty strings are normalized
-/// to `None` during deserialization.
+/// 许多交易平台 API 将 null 字符串字段表示为空字符串 (`""`)。
+/// 当此类型的数据映射到 `Option<String>` 时，默认行为会产生 `Some("")`，
+/// 这与预期的“值缺失”语义不同。此工具确保空字符串在反序列化过程中被规格化为 `None`。
 ///
-/// # Errors
+/// # 错误
 ///
-/// Returns an error if the JSON value cannot be deserialized into a string.
+/// 如果 JSON 值无法反序列化为字符串，则返回错误。
 pub fn deserialize_empty_string_as_none<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
 where
     D: Deserializer<'de>,
@@ -580,11 +572,11 @@ where
     Ok(opt.filter(|s| !s.is_empty()))
 }
 
-/// Deserializes an empty [`Ustr`] into `None`.
+/// 将空的 [`Ustr`] 反序列化为 `None`。
 ///
-/// # Errors
+/// # 错误
 ///
-/// Returns an error if the JSON value cannot be deserialized into a string.
+/// 如果 JSON 值无法反序列化为字符串，则返回错误。
 pub fn deserialize_empty_ustr_as_none<'de, D>(deserializer: D) -> Result<Option<Ustr>, D::Error>
 where
     D: Deserializer<'de>,
@@ -593,13 +585,13 @@ where
     Ok(opt.filter(|s| !s.is_empty()))
 }
 
-/// Deserializes a `u8` from a string field.
+/// 从字符串字段反序列化 `u8`。
 ///
-/// Returns 0 if the string is empty.
+/// 如果字符串为空，则返回 0。
 ///
-/// # Errors
+/// # 错误
 ///
-/// Returns an error if the string cannot be parsed as a u8.
+/// 如果字符串无法解析为 u8，则返回错误。
 pub fn deserialize_string_to_u8<'de, D>(deserializer: D) -> Result<u8, D::Error>
 where
     D: Deserializer<'de>,
@@ -611,13 +603,13 @@ where
     s.parse::<u8>().map_err(D::Error::custom)
 }
 
-/// Deserializes a `u64` from a string field.
+/// 从字符串字段反序列化 `u64`。
 ///
-/// Returns 0 if the string is empty.
+/// 如果字符串为空，则返回 0。
 ///
-/// # Errors
+/// # 错误
 ///
-/// Returns an error if the string cannot be parsed as a u64.
+/// 如果字符串无法解析为 u64，则返回错误。
 pub fn deserialize_string_to_u64<'de, D>(deserializer: D) -> Result<u64, D::Error>
 where
     D: Deserializer<'de>,
@@ -630,13 +622,13 @@ where
     }
 }
 
-/// Deserializes an optional `u64` from a string field.
+/// 从字符串字段反序列化可选级 `u64`。
 ///
-/// Returns `None` if the value is null or the string is empty.
+/// 如果值为 null 或字符串为空，则返回 `None`。
 ///
-/// # Errors
+/// # 错误
 ///
-/// Returns an error if the string cannot be parsed as a u64.
+/// 如果字符串无法解析为 u64，则返回错误。
 pub fn deserialize_optional_string_to_u64<'de, D>(deserializer: D) -> Result<Option<u64>, D::Error>
 where
     D: Deserializer<'de>,
@@ -694,7 +686,7 @@ mod tests {
 
     #[rstest]
     fn test_deserialize_bool_as_u8_with_invalid_integer() {
-        // Any integer other than 0/1 is invalid and should error
+        // 除 0/1 以外的任何整数均无效，应报错
         let json = r#"{"value": 2}"#;
         let result: Result<TestStruct, _> = serde_json::from_str(json);
         assert!(result.is_err());
@@ -850,7 +842,7 @@ mod tests {
 
         let json = serde_json::to_string(&original).unwrap();
 
-        // Check that it's serialized as strings
+        // 检查其是否序列化为字符串
         assert!(json.contains("\"123.456789012345678\""));
         assert!(json.contains("\"0.000000001\""));
 
@@ -1009,7 +1001,7 @@ mod tests {
         assert_eq!(result, expected);
     }
 
-    // Tests for flexible decimal deserializers (handles both string and number JSON values)
+    // 灵活的十进制数反序列化测试（同时处理字符串和数字形式的 JSON 值）
 
     #[derive(Debug, Serialize, Deserialize, PartialEq)]
     struct TestFlexibleDecimal {
@@ -1056,9 +1048,9 @@ mod tests {
 
     #[rstest]
     fn test_flexible_decimal_scientific_notation() {
-        // Test that scientific notation from serde_json is handled correctly.
-        // serde_json outputs very small numbers like 0.00000001 as "1e-8".
-        // Note: JSON numbers are parsed as f64, so values are limited to ~15 significant digits.
+        // 测试来自 serde_json 的科学计数法是否得到了正确处理。
+        // serde_json 会将极小的数值（如 0.00000001）输出为 "1e-8"。
+        // 注意：JSON 数值将被解析为 f64，因此有效数字被限制在大约 15 位。
         let json = r#"{"value": 0.00000001, "optional_value": 12345678.12345}"#;
         let parsed: TestFlexibleDecimal = serde_json::from_str(json).unwrap();
         assert_eq!(parsed.value, dec!(0.00000001));
@@ -1073,7 +1065,7 @@ mod tests {
         assert_eq!(parsed.optional_value, None);
     }
 
-    // Additional tests for DecimalVisitor edge cases
+    // 针对 DecimalVisitor 边界情况的额外测试
 
     #[derive(Debug, Deserialize)]
     struct TestDecimalOnly {
@@ -1108,7 +1100,7 @@ mod tests {
     }
 
     #[rstest]
-    #[case(r#"{"value": "123456789.123456789012345678"}"#)] // High precision string
+    #[case(r#"{"value": "123456789.123456789012345678"}"#)] // 高精度字符串
     fn test_deserialize_decimal_high_precision(#[case] json: &str) {
         let result: TestDecimalOnly = serde_json::from_str(json).unwrap();
         assert_eq!(result.value, dec!(123456789.123456789012345678));

@@ -13,10 +13,10 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! Generic parameter storage using `IndexMap<String, Value>`.
+//! 使用 `IndexMap<String, Value>` 的通用参数存储。
 //!
-//! This module provides a centralized definition of [`Params`] as a generic storage
-//! solution for `serde_json::Value` data, along with Python bindings.
+//! 此模块提供了 [`Params`] 的集中定义，作为 `serde_json::Value` 数据的通用存储方案，
+//! 并提供了 Python 绑定。
 
 use std::ops::{Deref, DerefMut};
 
@@ -24,76 +24,74 @@ use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-/// Newtype wrapper for generic parameter storage.
+/// 通用参数存储的新类型 (Newtype) 包装器。
 ///
-/// This represents a map of string keys to JSON values, used for passing
-/// adapter-specific configuration, metadata, and any generic key-value data.
+/// 它表示一个从字符串键到 JSON 值的映射，用于传递适配器特定的配置、元数据和任何通用的键值对数据。
 ///
-/// `Params` uses `IndexMap` to preserve insertion order, which is important for
-/// consistent serialization and debugging.
+/// `Params` 使用 `IndexMap` 以保留插入顺序，这对于保持序列化和调试的一致性非常重要。
 #[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct Params(IndexMap<String, Value>);
 
 impl Params {
-    /// Creates an empty `Params` map.
+    /// 创建一个空的 `Params` 映射。
     pub fn new() -> Self {
         Self(IndexMap::new())
     }
 
-    /// Creates `Params` from an `IndexMap`.
+    /// 从 `IndexMap` 创建 `Params`。
     pub fn from_index_map(map: IndexMap<String, Value>) -> Self {
         Self(map)
     }
 
-    /// Extracts a `u64` value from the params map.
+    /// 从参数映射中提取 `u64` 值。
     ///
-    /// Returns `None` if the key is missing or the value cannot be converted to `u64`.
+    /// 如果键缺失或值无法转换为 `u64`，则返回 `None`。
     pub fn get_u64(&self, key: &str) -> Option<u64> {
         self.get(key).and_then(|v| v.as_u64())
     }
 
-    /// Extracts an `i64` value from the params map.
+    /// 从参数映射中提取 `i64` 值。
     ///
-    /// Returns `None` if the key is missing or the value cannot be converted to `i64`.
+    /// 如果键缺失或值无法转换为 `i64`，则返回 `None`。
     pub fn get_i64(&self, key: &str) -> Option<i64> {
         self.get(key).and_then(|v| v.as_i64())
     }
 
-    /// Extracts a `usize` value from the params map.
+    /// 从参数映射中提取 `usize` 值。
     ///
-    /// Returns `None` if the key is missing or the value cannot be converted to `usize`.
+    /// 如果键缺失或值无法转换为 `usize`，则返回 `None`。
     pub fn get_usize(&self, key: &str) -> Option<usize> {
         self.get(key).and_then(|v| v.as_u64()).map(|n| n as usize)
     }
 
-    /// Extracts a string value from the params map.
+    /// 从参数映射中提取字符串值。
     ///
-    /// Returns `None` if the key is missing or the value is not a string.
+    /// 如果键缺失或值不是字符串，则返回 `None`。
     pub fn get_str(&self, key: &str) -> Option<&str> {
         self.get(key).and_then(|v| v.as_str())
     }
 
-    /// Extracts a boolean value from the params map.
+    /// 从参数映射中提取布尔值。
     ///
-    /// Returns `None` if the key is missing or the value is not a boolean.
+    /// 如果键缺失或值不是布尔值，则返回 `None`。
     pub fn get_bool(&self, key: &str) -> Option<bool> {
         self.get(key).and_then(|v| v.as_bool())
     }
 
-    /// Extracts a `f64` value from the params map.
+    /// 从参数映射中提取 `f64` 值。
     ///
-    /// Returns `None` if the key is missing or the value cannot be converted to `f64`.
+    /// 如果键缺失或值无法转换为 `f64`，则返回 `None`。
     pub fn get_f64(&self, key: &str) -> Option<f64> {
         self.get(key).and_then(|v| v.as_f64())
     }
 
     #[cfg(feature = "python")]
-    /// Converts `Params` to a Python dict.
+    /// 将 `Params` 转换为 Python 字典。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns a `PyErr` if conversion of any value fails.
+    /// 如果任何值的转换失败，则返回 `PyErr`。
     pub fn to_pydict(&self, py: pyo3::Python<'_>) -> pyo3::PyResult<pyo3::Py<pyo3::types::PyDict>> {
         crate::python::params::params_to_pydict(py, self)
     }
@@ -123,15 +121,15 @@ impl<'a> IntoIterator for &'a Params {
 }
 
 #[cfg(feature = "python")]
-/// Converts a Python dict to `Params`.
+/// 将 Python 字典转换为 `Params`。
 ///
-/// This is a convenience function that wraps `pydict_to_params`.
+/// 这是一个封装了 `pydict_to_params` 的便捷函数。
 ///
-/// # Errors
+/// # 错误
 ///
-/// Returns a `PyErr` if:
-/// - the dict cannot be serialized to JSON
-/// - the JSON is not a valid object
+/// 如果出现以下情况，则返回 `PyErr`：
+/// - 字典无法序列化为 JSON
+/// - JSON 不是有效的对象
 pub fn from_pydict(
     py: pyo3::Python<'_>,
     dict: pyo3::Py<pyo3::types::PyDict>,

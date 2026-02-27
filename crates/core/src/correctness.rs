@@ -13,15 +13,13 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! Functions for correctness checks similar to the *design by contract* philosophy.
+//! 类似于“契约式设计”（design by contract）理念的正确性检查函数。
 //!
-//! This module provides validation checking of function or method conditions.
+//! 此模块提供对函数或方法条件的验证检查。
 //!
-//! A condition is a predicate which must be true just prior to the execution of
-//! some section of code - for correct behavior as per the design specification.
+//! 条件是一个谓词，为了确保符合设计规范的正确行为，它在某段代码执行前必须为真。
 //!
-//! An [`anyhow::Result`] is returned with a descriptive message when the
-//! condition check fails.
+//! 当条件检查失败时，将返回一个包含描述性消息的 [`anyhow::Result`]。
 
 use std::fmt::{Debug, Display};
 
@@ -29,18 +27,17 @@ use rust_decimal::Decimal;
 
 use crate::collections::{MapLike, SetLike};
 
-/// A message prefix that can be used with calls to `expect` or other assertion-related functions.
+/// 可用于 `expect` 或其他断言相关函数的消息前缀。
 ///
-/// This constant provides a standard message that can be used to indicate a failure condition
-/// when a predicate or condition does not hold true. It is typically used in conjunction with
-/// functions like `expect` to provide a consistent error message.
-pub const FAILED: &str = "Condition failed";
+/// 此常量提供了一个标准消息，用于在谓词或条件不成立时指示失败。
+/// 它通常与 `expect` 等函数配合使用，以提供一致的错误消息。
+pub const FAILED: &str = "条件检查失败";
 
-/// Checks the `predicate` is true.
+/// 检查 `predicate` 是否为真。
 ///
-/// # Errors
+/// # 错误
 ///
-/// Returns an error if the validation check fails.
+/// 如果验证检查失败，则返回错误。
 #[inline(always)]
 pub fn check_predicate_true(predicate: bool, fail_msg: &str) -> anyhow::Result<()> {
     if !predicate {
@@ -49,11 +46,11 @@ pub fn check_predicate_true(predicate: bool, fail_msg: &str) -> anyhow::Result<(
     Ok(())
 }
 
-/// Checks the `predicate` is false.
+/// 检查 `predicate` 是否为假。
 ///
-/// # Errors
+/// # 错误
 ///
-/// Returns an error if the validation check fails.
+/// 如果验证检查失败，则返回错误。
 #[inline(always)]
 pub fn check_predicate_false(predicate: bool, fail_msg: &str) -> anyhow::Result<()> {
     if predicate {
@@ -62,91 +59,91 @@ pub fn check_predicate_false(predicate: bool, fail_msg: &str) -> anyhow::Result<
     Ok(())
 }
 
-/// Checks if the string `s` is not empty.
+/// 检查字符串 `s` 是否不为空。
 ///
-/// This function performs a basic check to ensure the string has at least one character.
-/// Unlike `check_valid_string`, it does not validate ASCII characters or check for whitespace.
+/// 此函数执行基本检查，以确保字符串至少包含一个字符。
+/// 与 `check_valid_string` 不同，它不验证 ASCII 字符或检查空白。
 ///
-/// # Errors
+/// # 错误
 ///
-/// Returns an error if `s` is empty.
+/// 如果 `s` 为空，则返回错误。
 #[inline(always)]
 pub fn check_nonempty_string<T: AsRef<str>>(s: T, param: &str) -> anyhow::Result<()> {
     if s.as_ref().is_empty() {
-        anyhow::bail!("invalid string for '{param}', was empty");
+        anyhow::bail!("'{param}' 是无效字符串，不能为空");
     }
     Ok(())
 }
 
-/// Checks the string `s` has semantic meaning and contains only ASCII characters.
+/// 检查字符串 `s` 是否具有语义含义且仅包含 ASCII 字符。
 ///
-/// # Errors
+/// # 错误
 ///
-/// Returns an error if:
-/// - `s` is an empty string.
-/// - `s` consists solely of whitespace characters.
-/// - `s` contains one or more non-ASCII characters.
+/// 在以下情况下返回错误：
+/// - `s` 是空字符串。
+/// - `s` 仅由空白字符组成。
+/// - `s` 包含一个或多个非 ASCII 字符。
 #[inline(always)]
 pub fn check_valid_string_ascii<T: AsRef<str>>(s: T, param: &str) -> anyhow::Result<()> {
     let s = s.as_ref();
 
     if s.is_empty() {
-        anyhow::bail!("invalid string for '{param}', was empty");
+        anyhow::bail!("'{param}' 是无效字符串，不能为空");
     }
 
-    // Ensure string is only traversed once
+    // 确保仅遍历一次字符串
     let mut has_non_whitespace = false;
     for c in s.chars() {
         if !c.is_whitespace() {
             has_non_whitespace = true;
         }
         if !c.is_ascii() {
-            anyhow::bail!("invalid string for '{param}' contained a non-ASCII char, was '{s}'");
+            anyhow::bail!("'{param}' 是无效字符串，包含非 ASCII 字符，输入为 '{s}'");
         }
     }
 
     if !has_non_whitespace {
-        anyhow::bail!("invalid string for '{param}', was all whitespace");
+        anyhow::bail!("'{param}' 是无效字符串，全为空白字符");
     }
 
     Ok(())
 }
 
-/// Checks the string `s` has semantic meaning and allows UTF-8 characters.
+/// 检查字符串 `s` 是否具有语义含义并允许 UTF-8 字符。
 ///
-/// This is a relaxed version of [`check_valid_string_ascii`] that permits non-ASCII UTF-8 characters.
-/// Use this for external identifiers (e.g., exchange symbols) that may contain Unicode characters.
+/// 这是 [`check_valid_string_ascii`] 的宽松版本，允许非 ASCII 的 UTF-8 字符。
+/// 用于可能包含 Unicode 字符的外部标识符（例如交易代码）。
 ///
-/// # Errors
+/// # 错误
 ///
-/// Returns an error if:
-/// - `s` is an empty string.
-/// - `s` consists solely of whitespace characters.
+/// 在以下情况下返回错误：
+/// - `s` 是空字符串。
+/// - `s` 仅由空白字符组成。
 #[inline(always)]
 pub fn check_valid_string_utf8<T: AsRef<str>>(s: T, param: &str) -> anyhow::Result<()> {
     let s = s.as_ref();
 
     if s.is_empty() {
-        anyhow::bail!("invalid string for '{param}', was empty");
+        anyhow::bail!("'{param}' 是无效字符串，不能为空");
     }
 
     let has_non_whitespace = s.chars().any(|c| !c.is_whitespace());
 
     if !has_non_whitespace {
-        anyhow::bail!("invalid string for '{param}', was all whitespace");
+        anyhow::bail!("'{param}' 是无效字符串，全为空白字符");
     }
 
     Ok(())
 }
 
-/// Checks the string `s` if Some, contains only ASCII characters and has semantic meaning.
+/// 检查字符串 `s`（如果是 Some）是否仅包含 ASCII 字符且具有语义含义。
 ///
-/// # Errors
+/// # 错误
 ///
-/// Returns an error if:
-/// - `s` is an empty string.
-/// - `s` consists solely of whitespace characters.
-/// - `s` contains one or more non-ASCII characters.
+/// 在以下情况下返回错误：
+/// - `s` 是空字符串。
+/// - `s` 仅由空白字符组成。
+/// - `s` 包含一个或多个非 ASCII 字符。
 #[inline(always)]
 pub fn check_valid_string_ascii_optional<T: AsRef<str>>(
     s: Option<T>,
@@ -158,25 +155,25 @@ pub fn check_valid_string_ascii_optional<T: AsRef<str>>(
     Ok(())
 }
 
-/// Checks the string `s` contains the pattern `pat`.
+/// 检查字符串 `s` 是否包含模式 `pat`。
 ///
-/// # Errors
+/// # 错误
 ///
-/// Returns an error if the validation check fails.
+/// 如果验证检查失败，则返回错误。
 #[inline(always)]
 pub fn check_string_contains<T: AsRef<str>>(s: T, pat: &str, param: &str) -> anyhow::Result<()> {
     let s = s.as_ref();
     if !s.contains(pat) {
-        anyhow::bail!("invalid string for '{param}' did not contain '{pat}', was '{s}'")
+        anyhow::bail!("'{param}' 是无效字符串，未包含 '{pat}'，输入为 '{s}'")
     }
     Ok(())
 }
 
-/// Checks the values are equal.
+/// 检查值是否相等。
 ///
-/// # Errors
+/// # 错误
 ///
-/// Returns an error if the validation check fails.
+/// 如果验证检查失败，则返回错误。
 #[inline(always)]
 pub fn check_equal<T: PartialEq + Debug + Display>(
     lhs: &T,
@@ -185,29 +182,29 @@ pub fn check_equal<T: PartialEq + Debug + Display>(
     rhs_param: &str,
 ) -> anyhow::Result<()> {
     if lhs != rhs {
-        anyhow::bail!("'{lhs_param}' value of {lhs} was not equal to '{rhs_param}' value of {rhs}");
+        anyhow::bail!("'{lhs_param}' 的值 {lhs} 与 '{rhs_param}' 的值 {rhs} 不相等");
     }
     Ok(())
 }
 
-/// Checks the `u8` values are equal.
+/// 检查 `u8` 值是否相等。
 ///
-/// # Errors
+/// # 错误
 ///
-/// Returns an error if the validation check fails.
+/// 如果验证检查失败，则返回错误。
 #[inline(always)]
 pub fn check_equal_u8(lhs: u8, rhs: u8, lhs_param: &str, rhs_param: &str) -> anyhow::Result<()> {
     if lhs != rhs {
-        anyhow::bail!("'{lhs_param}' u8 of {lhs} was not equal to '{rhs_param}' u8 of {rhs}")
+        anyhow::bail!("'{lhs_param}' 的 u8 值 {lhs} 与 '{rhs_param}' 的 u8 值 {rhs} 不相等")
     }
     Ok(())
 }
 
-/// Checks the `usize` values are equal.
+/// 检查 `usize` 值是否相等。
 ///
-/// # Errors
+/// # 错误
 ///
-/// Returns an error if the validation check fails.
+/// 如果验证检查失败，则返回错误。
 #[inline(always)]
 pub fn check_equal_usize(
     lhs: usize,
@@ -216,146 +213,146 @@ pub fn check_equal_usize(
     rhs_param: &str,
 ) -> anyhow::Result<()> {
     if lhs != rhs {
-        anyhow::bail!("'{lhs_param}' usize of {lhs} was not equal to '{rhs_param}' usize of {rhs}")
+        anyhow::bail!("'{lhs_param}' 的 usize 值 {lhs} 与 '{rhs_param}' 的 usize 值 {rhs} 不相等")
     }
     Ok(())
 }
 
-/// Checks the `u64` value is positive (> 0).
+/// 检查 `u64` 值是否为正数 (> 0)。
 ///
-/// # Errors
+/// # 错误
 ///
-/// Returns an error if the validation check fails.
+/// 如果验证检查失败，则返回错误。
 #[inline(always)]
 pub fn check_positive_u64(value: u64, param: &str) -> anyhow::Result<()> {
     if value == 0 {
-        anyhow::bail!("invalid u64 for '{param}' not positive, was {value}")
+        anyhow::bail!("'{param}' 的 u64 值无效，不是正数，输入为 {value}")
     }
     Ok(())
 }
 
-/// Checks the `u128` value is positive (> 0).
+/// 检查 `u128` 值是否为正数 (> 0)。
 ///
-/// # Errors
+/// # 错误
 ///
-/// Returns an error if the validation check fails.
+/// 如果验证检查失败，则返回错误。
 #[inline(always)]
 pub fn check_positive_u128(value: u128, param: &str) -> anyhow::Result<()> {
     if value == 0 {
-        anyhow::bail!("invalid u128 for '{param}' not positive, was {value}")
+        anyhow::bail!("'{param}' 的 u128 值无效，不是正数，输入为 {value}")
     }
     Ok(())
 }
 
-/// Checks the `i64` value is positive (> 0).
+/// 检查 `i64` 值是否为正数 (> 0)。
 ///
-/// # Errors
+/// # 错误
 ///
-/// Returns an error if the validation check fails.
+/// 如果验证检查失败，则返回错误。
 #[inline(always)]
 pub fn check_positive_i64(value: i64, param: &str) -> anyhow::Result<()> {
     if value <= 0 {
-        anyhow::bail!("invalid i64 for '{param}' not positive, was {value}")
+        anyhow::bail!("'{param}' 的 i64 值无效，不是正数，输入为 {value}")
     }
     Ok(())
 }
 
-/// Checks the `i64` value is positive (> 0).
+/// 检查 `i128` 值是否为正数 (> 0)。
 ///
-/// # Errors
+/// # 错误
 ///
-/// Returns an error if the validation check fails.
+/// 如果验证检查失败，则返回错误。
 #[inline(always)]
 pub fn check_positive_i128(value: i128, param: &str) -> anyhow::Result<()> {
     if value <= 0 {
-        anyhow::bail!("invalid i128 for '{param}' not positive, was {value}")
+        anyhow::bail!("'{param}' 的 i128 值无效，不是正数，输入为 {value}")
     }
     Ok(())
 }
 
-/// Checks the `f64` value is non-negative (>= 0).
+/// 检查 `f64` 值是否为非负数 (>= 0)。
 ///
-/// # Errors
+/// # 错误
 ///
-/// Returns an error if the validation check fails.
+/// 如果验证检查失败，则返回错误。
 #[inline(always)]
 pub fn check_non_negative_f64(value: f64, param: &str) -> anyhow::Result<()> {
     if value.is_nan() || value.is_infinite() {
-        anyhow::bail!("invalid f64 for '{param}', was {value}")
+        anyhow::bail!("'{param}' 的 f64 值无效，输入为 {value}")
     }
     if value < 0.0 {
-        anyhow::bail!("invalid f64 for '{param}' negative, was {value}")
+        anyhow::bail!("'{param}' 的 f64 值无效，是负数，输入为 {value}")
     }
     Ok(())
 }
 
-/// Checks the `u8` value is in range [`l`, `r`] (inclusive).
+/// 检查 `u8` 值是否在范围 [`l`, `r`] 内（闭区间）。
 ///
-/// # Errors
+/// # 错误
 ///
-/// Returns an error if the validation check fails.
+/// 如果验证检查失败，则返回错误。
 #[inline(always)]
 pub fn check_in_range_inclusive_u8(value: u8, l: u8, r: u8, param: &str) -> anyhow::Result<()> {
     if value < l || value > r {
-        anyhow::bail!("invalid u8 for '{param}' not in range [{l}, {r}], was {value}")
+        anyhow::bail!("'{param}' 的 u8 值无效，不在范围 [{l}, {r}] 内，输入为 {value}")
     }
     Ok(())
 }
 
-/// Checks the `u64` value is range [`l`, `r`] (inclusive).
+/// 检查 `u64` 值是否在范围 [`l`, `r`] 内（闭区间）。
 ///
-/// # Errors
+/// # 错误
 ///
-/// Returns an error if the validation check fails.
+/// 如果验证检查失败，则返回错误。
 #[inline(always)]
 pub fn check_in_range_inclusive_u64(value: u64, l: u64, r: u64, param: &str) -> anyhow::Result<()> {
     if value < l || value > r {
-        anyhow::bail!("invalid u64 for '{param}' not in range [{l}, {r}], was {value}")
+        anyhow::bail!("'{param}' 的 u64 值无效，不在范围 [{l}, {r}] 内，输入为 {value}")
     }
     Ok(())
 }
 
-/// Checks the `i64` value is in range [`l`, `r`] (inclusive).
+/// 检查 `i64` 值是否在范围 [`l`, `r`] 内（闭区间）。
 ///
-/// # Errors
+/// # 错误
 ///
-/// Returns an error if the validation check fails.
+/// 如果验证检查失败，则返回错误。
 #[inline(always)]
 pub fn check_in_range_inclusive_i64(value: i64, l: i64, r: i64, param: &str) -> anyhow::Result<()> {
     if value < l || value > r {
-        anyhow::bail!("invalid i64 for '{param}' not in range [{l}, {r}], was {value}")
+        anyhow::bail!("'{param}' 的 i64 值无效，不在范围 [{l}, {r}] 内，输入为 {value}")
     }
     Ok(())
 }
 
-/// Checks the `f64` value is in range [`l`, `r`] (inclusive).
+/// 检查 `f64` 值是否在范围 [`l`, `r`] 内（闭区间）。
 ///
-/// # Errors
+/// # 错误
 ///
-/// Returns an error if the validation check fails.
+/// 如果验证检查失败，则返回错误。
 #[inline(always)]
 pub fn check_in_range_inclusive_f64(value: f64, l: f64, r: f64, param: &str) -> anyhow::Result<()> {
-    // SAFETY: Hardcoded epsilon is intentional and appropriate here because:
-    // - 1e-15 is conservative for IEEE 754 double precision (machine epsilon ~2.22e-16)
-    // - This function is used for validation, not high-precision calculations
-    // - The epsilon prevents spurious failures due to floating-point representation
-    // - Making it configurable would complicate the API for minimal benefit
+    // 安全：硬编码 epsilon 是有意为之且在此处是合适的，因为：
+    // - 1e-15 对于 IEEE 754 双精度是保守的（机器 epsilon 约 2.22e-16）
+    // - 此函数用于验证，而非高精度计算
+    // - epsilon 防止由于浮点表示导致的误报失败
+    // - 使其可配置会使 API 复杂化而收益微乎其微
     const EPSILON: f64 = 1e-15;
 
     if value.is_nan() || value.is_infinite() {
-        anyhow::bail!("invalid f64 for '{param}', was {value}")
+        anyhow::bail!("'{param}' 的 f64 值无效，输入为 {value}")
     }
     if value < l - EPSILON || value > r + EPSILON {
-        anyhow::bail!("invalid f64 for '{param}' not in range [{l}, {r}], was {value}")
+        anyhow::bail!("'{param}' 的 f64 值无效，不在范围 [{l}, {r}] 内，输入为 {value}")
     }
     Ok(())
 }
 
-/// Checks the `usize` value is in range [`l`, `r`] (inclusive).
+/// 检查 `usize` 值是否在范围 [`l`, `r`] 内（闭区间）。
 ///
-/// # Errors
+/// # 错误
 ///
-/// Returns an error if the validation check fails.
+/// 如果验证检查失败，则返回错误。
 #[inline(always)]
 pub fn check_in_range_inclusive_usize(
     value: usize,
@@ -364,48 +361,48 @@ pub fn check_in_range_inclusive_usize(
     param: &str,
 ) -> anyhow::Result<()> {
     if value < l || value > r {
-        anyhow::bail!("invalid usize for '{param}' not in range [{l}, {r}], was {value}")
+        anyhow::bail!("'{param}' 的 usize 值无效，不在范围 [{l}, {r}] 内，输入为 {value}")
     }
     Ok(())
 }
 
-/// Checks the slice is empty.
+/// 检查切片是否为空。
 ///
-/// # Errors
+/// # 错误
 ///
-/// Returns an error if the validation check fails.
+/// 如果验证检查失败，则返回错误。
 #[inline(always)]
 pub fn check_slice_empty<T>(slice: &[T], param: &str) -> anyhow::Result<()> {
     if !slice.is_empty() {
         anyhow::bail!(
-            "the '{param}' slice `&[{}]` was not empty",
+            "'{param}' 切片 `&[{}]` 不为空",
             std::any::type_name::<T>()
         )
     }
     Ok(())
 }
 
-/// Checks the slice is **not** empty.
+/// 检查切片是否**不**为空。
 ///
-/// # Errors
+/// # 错误
 ///
-/// Returns an error if the validation check fails.
+/// 如果验证检查失败，则返回错误。
 #[inline(always)]
 pub fn check_slice_not_empty<T>(slice: &[T], param: &str) -> anyhow::Result<()> {
     if slice.is_empty() {
         anyhow::bail!(
-            "the '{param}' slice `&[{}]` was empty",
+            "'{param}' 切片 `&[{}]` 为空",
             std::any::type_name::<T>()
         )
     }
     Ok(())
 }
 
-/// Checks the hashmap is empty.
+/// 检查哈希映射是否为空。
 ///
-/// # Errors
+/// # 错误
 ///
-/// Returns an error if the validation check fails.
+/// 如果验证检查失败，则返回错误。
 #[inline(always)]
 pub fn check_map_empty<M>(map: &M, param: &str) -> anyhow::Result<()>
 where
@@ -413,7 +410,7 @@ where
 {
     if !map.is_empty() {
         anyhow::bail!(
-            "the '{param}' map `&<{}, {}>` was not empty",
+            "'{param}' 映射 `&<{}, {}>` 不为空",
             std::any::type_name::<M::Key>(),
             std::any::type_name::<M::Value>(),
         );
@@ -421,11 +418,11 @@ where
     Ok(())
 }
 
-/// Checks the map is **not** empty.
+/// 检查映射是否**不**为空。
 ///
-/// # Errors
+/// # 错误
 ///
-/// Returns an error if the validation check fails.
+/// 如果验证检查失败，则返回错误。
 #[inline(always)]
 pub fn check_map_not_empty<M>(map: &M, param: &str) -> anyhow::Result<()>
 where
@@ -433,7 +430,7 @@ where
 {
     if map.is_empty() {
         anyhow::bail!(
-            "the '{param}' map `&<{}, {}>` was empty",
+            "'{param}' 映射 `&<{}, {}>` 为空",
             std::any::type_name::<M::Key>(),
             std::any::type_name::<M::Value>(),
         );
@@ -441,11 +438,11 @@ where
     Ok(())
 }
 
-/// Checks the `key` is **not** in the `map`.
+/// 检查 `key` 是否**不在** `map` 中。
 ///
-/// # Errors
+/// # 错误
 ///
-/// Returns an error if the validation check fails.
+/// 如果验证检查失败，则返回错误。
 #[inline(always)]
 pub fn check_key_not_in_map<M>(
     key: &M::Key,
@@ -458,7 +455,7 @@ where
 {
     if map.contains_key(key) {
         anyhow::bail!(
-            "the '{key_name}' key {key} was already in the '{map_name}' map `&<{}, {}>`",
+            "键 '{key_name}' ({key}) 已存在于 '{map_name}' 映射 `&<{}, {}>` 中",
             std::any::type_name::<M::Key>(),
             std::any::type_name::<M::Value>(),
         );
@@ -466,11 +463,11 @@ where
     Ok(())
 }
 
-/// Checks the `key` is in the `map`.
+/// 检查 `key` 是否在 `map` 中。
 ///
-/// # Errors
+/// # 错误
 ///
-/// Returns an error if the validation check fails.
+/// 如果验证检查失败，则返回错误。
 #[inline(always)]
 pub fn check_key_in_map<M>(
     key: &M::Key,
@@ -483,7 +480,7 @@ where
 {
     if !map.contains_key(key) {
         anyhow::bail!(
-            "the '{key_name}' key {key} was not in the '{map_name}' map `&<{}, {}>`",
+            "键 '{key_name}' ({key}) 不在 '{map_name}' 映射 `&<{}, {}>` 中",
             std::any::type_name::<M::Key>(),
             std::any::type_name::<M::Value>(),
         );
@@ -491,11 +488,11 @@ where
     Ok(())
 }
 
-/// Checks the `member` is **not** in the `set`.
+/// 检查 `member` 是否**不在** `set` 中。
 ///
-/// # Errors
+/// # 错误
 ///
-/// Returns an error if the validation check fails.
+/// 如果验证检查失败，则返回错误。
 #[inline(always)]
 pub fn check_member_not_in_set<S>(
     member: &S::Item,
@@ -508,18 +505,18 @@ where
 {
     if set.contains(member) {
         anyhow::bail!(
-            "the '{member_name}' member was already in the '{set_name}' set `&<{}>`",
+            "成员 '{member_name}' 已存在于 '{set_name}' 集合 `&<{}>` 中",
             std::any::type_name::<S::Item>(),
         );
     }
     Ok(())
 }
 
-/// Checks the `member` is in the `set`.
+/// 检查 `member` 是否在 `set` 中。
 ///
-/// # Errors
+/// # 错误
 ///
-/// Returns an error if the validation check fails.
+/// 如果验证检查失败，则返回错误。
 #[inline(always)]
 pub fn check_member_in_set<S>(
     member: &S::Item,
@@ -532,22 +529,22 @@ where
 {
     if !set.contains(member) {
         anyhow::bail!(
-            "the '{member_name}' member was not in the '{set_name}' set `&<{}>`",
+            "成员 '{member_name}' 不在 '{set_name}' 集合 `&<{}>` 中",
             std::any::type_name::<S::Item>(),
         );
     }
     Ok(())
 }
 
-/// Checks the `Decimal` value is positive (> 0).
+/// 检查 `Decimal` 值是否为正数 (> 0)。
 ///
-/// # Errors
+/// # 错误
 ///
-/// Returns an error if the validation check fails.
+/// 如果验证检查失败，则返回错误。
 #[inline(always)]
 pub fn check_positive_decimal(value: Decimal, param: &str) -> anyhow::Result<()> {
     if value <= Decimal::ZERO {
-        anyhow::bail!("invalid Decimal for '{param}' not positive, was {value}")
+        anyhow::bail!("'{param}' 的 Decimal 值无效，不是正数，输入为 {value}")
     }
     Ok(())
 }
@@ -569,7 +566,7 @@ mod tests {
     #[case(false, false)]
     #[case(true, true)]
     fn test_check_predicate_true(#[case] predicate: bool, #[case] expected: bool) {
-        let result = check_predicate_true(predicate, "the predicate was false").is_ok();
+        let result = check_predicate_true(predicate, "谓词为假").is_ok();
         assert_eq!(result, expected);
     }
 
@@ -577,15 +574,15 @@ mod tests {
     #[case(false, true)]
     #[case(true, false)]
     fn test_check_predicate_false(#[case] predicate: bool, #[case] expected: bool) {
-        let result = check_predicate_false(predicate, "the predicate was true").is_ok();
+        let result = check_predicate_false(predicate, "谓词为真").is_ok();
         assert_eq!(result, expected);
     }
 
     #[rstest]
     #[case("a")]
-    #[case(" ")] // <-- whitespace is allowed
-    #[case("  ")] // <-- multiple whitespace is allowed
-    #[case("🦀")] // <-- non-ASCII is allowed
+    #[case(" ")] // <-- 允许空白
+    #[case("  ")] // <-- 允许连续空白
+    #[case("🦀")] // <-- 允许非 ASCII
     #[case(" a")]
     #[case("a ")]
     #[case("abc")]
@@ -594,7 +591,7 @@ mod tests {
     }
 
     #[rstest]
-    #[case("")] // empty string
+    #[case("")] // 空字符串
     fn test_check_nonempty_string_with_invalid_values(#[case] s: &str) {
         assert!(check_nonempty_string(s, "value").is_err());
     }
@@ -610,10 +607,10 @@ mod tests {
     }
 
     #[rstest]
-    #[case("")] // <-- empty string
-    #[case(" ")] // <-- whitespace-only
-    #[case("  ")] // <-- whitespace-only string
-    #[case("🦀")] // <-- contains non-ASCII char
+    #[case("")] // <-- 空字符串
+    #[case(" ")] // <-- 仅包含空白
+    #[case("  ")] // <-- 仅包含空白
+    #[case("🦀")] // <-- 包含非 ASCII 字符
     fn test_check_valid_string_ascii_with_invalid_values(#[case] s: &str) {
         assert!(check_valid_string_ascii(s, "value").is_err());
     }
@@ -628,9 +625,9 @@ mod tests {
     }
 
     #[rstest]
-    #[case("")] // <-- empty string
-    #[case(" ")] // <-- whitespace-only
-    #[case("  ")] // <-- whitespace-only string
+    #[case("")] // <-- 空字符串
+    #[case(" ")] // <-- 仅包含空白
+    #[case("  ")] // <-- 仅包含空白
     fn test_check_valid_string_utf8_with_invalid_values(#[case] s: &str) {
         assert!(check_valid_string_utf8(s, "value").is_err());
     }
@@ -909,9 +906,9 @@ mod tests {
     }
 
     #[rstest]
-    #[case(&HashMap::<u32, u32>::new(), 5, "key", "map", true)] // empty map
-    #[case(&HashMap::from([(1, 10), (2, 20)]), 1, "key", "map", false)] // key exists
-    #[case(&HashMap::from([(1, 10), (2, 20)]), 5, "key", "map", true)] // key doesn't exist
+    #[case(&HashMap::<u32, u32>::new(), 5, "key", "map", true)] // 空映射
+    #[case(&HashMap::from([(1, 10), (2, 20)]), 1, "key", "map", false)] // 键已存在
+    #[case(&HashMap::from([(1, 10), (2, 20)]), 5, "key", "map", true)] // 键不存在
     fn test_check_key_not_in_map(
         #[case] map: &HashMap<u32, u32>,
         #[case] key: u32,
@@ -924,9 +921,9 @@ mod tests {
     }
 
     #[rstest]
-    #[case(&HashMap::<u32, u32>::new(), 5, "key", "map", false)] // empty map
-    #[case(&HashMap::from([(1, 10), (2, 20)]), 1, "key", "map", true)] // key exists
-    #[case(&HashMap::from([(1, 10), (2, 20)]), 5, "key", "map", false)] // key doesn't exist
+    #[case(&HashMap::<u32, u32>::new(), 5, "key", "map", false)] // 空映射
+    #[case(&HashMap::from([(1, 10), (2, 20)]), 1, "key", "map", true)] // 键已存在
+    #[case(&HashMap::from([(1, 10), (2, 20)]), 5, "key", "map", false)] // 键不存在
     fn test_check_key_in_map(
         #[case] map: &HashMap<u32, u32>,
         #[case] key: u32,
@@ -939,9 +936,9 @@ mod tests {
     }
 
     #[rstest]
-    #[case(&HashSet::<u32>::new(), 5, "member", "set", true)] // Empty set
-    #[case(&HashSet::from([1, 2]), 1, "member", "set", false)] // Member exists
-    #[case(&HashSet::from([1, 2]), 5, "member", "set", true)] // Member doesn't exist
+    #[case(&HashSet::<u32>::new(), 5, "member", "set", true)] // 空集合
+    #[case(&HashSet::from([1, 2]), 1, "member", "set", false)] // 成员已存在
+    #[case(&HashSet::from([1, 2]), 5, "member", "set", true)] // 成员不存在
     fn test_check_member_not_in_set(
         #[case] set: &HashSet<u32>,
         #[case] member: u32,
@@ -954,9 +951,9 @@ mod tests {
     }
 
     #[rstest]
-    #[case(&HashSet::<u32>::new(), 5, "member", "set", false)] // Empty set
-    #[case(&HashSet::from([1, 2]), 1, "member", "set", true)] // Member exists
-    #[case(&HashSet::from([1, 2]), 5, "member", "set", false)] // Member doesn't exist
+    #[case(&HashSet::<u32>::new(), 5, "member", "set", false)] // 空集合
+    #[case(&HashSet::from([1, 2]), 1, "member", "set", true)] // 成员已存在
+    #[case(&HashSet::from([1, 2]), 5, "member", "set", false)] // 成员不存在
     fn test_check_member_in_set(
         #[case] set: &HashSet<u32>,
         #[case] member: u32,
@@ -969,14 +966,14 @@ mod tests {
     }
 
     #[rstest]
-    #[case("1", true)] // simple positive integer
-    #[case("0.0000000000000000000000000001", true)] // smallest positive (1 × 10⁻²⁸)
-    #[case("79228162514264337593543950335", true)] // very large positive (≈ Decimal::MAX)
-    #[case("0", false)] // zero should fail
-    #[case("-0.0000000000000000000000000001", false)] // tiny negative
-    #[case("-1", false)] // simple negative integer
+    #[case("1", true)] // 简单正整数
+    #[case("0.0000000000000000000000000001", true)] // 最小正数 (1 × 10⁻²⁸)
+    #[case("79228162514264337593543950335", true)] // 极大正数 (≈ Decimal::MAX)
+    #[case("0", false)] // 零应失败
+    #[case("-0.0000000000000000000000000001", false)] // 微小负数
+    #[case("-1", false)] // 简单负整数
     fn test_check_positive_decimal(#[case] raw: &str, #[case] expected: bool) {
-        let value = Decimal::from_str(raw).expect("valid decimal literal");
+        let value = Decimal::from_str(raw).expect("有效的 decimal 字面量");
         let result = super::check_positive_decimal(value, "param").is_ok();
         assert_eq!(result, expected);
     }

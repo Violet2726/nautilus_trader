@@ -13,7 +13,7 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! Abstraction layer over common hash-based containers.
+//! 常见基于哈希的容器的抽象层。
 
 use std::{
     collections::{HashMap, HashSet},
@@ -23,14 +23,14 @@ use std::{
 
 use ustr::Ustr;
 
-/// Represents a generic set-like container with members.
+/// 表示一个通用的类似集合（Set-like）的容器。
 pub trait SetLike {
-    /// The type of items stored in the set.
+    /// 存储在集合中的项的类型。
     type Item: Hash + Eq + Display + Clone;
 
-    /// Returns `true` if the set contains the specified item.
+    /// 如果集合包含指定的项，则返回 `true`。
     fn contains(&self, item: &Self::Item) -> bool;
-    /// Returns `true` if the set is empty.
+    /// 如果集合为空，则返回 `true`。
     fn is_empty(&self) -> bool;
 }
 
@@ -88,16 +88,16 @@ where
     }
 }
 
-/// Represents a generic map-like container with key-value pairs.
+/// 表示一个通用的类似映射（Map-like）的容器，包含键值对。
 pub trait MapLike {
-    /// The type of keys stored in the map.
+    /// 存储在映射中的键的类型。
     type Key: Hash + Eq + Display + Clone;
-    /// The type of values stored in the map.
+    /// 存储在映射中的值的类型。
     type Value: Debug;
 
-    /// Returns `true` if the map contains the specified key.
+    /// 如果映射包含指定的键，则返回 `true`。
     fn contains_key(&self, key: &Self::Key) -> bool;
-    /// Returns `true` if the map is empty.
+    /// 如果映射为空，则返回 `true`。
     fn is_empty(&self) -> bool;
 }
 
@@ -161,7 +161,7 @@ where
     }
 }
 
-/// Convert any iterator of string-like items into a `Vec<Ustr>`.
+/// 将任何字符串项的迭代器转换为 `Vec<Ustr>`。
 #[must_use]
 pub fn into_ustr_vec<I, T>(iter: I) -> Vec<Ustr>
 where
@@ -182,7 +182,7 @@ where
 #[cfg(test)]
 #[allow(
     clippy::unnecessary_to_owned,
-    reason = "Required for trait bound satisfaction"
+    reason = "满足 trait bound 限制所必需"
 )]
 mod tests {
     use std::collections::{HashMap, HashSet};

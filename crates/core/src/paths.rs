@@ -13,47 +13,45 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! Utility functions for resolving project and workspace directory paths.
+//! 解析项目和工作区目录路径的工具函数。
 
 use std::path::PathBuf;
 
-/// Returns the workspace root directory path.
+/// 返回工作区根目录路径。
 ///
-/// This is the directory containing the top-level `Cargo.toml` with the
-/// `[workspace]` section, typically where `pyproject.toml` and `docs/` are located.
+/// 这是包含顶级 `Cargo.toml`（带有 `[workspace]` 部分）的目录，通常也是 `pyproject.toml` 和 `docs/` 所在的目录。
 ///
 /// # Panics
 ///
-/// Panics if the `CARGO_MANIFEST_DIR` environment variable is not set or
-/// the parent directories cannot be determined.
+/// 如果环境变量 `CARGO_MANIFEST_DIR` 未设置或无法确定其父目录，则触发 panic。
 #[must_use]
 pub fn get_workspace_root_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent() // crates/core -> crates/
-        .and_then(|p| p.parent()) // crates/ -> nautilus_trader/
-        .expect("Failed to get workspace root")
+        .parent() // 从 crates/core 级 parent 到 crates/
+        .and_then(|p| p.parent()) // 从 crates/ 级 parent 到 nautilus_trader/
+        .expect("无法获取工作区根目录")
         .to_path_buf()
 }
 
-/// Returns the project root directory path.
+/// 返回项目根目录路径。
 ///
-/// For this monorepo, the project root is the same as the workspace root.
+/// 对于此单仓工程 (monorepo)，项目根目录与工作区根目录相同。
 ///
 /// # Panics
 ///
-/// Panics if the workspace root path cannot be determined.
+/// 如果无法确定工作区根目录路径，则触发 panic。
 #[must_use]
 pub fn get_project_root_path() -> PathBuf {
     get_workspace_root_path()
 }
 
-/// Returns the tests root directory path.
+/// 返回测试代码根目录路径。
 #[must_use]
 pub fn get_tests_root_path() -> PathBuf {
     get_project_root_path().join("tests")
 }
 
-/// Returns the test data directory path.
+/// 返回测试数据目录路径。
 #[must_use]
 pub fn get_test_data_path() -> PathBuf {
     if let Ok(test_data_root_path) = std::env::var("TEST_DATA_ROOT_PATH") {
@@ -76,7 +74,7 @@ mod tests {
         let root = get_workspace_root_path();
         assert!(
             root.join("pyproject.toml").exists(),
-            "Workspace root should contain pyproject.toml, was: {root:?}"
+            "工作区根目录应当包含 pyproject.toml，实际为：{root:?}"
         );
     }
 
@@ -85,7 +83,7 @@ mod tests {
         let root = get_workspace_root_path();
         assert!(
             root.join("crates").is_dir(),
-            "Workspace root should contain crates/ directory, was: {root:?}"
+            "工作区根目录应当包含 crates/ 目录，实际为：{root:?}"
         );
     }
 
@@ -99,7 +97,7 @@ mod tests {
         let tests_root = get_tests_root_path();
         assert!(
             tests_root.ends_with("tests"),
-            "Tests root should end with 'tests', was: {tests_root:?}"
+            "测试代码根目录应以 'tests' 结尾，实际为：{tests_root:?}"
         );
     }
 }

@@ -13,23 +13,23 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! String-case conversion helpers (`CamelCase` ⇄ `snake_case`).
+//! 字符串命名格式转换辅助工具 (`CamelCase` ⇄ `snake_case`)。
 
 use heck::ToSnakeCase;
 use pyo3::prelude::*;
 use pyo3_stub_gen::derive::gen_stub_pyfunction;
 
-/// Convert the given string from any common case (PascalCase, camelCase, kebab-case, etc.)
-/// to *lower* `snake_case`.
+/// 将给定的字符串从任何常见格式（PascalCase、camelCase、kebab-case 等）
+/// 转换为*小写* `snake_case`。
 ///
-/// This function uses the `heck` Rust crate under the hood.
+/// 此函数在底层使用了 Rust 的 `heck` crate。
 ///
-/// Parameters
+/// 参数 (Parameters)
 /// ----------
 /// input : str
-///     The input string to convert.
+///     待转换的输入字符串。
 ///
-/// Returns
+/// 返回 (Returns)
 /// -------
 /// str
 #[must_use]

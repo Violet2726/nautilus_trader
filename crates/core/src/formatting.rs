@@ -13,7 +13,7 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! Number formatting utilities.
+//! 数字格式化工具。
 
 fn separate_with(s: &str, sep: char) -> String {
     let (neg, digits) = if let Some(rest) = s.strip_prefix('-') {
@@ -48,14 +48,14 @@ fn separate_with(s: &str, sep: char) -> String {
     result
 }
 
-/// Extension trait for formatting numbers with separators.
+/// 用于通过分隔符格式化数字的扩展 trait。
 ///
-/// Drop-in replacement for the `thousands::Separable` trait.
+/// 作为 `thousands::Separable` trait 的直接替代品。
 pub trait Separable {
-    /// Formats the number with commas as thousand separators.
+    /// 使用逗号作为千分位分隔符格式化数字。
     fn separate_with_commas(&self) -> String;
 
-    /// Formats the number with underscores as thousand separators.
+    /// 使用下划线作为千分位分隔符格式化数字。
     fn separate_with_underscores(&self) -> String;
 }
 

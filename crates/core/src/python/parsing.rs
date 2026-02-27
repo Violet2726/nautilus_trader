@@ -13,7 +13,7 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! JSON / string parsing helpers for Python inputs.
+//! 为 Python 输入提供的 JSON / 字符串解析辅助工具。
 
 use pyo3::{
     prelude::*,
@@ -22,51 +22,52 @@ use pyo3::{
 
 use super::{to_pykey_err, to_pyvalue_err};
 
-/// Helper function to get a required string value from a Python dictionary.
+/// 从 Python 字典中获取必填字符串值的辅助函数。
 ///
-/// # Returns
+/// # 返回 (Returns)
 ///
-/// Returns the extracted string value or a `PyErr` if the key is missing or extraction fails.
+/// 返回提取到的字符串值；如果键缺失或提取失败，则返回 `PyErr`。
 ///
-/// # Errors
+/// # 错误 (Errors)
 ///
-/// Returns `PyErr` if the key is missing or value extraction fails.
+/// 如果键缺失或值提取失败，则返回 `PyErr`。
 pub fn get_required_string(dict: &Bound<'_, PyDict>, key: &str) -> PyResult<String> {
     dict.get_item(key)?
-        .ok_or_else(|| to_pykey_err(format!("Missing required key: {key}")))?
+        .ok_or_else(|| to_pykey_err(format!("缺失必填键: {key}")))?
         .extract()
 }
 
-/// Helper function to get a required value from a Python dictionary and extract it.
+/// 从 Python 字典中获取必填值并将其提取的辅助函数。
 ///
-/// # Returns
+/// # 返回 (Returns)
 ///
-/// Returns the extracted value or a `PyErr` if the key is missing or extraction fails.
+/// 返回提取到的值；如果键缺失或提取失败，则返回 `PyErr`。
 ///
-/// # Errors
+/// # 错误 (Errors)
 ///
-/// Returns `PyErr` if the key is missing or value extraction fails.
+/// 如果键缺失或值提取失败，则返回 `PyErr`。
 pub fn get_required<T>(dict: &Bound<'_, PyDict>, key: &str) -> PyResult<T>
 where
     T: for<'a, 'py> FromPyObject<'a, 'py>,
     for<'a, 'py> PyErr: From<<T as FromPyObject<'a, 'py>>::Error>,
 {
     dict.get_item(key)?
-        .ok_or_else(|| to_pykey_err(format!("Missing required key: {key}")))?
+        .ok_or_else(|| to_pykey_err(format!("缺失必填键: {key}")))?
         .extract()
         .map_err(PyErr::from)
 }
 
-/// Helper function to get an optional value from a Python dictionary.
+/// 从 Python 字典中获取可选值的辅助函数。
 ///
-/// # Returns
+/// # 返回 (Returns)
 ///
-/// Returns Some(value) if the key exists and extraction succeeds, None if the key is missing
-/// or if the value is Python None, or a `PyErr` if extraction fails.
+/// 如果键存在且提取成功，返回 Some(value)；
+/// 如果键缺失或值为 Python None，返回 None；
+/// 如果提取失败，返回 `PyErr`。
 ///
-/// # Errors
+/// # 错误 (Errors)
 ///
-/// Returns `PyErr` if value extraction fails (but not if the key is missing or value is None).
+/// 如果值提取失败（但在键缺失或值为 None 的情况下不会），则返回 `PyErr`。
 pub fn get_optional<T>(dict: &Bound<'_, PyDict>, key: &str) -> PyResult<Option<T>>
 where
     T: for<'a, 'py> FromPyObject<'a, 'py>,
@@ -84,33 +85,34 @@ where
     }
 }
 
-/// Helper function to get a required value, parse it with a closure, and handle parse errors.
+/// 获取必填值、使用闭包进行解析并处理解析错误的辅助函数。
 ///
-/// # Returns
+/// # 返回 (Returns)
 ///
-/// Returns the parsed value or a `PyErr` if the key is missing, extraction fails, or parsing fails.
+/// 返回解析后的值；如果键缺失、提取失败或解析失败，则返回 `PyErr`。
 ///
-/// # Errors
+/// # 错误 (Errors)
 ///
-/// Returns `PyErr` if the key is missing, value extraction fails, or parsing fails.
+/// 如果键缺失、值提取失败或解析失败，则返回 `PyErr`。
 pub fn get_required_parsed<T, F>(dict: &Bound<'_, PyDict>, key: &str, parser: F) -> PyResult<T>
 where
     F: FnOnce(String) -> Result<T, String>,
 {
     let value_str = get_required_string(dict, key)?;
-    parser(value_str).map_err(|e| to_pyvalue_err(format!("Failed to parse '{key}': {e}")))
+    parser(value_str).map_err(|e| to_pyvalue_err(format!("未能解析 '{key}': {e}")))
 }
 
-/// Helper function to get an optional value, parse it with a closure, and handle parse errors.
+/// 获取可选值、使用闭包进行解析并处理解析错误的辅助函数。
 ///
-/// # Returns
+/// # 返回 (Returns)
 ///
-/// Returns `Some(parsed_value)` if the key exists and parsing succeeds, None if the key is missing
-/// or if the value is Python None, or a `PyErr` if extraction or parsing fails.
+/// 如果键存在且解析成功，返回 `Some(parsed_value)`；
+/// 如果键缺失或值为 Python None，返回 None；
+/// 如果提取或解析失败，返回 `PyErr`。
 ///
-/// # Errors
+/// # 错误 (Errors)
 ///
-/// Returns `PyErr` if value extraction or parsing fails (but not if the key is missing or value is None).
+/// 如果值提取或解析失败（但在键缺失或值为 None 的情况下不会），则返回 `PyErr`。
 pub fn get_optional_parsed<T, F>(
     dict: &Bound<'_, PyDict>,
     key: &str,
@@ -127,28 +129,28 @@ where
                 let value_str: String = value.extract()?;
                 parser(value_str)
                     .map(Some)
-                    .map_err(|e| to_pyvalue_err(format!("Failed to parse '{key}': {e}")))
+                    .map_err(|e| to_pyvalue_err(format!("未能解析 '{key}': {e}")))
             }
         }
         None => Ok(None),
     }
 }
 
-/// Helper function to get a required `PyList` from a Python dictionary.
+/// 从 Python 字典中获取必填 `PyList` 的辅助函数。
 ///
-/// # Returns
+/// # 返回 (Returns)
 ///
-/// Returns the extracted `PyList` or a `PyErr` if the key is missing or extraction fails.
+/// 返回提取到的 `PyList`；如果键缺失或提取失败，则返回 `PyErr`。
 ///
-/// # Errors
+/// # 错误 (Errors)
 ///
-/// Returns `PyErr` if the key is missing or value extraction fails.
+/// 如果键缺失或值提取失败，则返回 `PyErr`。
 pub fn get_required_list<'py>(
     dict: &Bound<'py, PyDict>,
     key: &str,
 ) -> PyResult<Bound<'py, PyList>> {
     dict.get_item(key)?
-        .ok_or_else(|| to_pykey_err(format!("Missing required key: {key}")))?
+        .ok_or_else(|| to_pykey_err(format!("缺失必填键: {key}")))?
         .downcast_into()
         .map_err(Into::into)
 }

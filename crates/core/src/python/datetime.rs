@@ -13,7 +13,7 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! Date/time utility wrappers exposed to Python.
+//! 暴露给 Python 的日期/时间（Date/time）工具封装。
 
 use pyo3::prelude::*;
 use pyo3_stub_gen::derive::gen_stub_pyfunction;
@@ -28,14 +28,14 @@ use crate::{
     },
 };
 
-/// Return round nanoseconds (ns) converted from the given seconds.
+/// 返回由给定秒数转换而来的、保留整数部分的纳秒 (ns)。
 ///
-/// Parameters
+/// 参数 (Parameters)
 /// ----------
 /// secs : float
-///     The seconds to convert.
+///     待转换的秒数。
 ///
-/// Returns
+/// 返回 (Returns)
 /// -------
 /// int
 #[gen_stub_pyfunction(module = "nautilus_trader.core")]
@@ -44,14 +44,14 @@ pub fn py_secs_to_nanos(secs: f64) -> PyResult<u64> {
     secs_to_nanos(secs).map_err(to_pyvalue_err)
 }
 
-/// Return round milliseconds (ms) converted from the given seconds.
+/// 返回由给定秒数转换而来的、保留整数部分的毫秒 (ms)。
 ///
-/// Parameters
+/// 参数 (Parameters)
 /// ----------
 /// secs : float
-///     The seconds to convert.
+///     待转换的秒数。
 ///
-/// Returns
+/// 返回 (Returns)
 /// -------
 /// int
 #[gen_stub_pyfunction(module = "nautilus_trader.core")]
@@ -60,14 +60,14 @@ pub fn py_secs_to_millis(secs: f64) -> PyResult<u64> {
     secs_to_millis(secs).map_err(to_pyvalue_err)
 }
 
-/// Return round nanoseconds (ns) converted from the given milliseconds (ms).
+/// 返回由给定毫秒 (ms) 转换而来的、保留整数部分的纳秒 (ns)。
 ///
-/// Parameters
+/// 参数 (Parameters)
 /// ----------
 /// millis : float
-///     The milliseconds to convert.
+///     待转换的毫秒数。
 ///
-/// Returns
+/// 返回 (Returns)
 /// -------
 /// int
 #[gen_stub_pyfunction(module = "nautilus_trader.core")]
@@ -76,14 +76,14 @@ pub fn py_millis_to_nanos(millis: f64) -> PyResult<u64> {
     millis_to_nanos(millis).map_err(to_pyvalue_err)
 }
 
-/// Return round nanoseconds (ns) converted from the given microseconds (μs).
+/// 返回由给定微秒 (μs) 转换而来的、保留整数部分的纳秒 (ns)。
 ///
-/// Parameters
+/// 参数 (Parameters)
 /// ----------
 /// micros : float
-///     The microseconds to convert.
+///     待转换的微秒数。
 ///
-/// Returns
+/// 返回 (Returns)
 /// -------
 /// int
 #[gen_stub_pyfunction(module = "nautilus_trader.core")]
@@ -92,14 +92,14 @@ pub fn py_micros_to_nanos(micros: f64) -> PyResult<u64> {
     micros_to_nanos(micros).map_err(to_pyvalue_err)
 }
 
-/// Return seconds converted from the given nanoseconds (ns).
+/// 返回由给定纳秒 (ns) 转换而来的秒数。
 ///
-/// Parameters
+/// 参数 (Parameters)
 /// ----------
 /// nanos : int
-///     The nanoseconds to convert.
+///     待转换的纳秒数。
 ///
-/// Returns
+/// 返回 (Returns)
 /// -------
 /// float
 #[must_use]
@@ -109,14 +109,14 @@ pub fn py_nanos_to_secs(nanos: u64) -> f64 {
     nanos_to_secs(nanos)
 }
 
-/// Return round milliseconds (ms) converted from the given nanoseconds (ns).
+/// 返回由给定纳秒 (ns) 转换而来的、保留整数部分的毫秒 (ms)。
 ///
-/// Parameters
+/// 参数 (Parameters)
 /// ----------
 /// nanos : int
-///     The nanoseconds to convert.
+///     待转换的纳秒数。
 ///
-/// Returns
+/// 返回 (Returns)
 /// -------
 /// int
 #[must_use]
@@ -126,14 +126,14 @@ pub const fn py_nanos_to_millis(nanos: u64) -> u64 {
     nanos_to_millis(nanos)
 }
 
-/// Return round microseconds (μs) converted from the given nanoseconds (ns).
+/// 返回由给定纳秒 (ns) 转换而来的、保留整数部分的微秒 (μs)。
 ///
-/// Parameters
+/// 参数 (Parameters)
 /// ----------
 /// nanos : int
-///     The nanoseconds to convert.
+///     待转换的纳秒数。
 ///
-/// Returns
+/// 返回 (Returns)
 /// -------
 /// int
 #[must_use]
@@ -143,23 +143,23 @@ pub const fn py_nanos_to_micros(nanos: u64) -> u64 {
     nanos_to_micros(nanos)
 }
 
-/// Return UNIX nanoseconds as an ISO 8601 (RFC 3339) format string.
+/// 以 ISO 8601 (RFC 3339) 格式字符串的形式返回 UNIX 纳秒。
 ///
-/// Parameters
+/// 参数 (Parameters)
 /// ----------
 /// timestamp_ns : int
-///     The UNIX timestamp (nanoseconds).
-/// nanos_precision : bool, default True
-///     If True, use nanosecond precision. If False, use millisecond precision.
+///     UNIX 时间戳（纳秒）。
+/// nanos_precision : bool, 默认 True
+///     若为 True，则使用纳秒级精度。若为 False，则使用毫秒级精度。
 ///
-/// Returns
+/// 返回 (Returns)
 /// -------
 /// str
 ///
-/// Raises
+/// 抛出 (Raises)
 /// ------
 /// ValueError
-///     If `timestamp_ns` is invalid.
+///     如果 `timestamp_ns` 无效。
 #[gen_stub_pyfunction(module = "nautilus_trader.core")]
 #[pyfunction(
     name = "unix_nanos_to_iso8601",
@@ -171,7 +171,7 @@ pub fn py_unix_nanos_to_iso8601(
 ) -> PyResult<String> {
     if timestamp_ns > i64::MAX as u64 {
         return Err(to_pyvalue_err(
-            "timestamp_ns is out of range for conversion",
+            "timestamp_ns 超出了转换范围",
         ));
     }
 
@@ -185,29 +185,29 @@ pub fn py_unix_nanos_to_iso8601(
     Ok(formatted)
 }
 
-/// Return UNIX nanoseconds at midnight (UTC) of the last weekday (Mon-Fri).
+/// 返回在上一个工作日 (周一至周五) 午夜 (UTC) 的 UNIX 纳秒。
 ///
-/// Parameters
+/// 参数 (Parameters)
 /// ----------
 /// year : int
-///     The year from the datum date.
+///     基准日期的年份。
 /// month : int
-///     The month from the datum date.
+///     基准日期的月份。
 /// day : int
-///     The day from the datum date.
+///     基准日期的天。
 ///
-/// Returns
+/// 返回 (Returns)
 /// -------
 /// int
 ///
-/// Raises
+/// 抛出 (Raises)
 /// ------
 /// `ValueError`
-///     If given an invalid date.
+///     如果给定的日期无效。
 ///
 /// # Errors
 ///
-/// Returns a `PyErr` if the provided date is invalid.
+/// 如果提供的日期无效，则返回 `PyErr`。
 #[gen_stub_pyfunction(module = "nautilus_trader.core")]
 #[pyfunction(name = "last_weekday_nanos")]
 pub fn py_last_weekday_nanos(year: i32, month: u32, day: u32) -> PyResult<u64> {
@@ -216,25 +216,25 @@ pub fn py_last_weekday_nanos(year: i32, month: u32, day: u32) -> PyResult<u64> {
         .as_u64())
 }
 
-/// Return whether the given UNIX nanoseconds timestamp is within the last 24 hours.
+/// 返回给定的 UNIX 纳秒时间戳是否在过去 24 小时之内。
 ///
-/// Parameters
+/// 参数 (Parameters)
 /// ----------
 /// timestamp_ns : int
-///     The UNIX nanoseconds timestamp datum.
+///     UNIX 纳秒时间戳基准值。
 ///
-/// Returns
+/// 返回 (Returns)
 /// -------
 /// bool
 ///
-/// Raises
+/// 抛出 (Raises)
 /// ------
 /// ValueError
-///     If `timestamp` is invalid.
+///     如果 `timestamp` 无效。
 ///
 /// # Errors
 ///
-/// Returns a `PyErr` if the provided timestamp is invalid.
+/// 如果提供的时间戳无效，则返回 `PyErr`。
 #[gen_stub_pyfunction(module = "nautilus_trader.core")]
 #[pyfunction(name = "is_within_last_24_hours")]
 pub fn py_is_within_last_24_hours(timestamp_ns: u64) -> PyResult<bool> {

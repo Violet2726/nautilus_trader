@@ -13,76 +13,69 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! Utilities for transferring heap-allocated Rust `Vec<T>` values across an FFI boundary.
+//! 用于在 FFI 边界之间传输堆分配的 Rust `Vec<T>` 值的工具函数。
 //!
-//! The primary abstraction offered by this module is `CVec`, a C-compatible struct that stores
-//! a raw pointer (`ptr`) together with the vector’s logical `len` and `cap`.  By moving the
-//! allocation metadata into a plain `repr(C)` type we allow the memory created by Rust to be
-//! owned, inspected, and ultimately freed by foreign code (or vice-versa) without introducing
-//! undefined behaviour.
+//! 此模块提供的主要抽象是 `CVec`，这是一个 C 兼容的结构体，用于存储
+//! 原始指针 (`ptr`) 以及向量的逻辑长度 (`len`) 和容量 (`cap`)。通过将
+//! 分配元数据移动到普通的 `repr(C)` 类型中，我们允许 Rust 创建的内存在外部代码中
+//! 被拥有、检查，并最终释放（反之亦然），而不会引入未定义行为。
 //!
-//! Only a very small API surface is exposed to C:
+//! 仅向 C 暴露了非常小的 API 表面：
 //!
-//! * `cvec_new` – create an empty `CVec` sentinel that can be returned to foreign code.
+//! * `cvec_new` – 创建一个空的 `CVec` 哨兵，可返回给外部代码。
 //!
-//! De-allocation is intentionally **not** provided via a generic helper. Instead each FFI module
-//! must expose its own *type-specific* `vec_*_drop` function which reconstructs the original
-//! `Vec<T>` with [`Vec::from_raw_parts`] and allows it to drop. This avoids the size-mismatch risk
-//! that a one-size-fits-all `cvec_drop` had in the past.
+//! 该模块有意地**不**通过泛型辅助函数提供解除分配的功能。相反，每个 FFI 模块
+//! 必须公开其自己的*特定类型*的 `vec_*_drop` 函数，该函数使用 [`Vec::from_raw_parts`]
+//! 重构原始 `Vec<T>` 并允许其被销毁。这避免了过去“一站式” `cvec_drop` 存在的尺寸不匹配风险。
 //!
-//! All other manipulation happens on the Rust side before relinquishing ownership.  This keeps the
-//! rules for memory safety straightforward: foreign callers must treat the memory region pointed
-//! to by `ptr` as **opaque** and interact with it solely through the functions provided here.
+//! 所有其他操作都在 Rust 侧交出所有权之前发生。这使得内存安全规则变得简单明了：
+//! 外部调用方必须将 `ptr` 指向的内存区域视为**不透明的 (opaque)**，且仅通过此处提供的函数与之交互。
 
 use std::{ffi::c_void, fmt::Display, ptr::NonNull};
 
 use crate::ffi::abort_on_panic;
 
-/// `CVec` is a C compatible struct that stores an opaque pointer to a block of
-/// memory, its length and the capacity of the vector it was allocated from.
+/// `CVec` 是一个 C 兼容的结构体，存储指向内存块的一个不透明指针，
+/// 及其长度和分配该向量时的容量。
 ///
-/// # Safety
+/// # 安全性 (Safety)
 ///
-/// Changing the values here may lead to undefined behavior when the memory is dropped.
+/// 更改此处的数值可能会导致在销毁内存时产生未定义行为。
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct CVec {
-    /// Opaque pointer to block of memory storing elements to access the
-    /// elements cast it to the underlying type.
+    /// 指向存放元素内存块的不透明指针。若要访问元素，需将其转换为底层类型。
     pub ptr: *mut c_void,
-    /// The number of elements in the block.
+    /// 块中元素的数量。
     pub len: usize,
-    /// The capacity of vector from which it was allocated.
-    /// Used when deallocating the memory
+    /// 分配该向量时的容量。
+    /// 在解除内存分配时使用。
     pub cap: usize,
 }
 
-// SAFETY: CVec is marked as Send to satisfy PyO3's PyCapsule requirements, which need
-// to transfer ownership across the Python/Rust boundary. However, CVec contains raw
-// pointers and is only safe to use in single-threaded contexts or with external
-// synchronization guarantees.
+// 安全性：CVec 被标记为 Send 以满足 PyO3 的 PyCapsule 要求，
+// 后者需要跨 Python/Rust 边界传输所有权。然而，CVec 包含原始指针，
+// 且仅在单线程语境下或具有外部同步保证时方可安全使用。
 //
-// The Send impl is required for:
-// 1. PyO3's PyCapsule::new_with_destructor which has a Send bound
-// 2. Transferring CVec ownership to Python (which runs on a single GIL-protected thread)
+// 实现 Send 是出于以下需求：
+// 1. PyO3 的 PyCapsule::new_with_destructor 带有 Send 约束条件。
+// 2. 将 CVec 的所有权传输给 Python（其在单一的、受 GIL 保护的线程上运行）。
 //
-// IMPORTANT: Do not send CVec instances across threads without ensuring:
-// - The underlying data type T is itself Send + Sync
-// - Proper external synchronization (e.g., mutex) protects concurrent access
-// - The CVec is consumed on the same thread where it will be reconstructed
+// 重要提示：在发送 CVec 实例跨线程前，请确保：
+// - 底层数据类型 T 本身即实现了 Send + Sync。
+// - 适当的外部同步机制（如互斥锁 mutex）保护了并发访问。
+// - CVec 在将被重构的同一线程上被消耗。
 //
-// In practice, CVec usage in this codebase is confined to the Python FFI boundary
-// where the Python GIL provides the necessary synchronization.
+// 在实践中，本码库中的 CVec 使用仅限于 Python FFI 边界，此处 Python GIL 提供了必要的同步。
 unsafe impl Send for CVec {}
 
 impl CVec {
-    /// Returns an empty [`CVec`].
+    /// 返回一个空的 [`CVec`]。
     ///
-    /// This is primarily useful for constructing a sentinel value that represents the
-    /// absence of data when crossing the FFI boundary.
+    /// 这主要用于构造一个哨兵值，用以表示跨越 FFI 边界时的数据缺失。
     ///
-    /// Uses a dangling pointer (like `Vec::new()`) rather than null to satisfy
-    /// `Vec::from_raw_parts` preconditions when the CVec is later dropped.
+    /// 使用悬空指针（类似于 `Vec::new()`）而非 null，以满足之后销毁 CVec 时
+    /// `Vec::from_raw_parts` 的前置条件。
     #[must_use]
     pub fn empty() -> Self {
         Self {
@@ -93,11 +86,9 @@ impl CVec {
     }
 }
 
-/// Consumes and leaks the Vec, returning a mutable pointer to the contents as
-/// a [`CVec`]. The memory has been leaked and now exists for the lifetime of the
-/// program unless dropped manually.
-/// Note: drop the memory by reconstructing the vec using `from_raw_parts` method
-/// as shown in the test below.
+/// 消耗并泄漏 (leak) 该 Vec，将其内容的字段作为 [`CVec`] 以可变指针形式返回。
+/// 该内存已经被泄漏，且现在除非手动销毁，否则将在程序的生命周期内一直存在。
+/// 注意：通过如下文测试中所示的使用 `from_raw_parts` 方法重构该 vec 来销毁内存。
 impl<T> From<Vec<T>> for CVec {
     fn from(mut data: Vec<T>) -> Self {
         if data.is_empty() {
@@ -130,7 +121,7 @@ impl Display for CVec {
 // C API
 ////////////////////////////////////////////////////////////////////////////////
 
-/// Construct a new *empty* [`CVec`] value for use as initialiser/sentinel in foreign code.
+/// 构造一个新的*空* [`CVec`] 值，用作外部代码中的初始化程序或哨兵。
 #[cfg(feature = "ffi")]
 #[unsafe(no_mangle)]
 pub extern "C" fn cvec_new() -> CVec {
@@ -143,7 +134,7 @@ mod tests {
 
     use super::CVec;
 
-    /// Access values from a vector converted into a [`CVec`].
+    /// 访问转换成 [`CVec`] 的向量中的值。
     #[rstest]
     #[allow(unused_assignments)]
     fn access_values_test() {
@@ -169,12 +160,12 @@ mod tests {
         }
 
         unsafe {
-            // reconstruct the struct and drop the memory to deallocate
+            // 重构该结构体并销毁内存以释放空间
             let _ = Vec::from_raw_parts(ptr.cast::<u64>(), len, cap);
         }
     }
 
-    /// An empty vector gets converted to a dangling (non-null) pointer in a [`CVec`].
+    /// 空向量在 [`CVec`] 中会被转换为悬空（非 null）指针。
     #[rstest]
     fn empty_vec_should_give_dangling_ptr() {
         let data: Vec<u64> = vec![];

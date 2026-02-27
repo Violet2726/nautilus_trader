@@ -13,21 +13,20 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! A `UnixNanos` type for working with timestamps in nanoseconds since the UNIX epoch.
+//! 一个 `UnixNanos` 类型，用于处理自 UNIX 纪元以来的纳秒级时间戳。
 //!
-//! This module provides a strongly-typed representation of timestamps as nanoseconds
-//! since the UNIX epoch (January 1, 1970, 00:00:00 UTC). The `UnixNanos` type offers
-//! conversion utilities, arithmetic operations, and comparison methods.
+//! 此模块提供了自 UNIX 纪元（1970 年 1 月 1 日，00:00:00 UTC）以来的纳秒时间戳的强类型表示。
+//! `UnixNanos` 类型提供了转换工具、算术运算和比较方法。
 //!
-//! # Features
+//! # 特性
 //!
-//! - Zero-cost abstraction with appropriate operator implementations.
-//! - Conversion to/from `DateTime<Utc>`.
-//! - RFC 3339 string formatting.
-//! - Duration calculations.
-//! - Flexible parsing and serialization.
+//! - 带有所需运算符实现的零成本抽象。
+//! - 与 `DateTime<Utc>` 之间的相互转换。
+//! - RFC 3339 字符串格式化。
+//! - 持续时间计算。
+//! - 灵活的解析和序列化。
 //!
-//! # Parsing and Serialization
+//! # 解析和序列化
 #![allow(
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
@@ -35,23 +34,23 @@
     clippy::cast_possible_wrap
 )]
 //!
-//! `UnixNanos` can be created from and serialized to various formats:
+//! `UnixNanos` 可以从多种格式创建，并序列化为以下格式：
 //!
-//! * Integer values are interpreted as nanoseconds since the UNIX epoch.
-//! * Floating-point values are interpreted as seconds since the UNIX epoch (converted to nanoseconds
-//!   using truncation, not rounding, for consistency with [`secs_to_nanos`](crate::datetime::secs_to_nanos)).
-//! * String values may be:
-//!   - A numeric string (interpreted as nanoseconds).
-//!   - A floating-point string (interpreted as seconds, converted to nanoseconds).
-//!   - An RFC 3339 formatted timestamp (ISO 8601 with timezone).
-//!   - A simple date string in YYYY-MM-DD format (interpreted as midnight UTC on that date).
+//! * 整数值被解释为自 UNIX 纪元以来的纳秒数。
+//! * 浮点值被解释为自 UNIX 纪元以来的秒数（使用截断而非舍入将其转换为纳秒，
+//!   以保持与 [`secs_to_nanos`](crate::datetime::secs_to_nanos) 的一致性）。
+//! * 字符串值可以是：
+//!   - 数字字符串（被解释为纳秒）。
+//!   - 浮点数字符串（被解释为秒，并转换为纳秒）。
+//!   - RFC 3339 格式的时间戳（带有时区的 ISO 8601）。
+//!   - YYYY-MM-DD 格式的简单日期字符串（被解释为该日期的 UTC 午夜）。
 //!
-//! # Limitations
+//! # 限制
 //!
-//! * Negative timestamps are invalid and will result in an error.
-//! * Arithmetic operations will panic on overflow/underflow rather than wrapping.
-//! * The `as_i64()` method and `DateTime<Utc>` conversions will panic for timestamps
-//!   beyond approximately year 2262 (when nanoseconds exceed `i64::MAX`).
+//! * 负数时间戳无效，将导致错误。
+//! * 算术运算在发生溢出/下溢时将触发 panic，而不是采用回绕处理。
+//! * 当时间戳在大约 2262 年之后（此时纳秒数将超过 `i64::MAX`）时，
+//!   `as_i64()` 方法和 `DateTime<Utc>` 转换将触发 panic。
 
 use std::{
     cmp::Ordering,
@@ -67,79 +66,79 @@ use serde::{
     de::{self, Visitor},
 };
 
-/// Represents a duration in nanoseconds.
+/// 代表纳秒级的持续时间。
 pub type DurationNanos = u64;
 
-/// Represents a timestamp in nanoseconds since the UNIX epoch.
+/// 代表自 UNIX 纪元以来纳秒级的时间戳。
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 pub struct UnixNanos(u64);
 
 impl UnixNanos {
-    /// Creates a new [`UnixNanos`] instance.
+    /// 创建一个新的 [`UnixNanos`] 实例。
     #[must_use]
     pub const fn new(value: u64) -> Self {
         Self(value)
     }
 
-    /// Creates a new [`UnixNanos`] instance with the maximum valid value.
+    /// 创建一个具有最大有效值的 [`UnixNanos`] 实例。
     #[must_use]
     pub const fn max() -> Self {
         Self(u64::MAX)
     }
 
-    /// Returns `true` if the value of this instance is zero.
+    /// 如果此实例的值为零，则返回 `true`。
     #[must_use]
     pub const fn is_zero(&self) -> bool {
         self.0 == 0
     }
 
-    /// Returns the underlying value as `u64`.
+    /// 以 `u64` 类型返回底层值。
     #[must_use]
     pub const fn as_u64(&self) -> u64 {
         self.0
     }
 
-    /// Returns the underlying value as `i64`.
+    /// 以 `i64` 类型返回底层值。
     ///
     /// # Panics
     ///
-    /// Panics if the value exceeds `i64::MAX` (approximately year 2262).
+    /// 如果值超过 `i64::MAX`（大约在 2262 年），则触发 panic。
     #[must_use]
     pub const fn as_i64(&self) -> i64 {
         assert!(
             self.0 <= i64::MAX as u64,
-            "UnixNanos value exceeds i64::MAX"
+            "UnixNanos 超过了 i64::MAX"
         );
         self.0 as i64
     }
 
-    /// Returns the underlying value as `f64`.
+    /// 以 `f64` 类型返回底层值。
     #[must_use]
     pub const fn as_f64(&self) -> f64 {
         self.0 as f64
     }
 
-    /// Converts the underlying value to a datetime (UTC).
+    /// 将底层值转换为日期时间 (UTC)。
     ///
     /// # Panics
     ///
-    /// Panics if the value exceeds `i64::MAX` (approximately year 2262).
+    /// 如果值超过 `i64::MAX`（大约在 2262 年），则触发 panic。
     #[must_use]
-    pub const fn to_datetime_utc(&self) -> DateTime<Utc> {
+    pub fn to_datetime_utc(&self) -> DateTime<Utc> {
         DateTime::from_timestamp_nanos(self.as_i64())
     }
 
-    /// Converts the underlying value to an ISO 8601 (RFC 3339) string.
+    /// 将底层值转换为 ISO 8601 (RFC 3339) 格式字符串。
     #[must_use]
     pub fn to_rfc3339(&self) -> String {
         self.to_datetime_utc().to_rfc3339()
     }
 
-    /// Calculates the duration in nanoseconds since another [`UnixNanos`] instance.
+    /// 计算自另一个 [`UnixNanos`] 实例以来的纳秒级持续时间。
     ///
-    /// Returns `Some(duration)` if `self` is later than `other`, otherwise `None` if `other` is
-    /// greater than `self` (indicating a negative duration is not possible with `DurationNanos`).
+    /// 如果 `self` 晚于 `other`，返回 `Some(duration)`；否则如果 `other` 大于 `self` 则返回 `None`
+    /// （表示 `DurationNanos` 不可能表示负的持续时间）。
     #[must_use]
     pub const fn duration_since(&self, other: &Self) -> Option<DurationNanos> {
         self.0.checked_sub(other.0)
@@ -148,95 +147,91 @@ impl UnixNanos {
     fn parse_string(s: &str) -> Result<Self, String> {
         const MAX_NS_F64: f64 = u64::MAX as f64;
 
-        // Try parsing as an integer (nanoseconds)
+        // 尝试解析为整数（纳秒）
         if let Ok(int_value) = s.parse::<u64>() {
             return Ok(Self(int_value));
         }
 
-        // If the string is composed solely of digits but didn't fit in a u64 we
-        // treat that as an overflow error rather than attempting to interpret
-        // it as seconds in floating-point form. This avoids the surprising
-        // situation where a caller provides nanoseconds but gets an out-of-
-        // range float interpretation instead.
+        // 如果字符串完全由数字组成但无法装入 u64，则将其视为溢出错误，
+        // 而不是尝试将其解释为浮点数形式的秒。这避免了调用者提供了纳秒，
+        // 但却意外地得到了一个超出范围的浮点数解释。
         if s.chars().all(|c| c.is_ascii_digit()) {
-            return Err("Unix timestamp is out of range".into());
+            return Err("Unix 时间戳超出范围".into());
         }
 
-        // Try parsing as a floating point number (seconds)
+        // 尝试解析为浮点数（秒）
         if let Ok(float_value) = s.parse::<f64>() {
             if !float_value.is_finite() {
-                return Err("Unix timestamp must be finite".into());
+                return Err("Unix 时间戳必须是有限值".into());
             }
 
             if float_value < 0.0 {
-                return Err("Unix timestamp cannot be negative".into());
+                return Err("Unix 时间戳不能为负".into());
             }
 
-            // Convert seconds to nanoseconds while checking for overflow
-            // We perform the multiplication in `f64`, then validate the
-            // result fits inside `u64` *before* rounding / casting.
+            // 将秒转换为纳秒并检查是否溢出
+            // 我们在 `f64` 中进行乘法运算，然后在进行舍入/类型转换之前校验结果是否符合 `u64`。
             let nanos_f64 = float_value * 1_000_000_000.0;
 
             if nanos_f64 > MAX_NS_F64 {
-                return Err("Unix timestamp is out of range".into());
+                return Err("Unix 时间戳超出范围".into());
             }
 
             let nanos = nanos_f64.trunc() as u64;
             return Ok(Self(nanos));
         }
 
-        // Try parsing as an RFC 3339 timestamp
+        // 尝试解析为 RFC 3339 时间戳
         if let Ok(datetime) = DateTime::parse_from_rfc3339(s) {
             let nanos = datetime
                 .timestamp_nanos_opt()
-                .ok_or_else(|| "Timestamp out of range".to_string())?;
+                .ok_or_else(|| "时间戳超出范围".to_string())?;
 
             if nanos < 0 {
-                return Err("Unix timestamp cannot be negative".into());
+                return Err("Unix 时间戳不能为负".into());
             }
 
-            // SAFETY: Checked that nanos >= 0, so cast to u64 is safe
+            // 安全性：已检查 nanos >= 0，因此强制转换为 u64 是安全的
             return Ok(Self(nanos as u64));
         }
 
-        // Try parsing as a simple date string (YYYY-MM-DD format)
+        // 尝试解析为简单日期字符串 (YYYY-MM-DD 格式)
         if let Ok(datetime) = NaiveDate::parse_from_str(s, "%Y-%m-%d")
-            // SAFETY: unwrap() is safe here because and_hms_opt(0, 0, 0) always succeeds
-            // for valid dates (midnight is always a valid time)
+            // 安全性：此处使用 unwrap() 是安全的，因为 对于有效日期，and_hms_opt(0, 0, 0) 总会成功（午夜通常是有效时间）
             .map(|date| date.and_hms_opt(0, 0, 0).unwrap())
             .map(|naive_dt| DateTime::<Utc>::from_naive_utc_and_offset(naive_dt, Utc))
         {
             let nanos = datetime
                 .timestamp_nanos_opt()
-                .ok_or_else(|| "Timestamp out of range".to_string())?;
+                .ok_or_else(|| "时间戳超出范围".to_string())?;
             if nanos < 0 {
-                return Err("Unix timestamp cannot be negative".into());
+                return Err("Unix 时间戳不能为负".into());
             }
             return Ok(Self(nanos as u64));
         }
 
-        Err(format!("Invalid format: {s}"))
+        Err(format!("无效格式: {s}"))
     }
 
-    /// Returns `Some(self + rhs)` or `None` if the addition would overflow
+    /// 返回 `Some(self + rhs)`，如果加法导致溢出则返回 `None`。
     #[must_use]
     pub fn checked_add<T: Into<u64>>(self, rhs: T) -> Option<Self> {
         self.0.checked_add(rhs.into()).map(Self)
     }
 
-    /// Returns `Some(self - rhs)` or `None` if the subtraction would underflow
+    /// 返回 `Some(self - rhs)`，如果减法导致下溢则返回 `None`。
     #[must_use]
     pub fn checked_sub<T: Into<u64>>(self, rhs: T) -> Option<Self> {
         self.0.checked_sub(rhs.into()).map(Self)
     }
 
-    /// Saturating addition – if overflow occurs the value is clamped to `u64::MAX`.
+    /// 饱和加法 – 如果发生溢出，值将被限制在 `u64::MAX`。
     #[must_use]
     pub fn saturating_add_ns<T: Into<u64>>(self, rhs: T) -> Self {
         Self(self.0.saturating_add(rhs.into()))
     }
 
-    /// Saturating subtraction – if underflow occurs the value is clamped to `0`.
+    /// 饱和减法 – 如果发生下溢，值将被限制在 `0`。
     #[must_use]
     pub fn saturating_sub_ns<T: Into<u64>>(self, rhs: T) -> Self {
         Self(self.0.saturating_sub(rhs.into()))
@@ -305,39 +300,35 @@ impl From<UnixNanos> for u64 {
     }
 }
 
-/// Converts a string slice to [`UnixNanos`].
+/// 将字符串切片转换为 [`UnixNanos`]。
 ///
 /// # Panics
 ///
-/// This implementation will panic if the string cannot be parsed into a valid [`UnixNanos`].
-/// This is intentional fail-fast behavior where invalid timestamps indicate a critical
-/// logic error that should halt execution rather than silently propagate incorrect data.
+/// 如果字符串无法解析为有效的 [`UnixNanos`]，此实现将触发 panic。
+/// 这是有意设计的快速失败行为：无效的时间戳表明出现了严重逻辑错误，应当停止执行，而不是静默地传播错误数据。
 ///
-/// For error handling without panicking, use [`str::parse::<UnixNanos>()`] which returns
-/// a [`Result`].
+/// 若需无 panic 的错误处理，请使用返回 [`Result`] 的 [`str::parse::<UnixNanos>()`]。
 impl From<&str> for UnixNanos {
     fn from(value: &str) -> Self {
         value
             .parse()
-            .unwrap_or_else(|e| panic!("Failed to parse string '{value}' into UnixNanos: {e}. Use str::parse() for non-panicking error handling."))
+            .unwrap_or_else(|e| panic!("无法将字符串 '{value}' 解析为 UnixNanos: {e}。请使用 str::parse() 进行无 panic 的错误处理。"))
     }
 }
 
-/// Converts a [`String`] to [`UnixNanos`].
+/// 将 [`String`] 转换为 [`UnixNanos`]。
 ///
 /// # Panics
 ///
-/// This implementation will panic if the string cannot be parsed into a valid [`UnixNanos`].
-/// This is intentional fail-fast behavior where invalid timestamps indicate a critical
-/// logic error that should halt execution rather than silently propagate incorrect data.
+/// 如果字符串无法解析为有效的 [`UnixNanos`]，此实现将触发 panic。
+/// 这是有意设计的快速失败行为：无效的时间戳表明出现了严重逻辑错误，应当停止执行，而不是静默地传播错误数据。
 ///
-/// For error handling without panicking, use [`str::parse::<UnixNanos>()`] which returns
-/// a [`Result`].
+/// 若需无 panic 的错误处理，请使用返回 [`Result`] 的 [`str::parse::<UnixNanos>()`]。
 impl From<String> for UnixNanos {
     fn from(value: String) -> Self {
         value
             .parse()
-            .unwrap_or_else(|e| panic!("Failed to parse string '{value}' into UnixNanos: {e}. Use str::parse() for non-panicking error handling."))
+            .unwrap_or_else(|e| panic!("无法将字符串 '{value}' 解析为 UnixNanos: {e}。请使用 str::parse() 进行无 panic 的错误处理。"))
     }
 }
 
@@ -345,9 +336,9 @@ impl From<DateTime<Utc>> for UnixNanos {
     fn from(value: DateTime<Utc>) -> Self {
         let nanos = value
             .timestamp_nanos_opt()
-            .expect("DateTime timestamp out of range for UnixNanos");
+            .expect("DateTime 时间戳由于超出 UnixNanos 范围而无法转换");
 
-        assert!(nanos >= 0, "DateTime timestamp cannot be negative: {nanos}");
+        assert!(nanos >= 0, "DateTime 时间戳不能为负: {nanos}");
 
         Self::from(nanos as u64)
     }
@@ -357,12 +348,12 @@ impl From<SystemTime> for UnixNanos {
     fn from(value: SystemTime) -> Self {
         let duration = value
             .duration_since(std::time::UNIX_EPOCH)
-            .expect("SystemTime before UNIX EPOCH");
+            .expect("SystemTime 晚于 UNIX 纪元 (EPOCH)");
 
         let nanos = duration.as_nanos();
         assert!(
             nanos <= u64::MAX as u128,
-            "SystemTime overflowed u64 nanoseconds"
+            "SystemTime 纳秒数溢出了 u64"
         );
 
         Self::from(nanos as u64)
@@ -377,14 +368,12 @@ impl FromStr for UnixNanos {
     }
 }
 
-/// Adds two [`UnixNanos`] values.
+/// 将两个 [`UnixNanos`] 值相加。
 ///
 /// # Panics
 ///
-/// Panics on overflow. This is intentional fail-fast behavior: overflow in timestamp
-/// arithmetic indicates a logic error in calculations that would corrupt data.
-/// Use [`UnixNanos::checked_add()`] or [`UnixNanos::saturating_add_ns()`] if you need
-/// explicit overflow handling.
+/// 发生溢出时触发 panic。这是有意设计的快速失败行为：时间戳算术中的溢出表明计算中存在逻辑错误，会导致数据损坏。
+/// 如果需要显式的溢出处理，请使用 [`UnixNanos::checked_add()`] 或 [`UnixNanos::saturating_add_ns()`]。
 impl Add for UnixNanos {
     type Output = Self;
 
@@ -392,19 +381,17 @@ impl Add for UnixNanos {
         Self(
             self.0
                 .checked_add(rhs.0)
-                .expect("UnixNanos overflow in addition - invalid timestamp calculation"),
+                .expect("UnixNanos 加法溢出 - 无效的时间戳计算"),
         )
     }
 }
 
-/// Subtracts one [`UnixNanos`] from another.
+/// 从一个 [`UnixNanos`] 中减去另一个。
 ///
 /// # Panics
 ///
-/// Panics on underflow. This is intentional fail-fast behavior: underflow in timestamp
-/// arithmetic indicates a logic error in calculations that would corrupt data.
-/// Use [`UnixNanos::checked_sub()`] or [`UnixNanos::saturating_sub_ns()`] if you need
-/// explicit underflow handling.
+/// 发生下溢时触发 panic。这是有意设计的快速失败行为：时间戳算术中的下溢表明计算中存在逻辑错误，会导致数据损坏。
+/// 如果需要显式的下溢处理，请使用 [`UnixNanos::checked_sub()`] 或 [`UnixNanos::saturating_sub_ns()`]。
 impl Sub for UnixNanos {
     type Output = Self;
 
@@ -412,17 +399,17 @@ impl Sub for UnixNanos {
         Self(
             self.0
                 .checked_sub(rhs.0)
-                .expect("UnixNanos underflow in subtraction - invalid timestamp calculation"),
+                .expect("UnixNanos 减法下溢 - 无效的时间戳计算"),
         )
     }
 }
 
-/// Adds a `u64` nanosecond value to [`UnixNanos`].
+/// 向 [`UnixNanos`] 增加一个以 `u64` 表示的纳秒值。
 ///
 /// # Panics
 ///
-/// Panics on overflow. This is intentional fail-fast behavior for timestamp arithmetic.
-/// Use [`UnixNanos::checked_add()`] for explicit overflow handling.
+/// 发生溢出时触发 panic。这是针对时间戳算术有意设计的快速失败行为。
+/// 若需显式的溢出处理，请使用 [`UnixNanos::checked_add()`]。
 impl Add<u64> for UnixNanos {
     type Output = Self;
 
@@ -430,17 +417,17 @@ impl Add<u64> for UnixNanos {
         Self(
             self.0
                 .checked_add(rhs)
-                .expect("UnixNanos overflow in addition"),
+                .expect("UnixNanos 加法溢出"),
         )
     }
 }
 
-/// Subtracts a `u64` nanosecond value from [`UnixNanos`].
+/// 从 [`UnixNanos`] 中减去一个以 `u64` 表示的纳秒值。
 ///
 /// # Panics
 ///
-/// Panics on underflow. This is intentional fail-fast behavior for timestamp arithmetic.
-/// Use [`UnixNanos::checked_sub()`] for explicit underflow handling.
+/// 发生下溢时触发 panic。这是针对时间戳算术有意设计的快速失败行为。
+/// 若需显式的下溢处理，请使用 [`UnixNanos::checked_sub()`]。
 impl Sub<u64> for UnixNanos {
     type Output = Self;
 
@@ -448,38 +435,38 @@ impl Sub<u64> for UnixNanos {
         Self(
             self.0
                 .checked_sub(rhs)
-                .expect("UnixNanos underflow in subtraction"),
+                .expect("UnixNanos 减法下溢"),
         )
     }
 }
 
-/// Add-assigns a value to [`UnixNanos`].
+/// 通过加法赋值向 [`UnixNanos`] 增加一个值。
 ///
 /// # Panics
 ///
-/// Panics on overflow. This is intentional fail-fast behavior for timestamp arithmetic.
+/// 发生溢出时触发 panic。这是针对时间戳算术有意设计的快速失败行为。
 impl<T: Into<u64>> AddAssign<T> for UnixNanos {
     fn add_assign(&mut self, other: T) {
         let other_u64 = other.into();
         self.0 = self
             .0
             .checked_add(other_u64)
-            .expect("UnixNanos overflow in add_assign");
+            .expect("UnixNanos 加法赋值溢出 (add_assign)");
     }
 }
 
-/// Sub-assigns a value from [`UnixNanos`].
+/// 通过减法赋值从 [`UnixNanos`] 中减去一个值。
 ///
 /// # Panics
 ///
-/// Panics on underflow. This is intentional fail-fast behavior for timestamp arithmetic.
+/// 发生下溢时触发 panic。这是针对时间戳算术有意设计的快速失败行为。
 impl<T: Into<u64>> SubAssign<T> for UnixNanos {
     fn sub_assign(&mut self, other: T) {
         let other_u64 = other.into();
         self.0 = self
             .0
             .checked_sub(other_u64)
-            .expect("UnixNanos underflow in sub_assign");
+            .expect("UnixNanos 减法赋值下溢 (sub_assign)");
     }
 }
 
@@ -506,7 +493,7 @@ impl<'de> Deserialize<'de> for UnixNanos {
             type Value = UnixNanos;
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-                formatter.write_str("an integer, a string integer, or an RFC 3339 timestamp")
+                formatter.write_str("一个整数、一个字符串型的整数或一个 RFC 3339 时间戳")
             }
 
             fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E>
@@ -521,7 +508,7 @@ impl<'de> Deserialize<'de> for UnixNanos {
                 E: de::Error,
             {
                 if value < 0 {
-                    return Err(E::custom("Unix timestamp cannot be negative"));
+                    return Err(E::custom("Unix 时间戳不能为负"));
                 }
                 Ok(UnixNanos(value as u64))
             }
@@ -534,18 +521,18 @@ impl<'de> Deserialize<'de> for UnixNanos {
 
                 if !value.is_finite() {
                     return Err(E::custom(format!(
-                        "Unix timestamp must be finite, was {value}"
+                        "Unix 时间戳必须是有限值，实际为 {value}"
                     )));
                 }
                 if value < 0.0 {
-                    return Err(E::custom("Unix timestamp cannot be negative"));
+                    return Err(E::custom("Unix 时间戳不能为负"));
                 }
 
-                // Convert from seconds to nanoseconds with overflow check
+                // 将秒转换为纳秒并进行溢出检查
                 let nanos_f64 = value * 1_000_000_000.0;
                 if nanos_f64 > MAX_NS_F64 {
                     return Err(E::custom(format!(
-                        "Unix timestamp {value} seconds is out of range"
+                        "Unix 时间戳 {value} 秒超出范围"
                     )));
                 }
                 let nanos = nanos_f64.trunc() as u64;
@@ -649,19 +636,19 @@ mod tests {
     #[rstest]
     fn test_from_str_pre_epoch_date() {
         let err = "1969-12-31".parse::<UnixNanos>().unwrap_err();
-        assert_eq!(err.to_string(), "Unix timestamp cannot be negative");
+        assert_eq!(err.to_string(), "Unix 时间戳不能为负");
     }
 
     #[rstest]
     fn test_from_str_pre_epoch_rfc3339() {
         let err = "1969-12-31T23:59:59Z".parse::<UnixNanos>().unwrap_err();
-        assert_eq!(err.to_string(), "Unix timestamp cannot be negative");
+        assert_eq!(err.to_string(), "Unix 时间戳不能为负");
     }
 
     #[rstest]
     fn test_try_from_datetime_valid() {
         use chrono::TimeZone;
-        let datetime = Utc.timestamp_opt(1_000_000_000, 0).unwrap(); // 1 billion seconds since epoch
+        let datetime = Utc.timestamp_opt(1_000_000_000, 0).unwrap(); // 纪元以来的 10 亿秒
         let nanos = UnixNanos::from(datetime);
         assert_eq!(nanos.as_u64(), 1_000_000_000_000_000_000);
     }
@@ -745,26 +732,26 @@ mod tests {
     #[should_panic(expected = "UnixNanos overflow")]
     fn test_overflow_add() {
         let nanos = UnixNanos::from(u64::MAX);
-        let _ = nanos + UnixNanos::from(1); // This should panic due to overflow
+        let _ = nanos + UnixNanos::from(1); // 溢出应触发 panic
     }
 
     #[rstest]
     #[should_panic(expected = "UnixNanos overflow")]
     fn test_overflow_add_u64() {
         let nanos = UnixNanos::from(u64::MAX);
-        let _ = nanos + 1_u64; // This should panic due to overflow
+        let _ = nanos + 1_u64; // 溢出应触发 panic
     }
 
     #[rstest]
     #[should_panic(expected = "UnixNanos underflow")]
     fn test_overflow_sub() {
-        let _ = UnixNanos::default() - UnixNanos::from(1); // This should panic due to underflow
+        let _ = UnixNanos::default() - UnixNanos::from(1); // 下溢应触发 panic
     }
 
     #[rstest]
     #[should_panic(expected = "UnixNanos underflow")]
     fn test_overflow_sub_u64() {
-        let _ = UnixNanos::default() - 1_u64; // This should panic due to underflow
+        let _ = UnixNanos::default() - 1_u64; // 下溢应触发 panic
     }
 
     #[rstest]
@@ -792,10 +779,10 @@ mod tests {
 
     #[rstest]
     fn test_duration_since_chronological() {
-        // Create a reference time (Feb 10, 2024)
+        // 创建一个参考时间（2024 年 2 月 10 日）
         let earlier = Utc.with_ymd_and_hms(2024, 2, 10, 12, 0, 0).unwrap();
 
-        // Create a time 1 hour, 30 minutes, and 45 seconds later (with nanoseconds)
+        // 创建一个比参考时间晚 1 小时 30 分钟 45 秒的时间（带有纳秒）
         let later = earlier
             + Duration::hours(1)
             + Duration::minutes(30)
@@ -805,11 +792,11 @@ mod tests {
         let earlier_nanos = UnixNanos::from(earlier);
         let later_nanos = UnixNanos::from(later);
 
-        // Calculate expected duration in nanoseconds
-        let expected_duration = 60 * 60 * 1_000_000_000 + // 1 hour
-        30 * 60 * 1_000_000_000 + // 30 minutes
-        45 * 1_000_000_000 + // 45 seconds
-        500_000_000; // 500 million nanoseconds
+        // 计算预期的纳秒级持续时间
+        let expected_duration = 60 * 60 * 1_000_000_000 + // 1 小时
+        30 * 60 * 1_000_000_000 + // 30 分钟
+        45 * 1_000_000_000 + // 45 秒
+        500_000_000; // 5 亿纳秒
 
         assert_eq!(
             later_nanos.duration_since(&earlier_nanos),
@@ -820,15 +807,15 @@ mod tests {
 
     #[rstest]
     fn test_duration_since_with_edge_cases() {
-        // Test with maximum value
+        // 使用最大值进行测试
         let max = UnixNanos::from(u64::MAX);
         let smaller = UnixNanos::from(u64::MAX - 1000);
 
         assert_eq!(max.duration_since(&smaller), Some(1000));
         assert_eq!(smaller.duration_since(&max), None);
 
-        // Test with minimum value
-        let min = UnixNanos::default(); // Zero timestamp
+        // 使用最小值进行测试
+        let min = UnixNanos::default(); // 零时间戳
         let larger = UnixNanos::from(1000);
 
         assert_eq!(min.duration_since(&min), Some(0));
@@ -853,20 +840,20 @@ mod tests {
     }
 
     #[rstest]
-    #[case("123", 123)] // Integer string
-    #[case("1234.567", 1_234_567_000_000)] // Float string (seconds to nanos)
-    #[case("2024-02-10", 1_707_523_200_000_000_000)] // Simple date (midnight UTC)
-    #[case("2024-02-10T14:58:43Z", 1_707_577_123_000_000_000)] // RFC3339 without fractions
-    #[case("2024-02-10T14:58:43.456789Z", 1_707_577_123_456_789_000)] // RFC3339 with fractions
+    #[case("123", 123)] // 整数型字符串
+    #[case("1234.567", 1_234_567_000_000)] // 浮点型字符串（秒转为纳秒）
+    #[case("2024-02-10", 1_707_523_200_000_000_000)] // 简单日期（UTC 午夜）
+    #[case("2024-02-10T14:58:43Z", 1_707_577_123_000_000_000)] // 不带小数部分的 RFC3339
+    #[case("2024-02-10T14:58:43.456789Z", 1_707_577_123_456_789_000)] // 带有小数部分的 RFC3339
     fn test_from_str_formats(#[case] input: &str, #[case] expected: u64) {
         let parsed: UnixNanos = input.parse().unwrap();
         assert_eq!(parsed.as_u64(), expected);
     }
 
     #[rstest]
-    #[case("abc")] // Random string
-    #[case("not a timestamp")] // Non-timestamp string
-    #[case("2024-02-10 14:58:43")] // Space-separated format (not RFC3339)
+    #[case("abc")] // 随机字符串
+    #[case("not a timestamp")] // 非时间戳字符串
+    #[case("2024-02-10 14:58:43")] // 使用空格分隔的格式（非 RFC3339）
     fn test_from_str_invalid_formats(#[case] input: &str) {
         let result = input.parse::<UnixNanos>();
         assert!(result.is_err());
@@ -874,7 +861,7 @@ mod tests {
 
     #[rstest]
     fn test_from_str_integer_overflow() {
-        // One more digit than u64::MAX (20 digits) so definitely overflows
+        // 数字数量多于 u64::MAX (20 位数字)，肯定会溢出
         let input = "184467440737095516160";
         let result = input.parse::<UnixNanos>();
         assert!(result.is_err());
@@ -908,8 +895,8 @@ mod tests {
 
     #[rstest]
     fn test_from_str_float_overflow() {
-        // Use scientific notation so we take the floating-point parsing path.
-        let input = "2e10"; // 20 billion seconds ~ 634 years (> u64::MAX nanoseconds)
+        // 使用科学计数法，从而走浮点数解析路径。
+        let input = "2e10"; // 200 亿秒 ~ 634 年 (> u64::MAX 纳秒)
         let result = input.parse::<UnixNanos>();
         assert!(result.is_err());
     }
@@ -944,10 +931,10 @@ mod tests {
 
     #[rstest]
     fn test_deserialize_float_uses_truncation() {
-        // Truncation (not rounding) for consistency with secs_to_nanos() etc
+        // 为了与 secs_to_nanos() 等保持一致，使用截断而非舍入
         let json = "0.9999999999";
         let deserialized: UnixNanos = serde_json::from_str(json).unwrap();
-        assert_eq!(deserialized.as_u64(), 999_999_999); // Truncated, not rounded to 1B
+        assert_eq!(deserialized.as_u64(), 999_999_999); // 截断后的值，而不是舍入为 10 亿
     }
 
     #[rstest]
@@ -974,7 +961,7 @@ mod tests {
 
     #[rstest]
     fn test_deserialize_nan_fails() {
-        // JSON doesn't support NaN directly, test the internal deserializer
+        // JSON 不直接支持 NaN，因此测试内部反序列化器
         use serde::de::{
             IntoDeserializer,
             value::{Error as ValueError, F64Deserializer},
@@ -982,7 +969,7 @@ mod tests {
         let deserializer: F64Deserializer<ValueError> = f64::NAN.into_deserializer();
         let result: Result<UnixNanos, _> = UnixNanos::deserialize(deserializer);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("must be finite"));
+        assert!(result.unwrap_err().to_string().contains("必须是有限值"));
     }
 
     #[rstest]
@@ -994,7 +981,7 @@ mod tests {
         let deserializer: F64Deserializer<ValueError> = f64::INFINITY.into_deserializer();
         let result: Result<UnixNanos, _> = UnixNanos::deserialize(deserializer);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("must be finite"));
+        assert!(result.unwrap_err().to_string().contains("必须是有限值"));
     }
 
     #[rstest]
@@ -1006,33 +993,33 @@ mod tests {
         let deserializer: F64Deserializer<ValueError> = f64::NEG_INFINITY.into_deserializer();
         let result: Result<UnixNanos, _> = UnixNanos::deserialize(deserializer);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("must be finite"));
+        assert!(result.unwrap_err().to_string().contains("必须是有限值"));
     }
 
     #[rstest]
     fn test_deserialize_overflow_float_fails() {
-        // Test a float that would overflow u64 when converted to nanoseconds
-        // u64::MAX is ~18.4e18, so u64::MAX / 1e9 = ~18.4e9 seconds
+        // 测试将浮点数转换为纳秒时会溢出 u64 的情形
+        // u64::MAX 约为 18.4e18，因此 u64::MAX / 1e9 = 约为 18.4e9 秒
         let result: Result<UnixNanos, _> = serde_json::from_str("1e20");
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("out of range"));
+        assert!(result.unwrap_err().to_string().contains("超出范围"));
     }
 
     #[rstest]
     fn test_deserialize_invalid_string_fails() {
-        let json = "\"not a timestamp\"";
+        let json = "\"并非时间戳\"";
         let result: Result<UnixNanos, _> = serde_json::from_str(json);
         assert!(result.is_err());
     }
 
     #[rstest]
     fn test_deserialize_edge_cases() {
-        // Test zero
+        // 测试零
         let json = "0";
         let deserialized: UnixNanos = serde_json::from_str(json).unwrap();
         assert_eq!(deserialized.as_u64(), 0);
 
-        // Test large value
+        // 测试大数值
         let json = "18446744073709551615"; // u64::MAX
         let deserialized: UnixNanos = serde_json::from_str(json).unwrap();
         assert_eq!(deserialized.as_u64(), u64::MAX);
@@ -1042,30 +1029,30 @@ mod tests {
     #[should_panic(expected = "UnixNanos value exceeds i64::MAX")]
     fn test_as_i64_overflow_panics() {
         let nanos = UnixNanos::from(u64::MAX);
-        let _ = nanos.as_i64(); // Should panic
+        let _ = nanos.as_i64(); // 应触发 panic
     }
 
     ////////////////////////////////////////////////////////////////////////////////
-    // Property-based testing
+    // 基于属性的测试 (Property-based testing)
     ////////////////////////////////////////////////////////////////////////////////
 
     use proptest::prelude::*;
 
     fn unix_nanos_strategy() -> impl Strategy<Value = UnixNanos> {
         prop_oneof![
-            // Small values
+            // 小数值
             0u64..1_000_000u64,
-            // Medium values (microseconds range)
+            // 中等数值（微秒范围）
             1_000_000u64..1_000_000_000_000u64,
-            // Large values (nanoseconds since 1970, but safe for arithmetic)
+            // 大数值（1970 以来纳秒数，但对于算术运算安全）
             1_000_000_000_000u64..=i64::MAX as u64,
-            // Edge cases
+            // 边界情况
             Just(0u64),
             Just(1u64),
-            Just(1_000_000_000u64),             // 1 second in nanos
-            Just(1_000_000_000_000u64),         // ~2001 timestamp
-            Just(1_700_000_000_000_000_000u64), // ~2023 timestamp
-            Just((i64::MAX / 2) as u64),        // Safe for doubling
+            Just(1_000_000_000u64),             // 1 秒的纳秒数
+            Just(1_000_000_000_000u64),         // 约为 2001 年的时间戳
+            Just(1_700_000_000_000_000_000u64), // 约为 2023 年的时间戳
+            Just((i64::MAX / 2) as u64),        // 翻倍也安全
         ]
         .prop_map(UnixNanos::from)
     }
@@ -1081,7 +1068,7 @@ mod tests {
             prop_assert_eq!(nanos.as_u64(), value);
             prop_assert_eq!(nanos.as_f64(), value as f64);
 
-            // Test i64 conversion only for values within i64 range
+            // 仅对 i64 范围内的值测试 i64 转换
             if i64::try_from(value).is_ok() {
                 prop_assert_eq!(nanos.as_i64(), value as i64);
             }
@@ -1091,12 +1078,12 @@ mod tests {
         fn prop_unix_nanos_addition_commutative(
             (nanos1, nanos2) in unix_nanos_pair_strategy()
         ) {
-            // Addition should be commutative when no overflow occurs
+            // 当不发生溢出时，加法应满足交换律
             if let (Some(sum1), Some(sum2)) = (
                 nanos1.checked_add(nanos2.as_u64()),
                 nanos2.checked_add(nanos1.as_u64())
             ) {
-                prop_assert_eq!(sum1, sum2, "Addition should be commutative");
+                prop_assert_eq!(sum1, sum2, "加法应满足交换律");
             }
         }
 
@@ -1106,7 +1093,7 @@ mod tests {
             nanos2 in unix_nanos_strategy(),
             nanos3 in unix_nanos_strategy(),
         ) {
-            // Addition should be associative when no overflow occurs
+            // 当不发生溢出时，加法应满足结合律
             if let (Some(sum1), Some(sum2)) = (
                 nanos1.as_u64().checked_add(nanos2.as_u64()),
                 nanos2.as_u64().checked_add(nanos3.as_u64())
@@ -1117,7 +1104,7 @@ mod tests {
                 ) {
                     let left_result = UnixNanos::from(left);
                     let right_result = UnixNanos::from(right);
-                    prop_assert_eq!(left_result, right_result, "Addition should be associative");
+                    prop_assert_eq!(left_result, right_result, "加法应满足结合律");
                 }
         }
 
@@ -1125,67 +1112,67 @@ mod tests {
         fn prop_unix_nanos_subtraction_inverse(
             (nanos1, nanos2) in unix_nanos_pair_strategy()
         ) {
-            // Subtraction should be the inverse of addition when no underflow occurs
+            // 当不发生下溢时，减法应当是加法的逆运算
             if let Some(sum) = nanos1.checked_add(nanos2.as_u64()) {
                 let diff = sum - nanos2;
-                prop_assert_eq!(diff, nanos1, "Subtraction should be inverse of addition");
+                prop_assert_eq!(diff, nanos1, "减法应为加法的逆运算");
             }
         }
 
         #[rstest]
         fn prop_unix_nanos_zero_identity(nanos in unix_nanos_strategy()) {
-            // Zero should be additive identity
+            // 零应该是加法的单位元
             let zero = UnixNanos::default();
-            prop_assert_eq!(nanos + zero, nanos, "Zero should be additive identity");
-            prop_assert_eq!(zero + nanos, nanos, "Zero should be additive identity (commutative)");
-            prop_assert!(zero.is_zero(), "Zero should be recognized as zero");
+            prop_assert_eq!(nanos + zero, nanos, "零应当是加法的单位元");
+            prop_assert_eq!(zero + nanos, nanos, "零应当是加法的单位元（交换律）");
+            prop_assert!(zero.is_zero(), "零应当被识别为零");
         }
 
         #[rstest]
         fn prop_unix_nanos_ordering_consistency(
             (nanos1, nanos2) in unix_nanos_pair_strategy()
         ) {
-            // Ordering operations should be consistent
+            // 排序操作应当是一致的
             let eq = nanos1 == nanos2;
             let lt = nanos1 < nanos2;
             let gt = nanos1 > nanos2;
             let le = nanos1 <= nanos2;
             let ge = nanos1 >= nanos2;
 
-            // Exactly one of eq, lt, gt should be true
+            // eq, lt, gt 中应当有且仅有一个为 true
             let exclusive_count = [eq, lt, gt].iter().filter(|&&x| x).count();
-            prop_assert_eq!(exclusive_count, 1, "Exactly one of ==, <, > should be true");
+            prop_assert_eq!(exclusive_count, 1, "==, <, > 中应有且仅有一个为 true");
 
-            // Consistency checks
-            prop_assert_eq!(le, eq || lt, "<= should equal == || <");
-            prop_assert_eq!(ge, eq || gt, ">= should equal == || >");
-            prop_assert_eq!(lt, nanos2 > nanos1, "< should be symmetric with >");
-            prop_assert_eq!(le, nanos2 >= nanos1, "<= should be symmetric with >=");
+            // 一致性检查
+            prop_assert_eq!(le, eq || lt, "<= 应等于 == || <");
+            prop_assert_eq!(ge, eq || gt, ">= 应等于 == || >");
+            prop_assert_eq!(lt, nanos2 > nanos1, "< 应当与 > 对称");
+            prop_assert_eq!(le, nanos2 >= nanos1, "<= 应当与 >= 对称");
         }
 
         #[rstest]
         fn prop_unix_nanos_string_roundtrip(nanos in unix_nanos_strategy()) {
-            // String serialization should round-trip correctly
+            // 字符串序列化应当能正确往返转换
             let string_repr = nanos.to_string();
             let parsed = UnixNanos::from_str(&string_repr);
-            prop_assert!(parsed.is_ok(), "String parsing should succeed for valid UnixNanos");
+            prop_assert!(parsed.is_ok(), "有效的 UnixNanos 字符串解析应当成功");
             if let Ok(parsed_nanos) = parsed {
-                prop_assert_eq!(parsed_nanos, nanos, "String should round-trip exactly");
+                prop_assert_eq!(parsed_nanos, nanos, "字符串往返转换应完全一致");
             }
         }
 
         #[rstest]
         fn prop_unix_nanos_datetime_conversion(nanos in unix_nanos_strategy()) {
-            // DateTime conversion should be consistent (only test values within i64 range)
+            // 日期时间转换应当是一致的（仅测试 i64 范围内的值）
             if i64::try_from(nanos.as_u64()).is_ok() {
                 let datetime = nanos.to_datetime_utc();
                 let converted_back = UnixNanos::from(datetime);
-                prop_assert_eq!(converted_back, nanos, "DateTime conversion should round-trip");
+                prop_assert_eq!(converted_back, nanos, "DateTime 转换应当能往返转换");
 
-                // RFC3339 string should also round-trip for valid dates
+                // 有效日期的 RFC3339 字符串也应当能正确往返转换
                 let rfc3339 = nanos.to_rfc3339();
                 if let Ok(parsed_from_rfc3339) = UnixNanos::from_str(&rfc3339) {
-                    prop_assert_eq!(parsed_from_rfc3339, nanos, "RFC3339 string should round-trip");
+                    prop_assert_eq!(parsed_from_rfc3339, nanos, "RFC3339 字符串应当能往返转换");
                 }
             }
         }
@@ -1194,21 +1181,21 @@ mod tests {
         fn prop_unix_nanos_duration_since(
             (nanos1, nanos2) in unix_nanos_pair_strategy()
         ) {
-            // duration_since should be consistent with comparison and arithmetic
+            // duration_since 应当与比较和算术运算保持一致
             let duration = nanos1.duration_since(&nanos2);
 
             if nanos1 >= nanos2 {
-                // If nanos1 >= nanos2, duration should be Some and equal to difference
-                prop_assert!(duration.is_some(), "Duration should be Some when first >= second");
+                // 如果 nanos1 >= nanos2，持续时间应当为 Some 且等于差值
+                prop_assert!(duration.is_some(), "当 第一个值 >= 第二个值 时，持续时间应为 Some");
                 if let Some(dur) = duration {
                     prop_assert_eq!(dur, nanos1.as_u64() - nanos2.as_u64(),
-                        "Duration should equal the difference");
+                        "持续时间应等于两者的差值");
                     prop_assert_eq!(nanos2 + dur, nanos1.as_u64(),
-                        "second + duration should equal first");
+                        "第二个值 + 持续时间应等于第一个值");
                 }
             } else {
-                // If nanos1 < nanos2, duration should be None
-                prop_assert!(duration.is_none(), "Duration should be None when first < second");
+                // 如果 nanos1 < nanos2，持续时间应为 None
+                prop_assert!(duration.is_none(), "当 第一个值 < 第二个值 时，持续时间应为 None");
             }
         }
 
@@ -1216,20 +1203,20 @@ mod tests {
         fn prop_unix_nanos_checked_arithmetic(
             (nanos1, nanos2) in unix_nanos_pair_strategy()
         ) {
-            // Checked arithmetic should be consistent with regular arithmetic when no overflow/underflow
+            // 校验过的算术运算（Checked arithmetic）应当在不发生溢出/下溢时与常规算术保持一致
             let checked_add = nanos1.checked_add(nanos2.as_u64());
             let checked_sub = nanos1.checked_sub(nanos2.as_u64());
 
-            // If checked_add succeeds, regular addition should produce the same result
+            // 如果 checked_add 成功，常规加法应当产生相同结果
             if let Some(sum) = checked_add
                 && nanos1.as_u64().checked_add(nanos2.as_u64()).is_some() {
-                    prop_assert_eq!(sum, nanos1 + nanos2, "Checked add should match regular add when no overflow");
+                    prop_assert_eq!(sum, nanos1 + nanos2, "当不溢出时，Checked 加法应与常规加法一致");
                 }
 
-            // If checked_sub succeeds, regular subtraction should produce the same result
+            // 如果 checked_sub 成功，常规减法应当产生相同结果
             if let Some(diff) = checked_sub
                 && nanos1.as_u64() >= nanos2.as_u64() {
-                    prop_assert_eq!(diff, nanos1 - nanos2, "Checked sub should match regular sub when no underflow");
+                    prop_assert_eq!(diff, nanos1 - nanos2, "当不下溢时，Checked 减法应与常规减法一致");
                 }
         }
 
@@ -1237,28 +1224,28 @@ mod tests {
         fn prop_unix_nanos_saturating_arithmetic(
             (nanos1, nanos2) in unix_nanos_pair_strategy()
         ) {
-            // Saturating arithmetic should never panic and produce reasonable results
+            // 饱和算术运算绝不应触发 panic 且应当产生合理结果
             let sat_add = nanos1.saturating_add_ns(nanos2.as_u64());
             let sat_sub = nanos1.saturating_sub_ns(nanos2.as_u64());
 
-            // Saturating add should be >= both operands
-            prop_assert!(sat_add >= nanos1, "Saturating add result should be >= first operand");
-            prop_assert!(sat_add.as_u64() >= nanos2.as_u64(), "Saturating add result should be >= second operand");
+            // 饱和加法结果应 >= 两个操作数
+            prop_assert!(sat_add >= nanos1, "饱和加法结果应 >= 第一个操作数");
+            prop_assert!(sat_add.as_u64() >= nanos2.as_u64(), "饱和加法结果应 >= 第二个操作数");
 
-            // Saturating sub should be <= first operand
-            prop_assert!(sat_sub <= nanos1, "Saturating sub result should be <= first operand");
+            // 饱和减法结果应 <= 第一个操作数
+            prop_assert!(sat_sub <= nanos1, "饱和减法结果应 <= 第一个操作数");
 
-            // If no overflow/underflow would occur, saturating should match checked
+            // 如果不会发生溢出/下溢，饱和运算应当与 checked 运算一致
             if let Some(checked_sum) = nanos1.checked_add(nanos2.as_u64()) {
-                prop_assert_eq!(sat_add, checked_sum, "Saturating add should match checked add when no overflow");
+                prop_assert_eq!(sat_add, checked_sum, "当不溢出时，饱和加法应与 checked 加法一致");
             } else {
-                prop_assert_eq!(sat_add, UnixNanos::from(u64::MAX), "Saturating add should be MAX on overflow");
+                prop_assert_eq!(sat_add, UnixNanos::from(u64::MAX), "发生溢出时，饱和加法应为 MAX");
             }
 
             if let Some(checked_diff) = nanos1.checked_sub(nanos2.as_u64()) {
-                prop_assert_eq!(sat_sub, checked_diff, "Saturating sub should match checked sub when no underflow");
+                prop_assert_eq!(sat_sub, checked_diff, "当不下溢时，饱和减法应与 checked 减法一致");
             } else {
-                prop_assert_eq!(sat_sub, UnixNanos::default(), "Saturating sub should be zero on underflow");
+                prop_assert_eq!(sat_sub, UnixNanos::default(), "发生下溢时，饱和减法应为零");
             }
         }
     }

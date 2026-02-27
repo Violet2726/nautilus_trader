@@ -13,55 +13,54 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! Common message types.
+//! 通用消息类型。
 //!
-//! The [`Params`] type uses `IndexMap<String, Value>` for consistent ordering
-//! and JSON value support.
+//! [`Params`] 类型使用 `IndexMap<String, Value>`，以确一致的顺序并支持 JSON 值。
 
-// Re-export Params from the centralized params module
+// 从集中的 params 模块重新导出 Params
 pub use crate::params::Params;
 use crate::{UUID4, UnixNanos};
 
-/// Represents different types of messages in the system.
+/// 代表系统中不同类型的消息。
 #[derive(Debug, Clone)]
 pub enum Message {
-    /// A command message with an identifier and initialization timestamp.
+    /// 带有标识符和初始化时间戳的命令 (Command) 消息。
     Command {
-        /// The unique identifier for this command.
+        /// 此命令的唯一标识符。
         id: UUID4,
-        /// The initialization timestamp.
+        /// 初始化时间戳。
         ts_init: UnixNanos,
     },
-    /// A document message with an identifier and initialization timestamp.
+    /// 带有标识符和初始化时间戳的文档 (Document) 消息。
     Document {
-        /// The unique identifier for this document.
+        /// 此文档的唯一标识符。
         id: UUID4,
-        /// The initialization timestamp.
+        /// 初始化时间戳。
         ts_init: UnixNanos,
     },
-    /// An event message with identifiers and timestamps.
+    /// 带有标识符和时间戳的事件 (Event) 消息。
     Event {
-        /// The unique identifier for this event.
+        /// 此事件的唯一标识符。
         id: UUID4,
-        /// The initialization timestamp.
+        /// 初始化时间戳。
         ts_init: UnixNanos,
-        /// The event timestamp.
+        /// 事件发生时间戳。
         ts_event: UnixNanos,
     },
-    /// A request message with an identifier and initialization timestamp.
+    /// 带有标识符和初始化时间戳的请求 (Request) 消息。
     Request {
-        /// The unique identifier for this request.
+        /// 此请求的唯一标识符。
         id: UUID4,
-        /// The initialization timestamp.
+        /// 初始化时间戳。
         ts_init: UnixNanos,
     },
-    /// A response message with identifiers, timestamps, and correlation.
+    /// 带有标识符、时间戳和关联信息的响应 (Response) 消息。
     Response {
-        /// The unique identifier for this response.
+        /// 此响应的唯一标识符。
         id: UUID4,
-        /// The initialization timestamp.
+        /// 初始化时间戳。
         ts_init: UnixNanos,
-        /// The correlation identifier linking this response to a request.
+        /// 将此响应与请求链接起来的关联标识符 (correlation identifier)。
         correlation_id: UUID4,
     },
 }

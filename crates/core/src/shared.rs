@@ -13,34 +13,31 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! Efficient and ergonomic wrappers around frequently-used `Rc<RefCell<T>>` / `Weak<RefCell<T>>` pairs.
+//! 对频繁使用的 `Rc<RefCell<T>>` / `Weak<RefCell<T>>` 组合进行了高效且易用的封装。
 //!
-//! The NautilusTrader codebase heavily relies on shared, interior-mutable ownership for many
-//! engine components (`Rc<RefCell<T>>`). Repeating that verbose type across many APIs—alongside
-//! its weak counterpart—clutters code and increases the likelihood of accidentally storing a
-//! strong reference where only a weak reference is required (leading to reference cycles).
+//! NautilusTrader 码库极大地依赖于许多引擎组件间的共享所有权和内部可变性 (`Rc<RefCell<T>>`)。
+//! 在许多 API 中重复冗长的类型及其弱引用（Weak）副本会让代码变得杂乱，并且容易让人不小心存储强引用而非弱引用（导致循环引用）。
 //!
-//! `SharedCell<T>` and `WeakCell<T>` are zero-cost new-types that make the intent explicit and
-//! offer convenience helpers (`downgrade`, `upgrade`, `borrow`, `borrow_mut`). Because the
-//! wrappers are `#[repr(transparent)]`, they have the exact same memory layout as the wrapped
-//! `Rc` / `Weak` and introduce no runtime overhead.
+//! `SharedCell<T>` 和 `WeakCell<T>` 是零成本的新类型（Newtype），它们使代码意图更加明确，
+//! 并提供了如 `downgrade`、`upgrade`、`borrow`、`borrow_mut` 等便捷工具函数。因为这些封装器使用了 `#[repr(transparent)]` 特性，
+//! 所以它们与封装的 `Rc` / `Weak` 具有完全相同的内存布局，且不引入运行时开销。
 
-//! ## Choosing between `SharedCell` and `WeakCell`
+//! ## 如何在 `SharedCell` 与 `WeakCell` 之间做出选择
 //!
-//! * Use **`SharedCell<T>`** when the current owner genuinely *owns* (or co-owns) the value –
-//!   just as you would normally store an `Rc<RefCell<T>>`.
-//! * Use **`WeakCell<T>`** for back-references that could otherwise form a reference cycle.
-//!   The back-pointer does **not** keep the value alive, and every access must first
-//!   `upgrade()` to a strong `SharedCell`. This pattern is how we break circular ownership such
-//!   as *Exchange ↔ `ExecutionClient`*: the exchange keeps a `SharedCell` to the client, while the
-//!   client holds only a `WeakCell` back to the exchange.
+//! * 当当前所有者确实 *拥有*（或共同拥有）该值时，应使用 **`SharedCell<T>`** ——
+//!   就像你通常存储 `Rc<RefCell<T>>` 那样。
+//! * 对于可能形成循环引用的反向引用，应使用 **`WeakCell<T>`**。
+//!   反向指针 **不会** 保持该值的存活状态，且每次访问前都必须先
+//!   `upgrade()` 为强引用 `SharedCell`。我们使用这种模式来打破循环所有权，
+//!   例如 *交易平台 (Exchange) ↔ `ExecutionClient`*：交易平台持有指向客户端的 `SharedCell`，
+//!   而客户端仅持有指向交易平台的 `WeakCell`。
 
 use std::{
     cell::{BorrowError, BorrowMutError, Ref, RefCell, RefMut},
     rc::{Rc, Weak},
 };
 
-/// Strong, shared ownership of `T` with interior mutability.
+/// 带有内部可变性，对 `T` 的强共享所有权。
 #[repr(transparent)]
 #[derive(Debug)]
 pub struct SharedCell<T>(Rc<RefCell<T>>);
@@ -52,57 +49,57 @@ impl<T> Clone for SharedCell<T> {
 }
 
 impl<T> SharedCell<T> {
-    /// Wraps a value inside `Rc<RefCell<..>>`.
+    /// 将一个值包装在 `Rc<RefCell<..>>` 之中。
     #[inline]
     pub fn new(value: T) -> Self {
         Self(Rc::new(RefCell::new(value)))
     }
 
-    /// Creates a [`WeakCell`] pointing to the same allocation.
+    /// 创建一个指向同一分配空间的 [`WeakCell`]。
     #[inline]
     #[must_use]
     pub fn downgrade(&self) -> WeakCell<T> {
         WeakCell(Rc::downgrade(&self.0))
     }
 
-    /// Immutable borrow of the inner value.
+    /// 对内部值进行不可变借用。
     #[inline]
     #[must_use]
     pub fn borrow(&self) -> Ref<'_, T> {
         self.0.borrow()
     }
 
-    /// Mutable borrow of the inner value.
+    /// 对内部值进行可变借用。
     #[inline]
     #[must_use]
     pub fn borrow_mut(&self) -> RefMut<'_, T> {
         self.0.borrow_mut()
     }
 
-    /// Attempts to immutably borrow the inner value.
+    /// 尝试对内部值进行不可变借用。
     ///
-    /// Returns `Err` if the value is currently mutably borrowed.
+    /// 如果该值当前已被可变借用，则返回 `Err`。
     #[inline]
     pub fn try_borrow(&self) -> Result<Ref<'_, T>, BorrowError> {
         self.0.try_borrow()
     }
 
-    /// Attempts to mutably borrow the inner value.
+    /// 尝试对内部值进行可变借用。
     ///
-    /// Returns `Err` if the value is currently borrowed (mutably or immutably).
+    /// 如果该值当前已被借用（无论是可变借用还是不可变借用），则返回 `Err`。
     #[inline]
     pub fn try_borrow_mut(&self) -> Result<RefMut<'_, T>, BorrowMutError> {
         self.0.try_borrow_mut()
     }
 
-    /// Number of active strong references.
+    /// 活跃强引用的数量。
     #[inline]
     #[must_use]
     pub fn strong_count(&self) -> usize {
         Rc::strong_count(&self.0)
     }
 
-    /// Number of active weak references.
+    /// 活跃弱引用的数量。
     #[inline]
     #[must_use]
     pub fn weak_count(&self) -> usize {
@@ -130,7 +127,7 @@ impl<T> std::ops::Deref for SharedCell<T> {
     }
 }
 
-/// Weak counterpart to [`SharedCell`].
+/// [`SharedCell`] 对等的弱引用。
 #[repr(transparent)]
 #[derive(Debug)]
 pub struct WeakCell<T>(Weak<RefCell<T>>);
@@ -142,13 +139,13 @@ impl<T> Clone for WeakCell<T> {
 }
 
 impl<T> WeakCell<T> {
-    /// Attempts to upgrade the weak reference to a strong [`SharedCell`].
+    /// 尝试将弱引用升级为强引用 [`SharedCell`]。
     #[inline]
     pub fn upgrade(&self) -> Option<SharedCell<T>> {
         self.0.upgrade().map(SharedCell)
     }
 
-    /// Returns `true` if the pointed-to value has been dropped.
+    /// 如果所指的值已被销毁 (dropped)，则返回 `true`。
     #[inline]
     #[must_use]
     pub fn is_dropped(&self) -> bool {

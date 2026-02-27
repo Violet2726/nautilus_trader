@@ -13,54 +13,54 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! Functions for introspecting the running Python interpreter & installed packages.
+//! 用于内省运行中的 Python 解释器及已安装包的函数。
 
 #![allow(
     clippy::manual_let_else,
-    reason = "Prefer explicit control flow for error handling"
+    reason = "在错误处理中更倾向于显式的控制流"
 )]
 use pyo3::{prelude::*, types::PyTuple};
 
-/// Retrieves the Python interpreter version as a string.
+/// 以字符串形式获取 Python 解释器版本。
 ///
 /// # Panics
 ///
-/// Panics if `version_info` cannot be downcast to a tuple or if tuple elements are missing.
+/// 如果 `version_info` 无法被转换为元组或元组元素缺失，则触发 panic。
 #[must_use]
 pub fn get_python_version() -> String {
     Python::attach(|py| {
         let sys = match py.import("sys") {
             Ok(mod_sys) => mod_sys,
-            Err(_) => return "Unavailable (failed to import sys)".to_string(),
+            Err(_) => return "不可用 (导入 sys 失败)".to_string(),
         };
 
         let version_info = match sys.getattr("version_info") {
             Ok(info) => info,
-            Err(_) => return "Unavailable (version_info not found)".to_string(),
+            Err(_) => return "不可用 (未找到 version_info)".to_string(),
         };
 
         let version_tuple: &Bound<'_, PyTuple> = version_info
             .cast::<PyTuple>()
-            .expect("Failed to extract version_info");
+            .expect("未能提取 version_info");
 
         let major = version_tuple
             .get_item(0)
-            .expect("Failed to get major version")
+            .expect("未能获取主版本号 (major)")
             .extract::<i32>()
             .unwrap_or(-1);
         let minor = version_tuple
             .get_item(1)
-            .expect("Failed to get minor version")
+            .expect("未能获取次版本号 (minor)")
             .extract::<i32>()
             .unwrap_or(-1);
         let micro = version_tuple
             .get_item(2)
-            .expect("Failed to get micro version")
+            .expect("未能获取修订版本号 (micro)")
             .extract::<i32>()
             .unwrap_or(-1);
 
         if major == -1 || minor == -1 || micro == -1 {
-            "Unavailable (failed to extract version components)".to_string()
+            "不可用 (未能提取版本组件)".to_string()
         } else {
             format!("{major}.{minor}.{micro}")
         }
@@ -68,24 +68,22 @@ pub fn get_python_version() -> String {
 }
 
 #[must_use]
-/// Attempt to retrieve the `__version__` attribute of a *Python* package.
+/// 尝试检索 *Python* 包的 `__version__` 属性。
 ///
-/// When the requested package cannot be imported, or when it does not define a `__version__`
-/// attribute, the function returns a human-readable fallback string that starts with
-/// `"Unavailable"` so that downstream code can distinguish *real* version strings from error
-/// cases.
+/// 当请求的包无法被导入，或者它未定义 `__version__` 属性时，
+/// 该函数返回一个以 `"Unavailable"` 开头的人类可读的回退字符串，
+/// 以便下游代码能够区分“真正的”版本字符串与错误情况。
 ///
-/// This helper is primarily intended for diagnostic/logging purposes inside the NautilusTrader
-/// Python bindings.
+/// 此辅助程序主要用于 NautilusTrader Python 绑定内部的诊断/日志记录目的。
 pub fn get_python_package_version(package_name: &str) -> String {
     Python::attach(|py| match py.import(package_name) {
         Ok(package) => match package.getattr("__version__") {
             Ok(version_attr) => match version_attr.extract::<String>() {
                 Ok(version) => version,
-                Err(_) => "Unavailable (failed to extract version)".to_string(),
+                Err(_) => "不可用 (未能提取版本)".to_string(),
             },
-            Err(_) => "Unavailable (__version__ attribute not found)".to_string(),
+            Err(_) => "不可用 (未找到 __version__ 属性)".to_string(),
         },
-        Err(_) => "Unavailable (failed to import package)".to_string(),
+        Err(_) => "不可用 (导入包失败)".to_string(),
     })
 }

@@ -13,7 +13,7 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! Python bindings for [`Params`] type conversion.
+//! 为 [`Params`] 类型转换提供的 Python 绑定。
 
 use indexmap::IndexMap;
 use pyo3::{
@@ -25,13 +25,13 @@ use serde_json::Value;
 
 use crate::{params::Params, python::to_pyvalue_err};
 
-/// Converts a Python dict to `Params` (IndexMap<String, Value>).
+/// 将 Python 字典转换为 `Params` (IndexMap<String, Value>)。
 ///
 /// # Errors
 ///
-/// Returns a `PyErr` if:
-/// - the dict cannot be serialized to JSON
-/// - the JSON is not a valid object
+/// 如果发生以下情况，则返回 `PyErr`：
+/// - 该字典无法被序列化为 JSON
+/// - 该 JSON 不是一个有效的对象
 pub fn pydict_to_params(py: Python<'_>, dict: Py<PyDict>) -> PyResult<Option<Params>> {
     let dict_bound = dict.bind(py);
     if dict_bound.is_empty() {
@@ -48,17 +48,17 @@ pub fn pydict_to_params(py: Python<'_>, dict: Py<PyDict>) -> PyResult<Option<Par
             map.into_iter().collect::<IndexMap<String, Value>>(),
         )))
     } else {
-        Err(to_pyvalue_err("Expected a dictionary"))
+        Err(to_pyvalue_err("应为字典对象"))
     }
 }
 
-/// Helper function to convert a `serde_json::Value` to a Python object.
+/// 辅助函数，用于将 `serde_json::Value` 转换为 Python 对象。
 ///
-/// This is a common conversion pattern used when converting `Params` to Python dicts.
+/// 这是在将 `Params` 转换为 Python 字典时常用的一类转换模式。
 ///
 /// # Errors
 ///
-/// Returns a `PyErr` if the value type is unsupported or conversion fails.
+/// 如果值类型不受支持或转换失败，则返回 `PyErr`。
 pub fn value_to_pyobject(py: Python<'_>, val: &Value) -> PyResult<Py<PyAny>> {
     match val {
         Value::Null => Ok(py.None()),
@@ -72,12 +72,12 @@ pub fn value_to_pyobject(py: Python<'_>, val: &Value) -> PyResult<Py<PyAny>> {
             } else if n.is_f64() {
                 n.as_f64().unwrap().into_py_any(py)
             } else {
-                Err(to_pyvalue_err("Unsupported JSON number type"))
+                Err(to_pyvalue_err("不支持的 JSON 数字类型"))
             }
         }
         Value::Array(arr) => {
             let py_list =
-                PyList::new(py, &[] as &[Py<PyAny>]).expect("Invalid `ExactSizeIterator`");
+                PyList::new(py, &[] as &[Py<PyAny>]).expect("无效的 `ExactSizeIterator`已");
             for item in arr {
                 let py_item = value_to_pyobject(py, item)?;
                 py_list.append(py_item)?;
@@ -85,7 +85,7 @@ pub fn value_to_pyobject(py: Python<'_>, val: &Value) -> PyResult<Py<PyAny>> {
             py_list.into_py_any(py)
         }
         Value::Object(_) => {
-            // For nested objects, convert to dict recursively
+            // 对于嵌套对象，递归地转换为字典
             let json_str = serde_json::to_string(val).map_err(to_pyvalue_err)?;
             let py_dict: Py<PyDict> = PyModule::import(py, "json")?
                 .call_method("loads", (json_str,), None)?
@@ -95,11 +95,11 @@ pub fn value_to_pyobject(py: Python<'_>, val: &Value) -> PyResult<Py<PyAny>> {
     }
 }
 
-/// Converts `Params` (IndexMap<String, Value>) to a Python dict.
+/// 将 `Params` (IndexMap<String, Value>) 转换为 Python 字典。
 ///
 /// # Errors
 ///
-/// Returns a `PyErr` if conversion of any value fails.
+/// 如果任何值的转换失败，则返回 `PyErr`。
 pub fn params_to_pydict(py: Python<'_>, params: &Params) -> PyResult<Py<PyDict>> {
     let dict = PyDict::new(py);
     for (key, value) in params {

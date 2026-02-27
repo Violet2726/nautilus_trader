@@ -18,20 +18,20 @@
 use pyo3::prelude::*;
 use pyo3_stub_gen::derive::gen_stub_pyfunction;
 
-/// Masks an API key by showing only the first and last 4 characters.
+/// 通过仅显示前 4 位和后 4 位字符来掩码 API 密钥。
 ///
-/// For keys 8 characters or shorter, returns asterisks only.
+/// 对于长度为 8 个字符或更短的密钥，仅返回星号。
 ///
-/// Parameters
+/// 参数 (Parameters)
 /// ----------
 /// api_key : str
-///     The API key to mask.
+///     待掩码的 API 密钥。
 ///
-/// Returns
+/// 返回 (Returns)
 /// -------
 /// str
 ///
-/// Examples
+/// 示例 (Examples)
 /// --------
 /// >>> mask_api_key("abcdefghijklmnop")
 /// 'abcd...mnop'
@@ -42,7 +42,7 @@ use pyo3_stub_gen::derive::gen_stub_pyfunction;
 #[pyfunction(name = "mask_api_key")]
 #[allow(
     clippy::needless_pass_by_value,
-    reason = "Python FFI requires owned types"
+    reason = "Python FFI 要求使用拥有的 (owned) 类型"
 )]
 pub fn py_mask_api_key(api_key: String) -> String {
     crate::string::mask_api_key(&api_key)

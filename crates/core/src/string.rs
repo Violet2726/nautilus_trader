@@ -13,16 +13,16 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! String manipulation functionality.
+//! 字符串处理功能。
 
-/// Placeholder used in `Debug` impls to redact secret fields.
+/// 在 `Debug` 实现中用于脱敏秘密字段的占位符。
 pub const REDACTED: &str = "<redacted>";
 
-/// Masks an API key by showing only the first and last 4 characters.
+/// 通过仅显示前 4 位和后 4 位字符来脱敏 API 密钥。
 ///
-/// For keys 8 characters or shorter, returns asterisks only.
+/// 对于长度等于或小于 8 个字符的密钥，仅返回星号。
 ///
-/// # Examples
+/// # 示例
 ///
 /// ```
 /// use nautilus_core::string::mask_api_key;
@@ -32,7 +32,7 @@ pub const REDACTED: &str = "<redacted>";
 /// ```
 #[must_use]
 pub fn mask_api_key(key: &str) -> String {
-    // Work with Unicode scalars to avoid panicking on multibyte characters.
+    // 使用 Unicode 标量以避免多字节字符导致的 panic。
     let chars: Vec<char> = key.chars().collect();
     let len = chars.len();
 

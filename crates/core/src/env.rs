@@ -13,32 +13,29 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! Cross-platform environment variable utilities.
+//! 跨平台环境变量工具。
 //!
-//! This module provides functions for safely accessing environment variables
-//! with proper error handling.
+//! 此模块提供用于安全访问环境变量的函数，并带有适当的错误处理。
 
-/// Returns the value of the environment variable for the given `key`.
+/// 返回给定 `key` 对应的环境变量的值。
 ///
-/// # Errors
+/// # 错误
 ///
-/// Returns an error if the environment variable is not set.
+/// 如果未设置该环境变量，则返回错误。
 pub fn get_env_var(key: &str) -> anyhow::Result<String> {
     match std::env::var(key) {
         Ok(var) => Ok(var),
-        Err(_) => anyhow::bail!("environment variable '{key}' must be set"),
+        Err(_) => anyhow::bail!("必须设置环境变量 '{key}'"),
     }
 }
 
-/// Returns the provided `value` if `Some`, otherwise falls back to reading
-/// the environment variable for the given `key`.
+/// 如果 `value` 为 `Some`，则返回提供的 `value`；否则回退到读取给定 `key` 对应的环境变量。
 ///
-/// Only attempts to read the environment variable when `value` is `None`,
-/// avoiding unnecessary environment variable lookups and errors.
+/// 仅在 `value` 为 `None` 时尝试读取环境变量，从而避免不必要的环境变量查询和错误。
 ///
-/// # Errors
+/// # 错误
 ///
-/// Returns an error if `value` is `None` and the environment variable is not set.
+/// 如果 `value` 为 `None` 且未设置对应的环境变量，则返回错误。
 pub fn get_or_env_var(value: Option<String>, key: &str) -> anyhow::Result<String> {
     match value {
         Some(v) => Ok(v),
@@ -46,21 +43,18 @@ pub fn get_or_env_var(value: Option<String>, key: &str) -> anyhow::Result<String
     }
 }
 
-/// Returns the provided `value` if `Some`, otherwise falls back to reading
-/// the environment variable for the given `key`.
+/// 如果 `value` 为 `Some`，则返回提供的 `value`；否则回退到读取给定 `key` 对应的环境变量。
 ///
-/// Unlike [`get_or_env_var`], this function returns `None` instead of an error
-/// when the environment variable is not set. Use this for optional credentials
-/// where missing values are acceptable (e.g., public-only API clients).
+/// 与 [`get_or_env_var`] 不同，当未设置环境变量时，此函数返回 `None` 而不是错误。
+/// 适用于可接受缺失值的情形（例如，仅支持公开数据的 API 客户端）。
 #[must_use]
 pub fn get_or_env_var_opt(value: Option<String>, key: &str) -> Option<String> {
     value.or_else(|| std::env::var(key).ok())
 }
 
-/// Resolves a key/secret pair from provided values or environment variables.
+/// 从提供的值或环境变量中解析 key/secret 对。
 ///
-/// Returns `Some((key, secret))` when both are available,
-/// `None` otherwise.
+/// 当两者均可用时，返回 `Some((key, secret))`；否则返回 `None`。
 #[must_use]
 pub fn resolve_env_var_pair(
     key: Option<String>,
@@ -81,7 +75,7 @@ mod tests {
 
     #[rstest]
     fn test_get_env_var_success() {
-        // Test with a commonly available environment variable
+        // 使用一个通用的环境变量进行测试
         if let Ok(path) = std::env::var("PATH") {
             let result = get_env_var("PATH");
             assert!(result.is_ok());
@@ -91,11 +85,11 @@ mod tests {
 
     #[rstest]
     fn test_get_env_var_not_set() {
-        // Use a highly unlikely environment variable name
+        // 使用一个极不可能存在的环境变量名称
         let result = get_env_var("NONEXISTENT_ENV_VAR_THAT_SHOULD_NOT_EXIST_12345");
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains(
-            "environment variable 'NONEXISTENT_ENV_VAR_THAT_SHOULD_NOT_EXIST_12345' must be set"
+            "必须设置环境变量 'NONEXISTENT_ENV_VAR_THAT_SHOULD_NOT_EXIST_12345'"
         ));
     }
 
@@ -106,7 +100,7 @@ mod tests {
         assert!(result.is_err());
         let error_msg = result.unwrap_err().to_string();
         assert!(error_msg.contains(var_name));
-        assert!(error_msg.contains("must be set"));
+        assert!(error_msg.contains("必须设置"));
     }
 
     #[rstest]
@@ -119,7 +113,7 @@ mod tests {
 
     #[rstest]
     fn test_get_or_env_var_with_none_and_env_var_set() {
-        // Test with a commonly available environment variable
+        // 使用一个通用的环境变量进行测试
         if let Ok(path) = std::env::var("PATH") {
             let result = get_or_env_var(None, "PATH");
             assert!(result.is_ok());
@@ -132,13 +126,13 @@ mod tests {
         let result = get_or_env_var(None, "NONEXISTENT_ENV_VAR_THAT_SHOULD_NOT_EXIST_67890");
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains(
-            "environment variable 'NONEXISTENT_ENV_VAR_THAT_SHOULD_NOT_EXIST_67890' must be set"
+            "必须设置环境变量 'NONEXISTENT_ENV_VAR_THAT_SHOULD_NOT_EXIST_67890'"
         ));
     }
 
     #[rstest]
     fn test_get_or_env_var_empty_string_value() {
-        // Empty string is still a valid value that should be returned
+        // 空字符串仍是应当被返回的有效值
         let provided_value = Some(String::new());
         let result = get_or_env_var(provided_value, "PATH");
         assert!(result.is_ok());
@@ -147,8 +141,8 @@ mod tests {
 
     #[rstest]
     fn test_get_or_env_var_priority() {
-        // When both value and env var are available, value takes precedence
-        // Using PATH as it should be available in most environments
+        // 当提供的 value 和环境变量均可用时，value 具有更高优先级
+        // 使用 PATH 是因为它在大多数环境中都可用
         if std::env::var("PATH").is_ok() {
             let provided = Some("custom_value_takes_priority".to_string());
             let result = get_or_env_var(provided, "PATH");
@@ -180,7 +174,7 @@ mod tests {
 
     #[rstest]
     fn test_get_or_env_var_opt_priority() {
-        // When both value and env var are available, value takes precedence
+        // 当提供的 value 和环境变量均可用时，value 具有更高优先级
         if std::env::var("PATH").is_ok() {
             let provided = Some("custom_value".to_string());
             let result = get_or_env_var_opt(provided, "PATH");

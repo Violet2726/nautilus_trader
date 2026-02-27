@@ -13,16 +13,16 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! Helper functions that convert common C types (primarily UTF-8 encoded `char *` pointers) into
-//! the Rust data structures used throughout NautilusTrader.
+//! 辅助函数，用于将常见的 C 类型（主要是以 UTF-8 编码的 `char *` 指针）转换为
+//! NautilusTrader 整个系统中所使用的 Rust 数据结构。
 //!
-//! The conversions are opinionated:
+//! 转换过程具有以下特征：
 //!
-//! * JSON is used as the interchange format for complex structures.
-//! * `ustr::Ustr` is preferred over `String` where possible for its performance benefits.
+//! * JSON 被用作复杂结构的交换格式。
+//! * 出于性能考虑，在可能的情况下，`ustr::Ustr` 优于 `String`。
 //!
-//! All functions are `#[must_use]` and, unless otherwise noted, **assume** that the input pointer
-//! is non-null and points to a valid, *null-terminated* UTF-8 string.
+//! 所有函数都带有 `#[must_use]` 标记，并且除非另有说明，否则均**假定**输入指针
+//! 非空且指向一个有效的、*以 null 结尾的* UTF-8 字符串。
 
 use std::{
     collections::HashMap,
@@ -37,169 +37,169 @@ use crate::{
     parsing::{min_increment_precision_from_str, precision_from_str},
 };
 
-/// Convert a C bytes pointer into an owned `Vec<String>`.
+/// 将 C 字节指针转换为一个拥有的 `Vec<String>`。
 ///
-/// # Safety
+/// # 安全性 (Safety)
 ///
-/// Assumes `ptr` is a valid C string pointer.
+/// 假定 `ptr` 是一个有效的 C 字符串指针。
 ///
 /// # Panics
 ///
-/// Panics if `ptr` is null, contains invalid UTF-8/JSON, or the JSON value
-/// is not an array of strings.
+/// 如果 `ptr` 为空，包含无效的 UTF-8/JSON，或者该 JSON 值
+/// 不是一个字符串数组，则触发 panic。
 #[must_use]
 pub unsafe fn bytes_to_string_vec(ptr: *const c_char) -> Vec<String> {
-    assert!(!ptr.is_null(), "`ptr` was NULL");
+    assert!(!ptr.is_null(), "`ptr` 为 NULL");
 
-    // SAFETY: Caller guarantees ptr is valid per function contract
+    // 安全性：根据函数合约，调用方确保 ptr 是有效的
     let c_str = unsafe { CStr::from_ptr(ptr) };
     let bytes = c_str.to_bytes();
 
-    let json_string = std::str::from_utf8(bytes).expect("C string contains invalid UTF-8");
+    let json_string = std::str::from_utf8(bytes).expect("C 字符串包含无效的 UTF-8");
     let value: serde_json::Value =
-        serde_json::from_str(json_string).expect("C string contains invalid JSON");
+        serde_json::from_str(json_string).expect("C 字符串包含无效的 JSON");
 
     let arr = value
         .as_array()
-        .expect("C string JSON must be an array of strings");
+        .expect("C 字符串 JSON 必须是字符串数组");
 
     arr.iter()
         .map(|value| {
             value
                 .as_str()
-                .expect("C string JSON array must contain only strings")
+                .expect("C 字符串 JSON 数组必须仅包含字符串")
                 .to_owned()
         })
         .collect()
 }
 
-/// Convert a slice of `String` into a C string pointer (JSON encoded).
+/// 将 `String` 切片转换为 C 字符串指针（以 JSON 编码）。
 ///
 /// # Panics
 ///
-/// Panics if JSON serialization fails or if the generated string contains interior null bytes.
+/// 如果 JSON 序列化失败，或者生成的字符串内部包含 null 字节，则触发 panic。
 #[must_use]
 pub fn string_vec_to_bytes(strings: &[String]) -> *const c_char {
-    let json_string = serde_json::to_string(strings).expect("Failed to serialize strings to JSON");
-    let c_string = CString::new(json_string).expect("JSON string contains interior null bytes");
+    let json_string = serde_json::to_string(strings).expect("未能将字符串序列化为 JSON");
+    let c_string = CString::new(json_string).expect("JSON 字符串内部包含 null 字节");
 
     c_string.into_raw()
 }
 
-/// Convert a C bytes pointer into an owned `Option<HashMap<String, Value>>`.
+/// 将 C 字节指针转换为一个拥有的 `Option<HashMap<String, Value>>`。
 ///
-/// # Safety
+/// # 安全性 (Safety)
 ///
-/// Assumes `ptr` is a valid C string pointer.
+/// 假定 `ptr` 是一个有效的 C 字符串指针。
 ///
 /// # Panics
 ///
-/// Panics if `ptr` is not null but contains invalid UTF-8 or JSON.
+/// 如果 `ptr` 不为空，但包含无效的 UTF-8 或 JSON，则触发 panic。
 #[must_use]
 pub unsafe fn optional_bytes_to_json(ptr: *const c_char) -> Option<HashMap<String, Value>> {
     if ptr.is_null() {
         None
     } else {
-        // SAFETY: Caller guarantees ptr is valid per function contract
+        // 安全性：根据函数合约，调用方确保 ptr 是有效的
         let c_str = unsafe { CStr::from_ptr(ptr) };
         let bytes = c_str.to_bytes();
 
-        let json_string = std::str::from_utf8(bytes).expect("C string contains invalid UTF-8");
-        let result = serde_json::from_str(json_string).expect("C string contains invalid JSON");
+        let json_string = std::str::from_utf8(bytes).expect("C 字符串包含无效的 UTF-8");
+        let result = serde_json::from_str(json_string).expect("C 字符串包含无效的 JSON");
 
         Some(result)
     }
 }
 
-/// Convert a C bytes pointer into an owned `Option<HashMap<Ustr, Ustr>>`.
+/// 将 C 字节指针转换为一个拥有的 `Option<HashMap<Ustr, Ustr>>`。
 ///
-/// # Safety
+/// # 安全性 (Safety)
 ///
-/// Assumes `ptr` is a valid C string pointer.
+/// 假定 `ptr` 是一个有效的 C 字符串指针。
 ///
 /// # Panics
 ///
-/// Panics if `ptr` is not null but contains invalid UTF-8 or JSON.
+/// 如果 `ptr` 不为空，但包含无效的 UTF-8 或 JSON，则触发 panic。
 #[must_use]
 pub unsafe fn optional_bytes_to_str_map(ptr: *const c_char) -> Option<HashMap<Ustr, Ustr>> {
     if ptr.is_null() {
         None
     } else {
-        // SAFETY: Caller guarantees ptr is valid per function contract
+        // 安全性：根据函数合约，调用方确保 ptr 是有效的
         let c_str = unsafe { CStr::from_ptr(ptr) };
         let bytes = c_str.to_bytes();
 
-        let json_string = std::str::from_utf8(bytes).expect("C string contains invalid UTF-8");
-        let result = serde_json::from_str(json_string).expect("C string contains invalid JSON");
+        let json_string = std::str::from_utf8(bytes).expect("C 字符串包含无效的 UTF-8");
+        let result = serde_json::from_str(json_string).expect("C 字符串包含无效的 JSON");
 
         Some(result)
     }
 }
 
-/// Convert a C bytes pointer into an owned `Option<Vec<String>>`.
+/// 将 C 字节指针转换为一个拥有的 `Option<Vec<String>>`。
 ///
-/// # Safety
+/// # 安全性 (Safety)
 ///
-/// Assumes `ptr` is a valid C string pointer.
+/// 假定 `ptr` 是一个有效的 C 字符串指针。
 ///
 /// # Panics
 ///
-/// Panics if `ptr` is not null but contains invalid UTF-8 or JSON.
+/// 如果 `ptr` 不为空，但包含无效的 UTF-8 或 JSON，则触发 panic。
 #[must_use]
 pub unsafe fn optional_bytes_to_str_vec(ptr: *const c_char) -> Option<Vec<String>> {
     if ptr.is_null() {
         None
     } else {
-        // SAFETY: Caller guarantees ptr is valid per function contract
+        // 安全性：根据函数合约，调用方确保 ptr 是有效的
         let c_str = unsafe { CStr::from_ptr(ptr) };
         let bytes = c_str.to_bytes();
 
-        let json_string = std::str::from_utf8(bytes).expect("C string contains invalid UTF-8");
-        let result = serde_json::from_str(json_string).expect("C string contains invalid JSON");
+        let json_string = std::str::from_utf8(bytes).expect("C 字符串包含无效的 UTF-8");
+        let result = serde_json::from_str(json_string).expect("C 字符串包含无效的 JSON");
 
         Some(result)
     }
 }
 
-/// Return the decimal precision inferred from the given C string.
+/// 返回从给定 C 字符串推断出的十进制精度。
 ///
-/// # Safety
+/// # 安全性 (Safety)
 ///
-/// Assumes `ptr` is a valid C string pointer.
+/// 假定 `ptr` 是一个有效的 C 字符串指针。
 ///
 /// # Panics
 ///
-/// Panics if `ptr` is null.
+/// 如果 `ptr` 为空，则触发 panic。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn precision_from_cstr(ptr: *const c_char) -> u8 {
     abort_on_panic(|| {
-        assert!(!ptr.is_null(), "`ptr` was NULL");
-        // SAFETY: Caller guarantees ptr is valid per function contract
+        assert!(!ptr.is_null(), "`ptr` 为 NULL");
+        // 安全性：根据函数合约，调用方确保 ptr 是有效的
         let s = unsafe { cstr_as_str(ptr) };
         precision_from_str(s)
     })
 }
 
-/// Return the minimum price increment decimal precision inferred from the given C string.
+/// 返回从给定 C 字符串推断出的最小价格增量的十进制精度。
 ///
-/// # Safety
+/// # 安全性 (Safety)
 ///
-/// Assumes `ptr` is a valid C string pointer.
+/// 假定 `ptr` 是一个有效的 C 字符串指针。
 ///
 /// # Panics
 ///
-/// Panics if `ptr` is null.
+/// 如果 `ptr` 为空，则触发 panic。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn min_increment_precision_from_cstr(ptr: *const c_char) -> u8 {
     abort_on_panic(|| {
-        assert!(!ptr.is_null(), "`ptr` was NULL");
-        // SAFETY: Caller guarantees ptr is valid per function contract
+        assert!(!ptr.is_null(), "`ptr` 为 NULL");
+        // 安全性：根据函数合约，调用方确保 ptr 是有效的
         let s = unsafe { cstr_as_str(ptr) };
         min_increment_precision_from_str(s)
     })
 }
 
-/// Return a `bool` value from the given `u8`.
+/// 从给定的 `u8` 返回其对应的 `bool` 值。
 #[must_use]
 pub const fn u8_as_bool(value: u8) -> bool {
     value != 0

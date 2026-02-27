@@ -13,32 +13,32 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! Core parsing functions.
+//! 核心解析函数。
 
-/// Clamps a length to `u8::MAX` with optional debug logging.
+/// 将长度限制在 `u8::MAX` 以内，并可选择是否记录调试日志。
 #[inline]
 #[must_use]
 #[allow(
     clippy::cast_possible_truncation,
-    reason = "Intentional for parsing, value range validated"
+    reason = "用于解析，是有意为之，且已验证过值范围"
 )]
 fn clamp_precision_with_log(len: usize, context: &str, input: &str) -> u8 {
     if len > u8::MAX as usize {
         log::debug!(
-            "{} precision clamped from {} to {} for input: {}",
+            "{} 精度对于输入 {} 已从 {} 限制为 {}",
             context,
+            input,
             len,
-            u8::MAX,
-            input
+            u8::MAX
         );
     }
     len.min(u8::MAX as usize) as u8
 }
 
-/// Parses a scientific notation exponent and clamps to `u8::MAX`.
+/// 解析科学计数指数，并将其限制在 `u8::MAX` 以内。
 ///
-/// Returns `None` for invalid/empty exponents when `strict` is false,
-/// otherwise panics for malformed input.
+/// 当 `strict` 为 false 时，如果指数无效或为空，则返回 `None`；
+/// 否则，如果输入格式错误，则触发 panic。
 #[inline]
 #[must_use]
 fn parse_scientific_exponent(exponent_str: &str, strict: bool) -> Option<u8> {
@@ -47,111 +47,110 @@ fn parse_scientific_exponent(exponent_str: &str, strict: bool) -> Option<u8> {
     } else {
         assert!(
             !(exponent_str.is_empty() && strict),
-            "Invalid scientific notation format: missing exponent after 'e-'"
+            "科学计数法格式无效：'e-' 之后缺少指数"
         );
 
-        // Empty string is invalid (not a large number that overflowed)
+        // 空字符串是无效的（它并非导致溢出的大数值）
         if exponent_str.is_empty() {
             return None;
         }
 
-        // If it's all digits but overflows u64, clamp to u8::MAX
+        // 如果全部由数字组成但超过了 u64 范围，则限制为 u8::MAX
         if exponent_str.chars().all(|c| c.is_ascii_digit()) {
             Some(u8::MAX)
         } else if strict {
-            panic!("Invalid scientific notation exponent '{exponent_str}': must be a valid number")
+            panic!("无效的科学计数指数 '{exponent_str}'：必须是有效的数字")
         } else {
             None
         }
     }
 }
 
-/// Returns the decimal precision inferred from the given string.
+/// 返回从给定字符串推断出的十进制精度。
 ///
-/// For scientific notation with large negative exponents (e.g., "1e-300", "1e-4294967296"),
-/// the precision is clamped to `u8::MAX` (255) since that represents the maximum representable
-/// precision in this system. This handles arbitrarily large exponents without panicking.
+/// 对于具有极大负指数的科学计数法（例如 "1e-300", "1e-4294967296"），
+/// 精度会被限制为 `u8::MAX` (255)，因为这代表了此系统中可表示的最大精度。
+/// 这样可以在不触发 panic 的情况下处理任意大的指数。
 ///
 /// # Panics
 ///
-/// Panics if the input string is malformed (e.g., "1e-" with no exponent value, or non-numeric
-/// exponents like "1e-abc").
+/// 如果输入字符串格式错误（例如 "1e-" 后面缺失指数值，或使用了 "1e-abc" 这种非数字指数），
+/// 则会触发 panic。
 #[must_use]
 #[allow(
     clippy::cast_possible_truncation,
-    reason = "Intentional for parsing, value range validated"
+    reason = "用于解析，是有意为之，且已验证过值范围"
 )]
 pub fn precision_from_str(s: &str) -> u8 {
     let s = s.trim().to_ascii_lowercase();
 
-    // Check for scientific notation
+    // 检查是否为科学计数法
     if s.contains("e-") {
         let exponent_str = s
             .split("e-")
             .nth(1)
-            .expect("Invalid scientific notation format: missing exponent after 'e-'");
+            .expect("科学计数法格式无效：'e-' 之后缺少指数");
 
         return parse_scientific_exponent(exponent_str, true)
-            .expect("parse_scientific_exponent should return Some in strict mode");
+            .expect("在严格模式下 parse_scientific_exponent 应当返回 Some");
     }
 
-    // Check for decimal precision
+    // 检查十进制精度
     if let Some((_, decimal_part)) = s.split_once('.') {
-        clamp_precision_with_log(decimal_part.len(), "Decimal", &s)
+        clamp_precision_with_log(decimal_part.len(), "十进制", &s)
     } else {
         0
     }
 }
 
-/// Returns the minimum increment precision inferred from the given string,
-/// ignoring trailing zeros.
+/// 返回从给定字符串推断出的最小增量 (minimum increment) 精度，忽略尾随零。
 ///
-/// For scientific notation with large negative exponents (e.g., "1e-300"), the precision
-/// is clamped to `u8::MAX` (255) to match the behavior of `precision_from_str`.
+/// 对于具有极大负指数的科学计数法（例如 "1e-300"），精度将被限制为 `u8::MAX` (255)，
+/// 与 `precision_from_str` 的行为保持一致。
 #[must_use]
 #[allow(
     clippy::cast_possible_truncation,
-    reason = "Intentional for parsing, value range validated"
+    reason = "用于解析，是有意为之，且已验证过值范围"
 )]
 pub fn min_increment_precision_from_str(s: &str) -> u8 {
     let s = s.trim().to_ascii_lowercase();
 
-    // Check for scientific notation
+    // 检查是否为科学计数法
     if let Some(pos) = s.find('e')
         && s[pos + 1..].starts_with('-')
     {
         let exponent_str = &s[pos + 2..];
-        // Use lenient parsing (returns 0 for invalid, doesn't panic)
+        // 使用宽松解析（无效则返回 0，不触发 panic）
         return parse_scientific_exponent(exponent_str, false).unwrap_or(0);
     }
 
-    // Check for decimal precision
+    // 检查十进制精度
     if let Some(dot_pos) = s.find('.') {
         let decimal_part = &s[dot_pos + 1..];
         if decimal_part.chars().any(|c| c != '0') {
             let trimmed_len = decimal_part.trim_end_matches('0').len();
-            return clamp_precision_with_log(trimmed_len, "Minimum increment", &s);
+            return clamp_precision_with_log(trimmed_len, "最小增量", &s);
         }
-        clamp_precision_with_log(decimal_part.len(), "Decimal", &s)
+        clamp_precision_with_log(decimal_part.len(), "十进制", &s)
     } else {
         0
     }
 }
 
-/// Returns a `usize` from the given bytes.
+/// 从给定的字节序列中返回 `usize`。
 ///
-/// # Errors
+/// # 错误
 ///
-/// Returns an error if there are not enough bytes to represent a `usize`.
+/// 如果字节数不足以表示一个 `usize`，则返回错误。
 pub fn bytes_to_usize(bytes: &[u8]) -> anyhow::Result<usize> {
-    // Check bytes width
+    // 检查字节宽度
     if bytes.len() >= std::mem::size_of::<usize>() {
         let mut buffer = [0u8; std::mem::size_of::<usize>()];
         buffer.copy_from_slice(&bytes[..std::mem::size_of::<usize>()]);
 
         Ok(usize::from_le_bytes(buffer))
     } else {
-        anyhow::bail!("Not enough bytes to represent a `usize`");
+        anyhow::bail!("字节不足，无法表示一个 `usize` 值");
     }
 }
 
@@ -216,7 +215,7 @@ mod tests {
         assert!(result.is_err());
         assert_eq!(
             result.err().unwrap().to_string(),
-            "Not enough bytes to represent a `usize`"
+            "字节不足，无法表示一个 `usize` 值"
         );
     }
 
@@ -227,7 +226,7 @@ mod tests {
         assert!(result.is_err());
         assert_eq!(
             result.err().unwrap().to_string(),
-            "Not enough bytes to represent a `usize`"
+            "字节不足，无法表示一个 `usize` 值"
         );
     }
 
@@ -241,14 +240,14 @@ mod tests {
 
     #[rstest]
     fn test_precision_from_str_large_exponent_clamped() {
-        // u8::MAX is 255, so 999 should be clamped to 255
+        // u8::MAX 为 255, 999 应当被限制为 255
         let result = precision_from_str("1e-999");
         assert_eq!(result, 255);
     }
 
     #[rstest]
     fn test_precision_from_str_very_large_exponent_clamped() {
-        // Very large exponents should also be clamped to u8::MAX
+        // 非常大的指数也应当被限制为 u8::MAX
         let result = precision_from_str("1e-300");
         assert_eq!(result, 255);
 
@@ -265,55 +264,55 @@ mod tests {
     #[rstest]
     #[should_panic(expected = "missing exponent after 'e-'")]
     fn test_precision_from_str_malformed_scientific_notation() {
-        // "1e-" with empty exponent should panic (fail fast on malformed input)
+        // 带有空指数的 "1e-" 应当触发 panic (对格式错误输入采用快速失败策略)
         let _ = precision_from_str("1e-");
     }
 
     #[rstest]
     fn test_precision_from_str_edge_case_max_u8() {
-        // u8::MAX = 255, should work
+        // u8::MAX = 255，应正常工作
         let result = precision_from_str("1e-255");
         assert_eq!(result, 255);
     }
 
     #[rstest]
     fn test_precision_from_str_just_above_max_u8() {
-        // 256 should be clamped to 255
+        // 256 应当被限制为 255
         let result = precision_from_str("1e-256");
         assert_eq!(result, 255);
     }
 
     #[rstest]
     fn test_precision_from_str_u32_overflow() {
-        // Exponent > u32::MAX (4294967296) should be clamped to 255
+        // 大于 u32::MAX (4294967296) 的指数应当被限制为 255
         let result = precision_from_str("1e-4294967296");
         assert_eq!(result, 255);
     }
 
     #[rstest]
     fn test_precision_from_str_u64_overflow() {
-        // Exponent > u64::MAX should be clamped to 255
+        // 大于 u64::MAX 的指数应当被限制为 255
         let result = precision_from_str("1e-99999999999999999999");
         assert_eq!(result, 255);
     }
 
     #[rstest]
     fn test_min_increment_precision_from_str_large_exponent() {
-        // Large exponents should be clamped to u8::MAX (255), not return 0
+        // 大指数应当被限制为 u8::MAX (255)，而不是返回 0
         let result = min_increment_precision_from_str("1e-300");
         assert_eq!(result, 255);
     }
 
     #[rstest]
     fn test_min_increment_precision_from_str_very_large_exponent() {
-        // Very large exponents should also be clamped to 255
+        // 非常大的指数也应当被限制为 255
         let result = min_increment_precision_from_str("1e-99999999999999999999");
         assert_eq!(result, 255);
     }
 
     #[rstest]
     fn test_min_increment_precision_from_str_consistency() {
-        // Should match precision_from_str for large exponents
+        // 应当对于大指数与 precision_from_str 保持一致
         let input = "1e-1000";
         let precision = precision_from_str(input);
         let min_precision = min_increment_precision_from_str(input);
@@ -323,7 +322,7 @@ mod tests {
 
     #[rstest]
     fn test_min_increment_precision_from_str_empty_exponent() {
-        // Empty exponent should return 0, not u8::MAX
+        // 空指数应当返回 0，而不是 u8::MAX
         let result = min_increment_precision_from_str("1e-");
         assert_eq!(result, 0);
     }

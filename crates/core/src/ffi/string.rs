@@ -13,19 +13,17 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! Utilities for safely moving UTF-8 strings across the FFI boundary.
+//! 用于在 FFI 边界之间安全传输 UTF-8 字符串的工具函数。
 //!
-//! Interoperability between Rust and C/C++/Python often requires raw pointers to *null terminated*
-//! strings.  This module provides convenience helpers that:
+//! Rust 与 C/C++/Python 之间的互操作性通常需要指向*以 null 结尾的*字符串的原始指针。
+//! 此模块提供的便捷辅助函数可以：
 //!
-//! * Convert raw `*const c_char` pointers to Rust [`String`], [`&str`], byte slices, or
-//!   `ustr::Ustr` values.
-//! * Perform the inverse conversion when Rust needs to hand ownership of a string to foreign
-//!   code.
+//! * 将原始 `*const c_char` 指针转换为 Rust [`String`]、[`&str`]、字节切片或
+//!   `ustr::Ustr` 值。
+//! * 在 Rust 侧需要将字符串所有权移交给外部代码时，执行相反的转换。
 //!
-//! The majority of these functions are marked `unsafe` because they accept raw pointers and rely
-//! on the caller to uphold basic invariants (pointer validity, lifetime, UTF-8 correctness).  Each
-//! function documents the specific safety requirements.
+//! 由于这些函数接受原始指针，且依赖调用方维持基本的不变性（指针有效性、生命周期、UTF-8 正确性），
+//! 因此其中大部分都被标记为 `unsafe`。每个函数都详细记录了特定的安全性要求。
 
 use std::{
     ffi::{CStr, CString, c_char},
@@ -39,140 +37,140 @@ use ustr::Ustr;
 use crate::ffi::abort_on_panic;
 
 #[cfg(feature = "python")]
-/// Returns an owned string from a valid Python object pointer.
+/// 从一个有效的 Python 对象指针返回一个拥有的字符串。
 ///
-/// # Safety
+/// # 安全性 (Safety)
 ///
-/// Assumes `ptr` is borrowed from a valid Python UTF-8 `str`.
+/// 假定 `ptr` 是从一个有效的 Python UTF-8 `str` 中借用的。
 ///
 /// # Panics
 ///
-/// Panics if `ptr` is null.
+/// 如果 `ptr` 为空，则触发 panic。
 #[must_use]
 pub unsafe fn pystr_to_string(ptr: *mut ffi::PyObject) -> String {
-    assert!(!ptr.is_null(), "`ptr` was NULL");
-    // SAFETY: Caller guarantees ptr is borrowed from a valid Python UTF-8 str
+    assert!(!ptr.is_null(), "`ptr` 为 NULL");
+    // 安全性：调用方确保 ptr 是从一个有效的 Python UTF-8 str 中借用的
     Python::attach(|py| unsafe { Bound::from_borrowed_ptr(py, ptr).to_string() })
 }
 
-/// Convert a C string pointer into an owned `String`.
+/// 将 C 字符串指针转换为一个拥有的 `Ustr`。
 ///
-/// # Safety
+/// # 安全性 (Safety)
 ///
-/// Assumes `ptr` is a valid C string pointer.
+/// 假定 `ptr` 是一个有效的 C 字符串指针。
 ///
 /// # Panics
 ///
-/// Panics if `ptr` is null.
+/// 如果 `ptr` 为空，则触发 panic。
 #[must_use]
 pub unsafe fn cstr_to_ustr(ptr: *const c_char) -> Ustr {
-    assert!(!ptr.is_null(), "`ptr` was NULL");
-    // SAFETY: Caller guarantees ptr is valid per function contract
+    assert!(!ptr.is_null(), "`ptr` 为 NULL");
+    // 安全性：根据函数合约，调用方确保 ptr 是有效的
     let cstr = unsafe { CStr::from_ptr(ptr) };
-    Ustr::from(cstr.to_str().expect("CStr::from_ptr failed"))
+    Ustr::from(cstr.to_str().expect("CStr::from_ptr 失败"))
 }
 
-/// Convert a C string pointer into a borrowed byte slice.
+/// 将 C 字符串指针转换为一个借用的字节切片。
 ///
-/// # Safety
+/// # 安全性 (Safety)
 ///
-/// - Assumes `ptr` is a valid, null-terminated UTF-8 C string pointer.
-/// - The returned slice borrows the underlying allocation; callers must ensure the
-///   C buffer outlives every use of the slice.
+/// - 假定 `ptr` 是一个指向以 null 结尾的、有效的 UTF-8 C 字符串的指针。
+/// - 返回的切片借用了底层的分配空间；调用方必须确保 C 缓冲区的生命周期
+///   长于对该切片的每一次使用。
 ///
 /// # Panics
 ///
-/// Panics if `ptr` is null.
+/// 如果 `ptr` 为空，则触发 panic。
 #[must_use]
 pub unsafe fn cstr_to_bytes<'a>(ptr: *const c_char) -> &'a [u8] {
-    assert!(!ptr.is_null(), "`ptr` was NULL");
-    // SAFETY: Caller guarantees ptr is valid per function contract
+    assert!(!ptr.is_null(), "`ptr` 为 NULL");
+    // 安全性：根据函数合约，调用方确保 ptr 是有效的
     let cstr = unsafe { CStr::from_ptr(ptr) };
     cstr.to_bytes()
 }
 
-/// Convert a C string pointer into an owned `Option<Ustr>`.
+/// 将 C 字符串指针转换为一个拥有的 `Option<Ustr>`。
 ///
-/// # Safety
+/// # 安全性 (Safety)
 ///
-/// Assumes `ptr` is a valid C string pointer or NULL.
+/// 假定 `ptr` 是一个有效的 C 字符串指针或为 NULL。
 ///
 /// # Panics
 ///
-/// Panics if `ptr` is not null but not a valid UTF-8 C string.
+/// 如果 `ptr` 不为空但不是有效的 UTF-8 C 字符串，则触发 panic。
 #[must_use]
 pub unsafe fn optional_cstr_to_ustr(ptr: *const c_char) -> Option<Ustr> {
     if ptr.is_null() {
         None
     } else {
-        // SAFETY: Caller guarantees ptr is valid per function contract
+        // 安全性：根据函数合约，调用方确保 ptr 是有效的
         Some(unsafe { cstr_to_ustr(ptr) })
     }
 }
 
-/// Convert a C string pointer into a borrowed string slice.
+/// 将 C 字符串指针转换为一个借用的字符串切片。
 ///
-/// # Safety
+/// # 安全性 (Safety)
 ///
-/// - Assumes `ptr` is a valid, null-terminated UTF-8 C string pointer.
-/// - The returned `&str` borrows the underlying allocation; callers must ensure the
-///   C buffer outlives every use of the string slice.
+/// - 假定 `ptr` 是一个指向以 null 结尾的、有效的 UTF-8 C 字符串的指针。
+/// - 返回的 `&str` 借用了底层的分配空间；调用方必须确保 C 缓冲区的生命周期
+///   长于对该字符串切片的每一次使用。
 ///
 /// # Panics
 ///
-/// Panics if `ptr` is null or contains invalid UTF-8.
+/// 如果 `ptr` 为空或包含无效的 UTF-8 编码，则触发 panic。
 #[must_use]
 pub unsafe fn cstr_as_str<'a>(ptr: *const c_char) -> &'a str {
-    assert!(!ptr.is_null(), "`ptr` was NULL");
-    // SAFETY: Caller guarantees ptr is valid per function contract
+    assert!(!ptr.is_null(), "`ptr` 为 NULL");
+    // 安全性：根据函数合约，调用方确保 ptr 是有效的
     let cstr = unsafe { CStr::from_ptr(ptr) };
-    cstr.to_str().expect("C string contains invalid UTF-8")
+    cstr.to_str().expect("C 字符串包含无效的 UTF-8 编码")
 }
 
-/// Convert an optional C string pointer into `Option<&str>`.
+/// 将可选的 C 字符串指针转换为 `Option<&str>`。
 ///
-/// # Safety
+/// # 安全性 (Safety)
 ///
-/// - Assumes `ptr` is a valid, null-terminated UTF-8 C string pointer or NULL.
-/// - Any borrowed string must not outlive the underlying allocation.
+/// - 假定 `ptr` 是一个指向以 null 结尾的、有效的 UTF-8 C 字符串指针或为 NULL。
+/// - 任何借用的字符串其生命周期都不能长于底层的分配空间。
 ///
 /// # Panics
 ///
-/// Panics if `ptr` is not null but contains invalid UTF-8.
+/// 如果 `ptr` 不为空但包含无效的 UTF-8 编码，则触发 panic。
 #[must_use]
 pub unsafe fn optional_cstr_to_str<'a>(ptr: *const c_char) -> Option<&'a str> {
     if ptr.is_null() {
         None
     } else {
-        // SAFETY: Caller guarantees ptr is valid per function contract
+        // 安全性：根据函数合约，调用方确保 ptr 是有效的
         Some(unsafe { cstr_as_str(ptr) })
     }
 }
 
-/// Create a C string pointer to newly allocated memory from a [`&str`].
+/// 基于 [`&str`] 为新分配的内存创建一个 C 字符串指针。
 ///
 /// # Panics
 ///
-/// Panics if the input string contains interior null bytes.
+/// 如果输入字符串内部包含 null 字节，则触发 panic。
 #[must_use]
 pub fn str_to_cstr(s: &str) -> *const c_char {
-    CString::new(s).expect("CString::new failed").into_raw()
+    CString::new(s).expect("CString::new 失败").into_raw()
 }
 
-/// Drops the C string memory at the pointer.
+/// 释放指针指向的 C 字符串内存。
 ///
-/// # Safety
+/// # 安全性 (Safety)
 ///
-/// Assumes `ptr` is a valid C string pointer.
+/// 假定 `ptr` 是一个有效的 C 字符串指针。
 ///
 /// # Panics
 ///
-/// Panics if `ptr` is null.
+/// 如果 `ptr` 为空，则触发 panic。
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn cstr_drop(ptr: *const c_char) {
     abort_on_panic(|| {
-        assert!(!ptr.is_null(), "`ptr` was NULL");
-        // SAFETY: Caller guarantees ptr was allocated by str_to_cstr
+        assert!(!ptr.is_null(), "`ptr` 为 NULL");
+        // 安全性：调用方确保 ptr 是由 str_to_cstr 分配的
         let cstring = unsafe { CString::from_raw(ptr.cast_mut()) };
         drop(cstring);
     });
@@ -191,7 +189,7 @@ mod tests {
     #[rstest]
     fn test_pystr_to_string() {
         Python::initialize();
-        // Create a valid Python object pointer
+        // 创建一个有效的 Python 对象指针
         let ptr = Python::attach(|py| PyString::new(py, "test string1").as_ptr());
         let result = unsafe { pystr_to_string(ptr) };
         assert_eq!(result, "test string1");
@@ -199,9 +197,9 @@ mod tests {
 
     #[cfg(feature = "python")]
     #[rstest]
-    #[should_panic(expected = "`ptr` was NULL")]
+    #[should_panic(expected = "`ptr` 为 NULL")]
     fn test_pystr_to_string_with_null_ptr() {
-        // Create a null Python object pointer
+        // 创建一个空的 Python 对象指针
         let ptr: *mut ffi::PyObject = std::ptr::null_mut();
         unsafe {
             let _ = pystr_to_string(ptr);
@@ -210,8 +208,8 @@ mod tests {
 
     #[rstest]
     fn test_cstr_as_str() {
-        // Create a valid C string pointer
-        let c_string = CString::new("test string2").expect("CString::new failed");
+        // 创建一个有效的 C 字符串指针
+        let c_string = CString::new("test string2").expect("CString::new 失败");
         let ptr = c_string.as_ptr();
         let result = unsafe { cstr_as_str(ptr) };
         assert_eq!(result, "test string2");
@@ -219,8 +217,8 @@ mod tests {
 
     #[rstest]
     fn test_cstr_to_bytes() {
-        // Create a valid C string
-        let sample_c_string = CString::new("Hello, world!").expect("CString::new failed");
+        // 创建一个有效的 C 字符串
+        let sample_c_string = CString::new("Hello, world!").expect("CString::new 失败");
         let cstr_ptr = sample_c_string.as_ptr();
         let result = unsafe { cstr_to_bytes(cstr_ptr) };
         assert_eq!(result, b"Hello, world!");
@@ -228,9 +226,9 @@ mod tests {
     }
 
     #[rstest]
-    #[should_panic(expected = "`ptr` was NULL")]
+    #[should_panic(expected = "`ptr` 为 NULL")]
     fn test_cstr_to_bytes_with_null_ptr() {
-        // Create a null C string pointer
+        // 创建一个空的 C 字符串指针
         let ptr: *const c_char = std::ptr::null();
         unsafe {
             let _ = cstr_to_bytes(ptr);
@@ -239,7 +237,7 @@ mod tests {
 
     #[rstest]
     fn test_optional_cstr_to_str_with_null_ptr() {
-        // Call optional_cstr_to_str with null pointer
+        // 使用空指针调用 optional_cstr_to_str
         let ptr = std::ptr::null();
         let result = unsafe { optional_cstr_to_str(ptr) };
         assert!(result.is_none());
@@ -247,9 +245,9 @@ mod tests {
 
     #[rstest]
     fn test_optional_cstr_to_str_with_valid_ptr() {
-        // Create a valid C string
+        // 创建一个有效的 C 字符串
         let input_str = "hello world";
-        let c_str = CString::new(input_str).expect("CString::new failed");
+        let c_str = CString::new(input_str).expect("CString::new 失败");
         let result = unsafe { optional_cstr_to_str(c_str.as_ptr()) };
         assert!(result.is_some());
         assert_eq!(result.unwrap(), input_str);
@@ -260,14 +258,14 @@ mod tests {
         let s = "test string";
         let c_str_ptr = str_to_cstr(s);
         let c_str = unsafe { CStr::from_ptr(c_str_ptr) };
-        let result = c_str.to_str().expect("CStr::from_ptr failed");
+        let result = c_str.to_str().expect("CStr::from_ptr 失败");
         assert_eq!(result, s);
     }
 
     #[rstest]
     fn test_cstr_drop() {
-        let c_string = CString::new("test string3").expect("CString::new failed");
-        let ptr = c_string.into_raw(); // <-- pointer _must_ be obtained this way
+        let c_string = CString::new("test string3").expect("CString::new 失败");
+        let ptr = c_string.into_raw(); // <-- 注意：指针“必须”通过这种方式获取
         unsafe { cstr_drop(ptr) };
     }
 }

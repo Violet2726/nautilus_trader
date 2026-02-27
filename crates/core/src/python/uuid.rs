@@ -13,7 +13,7 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! UUID helpers for PyO3.
+//! 为 PyO3 提供的 UUID 辅助工具。
 
 use std::{
     collections::hash_map::DefaultHasher,
@@ -34,19 +34,19 @@ use crate::uuid::{UUID4, UUID4_LEN};
 
 #[pymethods]
 impl UUID4 {
-    /// Creates a new [`UUID4`] instance.
+    /// 创建一个新 [`UUID4`] 实例。
     ///
-    /// If a string value is provided, it attempts to parse it into a UUID.
-    /// If no value is provided, a new random UUID is generated.
+    /// 如果提供了字符串值，它会尝试将其解析为 UUID。
+    /// 如果未提供任何值，则生成一个新的随机 UUID。
     #[new]
     fn py_new() -> Self {
         Self::new()
     }
 
-    /// Sets the state of the `UUID4` instance during unpickling.
+    /// 在反序列化（unpickling）过程中设置 `UUID4` 实例的状态。
     #[allow(
         clippy::needless_pass_by_value,
-        reason = "Python FFI requires owned types"
+        reason = "Python FFI 要求使用拥有的 (owned) 类型"
     )]
     fn __setstate__(&mut self, py: Python<'_>, state: Py<PyAny>) -> PyResult<()> {
         let bytes: &Bound<'_, PyBytes> = state.cast_bound::<PyBytes>(py)?;
@@ -54,27 +54,27 @@ impl UUID4 {
 
         if slice.len() != UUID4_LEN {
             return Err(to_pyvalue_err(
-                "Invalid state for deserializing, incorrect bytes length",
+                "反序列化状态无效，字节长度不正确",
             ));
         }
 
         if slice[UUID4_LEN - 1] != 0 {
             return Err(to_pyvalue_err(
-                "Invalid state for deserializing, missing null terminator",
+                "反序列化状态无效，缺失 null 终止符",
             ));
         }
 
         let cstr = CStr::from_bytes_with_nul(slice).map_err(|_| {
-            to_pyvalue_err("Invalid state for deserializing, bytes must be null-terminated UTF-8")
+            to_pyvalue_err("反序列化状态无效，字节必须是以 null 结尾的 UTF-8 编码")
         })?;
 
         let value = cstr.to_str().map_err(|_| {
-            to_pyvalue_err("Invalid state for deserializing, bytes must be valid UTF-8")
+            to_pyvalue_err("反序列化状态无效，字节必须是有效的 UTF-8 编码")
         })?;
 
         let parsed = Self::from_str(value).map_err(|e| {
             to_pyvalue_err(format!(
-                "Invalid state for deserializing, unable to parse UUID: {e}"
+                "反序列化状态无效，无法解析 UUID: {e}"
             ))
         })?;
 
@@ -82,29 +82,29 @@ impl UUID4 {
         Ok(())
     }
 
-    /// Gets the state of the `UUID4` instance for pickling.
+    /// 获取 `UUID4` 实例的状态以进行序列化（pickling）。
     fn __getstate__(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         PyBytes::new(py, &self.value).into_py_any(py)
     }
 
-    /// Reduces the `UUID4` instance for pickling.
+    /// 为序列化（pickling）削减 (Reduce) `UUID4` 实例。
     fn __reduce__(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         let safe_constructor = py.get_type::<Self>().getattr("_safe_constructor")?;
         let state = self.__getstate__(py)?;
         (safe_constructor, PyTuple::empty(py), state).into_py_any(py)
     }
 
-    /// A safe constructor used during unpickling to ensure the correct initialization of `UUID4`.
+    /// 在反序列化（unpickling）过程中使用的安全构造函数，以确保 `UUID4` 的正确初始化。
     #[staticmethod]
     #[allow(
         clippy::unnecessary_wraps,
-        reason = "Python FFI requires Result return type"
+        reason = "Python FFI 要求返回 Result 类型"
     )]
     fn _safe_constructor() -> PyResult<Self> {
-        Ok(Self::new()) // Safe default
+        Ok(Self::new()) // 安全默认值
     }
 
-    /// Compares two `UUID4` instances for equality
+    /// 比较两个 `UUID4` 实例是否相等。
     fn __richcmp__(&self, other: &Self, op: CompareOp, py: Python<'_>) -> Py<PyAny> {
         match op {
             CompareOp::Eq => self.eq(other).into_py_any_unwrap(py),
@@ -113,11 +113,11 @@ impl UUID4 {
         }
     }
 
-    /// Returns a hash value for the `UUID4` instance.
+    /// 返回 `UUID4` 实例的哈希值。
     #[allow(
         clippy::cast_possible_truncation,
         clippy::cast_possible_wrap,
-        reason = "Intentional cast for Python interop"
+        reason = "为 Python 互操作性而进行的有意转换"
     )]
     fn __hash__(&self) -> isize {
         let mut h = DefaultHasher::new();
@@ -125,24 +125,24 @@ impl UUID4 {
         h.finish() as isize
     }
 
-    /// Returns a detailed string representation of the `UUID4` instance.
+    /// 返回 `UUID4` 实例的详细字符串表示形式。
     fn __repr__(&self) -> String {
         format!("{self:?}")
     }
 
-    /// Returns the `UUID4` as a string.
+    /// 返回 `UUID4` 的字符串形式。
     fn __str__(&self) -> String {
         self.to_string()
     }
 
-    /// Gets the `UUID4` value as a string.
+    /// 获取 `UUID4` 的字符串值。
     #[getter]
     #[pyo3(name = "value")]
     fn py_value(&self) -> String {
         self.to_string()
     }
 
-    /// Creates a new [`UUID4`] from a string representation.
+    /// 从字符串表示形式创建一个新 [`UUID4`]。
     #[staticmethod]
     #[pyo3(name = "from_str")]
     fn py_from_str(value: &str) -> PyResult<Self> {
@@ -176,7 +176,7 @@ mod tests {
             let py_bytes = PyBytes::new(py, &invalid);
             let err = uuid
                 .__setstate__(py, py_bytes.into_py_any_unwrap(py))
-                .expect_err("expected invalid state to error");
+                .expect_err("应在无效状态下报错");
             assert!(err.to_string().contains("Invalid state for deserializing"));
         });
     }
@@ -191,7 +191,7 @@ mod tests {
             let py_bytes = PyBytes::new(py, &bytes);
             let err = uuid
                 .__setstate__(py, py_bytes.into_py_any_unwrap(py))
-                .expect_err("expected missing NUL terminator to error");
+                .expect_err("应在缺失 NUL 终止符时报错");
             assert!(
                 err.to_string()
                     .contains("Invalid state for deserializing, missing null terminator")
@@ -208,7 +208,7 @@ mod tests {
             let py_bytes = PyBytes::new(py, &source.value);
             target
                 .__setstate__(py, py_bytes.into_py_any_unwrap(py))
-                .expect("valid state should succeed");
+                .expect("有效状态应转换成功");
             assert_eq!(target.to_string(), source.to_string());
         });
     }

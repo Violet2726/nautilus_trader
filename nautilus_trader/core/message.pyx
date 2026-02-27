@@ -23,20 +23,20 @@ from nautilus_trader.core.uuid cimport UUID4
 
 cdef class Command:
     """
-    The base class for all command messages.
+    所有指令消息（Command message）的基类。
 
-    Parameters
+    参数
     ----------
     command_id : UUID4
-        The command ID.
+        指令 ID。
     ts_init : uint64_t
-        UNIX timestamp (nanoseconds) when the object was initialized.
-    correlation_id : UUID4, optional
-        The correlation ID. If provided, this command is correlated to another command or request.
+        对象初始化时的 UNIX 时间戳（纳秒）。
+    correlation_id : UUID4, 可选
+        关联 ID。如果提供，此指令将与其他指令或请求相关联。
 
-    Warnings
+    警告
     --------
-    This class should not be used directly, but through a concrete subclass.
+    此类不应直接使用，而应通过具体的子类使用。
     """
 
     def __init__(
@@ -76,18 +76,18 @@ cdef class Command:
 
 cdef class Document:
     """
-    The base class for all document messages.
+    所有凭证消息（Document message）的基类。
 
-    Parameters
+    参数
     ----------
     document_id : UUID4
-        The command ID.
+        指令 ID。
     ts_init : uint64_t
-        UNIX timestamp (nanoseconds) when the object was initialized.
+        对象初始化时的 UNIX 时间戳（纳秒）。
 
-    Warnings
+    警告
     --------
-    This class should not be used directly, but through a concrete subclass.
+    此类不应直接使用，而应通过具体的子类使用。
     """
 
     def __init__(
@@ -123,68 +123,68 @@ cdef class Document:
 @cython.auto_pickle(False)
 cdef class Event:
     """
-    The abstract base class for all event messages.
+    所有事件消息（Event message）的抽象基类。
 
-    Warnings
+    警告
     --------
-    This class should not be used directly, but through a concrete subclass.
+    此类不应直接使用，而应通过具体的子类使用。
     """
 
     @property
     def id(self) -> UUID4:
         """
-        The event message identifier.
+        事件消息标识符。
 
-        Returns
+        返回
         -------
         UUID4
 
         """
-        raise NotImplementedError("abstract property must be implemented")
+        raise NotImplementedError("必须实现抽象属性")
 
     @property
     def ts_event(self) -> int:
         """
-        UNIX timestamp (nanoseconds) when the event occurred.
+        事件发生时的 UNIX 时间戳（纳秒）。
 
-        Returns
+        返回
         -------
         int
 
         """
-        raise NotImplementedError("abstract property must be implemented")
+        raise NotImplementedError("必须实现抽象属性")
 
     @property
     def ts_init(self) -> int:
         """
-        UNIX timestamp (nanoseconds) when the object was initialized.
+        对象初始化时的 UNIX 时间戳（纳秒）。
 
-        Returns
+        返回
         -------
         int
 
         """
-        raise NotImplementedError("abstract property must be implemented")
+        raise NotImplementedError("必须实现抽象属性")
 
 
 cdef class Request:
     """
-    The base class for all request messages.
+    所有请求消息（Request message）的基类。
 
-    Parameters
+    参数
     ----------
     callback : Callable[[Any], None]
-        The delegate to call with the response.
+        用于接收响应的回调委托。
     request_id : UUID4
-        The request ID.
+        请求 ID。
     ts_init : uint64_t
-        UNIX timestamp (nanoseconds) when the object was initialized.
-    correlation_id : UUID4, optional
-        The correlation ID. If provided, this request is correlated to another request.
+        对象初始化时的 UNIX 时间戳（纳秒）。
+    correlation_id : UUID4, 可选
+        关联 ID。如果提供，此请求将与其他请求相关联。
 
-    Warnings
+    警告
     --------
-    This class should not be used directly, but through a concrete subclass.
+    此类不应直接使用，而应通过具体的子类使用。
     """
 
     def __init__(
@@ -229,20 +229,20 @@ cdef class Request:
 
 cdef class Response:
     """
-    The base class for all response messages.
+    所有响应消息（Response message）的基类。
 
-    Parameters
+    参数
     ----------
     correlation_id : UUID4
-        The correlation ID.
+        关联 ID。
     response_id : UUID4
-        The response ID.
+        响应 ID。
     ts_init : uint64_t
-        UNIX timestamp (nanoseconds) when the object was initialized.
+        对象初始化时的 UNIX 时间戳（纳秒）。
 
-    Warnings
+    警告
     --------
-    This class should not be used directly, but through a concrete subclass.
+    此类不应直接使用，而应通过具体的子类使用。
     """
 
     def __init__(

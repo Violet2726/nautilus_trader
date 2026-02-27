@@ -13,7 +13,7 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! A `UUID4` Universally Unique Identifier (UUID) version 4 (RFC 4122).
+//! `UUID4` 通用唯一识别码 (UUID) 版本 4 (RFC 4122)。
 
 use std::{
     ffi::CStr,
@@ -27,11 +27,11 @@ use rand::Rng;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use uuid::Uuid;
 
-/// The maximum length of ASCII characters for a `UUID4` string value (includes null terminator).
+/// `UUID4` 字符串值的最大 ASCII 字符长度（包含 null 终止符）。
 pub(crate) const UUID4_LEN: usize = 37;
 
-/// Represents a Universally Unique Identifier (UUID)
-/// version 4 based on a 128-bit label as specified in RFC 4122.
+/// 表示根据 RFC 4122 规范基于 128 位标签生成的
+/// 版本 4 通用唯一识别码 (UUID)。
 #[repr(C)]
 #[derive(Copy, Clone, Hash, PartialEq, Eq)]
 #[cfg_attr(
@@ -39,22 +39,22 @@ pub(crate) const UUID4_LEN: usize = 37;
     pyo3::pyclass(module = "nautilus_trader.core.nautilus_pyo3.core", from_py_object)
 )]
 pub struct UUID4 {
-    /// The UUID v4 value as a fixed-length C string byte array (includes null terminator).
-    pub(crate) value: [u8; 37], // cbindgen issue using the constant in the array
+    /// 作为固定长度 C 字符串字节数组存储的 UUID v4 值（包含 null 终止符）。
+    pub(crate) value: [u8; 37], // cbindgen 在数组中使用常量时存在问题
 }
 
 impl UUID4 {
-    /// Creates a new [`UUID4`] instance.
+    /// 创建一个新 [`UUID4`] 实例。
     ///
-    /// The UUID value is stored as a fixed-length C string byte array.
+    /// UUID 值作为固定长度的 C 字符串字节数组进行存储。
     #[must_use]
     pub fn new() -> Self {
         let mut rng = rand::rng();
         let mut bytes = [0u8; 16];
         rng.fill_bytes(&mut bytes);
 
-        bytes[6] = (bytes[6] & 0x0F) | 0x40; // Set the version to 4
-        bytes[8] = (bytes[8] & 0x3F) | 0x80; // Set the variant to RFC 4122
+        bytes[6] = (bytes[6] & 0x0F) | 0x40; // 将版本设为 4
+        bytes[8] = (bytes[8] & 0x3F) | 0x80; // 将变体设为 RFC 4122
 
         let mut value = [0u8; UUID4_LEN];
         let mut cursor = Cursor::new(&mut value[..36]);
@@ -70,67 +70,67 @@ impl UUID4 {
                 bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15], 0, 0
             ]) >> 16
         )
-        .expect("Error writing UUID string to buffer");
+        .expect("将 UUID 字符串写入缓冲区时出错");
 
-        value[36] = 0; // Add the null terminator
+        value[36] = 0; // 添加 null 终止符
 
         Self { value }
     }
 
-    /// Converts the [`UUID4`] to a C string reference.
+    /// 将 [`UUID4`] 转换为 C 字符串引用。
     ///
     /// # Panics
     ///
-    /// Panics if the internal byte array is not a valid C string (does not end with a null terminator).
+    /// 如果内部字节数组不是有效的 C 字符串（即不以 null 终止符结尾），则触发 panic。
     #[must_use]
     pub fn to_cstr(&self) -> &CStr {
-        // SAFETY: We always store valid C strings
+        // 安全性：我们始终存储有效的 C 字符串
         CStr::from_bytes_with_nul(&self.value)
-            .expect("UUID byte representation should be a valid C string")
+            .expect("UUID 的字节表示形式应当是有效的 C 字符串")
     }
 
-    /// Returns the UUID as a string slice.
+    /// 将 UUID 作为字符串切片返回。
     #[must_use]
     pub fn as_str(&self) -> &str {
-        // SAFETY: We always store valid ASCII UUID strings
-        self.to_cstr().to_str().expect("UUID should be valid UTF-8")
+        // 安全性：我们始终存储有效的 ASCII UUID 字符串
+        self.to_cstr().to_str().expect("UUID 应当是有效的 UTF-8 编码")
     }
 
-    /// Returns the raw UUID bytes (16 bytes).
+    /// 返回原始 UUID 字节（16 字节）。
     ///
-    /// This method is optimized for serialization where the UUID bytes
-    /// are needed directly without string conversion overhead.
+    /// 此方法针对序列化进行了优化，在此场景下可以直接获取 UUID 字节
+    /// 而无需进行字符串转换的开销。
     #[must_use]
     pub fn as_bytes(&self) -> [u8; 16] {
-        // Parse the string representation to extract the raw bytes
-        // This is done once at read time to avoid repeated parsing
-        let uuid_str = self.to_cstr().to_str().expect("Valid UTF-8");
-        let uuid = Uuid::parse_str(uuid_str).expect("Valid UUID4");
+        // 解析字符串表示形式以提取原始字节
+        // 此操作在读取时仅执行一次，以避免重复解析
+        let uuid_str = self.to_cstr().to_str().expect("有效的 UTF-8 编码");
+        let uuid = Uuid::parse_str(uuid_str).expect("有效的 UUID4");
         *uuid.as_bytes()
     }
 
     fn validate_v4(uuid: &Uuid) {
-        // Validate this is a v4 UUID
+        // 验证这是否为 v4 UUID
         assert_eq!(
             uuid.get_version(),
             Some(uuid::Version::Random),
-            "UUID is not version 4"
+            "UUID 不是版本 4"
         );
 
-        // Validate RFC4122 variant
+        // 验证 RFC4122 变体
         assert_eq!(
             uuid.get_variant(),
             uuid::Variant::RFC4122,
-            "UUID is not RFC 4122 variant"
+            "UUID 不是 RFC 4122 变体"
         );
     }
 
     fn try_validate_v4(uuid: &Uuid) -> Result<(), String> {
         if uuid.get_version() != Some(uuid::Version::Random) {
-            return Err("UUID is not version 4".to_string());
+            return Err("UUID 不是版本 4".to_string());
         }
         if uuid.get_variant() != uuid::Variant::RFC4122 {
-            return Err("UUID is not RFC 4122 variant".to_string());
+            return Err("UUID 不是 RFC 4122 变体".to_string());
         }
         Ok(())
     }
@@ -139,7 +139,7 @@ impl UUID4 {
         let mut value = [0; UUID4_LEN];
         let uuid_str = uuid.to_string();
         value[..uuid_str.len()].copy_from_slice(uuid_str.as_bytes());
-        value[uuid_str.len()] = 0; // Add null terminator
+        value[uuid_str.len()] = 0; // 添加 null 终止符
         Self { value }
     }
 }
@@ -147,13 +147,13 @@ impl UUID4 {
 impl FromStr for UUID4 {
     type Err = String;
 
-    /// Attempts to create a [`UUID4`] from a string representation.
+    /// 尝试从字符串表示形式创建 [`UUID4`]。
     ///
-    /// The string should be a valid UUID in the standard format (e.g., "2d89666b-1a1e-4a75-b193-4eb3b454c757").
+    /// 字符串应当是标准格式的有效 UUID (例如 "2d89666b-1a1e-4a75-b193-4eb3b454c757")。
     ///
     /// # Errors
     ///
-    /// Returns an error if the `value` is not a valid UUID version 4 RFC 4122.
+    /// 如果 `value` 不是符合 RFC 4122 的有效版本 4 UUID，则返回错误。
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         let uuid = Uuid::try_parse(value).map_err(|e| e.to_string())?;
         Self::try_validate_v4(&uuid)?;
@@ -163,22 +163,22 @@ impl FromStr for UUID4 {
 
 impl From<&str> for UUID4 {
     fn from(value: &str) -> Self {
-        Self::from_str(value).expect("Invalid UUID4 string")
+        Self::from_str(value).expect("无效的 UUID4 字符串")
     }
 }
 
 impl From<String> for UUID4 {
     fn from(value: String) -> Self {
-        Self::from_str(&value).expect("Invalid UUID4 string")
+        Self::from_str(&value).expect("无效的 UUID4 字符串")
     }
 }
 
 impl From<uuid::Uuid> for UUID4 {
-    /// Creates a [`UUID4`] from a [`uuid::Uuid`].
+    /// 从 [`uuid::Uuid`] 创建 [`UUID4`]。
     ///
     /// # Panics
     ///
-    /// Panics if the `value` is not a valid UUID version 4 RFC 4122.
+    /// 如果 `value` 不是符合 RFC 4122 的有效版本 4 UUID，则触发 panic。
     fn from(value: uuid::Uuid) -> Self {
         Self::validate_v4(&value);
         Self::from_validated_uuid(&value)
@@ -186,16 +186,16 @@ impl From<uuid::Uuid> for UUID4 {
 }
 
 impl From<UUID4> for uuid::Uuid {
-    /// Creates a [`uuid::Uuid`] from a [`UUID4`].
+    /// 从 [`UUID4`] 创建 [`uuid::Uuid`]。
     fn from(value: UUID4) -> Self {
         Self::from_bytes(value.as_bytes())
     }
 }
 
 impl Default for UUID4 {
-    /// Creates a new default [`UUID4`] instance.
+    /// 创建一个新的默认 [`UUID4`] 实例。
     ///
-    /// The default UUID4 is simply a newly generated UUID version 4.
+    /// 默认的 UUID4 即是一个新生成的版本 4 UUID。
     fn default() -> Self {
         Self::new()
     }
@@ -252,9 +252,9 @@ mod tests {
         assert_eq!(uuid_parsed.get_version().unwrap(), uuid::Version::Random);
         assert_eq!(uuid_parsed.to_string().len(), 36);
 
-        // Version 4 requires bits: 0b0100xxxx
+        // 版本 4 要求位：0b0100xxxx
         assert_eq!(&uuid_string[14..15], "4");
-        // RFC4122 variant requires bits: 0b10xxxxxx
+        // RFC4122 变体要求位：0b10xxxxxx
         let variant_char = &uuid_string[19..20];
         assert!(matches!(variant_char, "8" | "9" | "a" | "b" | "A" | "B"));
     }
@@ -264,10 +264,10 @@ mod tests {
         let uuid = UUID4::new();
         let bytes = uuid.value;
 
-        // Check null termination
+        // 检查是否以 null 终止
         assert_eq!(bytes[36], 0);
 
-        // Verify dash positions
+        // 验证连字符位置
         assert_eq!(bytes[8] as char, '-');
         assert_eq!(bytes[13] as char, '-');
         assert_eq!(bytes[18] as char, '-');
@@ -296,10 +296,10 @@ mod tests {
     }
 
     #[rstest]
-    #[case("6ba7b810-9dad-11d1-80b4-00c04fd430c8")] // v1 (time-based)
-    #[case("000001f5-8fa9-21d1-9df3-00e098032b8c")] // v2 (DCE Security)
-    #[case("3d813cbb-47fb-32ba-91df-831e1593ac29")] // v3 (MD5 hash)
-    #[case("fb4f37c1-4ba3-5173-9812-2b90e76a06f7")] // v5 (SHA-1 hash)
+    #[case("6ba7b810-9dad-11d1-80b4-00c04fd430c8")] // v1 (基于时间)
+    #[case("000001f5-8fa9-21d1-9df3-00e098032b8c")] // v2 (DCE 安全)
+    #[case("3d813cbb-47fb-32ba-91df-831e1593ac29")] // v3 (MD5 哈希)
+    #[case("fb4f37c1-4ba3-5173-9812-2b90e76a06f7")] // v5 (SHA-1 哈希)
     #[should_panic(expected = "UUID is not version 4")]
     fn test_invalid_version(#[case] uuid_string: &str) {
         let _ = UUID4::from(uuid_string);
@@ -308,20 +308,20 @@ mod tests {
     #[rstest]
     #[should_panic(expected = "UUID is not RFC 4122 variant")]
     fn test_non_rfc4122_variant() {
-        // Valid v4 but wrong variant
+        // 虽然是有效的 v4，但是变体错误
         let uuid = "550e8400-e29b-41d4-0000-446655440000";
         let _ = UUID4::from(uuid);
     }
 
     #[rstest]
-    #[case("")] // Empty string
-    #[case("not-a-uuid-at-all")] // Invalid format
-    #[case("6ba7b810-9dad-11d1-80b4")] // Too short
-    #[case("6ba7b810-9dad-11d1-80b4-00c04fd430c8-extra")] // Too long
-    #[case("6ba7b810-9dad-11d1-80b4=00c04fd430c8")] // Wrong separator
-    #[case("6ba7b81019dad111d180b400c04fd430c8")] // No separators
-    #[case("6ba7b810-9dad-11d1-80b4-00c04fd430")] // Truncated
-    #[case("6ba7b810-9dad-11d1-80b4-00c04fd430cg")] // Invalid hex character
+    #[case("")] // 空字符串
+    #[case("not-a-uuid-at-all")] // 无效格式
+    #[case("6ba7b810-9dad-11d1-80b4")] // 过短
+    #[case("6ba7b810-9dad-11d1-80b4-00c04fd430c8-extra")] // 过长
+    #[case("6ba7b810-9dad-11d1-80b4=00c04fd430c8")] // 分隔符错误
+    #[case("6ba7b81019dad111d180b400c04fd430c8")] // 无分隔符
+    #[case("6ba7b810-9dad-11d1-80b4-00c04fd430")] // 被截断
+    #[case("6ba7b810-9dad-11d1-80b4-00c04fd430cg")] // 无效的十六进制字符
     fn test_invalid_uuid_cases(#[case] invalid_uuid: &str) {
         assert!(UUID4::from_str(invalid_uuid).is_err());
     }
@@ -441,11 +441,11 @@ mod tests {
         let bytes = uuid.as_bytes();
         assert_eq!(bytes.len(), 16);
 
-        // Reconstruct UUID from bytes and verify it matches
+        // 使用字节重新构造 UUID 并验证匹配
         let reconstructed = Uuid::from_bytes(bytes);
         assert_eq!(reconstructed.to_string(), uuid_string);
 
-        // Verify version 4
+        // 验证版本 4
         assert_eq!(reconstructed.get_version().unwrap(), uuid::Version::Random);
     }
 
@@ -459,9 +459,9 @@ mod tests {
     }
 
     #[rstest]
-    #[case("\"not-a-uuid\"")] // Invalid format
-    #[case("\"6ba7b810-9dad-11d1-80b4-00c04fd430c8\"")] // v1 UUID (wrong version)
-    #[case("\"\"")] // Empty string
+    #[case("\"not-a-uuid\"")] // 无效格式
+    #[case("\"6ba7b810-9dad-11d1-80b4-00c04fd430c8\"")] // v1 UUID (版本错误)
+    #[case("\"\"")] // 空字符串
     fn test_deserialize_invalid_uuid_returns_error(#[case] json: &str) {
         let result: Result<UUID4, _> = serde_json::from_str(json);
         assert!(result.is_err());
