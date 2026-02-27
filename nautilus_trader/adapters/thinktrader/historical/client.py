@@ -284,3 +284,12 @@ class HistoricThinkTraderClient:
     def get_full_tick(self, stock_list: list[str]) -> dict[str, dict]:
         """获取全推行情快照"""
         return self._client.get_full_tick(stock_list=stock_list)
+
+    def subscribe_whole_quote(self, code_list: list[str], callback=None) -> int:
+        """订阅全推行情"""
+        return self._client.subscribe_whole_quote(code_list=code_list, callback=callback)
+
+    def subscribe_quote(self, stock_code: str, period: str = "tick", count: int = 1, callback=None) -> int:
+        """订阅单股行情"""
+        import xtquant.xtdata as xtdata
+        return xtdata.subscribe_quote(stock_code=stock_code, period=period, count=count, callback=callback)
