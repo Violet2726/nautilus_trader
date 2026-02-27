@@ -13,38 +13,36 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! Live system node for [NautilusTrader](http://nautilustrader.io).
+//! [NautilusTrader](http://nautilustrader.io) 的实盘系统节点。
 //!
-//! The `nautilus-live` crate provides high-level abstractions and infrastructure for running live trading
-//! systems, including data streaming, execution management, and system lifecycle handling.
-//! It builds on top of the system kernel to provide simplified interfaces for live deployment:
+//! `nautilus-live` crate 为运行实盘交易系统提供了高层抽象和基础设施，
+//! 包括数据流、执行管理和系统生命周期处理。
+//! 它构建在系统内核之上，为实盘部署提供简化的接口：
 //!
-//! - `LiveNode` High-level abstraction for live system nodes.
-//! - `LiveNodeConfig` Configuration for live node deployment.
-//! - `AsyncRunner` for managing system real-time data flow.
+//! - `LiveNode` 实盘系统节点的高层抽象。
+//! - `LiveNodeConfig` 实盘节点部署的配置。
+//! - `AsyncRunner` 负责管理系统实时数据流。
 //!
-//! # Platform
+//! # 平台
 //!
-//! [NautilusTrader](http://nautilustrader.io) is an open-source, high-performance, production-grade
-//! algorithmic trading platform, providing quantitative traders with the ability to backtest
-//! portfolios of automated trading strategies on historical data with an event-driven engine,
-//! and also deploy those same strategies live, with no code changes.
+//! [NautilusTrader](http://nautilustrader.io) 是一个开源、高性能、生产级的算法交易平台，
+//! 为量化交易者提供了利用事件驱动引擎在历史数据上进行自动化交易策略组合回测的能力，
+//! 并且可以在不更改代码的情况下将这些策略部署到实盘环境。
 //!
-//! NautilusTrader's design, architecture, and implementation philosophy prioritizes software correctness and safety at the
-//! highest level, with the aim of supporting mission-critical, trading system backtesting and live deployment workloads.
+//! NautilusTrader 的设计、架构 and 实现理念将软件的正确性和安全性置于最高级别，
+//! 旨在支持关键任务级别的交易系统回测 and 实盘部署工作负载。
 //!
-//! # Feature Flags
+//! # 特性标志 (Feature Flags)
 //!
-//! This crate provides feature flags to control source code inclusion during compilation,
-//! depending on the intended use case, i.e. whether to provide Python bindings
-//! for the [nautilus_trader](https://pypi.org/project/nautilus_trader) Python package,
-//! or as part of a Rust only build.
+//! 此 crate 提供了特性标志，用于根据预期的使用场景控制编译期间的源代码包含，
+//! 例如是为 [nautilus_trader](https://pypi.org/project/nautilus_trader) Python 包提供 Python 绑定，
+//! 还是作为纯 Rust 构建的一部分。
 //!
-//! - `ffi`: Enables the C foreign function interface (FFI) from [cbindgen](https://github.com/mozilla/cbindgen).
-//! - `streaming`: Enables `persistence` dependency for streaming configuration.
-//! - `python`: Enables Python bindings from [PyO3](https://pyo3.rs) (auto-enables `streaming`).
-//! - `defi`: Enables DeFi (Decentralized Finance) support.
-//! - `extension-module`: Builds the crate as a Python extension module.
+//! - `ffi`: 启用来自 [cbindgen](https://github.com/mozilla/cbindgen) 的 C 外部函数接口 (FFI)。
+//! - `streaming`: 启用 `persistence` 依赖项以进行流式配置。
+//! - `python`: 启用来自 [PyO3](https://pyo3.rs) 的 Python 绑定（自动启用 `streaming`）。
+//! - `defi`: 启用 DeFi（去中心化金融）支持。
+//! - `extension-module`: 将 crate 构建为 Python 扩展模块。
 
 #![warn(rustc::all)]
 #![deny(unsafe_code)]
@@ -62,7 +60,7 @@ pub mod manager;
 pub mod node;
 pub mod runner;
 
-// Re-exports for adapters
+// 适配器的重新导出 (Re-exports)
 pub use emitter::ExecutionEventEmitter;
 pub use nautilus_common::factories::OrderEventFactory;
 pub use nautilus_execution::client::core::ExecutionClientCore;

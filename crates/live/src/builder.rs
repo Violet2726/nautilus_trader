@@ -13,7 +13,7 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! Builder for constructing [`LiveNode`] instances.
+//! 用于构建 [`LiveNode`] 实例的生成器 (Builder)。
 
 use std::{collections::HashMap, time::Duration};
 
@@ -33,10 +33,9 @@ use crate::{
     runner::AsyncRunner,
 };
 
-/// Builder for constructing a [`LiveNode`] with a fluent API.
+/// 用于通过流畅 (fluent) API 构建 [`LiveNode`] 的生成器。
 ///
-/// Provides configuration options specific to live nodes,
-/// including client factory registration and timeout settings.
+/// 提供专门针对实盘节点的配置选项，包括客户端工厂注册和超时设置。
 #[derive(Debug)]
 #[cfg_attr(
     feature = "python",
@@ -52,16 +51,16 @@ pub struct LiveNodeBuilder {
 }
 
 impl LiveNodeBuilder {
-    /// Creates a new [`LiveNodeBuilder`] with required parameters.
+    /// 使用必需参数创建一个新的 [`LiveNodeBuilder`]。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if `environment` is invalid (BACKTEST).
+    /// 如果 `environment` 无效（为 BACKTEST），则返回错误。
     pub fn new(trader_id: TraderId, environment: Environment) -> anyhow::Result<Self> {
         match environment {
             Environment::Sandbox | Environment::Live => {}
             Environment::Backtest => {
-                anyhow::bail!("LiveNode cannot be used with Backtest environment");
+                anyhow::bail!("LiveNode 不能用于回测 (Backtest) 环境");
             }
         }
 
@@ -81,108 +80,108 @@ impl LiveNodeBuilder {
         })
     }
 
-    /// Returns the name for the node.
+    /// 返回节点的名称。
     #[must_use]
     pub fn name(&self) -> &str {
         &self.name
     }
 
-    /// Set the name for the node.
+    /// 设置节点的名称。
     #[must_use]
     pub fn with_name(mut self, name: impl Into<String>) -> Self {
         self.name = name.into();
         self
     }
 
-    /// Set the instance ID for the node.
+    /// 设置节点的实例 ID。
     #[must_use]
     pub const fn with_instance_id(mut self, instance_id: UUID4) -> Self {
         self.config.instance_id = Some(instance_id);
         self
     }
 
-    /// Configure whether to load state on startup.
+    /// 配置是否在启动时加载状态。
     #[must_use]
     pub const fn with_load_state(mut self, load_state: bool) -> Self {
         self.config.load_state = load_state;
         self
     }
 
-    /// Configure whether to save state on shutdown.
+    /// 配置是否在停机时保存状态。
     #[must_use]
     pub const fn with_save_state(mut self, save_state: bool) -> Self {
         self.config.save_state = save_state;
         self
     }
 
-    /// Set the connection timeout in seconds.
+    /// 以秒为单位设置连接超时。
     #[must_use]
     pub const fn with_timeout_connection(mut self, timeout_secs: u64) -> Self {
         self.config.timeout_connection = Duration::from_secs(timeout_secs);
         self
     }
 
-    /// Set the reconciliation timeout in seconds.
+    /// 以秒为单位设置对账 (reconciliation) 超时。
     #[must_use]
     pub const fn with_timeout_reconciliation(mut self, timeout_secs: u64) -> Self {
         self.config.timeout_reconciliation = Duration::from_secs(timeout_secs);
         self
     }
 
-    /// Configure whether to run startup reconciliation.
+    /// 配置是否运行启动对账。
     #[must_use]
     pub fn with_reconciliation(mut self, reconciliation: bool) -> Self {
         self.config.exec_engine.reconciliation = reconciliation;
         self
     }
 
-    /// Set the reconciliation lookback in minutes.
+    /// 以分钟为单位设置对账回顾时间 (lookback)。
     #[must_use]
     pub fn with_reconciliation_lookback_mins(mut self, mins: u32) -> Self {
         self.config.exec_engine.reconciliation_lookback_mins = Some(mins);
         self
     }
 
-    /// Set the portfolio initialization timeout in seconds.
+    /// 以秒为单位设置投资组合初始化超时。
     #[must_use]
     pub const fn with_timeout_portfolio(mut self, timeout_secs: u64) -> Self {
         self.config.timeout_portfolio = Duration::from_secs(timeout_secs);
         self
     }
 
-    /// Set the disconnection timeout in seconds.
+    /// 以秒为单位设置断开连接超时。
     #[must_use]
     pub const fn with_timeout_disconnection_secs(mut self, timeout_secs: u64) -> Self {
         self.config.timeout_disconnection = Duration::from_secs(timeout_secs);
         self
     }
 
-    /// Set the post-stop delay in seconds.
+    /// 以秒为单位设置停止后的延迟。
     #[must_use]
     pub const fn with_delay_post_stop_secs(mut self, delay_secs: u64) -> Self {
         self.config.delay_post_stop = Duration::from_secs(delay_secs);
         self
     }
 
-    /// Set the shutdown timeout in seconds.
+    /// 以秒为单位设置停机超时。
     #[must_use]
     pub const fn with_delay_shutdown_secs(mut self, delay_secs: u64) -> Self {
         self.config.timeout_shutdown = Duration::from_secs(delay_secs);
         self
     }
 
-    /// Set the logging configuration.
+    /// 设置日志配置。
     #[must_use]
     pub fn with_logging(mut self, logging: LoggerConfig) -> Self {
         self.config.logging = logging;
         self
     }
 
-    /// Adds a data client factory with configuration.
+    /// 添加带配置的数据客户端工厂。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if a client with the same name is already registered.
+    /// 如果已注册同名的客户端，则返回错误。
     pub fn add_data_client(
         mut self,
         name: Option<String>,
@@ -192,7 +191,7 @@ impl LiveNodeBuilder {
         let name = name.unwrap_or_else(|| factory.name().to_string());
 
         if self.data_client_factories.contains_key(&name) {
-            anyhow::bail!("Data client '{name}' is already registered");
+            anyhow::bail!("数据客户端 '{name}' 已注册");
         }
 
         self.data_client_factories.insert(name.clone(), factory);
@@ -200,11 +199,11 @@ impl LiveNodeBuilder {
         Ok(self)
     }
 
-    /// Adds an execution client factory with configuration.
+    /// 添加带配置的执行客户端工厂。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if a client with the same name is already registered.
+    /// 如果已注册同名的客户端，则返回错误。
     pub fn add_exec_client(
         mut self,
         name: Option<String>,
@@ -214,7 +213,7 @@ impl LiveNodeBuilder {
         let name = name.unwrap_or_else(|| factory.name().to_string());
 
         if self.exec_client_factories.contains_key(&name) {
-            anyhow::bail!("Execution client '{name}' is already registered");
+            anyhow::bail!("执行客户端 '{name}' 已注册");
         }
 
         self.exec_client_factories.insert(name.clone(), factory);
@@ -222,19 +221,19 @@ impl LiveNodeBuilder {
         Ok(self)
     }
 
-    /// Build the [`LiveNode`] with the configured settings.
+    /// 根据配置的设置构建 [`LiveNode`]。
     ///
-    /// This will:
-    /// 1. Build the underlying kernel.
-    /// 2. Create clients using factories.
-    /// 3. Register clients with engines.
+    /// 此操作将执行：
+    /// 1. 构建底层内核。
+    /// 2. 使用工厂创建客户端。
+    /// 3. 在引擎中注册客户端。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if node construction fails.
+    /// 如果节点构造失败，则返回错误。
     pub fn build(mut self) -> anyhow::Result<LiveNode> {
         log::info!(
-            "Building LiveNode with {} data clients and {} execution clients",
+            "正在构建 LiveNode，包含 {} 个数据客户端和 {} 个执行客户端",
             self.data_client_factories.len(),
             self.exec_client_factories.len()
         );
@@ -244,7 +243,7 @@ impl LiveNodeBuilder {
 
         for (name, factory) in self.data_client_factories {
             if let Some(config) = self.data_client_configs.remove(&name) {
-                log::debug!("Creating data client {name}");
+                log::debug!("正在创建数据客户端 {name}");
 
                 let client =
                     factory.create(&name, config.as_ref(), kernel.cache(), kernel.clock())?;
@@ -262,24 +261,24 @@ impl LiveNodeBuilder {
                     .borrow_mut()
                     .register_client(adapter, venue);
 
-                log::info!("Registered DataClient-{client_id}");
+                log::info!("已注册 DataClient-{client_id}");
             } else {
-                log::warn!("No config found for data client factory {name}");
+                log::warn!("未找到数据客户端工厂 {name} 的配置");
             }
         }
 
         for (name, factory) in self.exec_client_factories {
             if let Some(config) = self.exec_client_configs.remove(&name) {
-                log::debug!("Creating execution client {name}");
+                log::debug!("正在创建执行客户端 {name}");
 
                 let client = factory.create(&name, config.as_ref(), kernel.cache())?;
                 let client_id = client.client_id();
 
                 kernel.exec_engine.borrow_mut().register_client(client)?;
 
-                log::info!("Registered ExecutionClient-{client_id}");
+                log::info!("已注册 ExecutionClient-{client_id}");
             } else {
-                log::warn!("No config found for execution client factory {name}");
+                log::warn!("未找到执行客户端工厂 {name} 的配置");
             }
         }
 
@@ -291,7 +290,7 @@ impl LiveNodeBuilder {
             exec_manager_config,
         );
 
-        log::info!("Built successfully");
+        log::info!("构建成功");
 
         Ok(LiveNode::new_from_builder(
             kernel,

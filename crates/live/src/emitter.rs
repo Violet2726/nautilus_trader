@@ -13,20 +13,19 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! Live execution event emitter for async event dispatch.
+//! 用于异步事件调度的实盘执行事件发射器 (emitter)。
 //!
-//! This module provides [`ExecutionEventEmitter`], which combines event generation (via
-//! [`OrderEventFactory`]) with async dispatch. Adapters use the `emit_*` convenience
-//! methods to generate and send events in a single call.
+//! 此模块提供了 [`ExecutionEventEmitter`]，它将事件生成（通过 [`OrderEventFactory`]）
+//! 与异步调度相结合。适配器可以使用 `emit_*` 便捷方法在一个调用中生成并发送事件。
 //!
-//! # Architecture
+//! # 架构
 //!
 //! ```text
-//! Adapter
-//! ├── core: ExecutionClientCore    (identity + connection state)
-//! └── emitter: ExecutionEventEmitter   (event generation + async dispatch)
+//! Adapter (适配器)
+//! ├── core: ExecutionClientCore    (身份标识 + 连接状态)
+//! └── emitter: ExecutionEventEmitter   (事件生成 + 异步调度)
 //!     ├── factory: OrderEventFactory
-//!     └── sender: Option<Sender>   (set in start())
+//!     └── sender: Option<Sender>   (在 start() 中设置)
 //! ```
 
 use nautilus_common::{
@@ -48,13 +47,12 @@ use nautilus_model::{
     types::{AccountBalance, Currency, MarginBalance, Money, Price, Quantity},
 };
 
-/// Event emitter for live trading - combines event generation with async dispatch.
+/// 实盘交易的事件发射器 —— 将事件生成与异步调度相结合。
 ///
-/// This struct wraps an [`OrderEventFactory`] for event construction and an unbounded
-/// channel sender for async dispatch. It provides `emit_*` convenience methods that
-/// generate and send events in a single call.
+/// 此结构体封装了用于构造事件的 [`OrderEventFactory`] 以及用于异步调度的无界通道发送器。
+/// 它提供了 `emit_*` 便捷方法，可以在单次调用中生成并发送事件。
 ///
-/// The sender is set during the adapter's `start()` phase via [`set_sender`](Self::set_sender).
+/// 发送器是在适配器的 `start()` 阶段通过 [`set_sender`](Self::set_sender) 设置的。
 #[derive(Debug, Clone)]
 pub struct ExecutionEventEmitter {
     clock: &'static AtomicTime,
@@ -63,9 +61,9 @@ pub struct ExecutionEventEmitter {
 }
 
 impl ExecutionEventEmitter {
-    /// Creates a new [`ExecutionEventEmitter`] with no sender.
+    /// 创建一个新的 [`ExecutionEventEmitter`]，初始不带发送器。
     ///
-    /// Call [`set_sender`](Self::set_sender) in the adapter's `start()` method.
+    /// 请在适配器的 `start()` 方法中调用 [`set_sender`](Self::set_sender)。
     #[must_use]
     pub fn new(
         clock: &'static AtomicTime,
@@ -85,30 +83,30 @@ impl ExecutionEventEmitter {
         self.clock.get_time_ns()
     }
 
-    /// Sets the sender. Call in adapter's `start()`.
+    /// 设置发送器。在适配器的 `start()` 中调用。
     pub fn set_sender(&mut self, sender: tokio::sync::mpsc::UnboundedSender<ExecutionEvent>) {
         self.sender = Some(sender);
     }
 
-    /// Returns true if the sender is initialized.
+    /// 如果发送器已初始化，则返回 true。
     #[must_use]
     pub fn is_initialized(&self) -> bool {
         self.sender.is_some()
     }
 
-    /// Returns the trader ID.
+    /// 返回交易员 ID。
     #[must_use]
     pub fn trader_id(&self) -> TraderId {
         self.factory.trader_id()
     }
 
-    /// Returns the account ID.
+    /// 返回账户 ID。
     #[must_use]
     pub fn account_id(&self) -> AccountId {
         self.factory.account_id()
     }
 
-    /// Generates and emits an account state event.
+    /// 生成并发出账户状态事件。
     pub fn emit_account_state(
         &self,
         balances: Vec<AccountBalance>,
@@ -126,7 +124,7 @@ impl ExecutionEventEmitter {
         self.send_account_state(state);
     }
 
-    /// Generates and emits an order denied event.
+    /// 生成并发出订单拒绝 (denied) 事件。
     pub fn emit_order_denied(&self, order: &OrderAny, reason: &str) {
         let event = self
             .factory
@@ -134,13 +132,13 @@ impl ExecutionEventEmitter {
         self.send_order_event(event);
     }
 
-    /// Generates and emits an order submitted event.
+    /// 生成并发出订单已提交 (submitted) 事件。
     pub fn emit_order_submitted(&self, order: &OrderAny) {
         let event = self.factory.generate_order_submitted(order, self.ts_init());
         self.send_order_event(event);
     }
 
-    /// Generates and emits an order rejected event.
+    /// 生成并发出订单驳回 (rejected) 事件。
     pub fn emit_order_rejected(
         &self,
         order: &OrderAny,
@@ -158,7 +156,7 @@ impl ExecutionEventEmitter {
         self.send_order_event(event);
     }
 
-    /// Generates and emits an order accepted event.
+    /// 生成并发出订单已受理 (accepted) 事件。
     pub fn emit_order_accepted(
         &self,
         order: &OrderAny,
@@ -171,7 +169,7 @@ impl ExecutionEventEmitter {
         self.send_order_event(event);
     }
 
-    /// Generates and emits an order modify rejected event.
+    /// 生成并发出订单修改驳回 (modify rejected) 事件。
     pub fn emit_order_modify_rejected(
         &self,
         order: &OrderAny,
@@ -189,7 +187,7 @@ impl ExecutionEventEmitter {
         self.send_order_event(event);
     }
 
-    /// Generates and emits an order cancel rejected event.
+    /// 生成并发出订单取消驳回 (cancel rejected) 事件。
     pub fn emit_order_cancel_rejected(
         &self,
         order: &OrderAny,
@@ -207,7 +205,7 @@ impl ExecutionEventEmitter {
         self.send_order_event(event);
     }
 
-    /// Generates and emits an order updated event.
+    /// 生成并发出订单已更新 (updated) 事件。
     #[allow(clippy::too_many_arguments)]
     pub fn emit_order_updated(
         &self,
@@ -232,7 +230,7 @@ impl ExecutionEventEmitter {
         self.send_order_event(event);
     }
 
-    /// Generates and emits an order canceled event.
+    /// 生成并发出订单已取消 (canceled) 事件。
     pub fn emit_order_canceled(
         &self,
         order: &OrderAny,
@@ -245,7 +243,7 @@ impl ExecutionEventEmitter {
         self.send_order_event(event);
     }
 
-    /// Generates and emits an order triggered event.
+    /// 生成并发出订单已触发 (triggered) 事件。
     pub fn emit_order_triggered(
         &self,
         order: &OrderAny,
@@ -258,7 +256,7 @@ impl ExecutionEventEmitter {
         self.send_order_event(event);
     }
 
-    /// Generates and emits an order expired event.
+    /// 生成并发出订单已过期 (expired) 事件。
     pub fn emit_order_expired(
         &self,
         order: &OrderAny,
@@ -271,7 +269,7 @@ impl ExecutionEventEmitter {
         self.send_order_event(event);
     }
 
-    /// Generates and emits an order filled event.
+    /// 生成并发出订单已成交 (filled) 事件。
     #[allow(clippy::too_many_arguments)]
     pub fn emit_order_filled(
         &self,
@@ -302,7 +300,7 @@ impl ExecutionEventEmitter {
         self.send_order_event(event);
     }
 
-    /// Constructs and emits an order rejected event from raw fields.
+    /// 从原始字段构造并发出订单驳回事件。
     #[allow(clippy::too_many_arguments)]
     pub fn emit_order_rejected_event(
         &self,
@@ -329,7 +327,7 @@ impl ExecutionEventEmitter {
         self.send_order_event(OrderEventAny::Rejected(event));
     }
 
-    /// Constructs and emits an order modify rejected event from raw fields.
+    /// 从原始字段构造并发出订单修改驳回事件。
     #[allow(clippy::too_many_arguments)]
     pub fn emit_order_modify_rejected_event(
         &self,
@@ -356,7 +354,7 @@ impl ExecutionEventEmitter {
         self.send_order_event(OrderEventAny::ModifyRejected(event));
     }
 
-    /// Constructs and emits an order cancel rejected event from raw fields.
+    /// 从原始字段构造并发出订单取消驳回事件。
     #[allow(clippy::too_many_arguments)]
     pub fn emit_order_cancel_rejected_event(
         &self,
@@ -383,50 +381,50 @@ impl ExecutionEventEmitter {
         self.send_order_event(OrderEventAny::CancelRejected(event));
     }
 
-    /// Emits an order event.
+    /// 发出订单事件。
     pub fn send_order_event(&self, event: OrderEventAny) {
         if let Some(sender) = &self.sender {
             if let Err(e) = sender.send(ExecutionEvent::Order(event)) {
-                log::warn!("Failed to send order event: {e}");
+                log::warn!("发送订单事件失败：{e}");
             }
         } else {
-            log::warn!("Cannot send order event: sender not initialized");
+            log::warn!("无法发送订单事件：发送器未初始化");
         }
     }
 
-    /// Emits an account state event.
+    /// 发出账户状态事件。
     pub fn send_account_state(&self, state: AccountState) {
         if let Some(sender) = &self.sender {
             if let Err(e) = sender.send(ExecutionEvent::Account(state)) {
-                log::warn!("Failed to send account state: {e}");
+                log::warn!("发送账户状态失败：{e}");
             }
         } else {
-            log::warn!("Cannot send account state: sender not initialized");
+            log::warn!("无法发送账户状态：发送器未初始化");
         }
     }
 
-    /// Emits an execution report.
+    /// 发出执行报告。
     pub fn send_execution_report(&self, report: ExecutionReport) {
         if let Some(sender) = &self.sender {
             if let Err(e) = sender.send(ExecutionEvent::Report(report)) {
-                log::warn!("Failed to send execution report: {e}");
+                log::warn!("发送执行报告失败：{e}");
             }
         } else {
-            log::warn!("Cannot send execution report: sender not initialized");
+            log::warn!("无法发送执行报告：发送器未初始化");
         }
     }
 
-    /// Emits an order status report.
+    /// 发出订单状态报告。
     pub fn send_order_status_report(&self, report: OrderStatusReport) {
         self.send_execution_report(ExecutionReport::Order(Box::new(report)));
     }
 
-    /// Emits a fill report.
+    /// 发出成交报告。
     pub fn send_fill_report(&self, report: FillReport) {
         self.send_execution_report(ExecutionReport::Fill(Box::new(report)));
     }
 
-    /// Emits a position status report.
+    /// 发出持仓状态报告。
     pub fn send_position_report(&self, report: PositionStatusReport) {
         self.send_execution_report(ExecutionReport::Position(Box::new(report)));
     }

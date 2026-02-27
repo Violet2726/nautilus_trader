@@ -352,7 +352,7 @@ mod tests {
 
     use super::*;
 
-    // Test fixture for creating test quotes
+    // 用于创建测试行情报价的测试固件
     fn test_quote() -> QuoteTick {
         QuoteTick {
             instrument_id: InstrumentId::from("EUR/USD.SIM"),
@@ -365,7 +365,7 @@ mod tests {
         }
     }
 
-    // Test helper to create AsyncRunner with manual channels
+    // 用于创建带有手动通道的 AsyncRunner 的测试辅助函数
     fn create_test_runner(
         time_evt_rx: tokio::sync::mpsc::UnboundedReceiver<TimeEventHandler>,
         data_evt_rx: tokio::sync::mpsc::UnboundedReceiver<DataEvent>,
@@ -408,7 +408,7 @@ mod tests {
         let sender = AsyncTimeEventSender::new(tx);
         let channel = sender.get_channel_sender();
 
-        // Verify the channel is functional
+        // 验证通道是否正常工作
         let event = TimeEvent::new(
             Ustr::from("test"),
             UUID4::new(),
@@ -447,7 +447,7 @@ mod tests {
                 assert_eq!(r.client_id, c.client_id);
                 assert_eq!(r.data_type, c.data_type);
             }
-            _ => panic!("Command mismatch"),
+            _ => panic!("命令不匹配"),
         }
     }
 
@@ -490,17 +490,17 @@ mod tests {
             signal_tx.clone(),
         );
 
-        // Start runner
+        // 启动运行器
         let runner_handle = tokio::spawn(async move {
             runner.run().await;
         });
 
-        // Send shutdown signal
+        // 发送关闭信号
         signal_tx.send(()).unwrap();
 
-        // Runner should stop quickly
+        // 运行器应该快速停止
         let result = tokio::time::timeout(Duration::from_millis(100), runner_handle).await;
-        assert!(result.is_ok(), "Runner should stop on signal");
+        assert!(result.is_ok(), "运行器收到信号后应该停止");
     }
 
     #[tokio::test]
@@ -522,22 +522,22 @@ mod tests {
             signal_tx.clone(),
         );
 
-        // Start runner
+        // 启动运行器
         let runner_handle = tokio::spawn(async move {
             runner.run().await;
         });
 
         drop(data_tx);
 
-        // Yield to let runner enter event loop before stop signal
+        // 屈服于调度器，让运行器在停止信号之前进入事件循环
         tokio::task::yield_now().await;
         signal_tx.send(()).ok();
 
-        // Runner should stop when channels close or on signal
+        // 运行器应在通道关闭或收到信号时停止
         let result = tokio::time::timeout(Duration::from_millis(200), runner_handle).await;
         assert!(
             result.is_ok(),
-            "Runner should stop when channels close or on signal"
+            "运行器应在通道关闭或收到信号时停止"
         );
     }
 
@@ -562,7 +562,7 @@ mod tests {
             signal_tx.clone(),
         );
 
-        // Spawn multiple concurrent senders
+        // 产生多个并发发送端
         let mut handles = vec![];
         for _ in 0..5 {
             let tx_clone = data_evt_tx.clone();
@@ -576,17 +576,17 @@ mod tests {
             handles.push(handle);
         }
 
-        // Start runner in background
+        // 在后台启动运行器
         let runner_handle = tokio::spawn(async move {
             runner.run().await;
         });
 
-        // Wait for all senders
+        // 等待所有发送端完成
         for handle in handles {
             handle.await.unwrap();
         }
 
-        // Yield to let runner enter event loop before stop signal
+        // 屈服于调度器，让运行器在停止信号之前进入事件循环
         tokio::task::yield_now().await;
         signal_tx.send(()).unwrap();
 
@@ -601,12 +601,12 @@ mod tests {
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<DataEvent>();
         let quote = test_quote();
 
-        // Send events
+        // 发送事件
         for _ in 0..count {
             tx.send(DataEvent::Data(Data::Quote(quote))).unwrap();
         }
 
-        // Verify all received
+        // 验证全部被接收
         let mut received = 0;
         while rx.try_recv().is_ok() {
             received += 1;
@@ -688,7 +688,7 @@ mod tests {
         signal_tx.send(()).unwrap();
 
         let result = tokio::time::timeout(Duration::from_millis(100), runner_handle).await;
-        assert!(result.is_ok(), "Runner should process command and stop");
+        assert!(result.is_ok(), "运行器应处理命令并停止");
     }
 
     #[tokio::test]
@@ -736,7 +736,7 @@ mod tests {
         let result = tokio::time::timeout(Duration::from_millis(100), runner_handle).await;
         assert!(
             result.is_ok(),
-            "Runner should process all commands and stop"
+            "运行器应处理所有命令并停止"
         );
     }
 
@@ -763,7 +763,7 @@ mod tests {
             ExecutionEvent::Order(OrderEventAny::Submitted(e)) => {
                 assert_eq!(e.client_order_id(), ClientOrderId::from("O-001"));
             }
-            _ => panic!("Expected OrderSubmitted event"),
+            _ => panic!("期望 OrderSubmitted 事件"),
         }
     }
 
@@ -799,7 +799,7 @@ mod tests {
                 assert_eq!(r.venue_order_id.as_str(), "V-001");
                 assert_eq!(r.order_status, OrderStatus::Accepted);
             }
-            _ => panic!("Expected OrderStatusReport"),
+            _ => panic!("期望 OrderStatusReport"),
         }
     }
 
@@ -835,7 +835,7 @@ mod tests {
                 assert_eq!(r.venue_order_id.as_str(), "V-001");
                 assert_eq!(r.trade_id.to_string(), "T-001");
             }
-            _ => panic!("Expected FillReport"),
+            _ => panic!("期望 FillReport"),
         }
     }
 
@@ -865,7 +865,7 @@ mod tests {
             ExecutionEvent::Report(ExecutionReport::Position(r)) => {
                 assert_eq!(r.venue_position_id.unwrap().as_str(), "P-001");
             }
-            _ => panic!("Expected PositionStatusReport"),
+            _ => panic!("期望 PositionStatusReport"),
         }
     }
 
@@ -892,7 +892,7 @@ mod tests {
             ExecutionEvent::Account(r) => {
                 assert_eq!(r.account_id.as_str(), "SIM-001");
             }
-            _ => panic!("Expected AccountState"),
+            _ => panic!("期望 AccountState"),
         }
     }
 
@@ -919,11 +919,11 @@ mod tests {
             runner.run().await;
         });
 
-        // Use stop via signal_tx directly
+        // 直接通过 signal_tx 使用停止
         signal_tx.send(()).unwrap();
 
         let result = tokio::time::timeout(Duration::from_millis(100), runner_handle).await;
-        assert!(result.is_ok(), "Runner should stop when stop() is called");
+        assert!(result.is_ok(), "当调用 stop() 时，运行器应该停止");
     }
 
     #[tokio::test]
@@ -949,13 +949,13 @@ mod tests {
             runner.run().await;
         });
 
-        // Send data event
+        // 发送数据事件
         let quote = test_quote();
         data_evt_tx
             .send(DataEvent::Data(Data::Quote(quote)))
             .unwrap();
 
-        // Send data command
+        // 发送数据命令
         let command = DataCommand::Subscribe(SubscribeCommand::Data(SubscribeCustomData {
             client_id: Some(ClientId::from("TEST")),
             venue: None,
@@ -967,7 +967,7 @@ mod tests {
         }));
         data_cmd_tx.send(command).unwrap();
 
-        // Send time event
+        // 发送时间事件
         let event = TimeEvent::new(
             Ustr::from("test"),
             UUID4::new(),
@@ -978,7 +978,7 @@ mod tests {
         let handler = TimeEventHandler::new(event, callback);
         time_evt_tx.send(handler).unwrap();
 
-        // Send execution order event
+        // 发送执行订单事件
         let order_event = OrderSubmitted::new(
             TraderId::from("TRADER-001"),
             StrategyId::from("S-001"),
@@ -993,7 +993,7 @@ mod tests {
             .send(ExecutionEvent::Order(OrderEventAny::Submitted(order_event)))
             .unwrap();
 
-        // Send execution report (OrderStatus)
+        // 发送执行报告 (OrderStatus)
         let order_status = OrderStatusReport::new(
             AccountId::from("SIM-001"),
             InstrumentId::from("EUR/USD.SIM"),
@@ -1016,7 +1016,7 @@ mod tests {
             ))))
             .unwrap();
 
-        // Send execution report (Fill)
+        // 发送执行报告 (Fill)
         let fill = FillReport::new(
             AccountId::from("SIM-001"),
             InstrumentId::from("EUR/USD.SIM"),
@@ -1039,7 +1039,7 @@ mod tests {
             ))))
             .unwrap();
 
-        // Send execution report (Position)
+        // 发送执行报告 (Position)
         let position = PositionStatusReport::new(
             AccountId::from("SIM-001"),
             InstrumentId::from("EUR/USD.SIM"),
@@ -1057,7 +1057,7 @@ mod tests {
             ))))
             .unwrap();
 
-        // Send account event
+        // 发送账户事件
         let account_state = AccountState::new(
             AccountId::from("SIM-001"),
             AccountType::Cash,
@@ -1073,14 +1073,14 @@ mod tests {
             .send(ExecutionEvent::Account(account_state))
             .unwrap();
 
-        // Yield to let runner enter event loop before stop signal
+        // 屈服于调度器，让运行器在停止信号之前进入事件循环
         tokio::task::yield_now().await;
         signal_tx.send(()).unwrap();
 
         let result = tokio::time::timeout(Duration::from_millis(200), runner_handle).await;
         assert!(
             result.is_ok(),
-            "Runner should process all event types and stop cleanly"
+            "运行器应处理所有事件类型并干净地停止"
         );
     }
 
@@ -1103,18 +1103,18 @@ mod tests {
             signal_tx.clone(),
         );
 
-        // Get handle before moving runner
+        // 在移动运行器之前获取句柄
         let handle = runner.handle();
 
         let runner_task = tokio::spawn(async move {
             runner.run().await;
         });
 
-        // Use handle to stop
+        // 使用句柄进行停止
         handle.stop();
 
         let result = tokio::time::timeout(Duration::from_millis(100), runner_task).await;
-        assert!(result.is_ok(), "Runner should stop via handle");
+        assert!(result.is_ok(), "运行器应通过句柄停止");
     }
 
     #[tokio::test]
@@ -1124,7 +1124,7 @@ mod tests {
 
         let handle2 = handle.clone();
 
-        // Both handles should be able to send stop signals
+        // 两个句柄都应该能够发送停止信号
         assert!(handle.signal_tx.send(()).is_ok());
         assert!(handle2.signal_tx.send(()).is_ok());
     }
@@ -1150,7 +1150,7 @@ mod tests {
 
         let handle = runner.handle();
 
-        // Send events before starting runner
+        // 在启动运行器之前发送事件
         for _ in 0..10 {
             let quote = test_quote();
             data_evt_tx
@@ -1162,11 +1162,11 @@ mod tests {
             runner.run().await;
         });
 
-        // Yield to let runner enter event loop before stop signal
+        // 屈服于调度器，让运行器在停止信号之前进入事件循环
         tokio::task::yield_now().await;
         handle.stop();
 
         let result = tokio::time::timeout(Duration::from_millis(200), runner_task).await;
-        assert!(result.is_ok(), "Runner should process events and stop");
+        assert!(result.is_ok(), "运行器应处理事件并停止");
     }
 }

@@ -13,7 +13,7 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! Python bindings for live node.
+//! 实盘节点的 Python 绑定。
 
 use std::{cell::RefCell, rc::Rc};
 
@@ -82,28 +82,28 @@ impl LiveNode {
     #[pyo3(name = "start")]
     fn py_start(&mut self) -> PyResult<()> {
         if self.is_running() {
-            return Err(to_pyruntime_err("LiveNode is already running"));
+            return Err(to_pyruntime_err("LiveNode 已经在运行中"));
         }
 
-        // Non-blocking start - just start the node in the background
+        // 非阻塞启动 - 仅在后台启动节点
         get_runtime().block_on(async { self.start().await.map_err(to_pyruntime_err) })
     }
 
     #[pyo3(name = "run")]
     fn py_run(&mut self, py: Python) -> PyResult<()> {
         if self.is_running() {
-            return Err(to_pyruntime_err("LiveNode is already running"));
+            return Err(to_pyruntime_err("LiveNode 已经在运行中"));
         }
 
-        // Get a handle for coordinating with the signal checker
+        // 获取用于与信号检查器协调的句柄
         let handle = self.handle();
 
-        // Import signal module
+        // 导入信号模块
         let signal_module = py.import("signal")?;
         let original_handler =
-            signal_module.call_method1("signal", (2, signal_module.getattr("SIG_DFL")?))?; // Save original SIGINT handler (signal 2)
+            signal_module.call_method1("signal", (2, signal_module.getattr("SIG_DFL")?))?; // 保存原始 SIGINT 处理程序 (signal 2)
 
-        // Set up a custom signal handler that uses our handle
+        // 设置使用我们句柄的自定义信号处理程序
         let handle_for_signal = handle;
         let signal_callback = pyo3::types::PyCFunction::new_closure(
             py,
@@ -112,20 +112,20 @@ impl LiveNode {
             move |_args: &pyo3::Bound<'_, PyTuple>,
                   _kwargs: Option<&pyo3::Bound<'_, PyDict>>|
                   -> PyResult<()> {
-                log::info!("Python signal handler called");
+                log::info!("Python 信号处理程序被调用");
                 handle_for_signal.stop();
                 Ok(())
             },
         )?;
 
-        // Install our signal handler
+        // 安装我们的信号处理程序
         signal_module.call_method1("signal", (2, signal_callback))?;
 
-        // Run the node and restore signal handler afterward
+        // 运行节点并在之后恢复信号处理程序
         let result =
             { get_runtime().block_on(async { self.run().await.map_err(to_pyruntime_err) }) };
 
-        // Restore original signal handler
+        // 恢复原始信号处理程序
         signal_module.call_method1("signal", (2, original_handler))?;
 
         result
@@ -134,146 +134,142 @@ impl LiveNode {
     #[pyo3(name = "stop")]
     fn py_stop(&self) -> PyResult<()> {
         if !self.is_running() {
-            return Err(to_pyruntime_err("LiveNode is not running"));
+            return Err(to_pyruntime_err("LiveNode 未在运行中"));
         }
 
-        // Use the handle to signal stop - this is thread-safe and doesn't require async
+        // 使用句柄发出停止信号 - 它是线程安全的，不需要 async
         self.handle().stop();
         Ok(())
     }
 
-    #[allow(
-        unsafe_code,
-        reason = "Required for Python actor component registration"
-    )]
+    #[allow(unsafe_code, reason = "Python 参与者组件注册所需")]
     #[pyo3(name = "add_actor_from_config")]
     fn py_add_actor_from_config(
         &mut self,
         _py: Python,
         config: ImportableActorConfig,
     ) -> PyResult<()> {
-        log::debug!("`add_actor_from_config` with: {config:?}");
+        log::debug!("`add_actor_from_config` 参数为: {config:?}");
 
-        // Extract module and class name from actor_path
+        // 从 actor_path 中提取模块和类名
         let parts: Vec<&str> = config.actor_path.split(':').collect();
         if parts.len() != 2 {
             return Err(to_pyvalue_err(
-                "actor_path must be in format 'module.path:ClassName'",
+                "actor_path 必须符合 'module.path:ClassName' 格式",
             ));
         }
         let (module_name, class_name) = (parts[0], parts[1]);
 
-        log::info!("Importing actor from module: {module_name} class: {class_name}");
+        log::info!("正在从模块 {} 类 {} 导入参与者", module_name, class_name);
 
-        // Import the Python class to verify it exists and get it for method dispatch
+        // 导入 Python 类以验证其是否存在，并获取它以进行方法调度
         let _python_class = Python::attach(|py| -> PyResult<Py<PyAny>> {
             let actor_module = py.import(module_name)?;
             let actor_class = actor_module.getattr(class_name)?;
             Ok(actor_class.unbind())
         })
-        .map_err(|e| to_pyruntime_err(format!("Failed to import Python class: {e}")))?;
+        .map_err(|e| to_pyruntime_err(format!("导入 Python 类失败: {e}")))?;
 
-        // Create default DataActorConfig for Rust PyDataActor.
-        // Inherited config attributes extracted and wired after
-        // Python actor creation
+        // 为 Rust PyDataActor 创建默认的 DataActorConfig。
+        // 在创建 Python 参与者后提取并连接继承的配置属性
         let basic_data_actor_config = DataActorConfig::default();
 
-        log::debug!("Created basic DataActorConfig for Rust: {basic_data_actor_config:?}");
+        log::debug!("为 Rust 创建了基础 DataActorConfig: {basic_data_actor_config:?}");
 
-        // Create the Python actor and register the internal PyDataActor
+        // 创建 Python 参与者并注册内部 PyDataActor
         let python_actor = Python::attach(|py| -> anyhow::Result<Py<PyAny>> {
-            // Import the Python class
+            // 导入 Python 类
             let actor_module = py
                 .import(module_name)
-                .map_err(|e| anyhow::anyhow!("Failed to import module {module_name}: {e}"))?;
+                .map_err(|e| anyhow::anyhow!("导入模块 {} 失败: {e}", module_name))?;
             let actor_class = actor_module
                 .getattr(class_name)
-                .map_err(|e| anyhow::anyhow!("Failed to get class {class_name}: {e}"))?;
+                .map_err(|e| anyhow::anyhow!("获取类 {} 失败: {e}", class_name))?;
 
-            // Create config instance if config_path and config are provided
+            // 如果提供了 config_path 和 config，则创建配置实例
             let config_instance = if !config.config_path.is_empty() && !config.config.is_empty() {
-                // Parse the config_path to get module and class
+                // 解析 config_path 以获取模块和类
                 let config_parts: Vec<&str> = config.config_path.split(':').collect();
                 if config_parts.len() != 2 {
                     anyhow::bail!(
-                        "config_path must be in format 'module.path:ClassName', was {}",
+                        "config_path 必须符合 'module.path:ClassName' 格式，实际为 {}",
                         config.config_path
                     );
                 }
                 let (config_module_name, config_class_name) = (config_parts[0], config_parts[1]);
 
-                log::debug!("Importing config class from module: {config_module_name} class: {config_class_name}");
+                log::debug!("正在从模块 {} 类 {} 导入配置类", config_module_name, config_class_name);
 
-                // Import the config class
+                // 导入配置类
                 let config_module = py
                     .import(config_module_name)
-                    .map_err(|e| anyhow::anyhow!("Failed to import config module {config_module_name}: {e}"))?;
+                    .map_err(|e| anyhow::anyhow!("导入配置模块 {} 失败: {e}", config_module_name))?;
                 let config_class = config_module
                     .getattr(config_class_name)
-                    .map_err(|e| anyhow::anyhow!("Failed to get config class {config_class_name}: {e}"))?;
+                    .map_err(|e| anyhow::anyhow!("获取配置类 {} 失败: {e}", config_class_name))?;
 
-                // Convert the serde_json::Value config dict to a Python dict
+                // 将 serde_json::Value 配置字典转换回 Python 字典
                 let py_dict = PyDict::new(py);
                 for (key, value) in &config.config {
-                    // Convert serde_json::Value back to Python object via JSON
+                    // 通过 JSON 将 serde_json::Value 转换回 Python 对象
                     let json_str = serde_json::to_string(value)
-                        .map_err(|e| anyhow::anyhow!("Failed to serialize config value: {e}"))?;
+                        .map_err(|e| anyhow::anyhow!("序列化配置值失败: {e}"))?;
                     let py_value = PyModule::import(py, "json")?
                         .call_method("loads", (json_str,), None)?;
                     py_dict.set_item(key, py_value)?;
                 }
 
-                log::debug!("Created config dict: {py_dict:?}");
+                log::debug!("创建了配置字典: {py_dict:?}");
 
-                // Try multiple approaches to create the config instance
+                // 尝试多种方法来创建配置实例
                 let config_instance = {
-                    // Try calling config class with **kwargs first
+                    // 首先尝试使用 **kwargs 调用配置类
                     match config_class.call((), Some(&py_dict)) {
                         Ok(instance) => {
-                            log::debug!("Successfully created config instance with kwargs");
+                            log::debug!("成功使用 kwargs 创建了配置实例");
 
-                            // Manually call __post_init__ if it exists
+                            // 如果 __post_init__ 存在，则手动调用它
                             if let Err(e) = instance.call_method0("__post_init__") {
-                                log::error!("Failed to call __post_init__ on config instance: {e}");
-                                anyhow::bail!("__post_init__ failed: {e}");
+                                log::error!("在配置实例上调用 __post_init__ 失败: {e}");
+                                anyhow::bail!("__post_init__ 失败: {e}");
                             }
-                            log::debug!("Successfully called __post_init__ on config instance");
+                            log::debug!("在配置实例上成功调用了 __post_init__");
 
                             instance
                         },
                         Err(kwargs_err) => {
-                            log::debug!("Failed to create config with kwargs: {kwargs_err}");
+                            log::debug!("使用 kwargs 创建配置失败: {kwargs_err}");
 
-                            // Second approach: try to create with default constructor and set attributes
+                            // 第二种方法：尝试使用默认构造函数创建并设置属性
                             match config_class.call0() {
                                 Ok(instance) => {
-                                    log::debug!("Created default config instance, setting attributes");
+                                    log::debug!("创建了默认配置实例，正在设置属性");
                                     for (key, value) in &config.config {
-                                        // Convert serde_json::Value to Python object
+                                        // 将 serde_json::Value 转换为 Python 对象
                                         let json_str = serde_json::to_string(value)
-                                            .map_err(|e| anyhow::anyhow!("Failed to serialize config value: {e}"))?;
+                                            .map_err(|e| anyhow::anyhow!("序列化配置值失败: {e}"))?;
                                         let py_value = PyModule::import(py, "json")?
                                             .call_method("loads", (json_str,), None)?;
                                         if let Err(setattr_err) = instance.setattr(key, py_value) {
-                                            log::warn!("Failed to set attribute {key}: {setattr_err}");
+                                            log::warn!("设置属性 {} 失败: {setattr_err}", key);
                                         }
                                     }
 
-                                    // Manually call __post_init__ if it exists
+                                    // 如果 __post_init__ 存在，则手动调用它
                                     if let Err(e) = instance.call_method0("__post_init__") {
-                                        log::error!("Failed to call __post_init__ on config instance: {e}");
-                                        anyhow::bail!("__post_init__ failed: {e}");
+                                        log::error!("在配置实例上调用 __post_init__ 失败: {e}");
+                                        anyhow::bail!("__post_init__ 失败: {e}");
                                     }
-                                    log::debug!("Called __post_init__ on config instance");
+                                    log::debug!("在配置实例上调用了 __post_init__");
 
                                     instance
                                 },
                                 Err(default_err) => {
-                                    log::debug!("Failed to create default config: {default_err}");
+                                    log::debug!("创建默认配置失败: {default_err}");
 
-                                    // If both approaches fail, return the original error
+                                    // 如果两种方法都失败，则返回原始错误
                                     anyhow::bail!(
-                                        "Failed to create config instance. Tried kwargs approach: {kwargs_err}, default constructor: {default_err}"
+                                        "创建配置实例失败。尝试 kwargs 方法: {kwargs_err}，默认构造函数: {default_err}"
                                     );
                                 }
                             }
@@ -281,90 +277,90 @@ impl LiveNode {
                     }
                 };
 
-                log::debug!("Created config instance: {config_instance:?}");
+                log::debug!("创建了配置实例: {config_instance:?}");
 
                 Some(config_instance)
             } else {
-                log::debug!("No config_path or empty config, using None");
+                log::debug!("没有 config_path 或配置为空，使用 None");
                 None
             };
 
-            // Create the Python actor instance with the config
+            // 使用配置创建 Python 参与者实例
             let python_actor = if let Some(config_obj) = config_instance.clone() {
                 actor_class.call1((config_obj,))?
             } else {
                 actor_class.call0()?
             };
 
-            log::debug!("Created Python actor instance: {python_actor:?}");
+            log::debug!("创建了 Python 参与者实例: {python_actor:?}");
 
-            // Get a mutable reference to the internal PyDataActor for registration
+            // 获取内部 PyDataActor 的可变引用以进行注册
             let mut py_data_actor_ref = python_actor
                 .extract::<PyRefMut<PyDataActor>>()
                 .map_err(Into::<PyErr>::into)
-                .map_err(|e| anyhow::anyhow!("Failed to extract PyDataActor: {e}"))?;
+                .map_err(|e| anyhow::anyhow!("提取 PyDataActor 失败: {e}"))?;
 
             log::debug!(
-                "Internal PyDataActor mem_addr: {}, registered: {}",
+                "内部 PyDataActor 内存地址: {}，已注册: {}",
                 &py_data_actor_ref.mem_address(),
                 py_data_actor_ref.is_registered()
             );
 
-            // Extract inherited DataActorConfig fields from the Python actor instance
-            // and wire them into the PyDataActor's core config
+            // 从 Python 参与者实例中提取继承的 DataActorConfig 字段，
+            // 并将其连接到 PyDataActor 的核心配置中
             if let Some(config_obj) = config_instance.as_ref() {
-                log::debug!("Extracting inherited config fields from Python actor config");
+                log::debug!("正在从 Python 参与者配置中提取继承的配置字段");
 
-                // Extract actor_id if present
+                // 如果存在 actor_id，则提取它
                 if let Ok(actor_id) = config_obj.getattr("actor_id")
                     && !actor_id.is_none() {
-                        // Try to extract as ActorId first, then as string
+                        // 首先尝试提取为 ActorId，然后尝试作为字符串
                         let actor_id_val = if let Ok(actor_id_val) = actor_id.extract::<ActorId>() {
                             actor_id_val
                         } else if let Ok(actor_id_str) = actor_id.extract::<String>() {
                             ActorId::from(actor_id_str.as_str())
                         } else {
-                            log::warn!("Failed to extract actor_id as ActorId or String");
-                            anyhow::bail!("Invalid `actor_id` type");
+                            log::warn!("未能将 actor_id 提取为 ActorId 或 String");
+                            anyhow::bail!("无效的 `actor_id` 类型");
                         };
 
-                        log::debug!("Extracted actor_id: {actor_id_val}");
+                        log::debug!("提取了 actor_id: {actor_id_val}");
                         py_data_actor_ref.set_actor_id(actor_id_val);
                     }
 
-                // Extract log_events if present
+                // 如果存在 log_events，则提取它
                 if let Ok(log_events) = config_obj.getattr("log_events")
                     && let Ok(log_events_val) = log_events.extract::<bool>() {
-                        log::debug!("Extracted log_events: {log_events_val}");
+                        log::debug!("提取了 log_events: {log_events_val}");
                         py_data_actor_ref.set_log_events(log_events_val);
                     }
 
-                // Extract log_commands if present
+                // 如果存在 log_commands，则提取它
                 if let Ok(log_commands) = config_obj.getattr("log_commands")
                     && let Ok(log_commands_val) = log_commands.extract::<bool>() {
-                        log::debug!("Extracted log_commands: {log_commands_val}");
+                        log::debug!("提取了 log_commands: {log_commands_val}");
                         py_data_actor_ref.set_log_commands(log_commands_val);
                     }
 
-                log::debug!("Successfully updated PyDataActor config from Python actor instance");
+                log::debug!("成功从 Python 参与者实例更新了 PyDataActor 配置");
             }
 
-            // Set the Python instance reference for method dispatch on the original
+            // 为原始实例上的方法调度设置 Python 实例引用
             py_data_actor_ref.set_python_instance(python_actor.clone().unbind());
 
-            log::debug!("Set Python instance reference for method dispatch");
+            log::debug!("设置了用于方法调度的 Python 实例引用");
 
-            // Register the internal PyDataActor
+            // 注册内部 PyDataActor
             let trader_id = self.trader_id();
             let clock = self.kernel().clock();
             let cache = self.kernel().cache();
 
             py_data_actor_ref
                 .register(trader_id, clock, cache)
-                .map_err(|e| anyhow::anyhow!("Failed to register PyDataActor: {e}"))?;
+                .map_err(|e| anyhow::anyhow!("注册 PyDataActor 失败: {e}"))?;
 
             log::debug!(
-                "Internal PyDataActor registered: {}, state: {:?}",
+                "内部 PyDataActor 已注册: {}，状态: {:?}",
                 py_data_actor_ref.is_registered(),
                 py_data_actor_ref.state()
             );
@@ -377,7 +373,7 @@ impl LiveNode {
             let py_actor = python_actor.bind(py);
             let py_data_actor_ref = py_actor
                 .cast::<PyDataActor>()
-                .map_err(|e| anyhow::anyhow!("Failed to downcast to PyDataActor: {e}"))?;
+                .map_err(|e| anyhow::anyhow!("向下转型为 PyDataActor 失败: {e}"))?;
             let py_data_actor = py_data_actor_ref.borrow();
             py_data_actor.register_in_global_registries();
 
@@ -390,10 +386,10 @@ impl LiveNode {
             .add_actor_id_for_lifecycle(actor_id)
             .map_err(to_pyruntime_err)?;
 
-        // Note: No mem::forget needed - the actor's py_self field holds a Py<PyAny>
-        // that keeps the Python instance alive, and registries share the inner via Rc::clone()
+        // 注意：不需要 mem::forget - 参与者的 py_self 字段持有一个 Py<PyAny>，
+        // 它可以保持 Python 实例处于活动状态，并且注册表通过 Rc::clone() 共享内部对象
 
-        log::info!("Registered Python actor {actor_id}");
+        log::info!("已注册 Python 参与者 {}", actor_id);
         Ok(())
     }
 
@@ -407,8 +403,8 @@ impl LiveNode {
     }
 }
 
-/// Python wrapper for `LiveNodeBuilder` that uses interior mutability
-/// to work around PyO3's shared ownership model.
+/// `LiveNodeBuilder` 的 Python 包装器，使用内部可变性
+/// 以解决 PyO3 的共享所有权模型。
 #[derive(Debug)]
 #[pyclass(name = "LiveNodeBuilder", module = "nautilus_trader.live", unsendable)]
 pub struct LiveNodeBuilderPy {
@@ -426,7 +422,7 @@ impl LiveNodeBuilderPy {
                 inner: self.inner.clone(),
             })
         } else {
-            Err(to_pyruntime_err("Builder already consumed"))
+            Err(to_pyruntime_err("Builder 已被消耗"))
         }
     }
 
@@ -439,7 +435,7 @@ impl LiveNodeBuilderPy {
                 inner: self.inner.clone(),
             })
         } else {
-            Err(to_pyruntime_err("Builder already consumed"))
+            Err(to_pyruntime_err("Builder 已被消耗"))
         }
     }
 
@@ -452,7 +448,7 @@ impl LiveNodeBuilderPy {
                 inner: self.inner.clone(),
             })
         } else {
-            Err(to_pyruntime_err("Builder already consumed"))
+            Err(to_pyruntime_err("Builder 已被消耗"))
         }
     }
 
@@ -465,7 +461,7 @@ impl LiveNodeBuilderPy {
                 inner: self.inner.clone(),
             })
         } else {
-            Err(to_pyruntime_err("Builder already consumed"))
+            Err(to_pyruntime_err("Builder 已被消耗"))
         }
     }
 
@@ -478,7 +474,7 @@ impl LiveNodeBuilderPy {
                 inner: self.inner.clone(),
             })
         } else {
-            Err(to_pyruntime_err("Builder already consumed"))
+            Err(to_pyruntime_err("Builder 已被消耗"))
         }
     }
 
@@ -491,7 +487,7 @@ impl LiveNodeBuilderPy {
                 inner: self.inner.clone(),
             })
         } else {
-            Err(to_pyruntime_err("Builder already consumed"))
+            Err(to_pyruntime_err("Builder 已被消耗"))
         }
     }
 
@@ -504,7 +500,7 @@ impl LiveNodeBuilderPy {
                 inner: self.inner.clone(),
             })
         } else {
-            Err(to_pyruntime_err("Builder already consumed"))
+            Err(to_pyruntime_err("Builder 已被消耗"))
         }
     }
 
@@ -517,7 +513,7 @@ impl LiveNodeBuilderPy {
                 inner: self.inner.clone(),
             })
         } else {
-            Err(to_pyruntime_err("Builder already consumed"))
+            Err(to_pyruntime_err("Builder 已被消耗"))
         }
     }
 
@@ -530,7 +526,7 @@ impl LiveNodeBuilderPy {
                 inner: self.inner.clone(),
             })
         } else {
-            Err(to_pyruntime_err("Builder already consumed"))
+            Err(to_pyruntime_err("Builder 已被消耗"))
         }
     }
 
@@ -543,7 +539,7 @@ impl LiveNodeBuilderPy {
                 inner: self.inner.clone(),
             })
         } else {
-            Err(to_pyruntime_err("Builder already consumed"))
+            Err(to_pyruntime_err("Builder 已被消耗"))
         }
     }
 
@@ -556,7 +552,7 @@ impl LiveNodeBuilderPy {
                 inner: self.inner.clone(),
             })
         } else {
-            Err(to_pyruntime_err("Builder already consumed"))
+            Err(to_pyruntime_err("Builder 已被消耗"))
         }
     }
 
@@ -569,7 +565,7 @@ impl LiveNodeBuilderPy {
                 inner: self.inner.clone(),
             })
         } else {
-            Err(to_pyruntime_err("Builder already consumed"))
+            Err(to_pyruntime_err("Builder 已被消耗"))
         }
     }
 
@@ -583,20 +579,20 @@ impl LiveNodeBuilderPy {
         let mut inner_ref = self.inner.borrow_mut();
         if let Some(builder) = inner_ref.take() {
             Python::attach(|py| -> PyResult<Self> {
-                // Use the global registry to extract Py<PyAny>s to trait objects
+                // 使用全局注册表将 Py<PyAny> 提取到 trait 对象
                 let registry = get_global_pyo3_registry();
 
                 let boxed_factory = registry.extract_factory(py, factory.clone_ref(py))?;
                 let boxed_config = registry.extract_config(py, config.clone_ref(py))?;
 
-                // Use the factory name from the original factory for the client name
+                // 使用原始工厂的工厂名称作为客户端名称
                 let factory_name = factory
                     .getattr(py, "name")?
                     .call0(py)?
                     .extract::<String>(py)?;
                 let client_name = name.unwrap_or(factory_name);
 
-                // Add the data client to the builder using boxed trait objects
+                // 使用 boxed trait 对象将数据客户端添加到 builder 中
                 match builder.add_data_client(Some(client_name), boxed_factory, boxed_config) {
                     Ok(updated_builder) => {
                         *inner_ref = Some(updated_builder);
@@ -604,11 +600,11 @@ impl LiveNodeBuilderPy {
                             inner: self.inner.clone(),
                         })
                     }
-                    Err(e) => Err(to_pyruntime_err(format!("Failed to add data client: {e}"))),
+                    Err(e) => Err(to_pyruntime_err(format!("添加数据客户端失败: {e}"))),
                 }
             })
         } else {
-            Err(to_pyruntime_err("Builder already consumed"))
+            Err(to_pyruntime_err("Builder 已被消耗"))
         }
     }
 
@@ -640,11 +636,11 @@ impl LiveNodeBuilderPy {
                             inner: self.inner.clone(),
                         })
                     }
-                    Err(e) => Err(to_pyruntime_err(format!("Failed to add exec client: {e}"))),
+                    Err(e) => Err(to_pyruntime_err(format!("添加执行客户端失败: {e}"))),
                 }
             })
         } else {
-            Err(to_pyruntime_err("Builder already consumed"))
+            Err(to_pyruntime_err("Builder 已被消耗"))
         }
     }
 
@@ -657,7 +653,7 @@ impl LiveNodeBuilderPy {
                 Err(e) => Err(to_pyruntime_err(e)),
             }
         } else {
-            Err(to_pyruntime_err("Builder already consumed"))
+            Err(to_pyruntime_err("Builder 已被消耗"))
         }
     }
 

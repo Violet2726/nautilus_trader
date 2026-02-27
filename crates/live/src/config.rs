@@ -13,7 +13,7 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! Configuration types for live Nautilus system nodes.
+//! Nautilus 实时系统节点的配置类型。
 
 use std::{collections::HashMap, time::Duration};
 
@@ -30,10 +30,10 @@ use nautilus_risk::engine::config::RiskEngineConfig;
 use nautilus_system::config::{NautilusKernelConfig, StreamingConfig};
 use serde::{Deserialize, Serialize};
 
-/// Configuration for live data engines.
+/// 实盘数据引擎的配置。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LiveDataEngineConfig {
-    /// The queue size for the engine's internal queue buffers.
+    /// 引擎内部队列缓冲区的队列大小。
     pub qsize: u32,
 }
 
@@ -49,10 +49,10 @@ impl From<LiveDataEngineConfig> for DataEngineConfig {
     }
 }
 
-/// Configuration for live risk engines.
+/// 实盘风险引擎的配置。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LiveRiskEngineConfig {
-    /// The queue size for the engine's internal queue buffers.
+    /// 引擎内部队列缓冲区的队列大小。
     pub qsize: u32,
 }
 
@@ -68,70 +68,70 @@ impl From<LiveRiskEngineConfig> for RiskEngineConfig {
     }
 }
 
-/// Configuration for live execution engines.
+/// 实盘执行引擎的配置。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LiveExecEngineConfig {
-    /// If reconciliation is active at start-up.
+    /// 启动时是否激活对账 (reconciliation)。
     pub reconciliation: bool,
-    /// The delay (seconds) before starting reconciliation at startup.
+    /// 启动时开始对账前的延迟（秒）。
     pub reconciliation_startup_delay_secs: f64,
-    /// The maximum lookback minutes to reconcile state for.
+    /// 对账状态的最大回顾分钟数。
     pub reconciliation_lookback_mins: Option<u32>,
-    /// Specific instrument IDs to reconcile (if None, reconciles all).
+    /// 要对账的具体标的 ID（如果为 None，则对账所有标的）。
     pub reconciliation_instrument_ids: Option<Vec<String>>,
-    /// If unclaimed order events with an EXTERNAL strategy ID should be filtered/dropped.
+    /// 是否应过滤/丢弃具有 EXTERNAL 策略 ID 的未申领订单事件。
     pub filter_unclaimed_external_orders: bool,
-    /// If position status reports are filtered from reconciliation.
+    /// 是否从对账中过滤持仓状态报告。
     pub filter_position_reports: bool,
-    /// Client order IDs to filter from reconciliation.
+    /// 要从对账中过滤的客户订单 ID。
     pub filtered_client_order_ids: Option<Vec<String>>,
-    /// If MARKET order events will be generated during reconciliation to align discrepancies.
+    /// 是否在对账期间生成 MARKET 订单事件以对齐差异。
     pub generate_missing_orders: bool,
-    /// The interval (milliseconds) between checking whether in-flight orders have exceeded their threshold.
+    /// 检查在途订单 (in-flight orders) 是否超过其阈值的间隔（毫秒）。
     pub inflight_check_interval_ms: u32,
-    /// The threshold (milliseconds) beyond which an in-flight order's status is checked with the venue.
+    /// 超过此阈值（毫秒）后，将向交易所检查在途订单的状态。
     pub inflight_check_threshold_ms: u32,
-    /// The number of retry attempts for verifying in-flight order status.
+    /// 验证在途订单状态的重试次数。
     pub inflight_check_retries: u32,
-    /// The interval (seconds) between checks for open orders at the venue.
+    /// 检查交易平台开仓订单的间隔（秒）。
     pub open_check_interval_secs: Option<f64>,
-    /// The lookback minutes for open order checks.
+    /// 开仓订单检查的回顾分钟数。
     pub open_check_lookback_mins: Option<u32>,
-    /// The minimum elapsed time (milliseconds) since an order update before acting on discrepancies.
+    /// 订单更新后处理差异前的最小流逝时间（毫秒）。
     pub open_check_threshold_ms: u32,
-    /// The number of retries for missing open orders.
+    /// 遗漏开仓订单的重试次数。
     pub open_check_missing_retries: u32,
-    /// If the `check_open_orders` requests only currently open orders from the venue.
+    /// `check_open_orders` 请求是否仅从交易所请求当前开仓的订单。
     pub open_check_open_only: bool,
-    /// The maximum number of single-order queries per consistency check cycle.
+    /// 每个一致性检查周期中单笔订单查询的最大数量。
     pub max_single_order_queries_per_cycle: u32,
-    /// The delay (milliseconds) between consecutive single-order queries.
+    /// 连续单笔订单查询之间的延迟（毫秒）。
     pub single_order_query_delay_ms: u32,
-    /// The interval (seconds) between checks for open positions at the venue.
+    /// 检查交易所持仓的间隔（秒）。
     pub position_check_interval_secs: Option<f64>,
-    /// The lookback minutes for position consistency checks.
+    /// 持仓一致性检查的回顾分钟数。
     pub position_check_lookback_mins: u32,
-    /// The minimum elapsed time (milliseconds) since a position update before acting on discrepancies.
+    /// 持仓更新后处理差异前的最小流逝时间（毫秒）。
     pub position_check_threshold_ms: u32,
-    /// The interval (minutes) between purging closed orders from the in-memory cache.
+    /// 从内存缓存中清除已关闭订单的间隔（分钟）。
     pub purge_closed_orders_interval_mins: Option<u32>,
-    /// The time buffer (minutes) before closed orders can be purged.
+    /// 已关闭订单被清除前的时间缓冲（分钟）。
     pub purge_closed_orders_buffer_mins: Option<u32>,
-    /// The interval (minutes) between purging closed positions from the in-memory cache.
+    /// 从内存缓存中清除已关闭持仓的间隔（分钟）。
     pub purge_closed_positions_interval_mins: Option<u32>,
-    /// The time buffer (minutes) before closed positions can be purged.
+    /// 已关闭持仓被清除前的时间缓冲（分钟）。
     pub purge_closed_positions_buffer_mins: Option<u32>,
-    /// The interval (minutes) between purging account events from the in-memory cache.
+    /// 从内存缓存中清除账户事件的间隔（分钟）。
     pub purge_account_events_interval_mins: Option<u32>,
-    /// The time buffer (minutes) before account events can be purged.
+    /// 账户事件被清除前的回顾时间缓冲（分钟）。
     pub purge_account_events_lookback_mins: Option<u32>,
-    /// If purge operations should also delete from the backing database.
+    /// 清除操作是否也应从后端数据库中删除。
     pub purge_from_database: bool,
-    /// The interval (seconds) between auditing own books against public order books.
+    /// 根据公开订单簿审计自有订单簿的间隔（秒）。
     pub own_books_audit_interval_secs: Option<f64>,
-    /// If the engine should gracefully shutdown when queue processing encounters unexpected errors.
+    /// 当队列处理遇到意外错误时，引擎是否应优雅停机。
     pub graceful_shutdown_on_error: bool,
-    /// The queue size for the engine's internal queue buffers.
+    /// 引擎内部队列缓冲区的队列大小。
     pub qsize: u32,
 }
 
@@ -179,23 +179,23 @@ impl From<LiveExecEngineConfig> for ExecutionEngineConfig {
     }
 }
 
-/// Configuration for live client message routing.
+/// 实盘客户端消息路由的配置。
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct RoutingConfig {
-    /// If the client should be registered as the default routing client.
+    /// 客户端是否应注册为默认路由客户端。
     pub default: bool,
-    /// The venues to register for routing.
+    /// 要注册路由的交易平台 (Venues)。
     pub venues: Option<Vec<String>>,
 }
 
-/// Configuration for instrument providers.
+/// 标的提供者 (Instrument Provider) 的配置。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct InstrumentProviderConfig {
-    /// Whether to load all instruments on startup.
+    /// 是否在启动时加载所有标的。
     pub load_all: bool,
-    /// Whether to load instrument IDs only.
+    /// 是否仅加载标的 ID。
     pub load_ids: bool,
-    /// Filters for loading specific instruments.
+    /// 加载特定标的的过滤器。
     pub filters: HashMap<String, String>,
 }
 
@@ -209,70 +209,70 @@ impl Default for InstrumentProviderConfig {
     }
 }
 
-/// Configuration for live data clients.
+/// 实盘数据客户端的配置。
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct LiveDataClientConfig {
-    /// If `DataClient` will emit bar updates when a new bar opens.
+    /// 当新 K 线开启时，`DataClient` 是否会发出 K 线更新信息。
     pub handle_revised_bars: bool,
-    /// The client's instrument provider configuration.
+    /// 客户端的标的提供者配置。
     pub instrument_provider: InstrumentProviderConfig,
-    /// The client's message routing configuration.
+    /// 客户端的消息路由配置。
     pub routing: RoutingConfig,
 }
 
-/// Configuration for live execution clients.
+/// 实盘执行客户端的配置。
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct LiveExecClientConfig {
-    /// The client's instrument provider configuration.
+    /// 客户端的标的提供者配置。
     pub instrument_provider: InstrumentProviderConfig,
-    /// The client's message routing configuration.
+    /// 客户端的消息路由配置。
     pub routing: RoutingConfig,
 }
 
-/// Configuration for live Nautilus system nodes.
+/// Nautilus 实时系统节点的配置。
 #[derive(Debug, Clone)]
 pub struct LiveNodeConfig {
-    /// The trading environment.
+    /// 交易环境。
     pub environment: Environment,
-    /// The trader ID for the node.
+    /// 节点的交易员 ID。
     pub trader_id: TraderId,
-    /// If trading strategy state should be loaded from the database on start.
+    /// 启动时是否应从数据库加载交易策略状态。
     pub load_state: bool,
-    /// If trading strategy state should be saved to the database on stop.
+    /// 停止时是否应将交易策略状态保存到数据库。
     pub save_state: bool,
-    /// The logging configuration for the kernel.
+    /// 内核的日志配置。
     pub logging: LoggerConfig,
-    /// The unique instance identifier for the kernel
+    /// 内核的唯一实例标识符。
     pub instance_id: Option<UUID4>,
-    /// The timeout for all clients to connect and initialize.
+    /// 所有客户端连接并初始化的超时时间。
     pub timeout_connection: Duration,
-    /// The timeout for execution state to reconcile.
+    /// 执行状态对账的超时时间。
     pub timeout_reconciliation: Duration,
-    /// The timeout for portfolio to initialize margins and unrealized pnls.
+    /// 投资组合初始化保证金和浮动盈亏的超时时间。
     pub timeout_portfolio: Duration,
-    /// The timeout for all engine clients to disconnect.
+    /// 所有引擎客户端断开连接的超时时间。
     pub timeout_disconnection: Duration,
-    /// The delay after stopping the node to await residual events before final shutdown.
+    /// 节点停止后，在最终关闭前等待残留事件的延迟时间。
     pub delay_post_stop: Duration,
-    /// The timeout to await pending tasks cancellation during shutdown.
+    /// 关闭期间等待挂起任务取消的超时时间。
     pub timeout_shutdown: Duration,
-    /// The cache configuration.
+    /// 缓存配置。
     pub cache: Option<CacheConfig>,
-    /// The message bus configuration.
+    /// 消息总线配置。
     pub msgbus: Option<MessageBusConfig>,
-    /// The portfolio configuration.
+    /// 投资组合配置。
     pub portfolio: Option<PortfolioConfig>,
-    /// The configuration for streaming to feather files.
+    /// 向 feather 文件流式传输的配置。
     pub streaming: Option<StreamingConfig>,
-    /// The live data engine configuration.
+    /// 实盘数据引擎配置。
     pub data_engine: LiveDataEngineConfig,
-    /// The live risk engine configuration.
+    /// 实盘风险引擎配置。
     pub risk_engine: LiveRiskEngineConfig,
-    /// The live execution engine configuration.
+    /// 实盘执行引擎配置。
     pub exec_engine: LiveExecEngineConfig,
-    /// The data client configurations.
+    /// 数据客户端配置。
     pub data_clients: HashMap<String, LiveDataClientConfig>,
-    /// The execution client configurations.
+    /// 执行客户端配置。
     pub exec_clients: HashMap<String, LiveExecClientConfig>,
 }
 

@@ -13,17 +13,17 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! Python bindings from [PyO3](https://pyo3.rs).
+//! 来自 [PyO3](https://pyo3.rs) 的 Python 绑定。
 
 pub mod node;
 
 use pyo3::prelude::*;
 
-/// Loaded as `nautilus_pyo3.live`.
+/// 作为 `nautilus_pyo3.live` 加载。
 ///
-/// # Errors
+/// # 错误
 ///
-/// Returns a `PyErr` if registering any module components fails.
+/// 如果注册任何模块组件失败，则返回 `PyErr`。
 #[pymodule]
 pub fn live(_: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<crate::node::LiveNode>()?;
