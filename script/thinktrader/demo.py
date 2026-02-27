@@ -38,7 +38,7 @@ PAYLOAD = {
     "license": "c5ddbf5f-2917-44d4-9b66-d4ab239cbac5",
     "macAddress": "00:16:3E:41:EA:AF",
     "positionStockCodes": "",
-    "securitiesAccount": "693",
+    "securitiesAccount": "179",
     "sign": "noesis_2025"
 }
 
