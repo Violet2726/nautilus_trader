@@ -8,6 +8,7 @@ import re
 import socket
 
 import requests
+from config import Config
 
 
 # 测试网络IP - 使用多个源获取
@@ -41,7 +42,7 @@ def get_public_ip():
 def get_local_ip():
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(("114.80.213.49", 16669))
+        s.connect((Config.Server.HOST, Config.Server.PORT))
         ip = s.getsockname()[0]
         s.close()
         return ip
@@ -53,12 +54,14 @@ print("网络诊断信息")
 print("=" * 60)
 public_ip = get_public_ip()
 local_ip = get_local_ip()
-print(f"公网IP: {public_ip}")
-print(f"本地IP: {local_ip}")
-print("账号绑定IP: 124.160.32.18")
+print(f"公网 IP: {public_ip}")
+print(f"本地 IP: {local_ip}")
+print(f"当前账号组别：{Config.Account.ACCOUNT_GROUP}")
+print(f"交易账号：{Config.Account.TRADING_ACCOUNT}")
+print(f"账号绑定 IP: {Config.Account.BIND_IP}")
 print("=" * 60)
 
-if public_ip != "Unknown" and public_ip != "124.160.32.18":
+if public_ip != "Unknown" and public_ip != Config.Account.BIND_IP:
     print("⚠️ 警告: 您的公网IP与账号绑定的IP不匹配！")
     print("这很可能是导致连接被拒绝的原因。")
     print("解决方案:")
@@ -71,11 +74,23 @@ from daily_real_wind import get_deal
 from daily_real_wind import get_order
 from daily_real_wind import get_position
 from daily_real_wind import place_order
+from config import Config, get_account as get_account_config, list_accounts
 
 
 class ContextInfo:
-    def __init__(self):
-        self.acct = "690"
+    def __init__(self, account=None):
+        """
+        初始化上下文
+        
+        Args:
+            account: 账号配置对象，None 则使用默认账号
+        """
+        if account:
+            self.account_config = account
+            self.acct = account.TRADING_ACCOUNT
+        else:
+            self.account_config = Config.Account
+            self.acct = Config.Account.TRADING_ACCOUNT
 
 
 C = ContextInfo()

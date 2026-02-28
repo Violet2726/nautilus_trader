@@ -13,17 +13,25 @@ if base_path not in sys.path:
 import quickfix as fix
 from protocol.quick_fix import QMTToFIXAdapter
 from protocol.quick_fix import ensure_tls_tunnel
+from config import Config, AccountConfig
 
 
 class WindFixConn:
-    """连接wind fix"""
+    """连接 wind fix"""
 
-    def __init__(self):
-        self.wind_cfg_path = "wind_fix_config.cfg"  # wind fix协议配置文件位置
-        self.wind_fix44_path = "FIX44.xml"  # wind fix协议字典位置
-        self.login_account = "HA2032139003"  # wind 通道账号
-        self.password = "60374602"  # wind 通道密码
-        self.waite_time = 3  # 登录等待时间
+    def __init__(self, account_config=None):
+        """
+        初始化 FIX 连接
+        
+        Args:
+            account_config: 账号配置对象，如使用 None 则使用 Config.Account
+        """
+        self.account_config = account_config or Config.Account
+        self.wind_cfg_path = Config.Paths.WIND_FIX_CONFIG
+        self.wind_fix44_path = Config.Paths.WIND_FIX_DICT
+        self.login_account = self.account_config.WIND_LOGIN_ACCOUNT
+        self.password = self.account_config.WIND_PASSWORD
+        self.waite_time = Config.Timeout.LOGIN_WAIT
 
     def test_network_connection(self, host, port):
         """测试网络连接"""
@@ -42,8 +50,8 @@ class WindFixConn:
         # 测试网络连接
         settings = fix.SessionSettings(self.wind_cfg_path)
         # 从配置中获取连接信息
-        host = "114.80.213.49"
-        port = 16669
+        host = Config.Server.HOST
+        port = Config.Server.PORT
 
         print(f"正在测试网络连接: {host}:{port}")
         if not self.test_network_connection(host, port):
@@ -64,7 +72,7 @@ class WindFixConn:
 
             # 优化：循环检查直到登录成功或超时
             start_wait = time.time()
-            while time.time() - start_wait < 30: # 最长等待 30 秒
+            while time.time() - start_wait < Config.Timeout.MAX_LOGIN_WAIT: # 最长等待 Config.Timeout.MAX_LOGIN_WAIT 秒
                 if application.session_id is not None:
                     # 额外等待一小会确保应用层登录也完成
                     time.sleep(2)
@@ -80,8 +88,30 @@ class WindFixConn:
             return None, None
 
 
-# 保持住链接
-_, app = WindFixConn().get_fix_application()
+# 全局应用实例（使用默认账号）
+_app_instance = None
+_initiator = None
+
+def init_fix_connection(account_config=None):
+    """
+    初始化 FIX 连接（可指定账号）
+    
+    Args:
+        account_config: 账号配置对象，None 则使用默认账号
+    
+    Returns:
+        (initiator, application) 元组
+    """
+    global _app_instance, _initiator
+    conn = WindFixConn(account_config)
+    _initiator, _app_instance = conn.get_fix_application()
+    return _initiator, _app_instance
+
+# 默认初始化（使用 Config.Account）
+if _app_instance is None:
+    _initiator, _app_instance = init_fix_connection()
+
+app = _app_instance
 
 
 def place_order(C, op_type, order_code, pr_type, price, volume, note) -> str:
