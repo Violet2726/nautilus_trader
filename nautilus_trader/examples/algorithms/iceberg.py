@@ -1,42 +1,30 @@
-# -------------------------------------------------------------------------------------------------
-#  Copyright (C) 2015-2026 Nautech Systems Pty Ltd. All rights reserved.
-#  https://nautechsystems.io
-#
-#  Licensed under the GNU Lesser General Public License Version 3.0 (the "License");
-#  You may not use this file except in compliance with the License.
-#  You may obtain a copy of the License at https://www.gnu.org/licenses/lgpl-3.0.en.html
-#
-#  Unless required by applicable law or agreed to in writing, software
-#  distributed under the License is distributed on an "AS IS" BASIS,
-#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-#  See the License for the specific language governing permissions and
-#  limitations under the License.
-# -------------------------------------------------------------------------------------------------
+"""
+冰山订单 (Iceberg) 执行算法。
+
+该算法将大订单隐藏在市场深处，每次只展示一小部分（"冰山一角"），
+当该部分成交后再自动提交下一个切片，直到全部数量执行完毕。
+"""
 
 from __future__ import annotations
 
 import random
-from decimal import ROUND_DOWN
-from decimal import Decimal
+from decimal import ROUND_DOWN, Decimal
 
 from nautilus_trader.common.enums import LogColor
 from nautilus_trader.config import ExecAlgorithmConfig
 from nautilus_trader.core.correctness import PyCondition
 from nautilus_trader.execution.algorithm import ExecAlgorithm
-from nautilus_trader.model.enums import OrderType
+from nautilus_trader.model.enums import OrderSide, OrderType
 from nautilus_trader.model.events.order import OrderFilled
-from nautilus_trader.model.identifiers import ClientOrderId
-from nautilus_trader.model.identifiers import ExecAlgorithmId
+from nautilus_trader.model.identifiers import ClientOrderId, ExecAlgorithmId
 from nautilus_trader.model.instruments import Instrument
 from nautilus_trader.model.objects import Quantity
-from nautilus_trader.model.orders import LimitOrder
-from nautilus_trader.model.orders import MarketOrder
-from nautilus_trader.model.orders import Order
+from nautilus_trader.model.orders import LimitOrder, MarketOrder, Order
 
 
 class IcebergExecAlgorithmConfig(ExecAlgorithmConfig, frozen=True):
     """
-    ``IcebergExecAlgorithm`` 实例的配置类。
+    Iceberg 执行算法配置类。
 
     该配置类定义了冰山订单 (Iceberg) 执行算法所需的参数。
     冰山算法将一个大订单隐藏在市场深处，每次只向市场展示一小部分（即"露出水面"的冰山一角），
@@ -44,9 +32,13 @@ class IcebergExecAlgorithmConfig(ExecAlgorithmConfig, frozen=True):
 
     Parameters
     ----------
-    exec_algorithm_id : ExecAlgorithmId
-        执行算法 ID（将覆盖默认值，默认值为类名）。
+    exec_algorithm_id : ExecAlgorithmId, optional
+        执行算法 ID（默认："Iceberg"）。
 
+    Notes
+    -----
+    此配置类定义了 Iceberg 执行算法所需的参数。
+    该算法旨在将大订单拆分为多个小切片，每次只执行一个切片。
     """
 
     exec_algorithm_id: ExecAlgorithmId | None = ExecAlgorithmId("Iceberg")
@@ -54,20 +46,18 @@ class IcebergExecAlgorithmConfig(ExecAlgorithmConfig, frozen=True):
 
 class IcebergExecAlgorithm(ExecAlgorithm):
     """
-    提供冰山订单 (Iceberg) 执行算法。
+    冰山订单 (Iceberg) 执行算法。
 
-    冰山执行算法的目标是隐藏大订单的真实规模。算法接收一个代表总数量和方向的主订单
-    (primary order)，然后将其拆分为多个固定大小的切片 (slice)，每次只向市场提交
-    一个切片。当前切片完全成交后，才自动提交下一个切片。
+    算法特点：
+    - 将大订单拆分为多个固定大小的切片 (slice)
+    - 每次只向市场提交一个切片，隐藏真实订单规模
+    - 成交驱动型：完全由子订单的 OrderFilled 事件触发下一个切片
+    - 支持数量随机化（降低被识别为算法订单的概率）
+    - 支持市场深度检查（限制订单占市场深度的比例）
 
     与 TWAP/VWAP/POV 等基于时间或成交量驱动的算法不同，冰山订单是**成交驱动型**的：
     - 不依赖定时器或市场成交量数据
-    - 完全由子订单的 OrderFilled 事件触发下一个切片
     - 在当前切片未完全成交前，不会提交新的切片
-
-    可选的随机化功能可以让每个切片的大小在 [slice_qty * (1 - randomize_pct),
-    slice_qty * (1 + randomize_pct)] 范围内随机浮动，以降低被市场对手方识别为
-    算法订单的概率。
 
     算法工作流程：
     1. 接收主订单后，根据 slice_qty 计算切片大小
@@ -78,11 +68,24 @@ class IcebergExecAlgorithm(ExecAlgorithm):
     Parameters
     ----------
     config : IcebergExecAlgorithmConfig, optional
-        该实例的配置。
+        算法配置实例。
 
+    Notes
+    -----
+    可选的随机化功能可以让每个切片的大小在 [slice_qty * (1 - randomize_pct),
+    slice_qty * (1 + randomize_pct)] 范围内随机浮动，以降低被市场对手方识别为
+    算法订单的概率。
     """
 
     def __init__(self, config: IcebergExecAlgorithmConfig | None = None) -> None:
+        """
+        初始化 Iceberg 执行算法。
+
+        Parameters
+        ----------
+        config : IcebergExecAlgorithmConfig, optional
+            算法配置实例。
+        """
         if config is None:
             config = IcebergExecAlgorithmConfig()
         super().__init__(config)
@@ -95,73 +98,159 @@ class IcebergExecAlgorithm(ExecAlgorithm):
         self._randomize_pct: dict[ClientOrderId, float] = {}
         # 当前正在执行的子订单 ID -> 主订单 ID 的映射
         self._active_spawns: dict[ClientOrderId, ClientOrderId] = {}
+        # 市场深度检查参数
+        self._max_display_ratios: dict[ClientOrderId, float] = {}
 
     def on_start(self) -> None:
         """
-        算法组件启动时执行的操作。
+        算法启动时执行的操作。
+
+        Notes
+        -----
+        此方法在算法组件启动时被调用，可用于初始化资源。
         """
         # 可选实现
 
     def on_stop(self) -> None:
         """
-        算法组件停止时执行的操作。
+        算法停止时执行的操作。
+
+        Notes
+        -----
+        冰山算法不使用定时器，无需取消。
         """
         # 冰山算法不使用定时器，无需取消
 
     def on_reset(self) -> None:
         """
-        算法组件重置时执行的操作。
+        算法重置时执行的操作。
+
+        Notes
+        -----
+        此方法在算法组件重置时被调用，负责清空所有内部状态字典。
         """
         self._remaining_qty.clear()
         self._slice_qty.clear()
         self._randomize_pct.clear()
         self._active_spawns.clear()
+        self._max_display_ratios.clear()
 
     def on_save(self) -> dict[str, bytes]:
         """
-        算法组件保存时执行的操作。
-
-        创建并返回要保存的状态字典。
+        保存算法状态。
 
         Returns
         -------
         dict[str, bytes]
-            策略状态字典。
+            算法状态字典。
 
+        Notes
+        -----
+        此方法用于持久化算法状态，当前实现返回空字典。
         """
         return {}  # 可选实现
 
     def on_load(self, state: dict[str, bytes]) -> None:
         """
-        算法组件加载时执行的操作。
-
-        已保存的状态值将包含在给定的状态字典中。
+        加载算法状态。
 
         Parameters
         ----------
         state : dict[str, bytes]
-            算法组件状态字典。
+            算法状态字典。
 
+        Notes
+        -----
+        此方法用于从持久化存储中恢复算法状态，当前实现为空操作。
         """
         # 可选实现
 
     def round_decimal_down(self, amount: Decimal, precision: int) -> Decimal:
-        """将 Decimal 值向下取整到指定精度。"""
+        """
+        将 Decimal 值向下取整到指定精度。
+
+        Parameters
+        ----------
+        amount : Decimal
+            要取整的数值。
+        precision : int
+            精度（小数位数）。
+
+        Returns
+        -------
+        Decimal
+            向下取整后的结果。
+        """
         return amount.quantize(Decimal(f"1e-{precision}"), rounding=ROUND_DOWN)
+
+    def check_market_depth_limit(
+        self,
+        instrument: Instrument,
+        proposed_qty: Quantity,
+        max_display_ratio: float,
+        order_side: OrderSide,
+    ) -> Quantity:
+        """
+        检查市场深度限制。
+
+        Parameters
+        ----------
+        instrument : Instrument
+            交易工具。
+        proposed_qty : Quantity
+            提议的订单数量。
+        max_display_ratio : float
+            最大显示比例（如 0.1 表示 10%）。
+        order_side : OrderSide
+            订单方向（买/卖）。
+
+        Returns
+        -------
+        Quantity
+            经过市场深度限制调整后的数量。
+
+        Notes
+        -----
+        此方法通过比较订单数量与订单簿深度，确保单笔订单不会对市场造成过大冲击。
+        限制规则：订单数量不超过订单簿最佳报价数量的指定比例。
+        """
+        book = self.cache.order_book(instrument.id)
+        if book is None:
+            return proposed_qty
+
+        # 获取最佳反向报价数量
+        depth_qty = book.best_ask_size() if order_side == OrderSide.BUY else book.best_bid_size()
+        if depth_qty is None:
+            return proposed_qty
+
+        max_allowed = depth_qty.as_decimal() * Decimal(str(max_display_ratio))
+        limited_qty = min(proposed_qty, instrument.make_qty(max_allowed))
+        
+        # 确保至少有 1 单位的量
+        if limited_qty.as_decimal() < instrument.size_increment.as_decimal():
+            limited_qty = instrument.make_qty(instrument.size_increment.as_decimal())
+            
+        return limited_qty
 
     def on_order(self, order: Order) -> None:
         """
         算法运行中接收到订单时执行的操作。
 
+        此方法处理主订单的初始化，包括：
+        - 验证订单类型和参数
+        - 解析执行参数（切片大小、随机化百分比等）
+        - 验证参数合理性
+        - 初始化跟踪状态
+        - 立即提交第一个切片
+
         Parameters
         ----------
         order : Order
-            待处理的订单。
+            主订单对象。
 
-        Warnings
-        --------
-        系统方法（不应由用户代码直接调用）。
-
+        Notes
+        -----
+        该方法负责整个 Iceberg 执行流程的初始化阶段。
         """
         # 确保该订单尚未被调度
         PyCondition.not_in(
@@ -219,6 +308,9 @@ class IcebergExecAlgorithm(ExecAlgorithm):
             )
             return
 
+        # 获取市场深度检查参数（可选，默认 0.1 即 10%）
+        max_display_ratio = exec_params.get("max_display_ratio", 0.1)
+
         order_qty = order.quantity.as_decimal()
 
         # 如果切片大小大于等于订单总量，则直接提交整个订单
@@ -246,10 +338,12 @@ class IcebergExecAlgorithm(ExecAlgorithm):
         self._remaining_qty[order.client_order_id] = order_qty
         self._slice_qty[order.client_order_id] = slice_qty
         self._randomize_pct[order.client_order_id] = randomize_pct
+        self._max_display_ratios[order.client_order_id] = max_display_ratio
 
         self.log.info(
             f"已启动 Iceberg 执行 {order.client_order_id}："
-            f"total_qty={order_qty}, slice_qty={slice_qty}, randomize_pct={randomize_pct}",
+            f"total_qty={order_qty}, slice_qty={slice_qty}, randomize_pct={randomize_pct}, "
+            f"max_display_ratio={max_display_ratio}",
             LogColor.BLUE,
         )
 
@@ -267,6 +361,12 @@ class IcebergExecAlgorithm(ExecAlgorithm):
         event : OrderFilled
             接收到的订单成交事件。
 
+        Notes
+        -----
+        该方法在每次子订单成交时被调用，负责：
+        - 更新剩余数量
+        - 检查是否完全成交
+        - 提交下一个切片（如需要）
         """
         filled_order_id = event.client_order_id
 
@@ -349,6 +449,13 @@ class IcebergExecAlgorithm(ExecAlgorithm):
         instrument : Instrument
             合约信息。
 
+        Notes
+        -----
+        该方法负责生成并提交下一个子订单，包括：
+        - 计算当前切片数量（考虑随机化）
+        - 应用市场深度限制
+        - 生成适当的订单类型（限价单或市价单）
+        - 提交订单并更新内部状态
         """
         primary_id = primary.client_order_id
         remaining = self._remaining_qty.get(primary_id, Decimal(0))
@@ -372,6 +479,15 @@ class IcebergExecAlgorithm(ExecAlgorithm):
             min_qty_decimal,
             instrument.size_precision,
         )
+
+        # 应用市场深度限制
+        max_display_ratio = self._max_display_ratios.get(primary.client_order_id, 0.1)
+        if max_display_ratio > 0:
+            proposed_qty = instrument.make_qty(current_slice)
+            limited_qty = self.check_market_depth_limit(
+                instrument, proposed_qty, max_display_ratio, primary.side
+            )
+            current_slice = limited_qty.as_decimal()
 
         # 如果剩余数量小于等于本次切片，直接提交主订单
         if remaining <= current_slice or (remaining - current_slice) < min_qty_decimal:
@@ -447,6 +563,13 @@ class IcebergExecAlgorithm(ExecAlgorithm):
         Decimal
             计算后的切片数量（已取整，且不超过剩余数量）。
 
+        Notes
+        -----
+        该方法执行以下步骤：
+        - 应用随机化（如启用）
+        - 向下取整到合约精度
+        - 确保不低于最小数量
+        - 确保不超过剩余数量
         """
         if randomize_pct > 0:
             # 在 [1 - pct, 1 + pct] 范围内随机生成乘数
@@ -481,11 +604,17 @@ class IcebergExecAlgorithm(ExecAlgorithm):
         exec_spawn_id : ClientOrderId
             要完成的执行序列的客户端订单 ID。
 
+        Notes
+        -----
+        此方法在订单执行序列完成时被调用，负责：
+        - 清理所有与该订单相关的内部状态字典
+        - 清理该主订单下的所有活跃子订单映射
         """
         # 清理跟踪状态
         self._remaining_qty.pop(exec_spawn_id, None)
         self._slice_qty.pop(exec_spawn_id, None)
         self._randomize_pct.pop(exec_spawn_id, None)
+        self._max_display_ratios.pop(exec_spawn_id, None)
 
         # 清理该主订单下的所有活跃子订单映射
         spawn_ids_to_remove = [

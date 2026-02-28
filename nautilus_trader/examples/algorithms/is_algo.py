@@ -1,24 +1,26 @@
-# -------------------------------------------------------------------------------------------------
-#  Copyright (C) 2015-2026 Nautech Systems Pty Ltd. All rights reserved.
-#  https://nautechsystems.io
-#
-#  Licensed under the GNU Lesser General Public License Version 3.0 (the "License");
-#  You may not use this file except in compliance with the License.
-#  You may obtain a copy of the License at https://www.gnu.org/licenses/lgpl-3.0.en.html
-#
-#  Unless required by applicable law or agreed to in writing, software
-#  distributed under the License is distributed on an "AS IS" BASIS,
-#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-#  See the License for the specific language governing permissions and
-#  limitations under the License.
-# -------------------------------------------------------------------------------------------------
+"""
+实现缺口 (Implementation Shortfall, IS) 执行算法。
+
+IS 执行算法的核心目标是在**市场冲击成本**与**时间风险成本**之间取得最优平衡：
+- 执行过快 → 市场冲击大，抬高/压低价格
+- 执行过慢 → 价格可能向不利方向漂移，增加时间风险
+
+算法通过 `urgency` (紧迫度) 参数来控制这一权衡：
+- urgency → 1.0：高度紧迫，大量前置执行（类似一次性市价单）
+- urgency → 0.0：低紧迫度，更均匀分散执行（类似 TWAP）
+
+此外，算法实时监控市场价格相对于到达价格的漂移情况：
+- 如果价格向**不利方向**漂移（买单价格上涨、卖单价格下跌），
+  算法会自适应加速执行，减少进一步的不利影响
+- 如果价格向**有利方向**漂移，算法维持正常节奏
+"""
 
 from __future__ import annotations
 
 import math
+import random
 from datetime import timedelta
-from decimal import ROUND_DOWN
-from decimal import Decimal
+from decimal import ROUND_DOWN, Decimal
 
 from nautilus_trader.common.enums import LogColor
 from nautilus_trader.common.events import TimeEvent
@@ -26,21 +28,16 @@ from nautilus_trader.config import ExecAlgorithmConfig
 from nautilus_trader.core.correctness import PyCondition
 from nautilus_trader.execution.algorithm import ExecAlgorithm
 from nautilus_trader.model.data import TradeTick
-from nautilus_trader.model.enums import OrderSide
-from nautilus_trader.model.enums import OrderType
-from nautilus_trader.model.identifiers import ClientOrderId
-from nautilus_trader.model.identifiers import ExecAlgorithmId
-from nautilus_trader.model.identifiers import InstrumentId
+from nautilus_trader.model.enums import OrderSide, OrderType
+from nautilus_trader.model.identifiers import ClientOrderId, ExecAlgorithmId, InstrumentId
 from nautilus_trader.model.instruments import Instrument
 from nautilus_trader.model.objects import Quantity
-from nautilus_trader.model.orders import LimitOrder
-from nautilus_trader.model.orders import MarketOrder
-from nautilus_trader.model.orders import Order
+from nautilus_trader.model.orders import LimitOrder, MarketOrder, Order
 
 
 class ISExecAlgorithmConfig(ExecAlgorithmConfig, frozen=True):
     """
-    ``ISExecAlgorithm`` 实例的配置类。
+    IS 执行算法配置类。
 
     该配置类定义了实现缺口 (Implementation Shortfall, IS) 执行算法所需的参数。
     IS 算法也称为"到达价格算法" (Arrival Price Algorithm)，其目标是最小化
@@ -48,9 +45,13 @@ class ISExecAlgorithmConfig(ExecAlgorithmConfig, frozen=True):
 
     Parameters
     ----------
-    exec_algorithm_id : ExecAlgorithmId
-        执行算法 ID（将覆盖默认值，默认值为类名）。
+    exec_algorithm_id : ExecAlgorithmId, optional
+        执行算法 ID（默认："IS"）。
 
+    Notes
+    -----
+    此配置类定义了 IS 执行算法所需的参数。
+    该算法旨在在市场冲击成本与时间风险成本之间取得最优平衡。
     """
 
     exec_algorithm_id: ExecAlgorithmId | None = ExecAlgorithmId("IS")
@@ -58,7 +59,15 @@ class ISExecAlgorithmConfig(ExecAlgorithmConfig, frozen=True):
 
 class ISExecAlgorithm(ExecAlgorithm):
     """
-    提供实现缺口 (Implementation Shortfall, IS) 执行算法。
+    实现缺口 (Implementation Shortfall, IS) 执行算法。
+
+    算法特点：
+    - 在市场冲击成本与时间风险成本之间取得最优平衡
+    - 通过 urgency 参数控制执行策略（前倾 vs 均匀）
+    - 实时监控价格漂移并自适应调整执行数量
+    - 支持时间随机化（±20% 抖动）
+    - 支持数量随机化（±5% 扰动）
+    - 支持市场冲击保护（限制订单占市场深度的比例）
 
     IS 执行算法的核心目标是在**市场冲击成本**与**时间风险成本**之间取得最优平衡：
     - 执行过快 → 市场冲击大，抬高/压低价格
@@ -83,11 +92,22 @@ class ISExecAlgorithm(ExecAlgorithm):
     Parameters
     ----------
     config : ISExecAlgorithmConfig, optional
-        该实例的配置。
+        算法配置实例。
 
+    Notes
+    -----
+    该算法旨在最小化实际执行价格与"到达价格"（即算法收到订单时的市场价格）之间的差距。
     """
 
     def __init__(self, config: ISExecAlgorithmConfig | None = None) -> None:
+        """
+        初始化 IS 执行算法。
+
+        Parameters
+        ----------
+        config : ISExecAlgorithmConfig, optional
+            算法配置实例。
+        """
         if config is None:
             config = ISExecAlgorithmConfig()
         super().__init__(config)
@@ -108,23 +128,39 @@ class ISExecAlgorithm(ExecAlgorithm):
         self._subscribed_instruments: set[InstrumentId] = set()
         # 跟踪当前活跃的子订单，以便在下个切片时撤销旧单
         self._active_spawned_orders: dict[ClientOrderId, ClientOrderId] = {}
+        # 随机化和市场冲击控制参数
+        self._randomization_enabled: dict[ClientOrderId, bool] = {}
+        self._max_market_impact_ratios: dict[ClientOrderId, float] = {}
+        self._base_intervals: dict[ClientOrderId, float] = {}
 
     def on_start(self) -> None:
         """
-        算法组件启动时执行的操作。
+        算法启动时执行的操作。
+
+        Notes
+        -----
+        此方法在算法组件启动时被调用，可用于初始化资源。
         """
         # 可选实现
 
     def on_stop(self) -> None:
         """
-        算法组件停止时执行的操作。
+        算法停止时执行的操作。
+
+        Notes
+        -----
+        此方法在算法组件停止时被调用，负责取消所有活跃的定时器。
         """
         # 取消所有活跃的定时器
         self.clock.cancel_timers()
 
     def on_reset(self) -> None:
         """
-        算法组件重置时执行的操作。
+        算法重置时执行的操作。
+
+        Notes
+        -----
+        此方法在算法组件重置时被调用，负责清空所有内部状态字典和集合。
         """
         self._scheduled_sizes.clear()
         self._arrival_prices.clear()
@@ -134,52 +170,188 @@ class ISExecAlgorithm(ExecAlgorithm):
         self._urgency.clear()
         self._subscribed_instruments.clear()
         self._active_spawned_orders.clear()
+        self._randomization_enabled.clear()
+        self._max_market_impact_ratios.clear()
+        self._base_intervals.clear()
 
     def on_save(self) -> dict[str, bytes]:
         """
-        算法组件保存时执行的操作。
-
-        创建并返回要保存的状态字典。
+        保存算法状态。
 
         Returns
         -------
         dict[str, bytes]
-            策略状态字典。
+            算法状态字典。
 
+        Notes
+        -----
+        此方法用于持久化算法状态，当前实现返回空字典。
         """
         return {}  # 可选实现
 
     def on_load(self, state: dict[str, bytes]) -> None:
         """
-        算法组件加载时执行的操作。
-
-        已保存的状态值将包含在给定的状态字典中。
+        加载算法状态。
 
         Parameters
         ----------
         state : dict[str, bytes]
-            算法组件状态字典。
+            算法状态字典。
 
+        Notes
+        -----
+        此方法用于从持久化存储中恢复算法状态，当前实现为空操作。
         """
         # 可选实现
 
     def round_decimal_down(self, amount: Decimal, precision: int) -> Decimal:
-        """将 Decimal 值向下取整到指定精度。"""
+        """
+        将 Decimal 值向下取整到指定精度。
+
+        Parameters
+        ----------
+        amount : Decimal
+            要取整的数值。
+        precision : int
+            精度（小数位数）。
+
+        Returns
+        -------
+        Decimal
+            向下取整后的结果。
+        """
         return amount.quantize(Decimal(f"1e-{precision}"), rounding=ROUND_DOWN)
+
+    def apply_time_randomization(self, base_interval_secs: float) -> timedelta:
+        """
+        应用时间随机性（±20% 抖动）。
+
+        Parameters
+        ----------
+        base_interval_secs : float
+            基础时间间隔（秒）。
+
+        Returns
+        -------
+        timedelta
+            随机化后的时间间隔。
+
+        Notes
+        -----
+        时间随机化范围：0.8x 到 1.2x（±20% 抖动）
+        """
+        jitter = 0.8 + random.uniform(0.0, 0.4)  # 0.8 to 1.2
+        randomized_secs = base_interval_secs * jitter
+        return timedelta(seconds=max(randomized_secs, 1.0))
+
+    def apply_quantity_randomization(
+        self,
+        base_qty: Quantity,
+        remaining_qty: Quantity,
+        is_final: bool,
+    ) -> Quantity:
+        """
+        应用数量随机性（±5% 扰动）。
+
+        Parameters
+        ----------
+        base_qty : Quantity
+            基础数量。
+        remaining_qty : Quantity
+            剩余数量。
+        is_final : bool
+            是否为最后一笔订单。
+
+        Returns
+        -------
+        Quantity
+            随机化后的数量。
+
+        Notes
+        -----
+        数量随机化范围：0.95x 到 1.05x（±5% 扰动）
+        最后一笔订单不进行随机化，直接返回剩余数量。
+        """
+        if is_final:
+            return remaining_qty
+
+        randomization_factor = 0.95 + random.uniform(0.0, 0.10)  # 0.95 to 1.05
+        randomized_raw = float(base_qty.as_double()) * randomization_factor
+        instrument = self.cache.instrument(base_qty.instrument_id)
+        randomized_qty = instrument.make_qty(Decimal(str(randomized_raw)))
+        
+        # 确保数量在合理范围内
+        return min(randomized_qty, remaining_qty)
+
+    def check_market_impact_limit(
+        self,
+        instrument: Instrument,
+        proposed_qty: Quantity,
+        max_impact_ratio: float,
+        order_side: OrderSide,
+    ) -> Quantity:
+        """
+        检查市场冲击限制。
+
+        Parameters
+        ----------
+        instrument : Instrument
+            交易工具。
+        proposed_qty : Quantity
+            提议的订单数量。
+        max_impact_ratio : float
+            最大市场冲击比例（如 0.1 表示 10%）。
+        order_side : OrderSide
+            订单方向（买/卖）。
+
+        Returns
+        -------
+        Quantity
+            经过市场冲击限制调整后的数量。
+
+        Notes
+        -----
+        此方法通过比较订单数量与订单簿深度，确保单笔订单不会对市场造成过大冲击。
+        限制规则：订单数量不超过订单簿最佳报价数量的指定比例。
+        """
+        book = self.cache.order_book(instrument.id)
+        if book is None:
+            return proposed_qty
+
+        # 获取最佳反向报价数量
+        depth_qty = book.best_ask_size() if order_side == OrderSide.BUY else book.best_bid_size()
+        if depth_qty is None:
+            return proposed_qty
+
+        max_allowed = depth_qty.as_decimal() * Decimal(str(max_impact_ratio))
+        limited_qty = min(proposed_qty, instrument.make_qty(max_allowed))
+        
+        # 确保至少有 1 单位的量
+        if limited_qty.as_decimal() < instrument.size_increment.as_decimal():
+            limited_qty = instrument.make_qty(instrument.size_increment.as_decimal())
+            
+        return limited_qty
 
     def on_order(self, order: Order) -> None:
         """
         算法运行中接收到订单时执行的操作。
 
+        此方法处理主订单的初始化，包括：
+        - 验证订单类型和参数
+        - 解析执行参数（时间范围、检查间隔、紧迫度等）
+        - 计算到达价格
+        - 根据紧迫度生成执行调度
+        - 应用各种保护机制（随机化、市场冲击限制等）
+        - 提交第一个切片并启动定时器
+
         Parameters
         ----------
         order : Order
-            待处理的订单。
+            主订单对象。
 
-        Warnings
-        --------
-        系统方法（不应由用户代码直接调用）。
-
+        Notes
+        -----
+        该方法负责整个 IS 执行流程的初始化阶段。
         """
         # 确保该订单尚未被调度
         PyCondition.not_in(
@@ -245,6 +417,10 @@ class ISExecAlgorithm(ExecAlgorithm):
             )
             return
 
+        # 获取可选参数
+        max_market_impact_ratio = exec_params.get("max_market_impact_ratio", 0.1)  # 默认 10%
+        randomization_enabled = exec_params.get("randomization_enabled", True)  # 默认启用
+
         # 计算总间隔数
         num_intervals: int = math.floor(horizon_secs / interval_secs)
 
@@ -278,6 +454,9 @@ class ISExecAlgorithm(ExecAlgorithm):
         self._order_sides[order.client_order_id] = order.side
         self._order_instrument_ids[order.client_order_id] = order.instrument_id
         self._urgency[order.client_order_id] = urgency
+        self._randomization_enabled[order.client_order_id] = randomization_enabled
+        self._max_market_impact_ratios[order.client_order_id] = max_market_impact_ratio
+        self._base_intervals[order.client_order_id] = interval_secs
 
         # 订阅逐笔成交数据（用于监控价格漂移）
         if order.instrument_id not in self._subscribed_instruments:
@@ -286,6 +465,19 @@ class ISExecAlgorithm(ExecAlgorithm):
 
         # 立即提交第一个切片
         first_qty: Quantity = scheduled_sizes.pop(0)
+        
+        # 应用市场冲击限制
+        if max_market_impact_ratio > 0:
+            first_qty = self.check_market_impact_limit(
+                instrument, first_qty, max_market_impact_ratio, order.side
+            )
+        
+        # 应用数量随机化
+        if randomization_enabled:
+            remaining_qty = instrument.make_qty(self._remaining_qty[order.client_order_id])
+            is_final = len(scheduled_sizes) == 0
+            first_qty = self.apply_quantity_randomization(first_qty, remaining_qty, is_final)
+        
         self._remaining_qty[order.client_order_id] -= first_qty.as_decimal()
 
         if order.order_type == OrderType.LIMIT:
@@ -316,10 +508,11 @@ class ISExecAlgorithm(ExecAlgorithm):
             self._active_spawned_orders[order.client_order_id] = spawned_order.client_order_id
             self.submit_order(spawned_order)
 
-        # 设置定时器
+        # 设置定时器（应用时间随机化）
+        timer_interval = self.apply_time_randomization(interval_secs) if randomization_enabled else timedelta(seconds=interval_secs)
         self.clock.set_timer(
             name=order.client_order_id.value,
-            interval=timedelta(seconds=interval_secs),
+            interval=timer_interval,
             callback=self.on_time_event,
         )
         self.log.info(
@@ -340,6 +533,14 @@ class ISExecAlgorithm(ExecAlgorithm):
         event : TimeEvent
             接收到的定时事件。
 
+        Notes
+        -----
+        该方法在每次定时器触发时被调用，负责：
+        - 查找对应的主订单
+        - 撤销上一轮未成交完的子订单
+        - 计算当前执行数量（基准量 + 价格漂移调整量）
+        - 应用各种限制（市场冲击、随机化等）
+        - 生成并提交子订单
         """
         self.log.info(repr(event), LogColor.CYAN)
 
@@ -387,12 +588,30 @@ class ISExecAlgorithm(ExecAlgorithm):
         base_qty: Quantity = scheduled_sizes.pop(0)
         base_qty_decimal = base_qty.as_decimal()
 
+        # 应用数量随机化
+        randomization_enabled = self._randomization_enabled.get(exec_spawn_id, True)
+        if randomization_enabled:
+            remaining = self._remaining_qty.get(exec_spawn_id, Decimal(0))
+            remaining_qty = instrument.make_qty(remaining)
+            is_final = len(scheduled_sizes) == 0
+            base_qty = self.apply_quantity_randomization(base_qty, remaining_qty, is_final)
+            base_qty_decimal = base_qty.as_decimal()
+
         # 计算价格漂移自适应调整量
         adjusted_qty_decimal = self._apply_drift_adjustment(
             exec_spawn_id,
             base_qty_decimal,
             instrument,
         )
+
+        # 应用市场冲击限制
+        max_impact_ratio = self._max_market_impact_ratios.get(exec_spawn_id, 0.1)
+        if max_impact_ratio > 0:
+            proposed_qty = instrument.make_qty(adjusted_qty_decimal)
+            limited_qty = self.check_market_impact_limit(
+                instrument, proposed_qty, max_impact_ratio, primary.side
+            )
+            adjusted_qty_decimal = limited_qty.as_decimal()
 
         # 确保调整后的数量不超过剩余量
         remaining = self._remaining_qty.get(exec_spawn_id, Decimal(0))
@@ -464,6 +683,16 @@ class ISExecAlgorithm(ExecAlgorithm):
         self._active_spawned_orders[exec_spawn_id] = spawned_order.client_order_id
         self.submit_order(spawned_order)
 
+        # 重置定时器（应用时间随机化）
+        if randomization_enabled and scheduled_sizes:
+            base_interval = self._base_intervals.get(exec_spawn_id, 60.0)
+            timer_interval = self.apply_time_randomization(base_interval)
+            self.clock.set_timer(
+                name=exec_spawn_id.value,
+                interval=timer_interval,
+                callback=self.on_time_event,
+            )
+
     def _get_arrival_price(self, instrument_id: InstrumentId) -> Decimal | None:
         """
         获取到达价格 —— 算法收到订单瞬间的市场最新成交价。
@@ -475,9 +704,15 @@ class ISExecAlgorithm(ExecAlgorithm):
 
         Returns
         -------
-        Decimal or None
+        Decimal | None
             到达价格，如果无市场数据则返回 None。
 
+        Notes
+        -----
+        该方法按以下优先级获取到达价格：
+        1. 最新逐笔成交价格
+        2. 报价中间价（买一价和卖一价的平均值）
+        3. 无数据时返回 None
         """
         # 优先从最新逐笔成交获取
         if self.cache.has_trade_ticks(instrument_id):
@@ -525,6 +760,14 @@ class ISExecAlgorithm(ExecAlgorithm):
         list[Quantity]
             每个间隔的目标执行数量列表。
 
+        Notes
+        -----
+        该方法执行以下步骤：
+        1. 将 urgency 映射到衰减因子 [0, 3]
+        2. 计算每个间隔的指数衰减权重
+        3. 归一化权重
+        4. 根据归一化权重分配数量
+        5. 验证总量并调整最后一个切片
         """
         if num_intervals <= 0:
             return []
@@ -687,6 +930,12 @@ class ISExecAlgorithm(ExecAlgorithm):
         exec_spawn_id : ClientOrderId
             要完成的执行序列的客户端订单 ID。
 
+        Notes
+        -----
+        此方法在订单执行序列完成时被调用，负责：
+        - 取消定时器
+        - 清理所有与该订单相关的内部状态
+        - 取消订阅不再使用的 TradeTick 数据
         """
         # 取消定时器
         if exec_spawn_id.value in self.clock.timer_names:
@@ -697,6 +946,9 @@ class ISExecAlgorithm(ExecAlgorithm):
         self._arrival_prices.pop(exec_spawn_id, None)
         self._remaining_qty.pop(exec_spawn_id, None)
         self._order_sides.pop(exec_spawn_id, None)
+        self._randomization_enabled.pop(exec_spawn_id, None)
+        self._max_market_impact_ratios.pop(exec_spawn_id, None)
+        self._base_intervals.pop(exec_spawn_id, None)
         instrument_id = self._order_instrument_ids.pop(exec_spawn_id, None)
         self._urgency.pop(exec_spawn_id, None)
         self._active_spawned_orders.pop(exec_spawn_id, None)

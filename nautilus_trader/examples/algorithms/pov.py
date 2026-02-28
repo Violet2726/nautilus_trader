@@ -13,11 +13,16 @@
 #  limitations under the License.
 # -------------------------------------------------------------------------------------------------
 
-from __future__ import annotations
+"""
+参与比例 (POV) 执行算法。
 
+该算法按照市场成交量的固定百分比来执行订单，通过订阅逐笔成交数据实时跟踪市场成交量，
+并按指定的目标参与率生成子订单，确保算法执行速率与市场活跃度保持同步。
+"""
+
+import random
 from datetime import timedelta
-from decimal import ROUND_DOWN
-from decimal import Decimal
+from decimal import ROUND_DOWN, Decimal
 
 from nautilus_trader.common.enums import LogColor
 from nautilus_trader.common.events import TimeEvent
@@ -25,31 +30,26 @@ from nautilus_trader.config import ExecAlgorithmConfig
 from nautilus_trader.core.correctness import PyCondition
 from nautilus_trader.execution.algorithm import ExecAlgorithm
 from nautilus_trader.model.data import TradeTick
-from nautilus_trader.model.enums import OrderSide
-from nautilus_trader.model.enums import OrderType
-from nautilus_trader.model.identifiers import ClientOrderId
-from nautilus_trader.model.identifiers import ExecAlgorithmId
-from nautilus_trader.model.identifiers import InstrumentId
+from nautilus_trader.model.enums import OrderSide, OrderType
+from nautilus_trader.model.identifiers import ClientOrderId, ExecAlgorithmId, InstrumentId
 from nautilus_trader.model.instruments import Instrument
 from nautilus_trader.model.objects import Quantity
-from nautilus_trader.model.orders import LimitOrder
-from nautilus_trader.model.orders import MarketOrder
-from nautilus_trader.model.orders import Order
+from nautilus_trader.model.orders import LimitOrder, MarketOrder, Order
 
 
 class POVExecAlgorithmConfig(ExecAlgorithmConfig, frozen=True):
     """
-    ``POVExecAlgorithm`` 实例的配置类。
-
-    该配置类定义了参与比例 (Percentage of Volume, POV) 执行算法所需的参数。
-    POV 算法以市场实际成交量的固定百分比为目标来提交子订单，
-    确保算法的执行速率与市场活跃度保持同步。
+    POV 执行算法配置类。
 
     Parameters
     ----------
-    exec_algorithm_id : ExecAlgorithmId
-        执行算法 ID（将覆盖默认值，默认值为类名）。
+    exec_algorithm_id : ExecAlgorithmId, optional
+        执行算法 ID（默认："POV"）。
 
+    Notes
+    -----
+    此配置类定义了参与比例 (POV) 执行算法所需的参数。
+    该算法旨在按照市场成交量的固定百分比来提交子订单。
     """
 
     exec_algorithm_id: ExecAlgorithmId | None = ExecAlgorithmId("POV")
@@ -57,76 +57,72 @@ class POVExecAlgorithmConfig(ExecAlgorithmConfig, frozen=True):
 
 class POVExecAlgorithm(ExecAlgorithm):
     """
-    提供参与比例 (Percentage of Volume, POV) 执行算法。
+    参与比例 (Percentage of Volume, POV) 执行算法。
 
-    POV 执行算法的目标是按照市场成交量的固定百分比来执行订单。算法接收一个代表总数量
-    和方向的主订单 (primary order)，然后通过订阅逐笔成交 (TradeTick) 数据来实时
-    跟踪市场成交量，并按指定的目标参与率 (pov_rate) 来生成子订单。
-
-    与 TWAP/VWAP 不同，POV 是一种**被动跟随型**算法：
-    - TWAP 按固定时间均匀分配
-    - VWAP 按历史/实时成交量分布分配
-    - POV 则严格按照市场成交量的固定百分比跟随执行
-
-    例如：若 pov_rate 设为 0.10 (10%)，当市场成交 1000 手时，算法将执行 100 手。
+    算法特点：
+    - 被动跟随：根据实际市场成交量动态调整执行节奏
+    - 风险控制：内置随机化、市场深度限制等保护机制
+    - 灵活配置：支持多种可调参数以适应不同市场环境
 
     算法工作流程：
-    1. 接收主订单后，订阅该合约的逐笔成交 (TradeTick) 数据
-    2. 按固定的检查间隔 (interval_secs) 触发定时器
-    3. 在每个间隔结束时，将该间隔内累积的市场成交量乘以 pov_rate，
-       作为本次应执行的子订单大小
-    4. 当累计已执行数量达到主订单总量时，自动完成执行序列
-    5. 如果到达最大执行时间 (max_horizon_secs) 仍有剩余数量，
-       则提交剩余的主订单以确保完全执行
+    1. 接收主订单后订阅对应合约的逐笔成交数据
+    2. 按固定间隔触发定时器，累积该间隔内的市场成交量
+    3. 将累积成交量乘以目标参与率作为本次子订单数量
+    4. 应用各种风险控制措施后提交子订单
+    5. 重复直到完成全部执行或达到最大执行时间
 
     Parameters
     ----------
     config : POVExecAlgorithmConfig, optional
-        该实例的配置。
+        算法配置实例。
 
+    Notes
+    -----
+    与 TWAP/VWAP 不同，POV 是一种被动跟随型算法：
+    - TWAP 按固定时间均匀分配
+    - VWAP 按历史/实时成交量分布分配
+    - POV 则严格按照市场成交量的固定百分比跟随执行
     """
 
     def __init__(self, config: POVExecAlgorithmConfig | None = None) -> None:
+        """
+        初始化 POV 执行算法。
+
+        Parameters
+        ----------
+        config : POVExecAlgorithmConfig, optional
+            算法配置实例。
+        """
         if config is None:
             config = POVExecAlgorithmConfig()
         super().__init__(config)
 
-        # 每个主订单的剩余待执行数量
+        # 订单跟踪状态
         self._remaining_qty: dict[ClientOrderId, Decimal] = {}
-        # 每个主订单在当前检查间隔内累积的市场成交量
         self._interval_volume: dict[ClientOrderId, Decimal] = {}
-        # 每个主订单的目标参与率 (0 < pov_rate <= 1)
         self._pov_rates: dict[ClientOrderId, Decimal] = {}
-        # 每个主订单对应的合约 ID，用于匹配 TradeTick
         self._order_instrument_ids: dict[ClientOrderId, InstrumentId] = {}
-        # 每个主订单的最大执行时间（秒），超时后强制提交剩余量
         self._max_horizon_secs: dict[ClientOrderId, float] = {}
-        # 每个主订单的启动时间戳（纳秒），用于判断是否超时
         self._start_time_ns: dict[ClientOrderId, int] = {}
-        # 限制每笔子订单的最大发单量，防冲击
         self._max_slice_qty: dict[ClientOrderId, Decimal] = {}
-        # 跟踪当前活跃的子订单，以便在下个切片时撤销旧单
         self._active_spawned_orders: dict[ClientOrderId, ClientOrderId] = {}
-        # 跟踪已订阅 TradeTick 的合约 ID
         self._subscribed_instruments: set[InstrumentId] = set()
 
+        # 随机化和市场深度控制参数
+        self._randomization_enabled: dict[ClientOrderId, bool] = {}
+        self._max_display_ratios: dict[ClientOrderId, float] = {}
+        self._base_intervals: dict[ClientOrderId, float] = {}
+
     def on_start(self) -> None:
-        """
-        算法组件启动时执行的操作。
-        """
-        # 可选实现
+        """算法启动时的回调。"""
+        pass
 
     def on_stop(self) -> None:
-        """
-        算法组件停止时执行的操作。
-        """
-        # 取消所有活跃的定时器
+        """算法停止时的回调。"""
         self.clock.cancel_timers()
 
     def on_reset(self) -> None:
-        """
-        算法组件重置时执行的操作。
-        """
+        """算法重置时的回调。"""
         self._remaining_qty.clear()
         self._interval_volume.clear()
         self._pov_rates.clear()
@@ -136,52 +132,154 @@ class POVExecAlgorithm(ExecAlgorithm):
         self._max_slice_qty.clear()
         self._active_spawned_orders.clear()
         self._subscribed_instruments.clear()
+        self._randomization_enabled.clear()
+        self._max_display_ratios.clear()
+        self._base_intervals.clear()
 
     def on_save(self) -> dict[str, bytes]:
         """
-        算法组件保存时执行的操作。
-
-        创建并返回要保存的状态字典。
+        算法保存时的回调。
 
         Returns
         -------
         dict[str, bytes]
             策略状态字典。
-
         """
-        return {}  # 可选实现
+        return {}
 
     def on_load(self, state: dict[str, bytes]) -> None:
         """
-        算法组件加载时执行的操作。
-
-        已保存的状态值将包含在给定的状态字典中。
+        算法加载时的回调。
 
         Parameters
         ----------
         state : dict[str, bytes]
-            算法组件状态字典。
-
+            策略状态字典。
         """
-        # 可选实现
+        pass
 
     def round_decimal_down(self, amount: Decimal, precision: int) -> Decimal:
-        """将 Decimal 值向下取整到指定精度。"""
+        """
+        将 Decimal 值向下取整到指定精度。
+
+        Parameters
+        ----------
+        amount : Decimal
+            要取整的数值。
+        precision : int
+            精度（小数位数）。
+
+        Returns
+        -------
+        Decimal
+            向下取整后的结果。
+        """
         return amount.quantize(Decimal(f"1e-{precision}"), rounding=ROUND_DOWN)
+
+    def apply_time_randomization(self, base_interval_secs: float) -> timedelta:
+        """
+        应用时间随机性（±20% 抖动）。
+
+        Parameters
+        ----------
+        base_interval_secs : float
+            基础时间间隔（秒）。
+
+        Returns
+        -------
+        timedelta
+            随机化后的时间间隔。
+        """
+        jitter = 0.8 + random.uniform(0.0, 0.4)  # 0.8 to 1.2
+        randomized_secs = base_interval_secs * jitter
+        return timedelta(seconds=max(randomized_secs, 1.0))
+
+    def apply_quantity_randomization(
+        self,
+        base_qty: Quantity,
+        remaining_qty: Quantity,
+        is_final: bool,
+    ) -> Quantity:
+        """
+        应用数量随机性（±5% 扰动）。
+
+        Parameters
+        ----------
+        base_qty : Quantity
+            基准数量。
+        remaining_qty : Quantity
+            剩余数量。
+        is_final : bool
+            是否为最后一个切片。
+
+        Returns
+        -------
+        Quantity
+            随机化后的数量。
+        """
+        if is_final:
+            return remaining_qty
+
+        randomization_factor = 0.95 + random.uniform(0.0, 0.10)  # 0.95 to 1.05
+        randomized_raw = float(base_qty.as_double()) * randomization_factor
+        instrument = self.cache.instrument(base_qty.instrument_id)
+        randomized_qty = instrument.make_qty(Decimal(str(randomized_raw)))
+        
+        # 确保数量在合理范围内
+        return min(randomized_qty, remaining_qty)
+
+    def check_market_depth_limit(
+        self,
+        instrument: Instrument,
+        proposed_qty: Quantity,
+        max_display_ratio: float,
+        order_side: OrderSide,
+    ) -> Quantity:
+        """
+        检查市场深度限制。
+
+        Parameters
+        ----------
+        instrument : Instrument
+            合约信息。
+        proposed_qty : Quantity
+            提议的订单数量。
+        max_display_ratio : float
+            最大显示比例（相对于市场深度）。
+        order_side : OrderSide
+            订单方向。
+
+        Returns
+        -------
+        Quantity
+            经过市场深度限制后的数量。
+        """
+        book = self.cache.order_book(instrument.id)
+        if book is None:
+            return proposed_qty
+
+        # 获取最佳反向报价数量
+        depth_qty = book.best_ask_size() if order_side == OrderSide.BUY else book.best_bid_size()
+        if depth_qty is None:
+            return proposed_qty
+
+        max_allowed = depth_qty.as_decimal() * Decimal(str(max_display_ratio))
+        limited_qty = min(proposed_qty, instrument.make_qty(max_allowed))
+        
+        # 确保至少有 1 单位的量
+        if limited_qty.as_decimal() < instrument.size_increment.as_decimal():
+            limited_qty = instrument.make_qty(instrument.size_increment.as_decimal())
+            
+        return limited_qty
 
     def on_order(self, order: Order) -> None:
         """
-        算法运行中接收到订单时执行的操作。
+        接收到订单时的回调。
 
         Parameters
         ----------
         order : Order
             待处理的订单。
-
-        Warnings
-        --------
-        系统方法（不应由用户代码直接调用）。
-
         """
         # 确保该订单尚未被调度
         PyCondition.not_in(
@@ -195,7 +293,7 @@ class POVExecAlgorithm(ExecAlgorithm):
         # 支持市价单和限价单
         if order.order_type not in (OrderType.MARKET, OrderType.LIMIT):
             self.log.error(
-                f"无法执行订单：不支持的订单类型 {order.order_type=}",
+                f"无法执行订单：仅支持市价单和限价单，当前类型为 {order.order_type=}",
             )
             return
 
@@ -244,6 +342,10 @@ class POVExecAlgorithm(ExecAlgorithm):
         # 获取最大切片限制（可选参数），防止突然放量导致发单过大冲击盘口
         max_slice_qty = exec_params.get("max_slice_qty")
 
+        # 获取可选参数
+        max_display_ratio = exec_params.get("max_display_ratio", 0.1)  # 默认 10%
+        randomization_enabled = exec_params.get("randomization_enabled", True)  # 默认启用
+
         # 初始化该订单的跟踪状态
         self._remaining_qty[order.client_order_id] = order.quantity.as_decimal()
         self._interval_volume[order.client_order_id] = Decimal(0)
@@ -253,16 +355,20 @@ class POVExecAlgorithm(ExecAlgorithm):
         self._start_time_ns[order.client_order_id] = self.clock.timestamp_ns()
         if max_slice_qty:
             self._max_slice_qty[order.client_order_id] = Decimal(str(max_slice_qty))
+        self._randomization_enabled[order.client_order_id] = randomization_enabled
+        self._max_display_ratios[order.client_order_id] = max_display_ratio
+        self._base_intervals[order.client_order_id] = interval_secs
 
         # 订阅该合约的逐笔成交数据（用于跟踪市场成交量）
         if order.instrument_id not in self._subscribed_instruments:
             self.subscribe_trade_ticks(order.instrument_id)
             self._subscribed_instruments.add(order.instrument_id)
 
-        # 设置定时器，按固定间隔触发成交量检查
+        # 设置定时器，按固定间隔触发成交量检查（应用时间随机化）
+        timer_interval = self.apply_time_randomization(interval_secs) if randomization_enabled else timedelta(seconds=interval_secs)
         self.clock.set_timer(
             name=order.client_order_id.value,
-            interval=timedelta(seconds=interval_secs),
+            interval=timer_interval,
             callback=self.on_time_event,
         )
         self.log.info(
@@ -273,15 +379,12 @@ class POVExecAlgorithm(ExecAlgorithm):
 
     def on_trade_tick(self, tick: TradeTick) -> None:
         """
-        接收到逐笔成交数据时执行的操作。
-
-        在每个检查间隔内累积市场成交量，用于计算下一个子订单的大小。
+        接收到逐笔成交数据时的回调。
 
         Parameters
         ----------
         tick : TradeTick
             接收到的逐笔成交数据。
-
         """
         # 遍历所有正在执行的订单，累积与该合约匹配的成交量
         tick_size = tick.size.as_decimal()
@@ -291,16 +394,12 @@ class POVExecAlgorithm(ExecAlgorithm):
 
     def on_time_event(self, event: TimeEvent) -> None:
         """
-        算法接收到定时事件时执行的操作。
-
-        在每个间隔结束时，将该间隔内累积的市场成交量乘以目标参与率，
-        作为本次应执行的子订单数量。
+        接收到定时事件时的回调。
 
         Parameters
         ----------
         event : TimeEvent
             接收到的定时事件。
-
         """
         self.log.info(repr(event), LogColor.CYAN)
 
@@ -385,10 +484,19 @@ class POVExecAlgorithm(ExecAlgorithm):
         target_qty = min(target_qty, remaining)
 
         # 防冲击：应用最大单笔限制
-        max_slice = self._max_slice_qty.get(exec_spawn_id)
+        max_slice = self._max_slice_qty.get(exec_spawn_id, None)
         if max_slice and target_qty > max_slice:
             self.log.info(f"POV 计算量 {target_qty} 超过限制 {max_slice}，进行截断", LogColor.YELLOW)
             target_qty = max_slice
+
+        # 应用市场深度限制
+        max_display_ratio = self._max_display_ratios.get(exec_spawn_id, 0.1)
+        if max_display_ratio > 0:
+            proposed_qty = instrument.make_qty(target_qty)
+            limited_qty = self.check_market_depth_limit(
+                instrument, proposed_qty, max_display_ratio, primary.side
+            )
+            target_qty = limited_qty.as_decimal()
 
         # 获取最小可执行数量
         min_qty_decimal = instrument.size_increment.as_decimal()
@@ -409,6 +517,14 @@ class POVExecAlgorithm(ExecAlgorithm):
             return
 
         quantity: Quantity = instrument.make_qty(target_qty)
+
+        # 应用数量随机化
+        randomization_enabled = self._randomization_enabled.get(exec_spawn_id, True)
+        if randomization_enabled:
+            remaining_qty = instrument.make_qty(remaining)
+            is_final = (remaining - target_qty) <= min_qty_decimal  # 如果剩余量少于最小单位，视为最后一批
+            quantity = self.apply_quantity_randomization(quantity, remaining_qty, is_final)
+            target_qty = quantity.as_decimal()
 
         # 更新剩余数量
         self._remaining_qty[exec_spawn_id] -= target_qty
@@ -461,17 +577,24 @@ class POVExecAlgorithm(ExecAlgorithm):
         self._active_spawned_orders[exec_spawn_id] = spawned_order.client_order_id
         self.submit_order(spawned_order)
 
+        # 重置定时器（应用时间随机化）
+        if randomization_enabled:
+            base_interval = self._base_intervals.get(exec_spawn_id, 60.0)
+            timer_interval = self.apply_time_randomization(base_interval)
+            self.clock.set_timer(
+                name=exec_spawn_id.value,
+                interval=timer_interval,
+                callback=self.on_time_event,
+            )
+
     def complete_sequence(self, exec_spawn_id: ClientOrderId) -> None:
         """
-        完成一个执行序列。
-
-        清理与该订单相关的所有跟踪状态，并取消定时器。
+        完成执行序列的回调。
 
         Parameters
         ----------
         exec_spawn_id : ClientOrderId
             要完成的执行序列的客户端订单 ID。
-
         """
         # 取消定时器
         if exec_spawn_id.value in self.clock.timer_names:
@@ -486,6 +609,9 @@ class POVExecAlgorithm(ExecAlgorithm):
         self._start_time_ns.pop(exec_spawn_id, None)
         self._max_slice_qty.pop(exec_spawn_id, None)
         self._active_spawned_orders.pop(exec_spawn_id, None)
+        self._randomization_enabled.pop(exec_spawn_id, None)
+        self._max_display_ratios.pop(exec_spawn_id, None)
+        self._base_intervals.pop(exec_spawn_id, None)
 
         # 如果没有其他订单使用该合约的 TradeTick，则取消订阅
         if instrument_id and not any(
