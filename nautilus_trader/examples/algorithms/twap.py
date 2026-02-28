@@ -23,11 +23,13 @@ from nautilus_trader.common.events import TimeEvent
 from nautilus_trader.config import ExecAlgorithmConfig
 from nautilus_trader.core.correctness import PyCondition
 from nautilus_trader.execution.algorithm import ExecAlgorithm
+from nautilus_trader.model.enums import OrderSide
 from nautilus_trader.model.enums import OrderType
 from nautilus_trader.model.identifiers import ClientOrderId
 from nautilus_trader.model.identifiers import ExecAlgorithmId
 from nautilus_trader.model.instruments import Instrument
 from nautilus_trader.model.objects import Quantity
+from nautilus_trader.model.orders import LimitOrder
 from nautilus_trader.model.orders import MarketOrder
 from nautilus_trader.model.orders import Order
 
@@ -71,6 +73,7 @@ class TWAPExecAlgorithm(ExecAlgorithm):
         super().__init__(config)
 
         self._scheduled_sizes: dict[ClientOrderId, list[Quantity]] = {}
+        self._active_spawned_orders: dict[ClientOrderId, ClientOrderId] = {}
 
     def on_start(self) -> None:
         """
@@ -89,6 +92,7 @@ class TWAPExecAlgorithm(ExecAlgorithm):
         算法组件重置时执行的操作。
         """
         self._scheduled_sizes.clear()
+        self._active_spawned_orders.clear()
 
     def on_save(self) -> dict[str, bytes]:
         """
@@ -144,9 +148,9 @@ class TWAPExecAlgorithm(ExecAlgorithm):
         )
         self.log.info(repr(order), LogColor.CYAN)
 
-        if order.order_type != OrderType.MARKET:
+        if order.order_type not in (OrderType.MARKET, OrderType.LIMIT):
             self.log.error(
-                f"无法执行订单：仅支持市价单，{order.order_type=}",
+                f"无法执行订单：仅支持市价单和限价单，{order.order_type=}",
             )
             return
 
@@ -215,14 +219,31 @@ class TWAPExecAlgorithm(ExecAlgorithm):
         self._scheduled_sizes[order.client_order_id] = scheduled_sizes
         first_qty: Quantity = scheduled_sizes.pop(0)
 
-        spawned_order: MarketOrder = self.spawn_market(
-            primary=order,
-            quantity=first_qty,
-            time_in_force=order.time_in_force,
-            reduce_only=order.is_reduce_only,
-            tags=order.tags,
-        )
+        spawned_order = None
+        if order.order_type == OrderType.MARKET:
+            spawned_order = self.spawn_market(
+                primary=order,
+                quantity=first_qty,
+                time_in_force=order.time_in_force,
+                reduce_only=order.is_reduce_only,
+                tags=order.tags,
+            )
+        else:
+            quote = self.cache.quote_tick(instrument.id)
+            if not quote:
+                self.log.error(f"无法执行首笔限价单：未找到合约 {instrument.id} 的行情")
+                return
+            price = quote.bid_price if order.side == OrderSide.BUY else quote.ask_price
+            spawned_order = self.spawn_limit(
+                primary=order,
+                quantity=first_qty,
+                price=price,
+                time_in_force=order.time_in_force,
+                reduce_only=order.is_reduce_only,
+                tags=order.tags,
+            )
 
+        self._active_spawned_orders[order.client_order_id] = spawned_order.client_order_id
         self.submit_order(spawned_order)
 
         # 设置定时器
@@ -272,24 +293,55 @@ class TWAPExecAlgorithm(ExecAlgorithm):
             self.log.error(f"无法找到 {exec_spawn_id=} 的计划规模")
             return
 
+        # 时间片结束，主动撤销未成交的上一笔限价单
+        last_spawned_id = self._active_spawned_orders.get(exec_spawn_id)
+        if last_spawned_id:
+            last_order = self.cache.order(last_spawned_id)
+            if last_order and not last_order.is_closed:
+                self.log.info(f"时间片结束，主动撤销未成交订单：{last_spawned_id}")
+                self.cancel_order(last_order)
+            self._active_spawned_orders.pop(exec_spawn_id, None)
+
         if not scheduled_sizes:
             self.log.warning(f"{exec_spawn_id=} 没有更多的规模可执行")
             return
 
         quantity: Quantity = instrument.make_qty(scheduled_sizes.pop(0))
         if not scheduled_sizes:  # 最后一份数量
+            if primary.order_type == OrderType.LIMIT:
+                quote = self.cache.quote_tick(instrument.id)
+                if quote:
+                    price = quote.bid_price if primary.side == OrderSide.BUY else quote.ask_price
+                    self.modify_order_in_place(primary, price=price)
             self.submit_order(primary)
             self.complete_sequence(primary.client_order_id)
             return
 
-        spawned_order: MarketOrder = self.spawn_market(
-            primary=primary,
-            quantity=quantity,
-            time_in_force=primary.time_in_force,
-            reduce_only=primary.is_reduce_only,
-            tags=primary.tags,
-        )
+        spawned_order = None
+        if primary.order_type == OrderType.MARKET:
+            spawned_order = self.spawn_market(
+                primary=primary,
+                quantity=quantity,
+                time_in_force=primary.time_in_force,
+                reduce_only=primary.is_reduce_only,
+                tags=primary.tags,
+            )
+        else:
+            quote = self.cache.quote_tick(instrument.id)
+            if not quote:
+                self.log.error(f"无法执行限价单：未找到合约 {instrument.id} 的行情")
+                return
+            price = quote.bid_price if primary.side == OrderSide.BUY else quote.ask_price
+            spawned_order = self.spawn_limit(
+                primary=primary,
+                quantity=quantity,
+                price=price,
+                time_in_force=primary.time_in_force,
+                reduce_only=primary.is_reduce_only,
+                tags=primary.tags,
+            )
 
+        self._active_spawned_orders[exec_spawn_id] = spawned_order.client_order_id
         self.submit_order(spawned_order)
 
     def complete_sequence(self, exec_spawn_id: ClientOrderId) -> None:
@@ -305,4 +357,5 @@ class TWAPExecAlgorithm(ExecAlgorithm):
         if exec_spawn_id.value in self.clock.timer_names:
             self.clock.cancel_timer(exec_spawn_id.value)
         self._scheduled_sizes.pop(exec_spawn_id, None)
+        self._active_spawned_orders.pop(exec_spawn_id, None)
         self.log.info(f"已完成 {exec_spawn_id} 的 TWAP 执行", LogColor.BLUE)

@@ -33,6 +33,7 @@ from nautilus_trader.model.identifiers import ExecAlgorithmId
 from nautilus_trader.model.identifiers import InstrumentId
 from nautilus_trader.model.instruments import Instrument
 from nautilus_trader.model.objects import Quantity
+from nautilus_trader.model.orders import LimitOrder
 from nautilus_trader.model.orders import MarketOrder
 from nautilus_trader.model.orders import Order
 
@@ -105,6 +106,8 @@ class ISExecAlgorithm(ExecAlgorithm):
         self._urgency: dict[ClientOrderId, float] = {}
         # 跟踪已订阅 TradeTick 的合约 ID
         self._subscribed_instruments: set[InstrumentId] = set()
+        # 跟踪当前活跃的子订单，以便在下个切片时撤销旧单
+        self._active_spawned_orders: dict[ClientOrderId, ClientOrderId] = {}
 
     def on_start(self) -> None:
         """
@@ -130,6 +133,7 @@ class ISExecAlgorithm(ExecAlgorithm):
         self._order_instrument_ids.clear()
         self._urgency.clear()
         self._subscribed_instruments.clear()
+        self._active_spawned_orders.clear()
 
     def on_save(self) -> dict[str, bytes]:
         """
@@ -186,10 +190,10 @@ class ISExecAlgorithm(ExecAlgorithm):
         )
         self.log.info(repr(order), LogColor.CYAN)
 
-        # 仅支持市价单
-        if order.order_type != OrderType.MARKET:
+        # 支持市价单和限价单
+        if order.order_type not in (OrderType.MARKET, OrderType.LIMIT):
             self.log.error(
-                f"无法执行订单：仅支持市价单，当前类型为 {order.order_type=}",
+                f"无法执行订单：仅支持市价单和限价单，当前类型为 {order.order_type=}",
             )
             return
 
@@ -284,15 +288,33 @@ class ISExecAlgorithm(ExecAlgorithm):
         first_qty: Quantity = scheduled_sizes.pop(0)
         self._remaining_qty[order.client_order_id] -= first_qty.as_decimal()
 
-        spawned_order: MarketOrder = self.spawn_market(
-            primary=order,
-            quantity=first_qty,
-            time_in_force=order.time_in_force,
-            reduce_only=order.is_reduce_only,
-            tags=order.tags,
-        )
-
-        self.submit_order(spawned_order)
+        if order.order_type == OrderType.LIMIT:
+            quote = self.cache.quote_tick(order.instrument_id)
+            if not quote:
+                self.log.warning(f"无法获取合约 {order.instrument_id} 的最新盘口数据，跳过首次限价单执行")
+                self._remaining_qty[order.client_order_id] += first_qty.as_decimal() # 退回数量
+            else:
+                price = quote.bid_price if order.side == OrderSide.BUY else quote.ask_price
+                spawned_order = self.spawn_limit(
+                    primary=order,
+                    quantity=first_qty,
+                    price=price,
+                    time_in_force=order.time_in_force,
+                    reduce_only=order.is_reduce_only,
+                    tags=order.tags,
+                )
+                self._active_spawned_orders[order.client_order_id] = spawned_order.client_order_id
+                self.submit_order(spawned_order)
+        else:
+            spawned_order = self.spawn_market(
+                primary=order,
+                quantity=first_qty,
+                time_in_force=order.time_in_force,
+                reduce_only=order.is_reduce_only,
+                tags=order.tags,
+            )
+            self._active_spawned_orders[order.client_order_id] = spawned_order.client_order_id
+            self.submit_order(spawned_order)
 
         # 设置定时器
         self.clock.set_timer(
@@ -352,6 +374,15 @@ class ISExecAlgorithm(ExecAlgorithm):
             self.log.warning(f"{exec_spawn_id=} 没有更多的调度切片")
             return
 
+        # 撤销上一轮未成交完的子订单
+        if exec_spawn_id in self._active_spawned_orders:
+            prev_spawn_id = self._active_spawned_orders[exec_spawn_id]
+            prev_order = self.cache.order(prev_spawn_id)
+            if prev_order and not prev_order.is_closed:
+                self.log.info(f"由于新的时间片到达，撤销尚未完全成交的上一轮订单: {prev_spawn_id}")
+                self.cancel_order(prev_order)
+            self._active_spawned_orders.pop(exec_spawn_id)
+
         # 获取基准调度量
         base_qty: Quantity = scheduled_sizes.pop(0)
         base_qty_decimal = base_qty.as_decimal()
@@ -390,6 +421,11 @@ class ISExecAlgorithm(ExecAlgorithm):
 
         # 如果这是最后一个切片，直接提交主订单
         if not scheduled_sizes:
+            if primary.order_type == OrderType.LIMIT:
+                quote = self.cache.quote_tick(primary.instrument_id)
+                if quote:
+                    price = quote.bid_price if primary.side == OrderSide.BUY else quote.ask_price
+                    self.modify_order_in_place(primary, quantity=primary.quantity, price=price)
             self.submit_order(primary)
             self.complete_sequence(primary.client_order_id)
             return
@@ -400,14 +436,32 @@ class ISExecAlgorithm(ExecAlgorithm):
         self._remaining_qty[exec_spawn_id] -= adjusted_qty_decimal
 
         # 生成并提交子订单
-        spawned_order: MarketOrder = self.spawn_market(
-            primary=primary,
-            quantity=quantity,
-            time_in_force=primary.time_in_force,
-            reduce_only=primary.is_reduce_only,
-            tags=primary.tags,
-        )
+        if primary.order_type == OrderType.LIMIT:
+            quote = self.cache.quote_tick(primary.instrument_id)
+            if not quote:
+                self.log.warning(f"无法获取合约 {primary.instrument_id} 的最新盘口数据，跳过本次限价单执行")
+                self._remaining_qty[exec_spawn_id] += adjusted_qty_decimal # 退回数量
+                return
+                
+            price = quote.bid_price if primary.side == OrderSide.BUY else quote.ask_price
+            spawned_order = self.spawn_limit(
+                primary=primary,
+                quantity=quantity,
+                price=price,
+                time_in_force=primary.time_in_force,
+                reduce_only=primary.is_reduce_only,
+                tags=primary.tags,
+            )
+        else:
+            spawned_order = self.spawn_market(
+                primary=primary,
+                quantity=quantity,
+                time_in_force=primary.time_in_force,
+                reduce_only=primary.is_reduce_only,
+                tags=primary.tags,
+            )
 
+        self._active_spawned_orders[exec_spawn_id] = spawned_order.client_order_id
         self.submit_order(spawned_order)
 
     def _get_arrival_price(self, instrument_id: InstrumentId) -> Decimal | None:
@@ -645,6 +699,7 @@ class ISExecAlgorithm(ExecAlgorithm):
         self._order_sides.pop(exec_spawn_id, None)
         instrument_id = self._order_instrument_ids.pop(exec_spawn_id, None)
         self._urgency.pop(exec_spawn_id, None)
+        self._active_spawned_orders.pop(exec_spawn_id, None)
 
         # 如果没有其他订单使用该合约的 TradeTick，则取消订阅
         if instrument_id and not any(

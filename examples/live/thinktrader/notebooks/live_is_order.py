@@ -104,10 +104,17 @@ class ISOrderStrategy(Strategy):
             "urgency": self.urgency,
         }
 
-        # 构建订单
-        order = self.order_factory.market(
+        # 构建订单: 替换为限价单
+        quote = self.cache.quote_tick(self.instrument_id)
+        if not quote:
+            self.log.error(f"无法获取合约 {self.instrument_id} 的最新盘口数据，取消发单")
+            return
+            
+        price = quote.bid_price
+        order = self.order_factory.limit(
             instrument_id=self.instrument_id,
             order_side=OrderSide.BUY,
+            price=price,
             quantity=self.instrument.make_qty(self.trade_size),
             time_in_force=TimeInForce.GTC,
             exec_algorithm_id=exec_algorithm_id,
@@ -115,7 +122,7 @@ class ISOrderStrategy(Strategy):
         )
 
         self.log.info(
-            f"正在提交 IS 订单: 标的={self.instrument_id}, 总数量={self.trade_size}, "
+            f"正在提交 IS 订单: 标的={self.instrument_id}, 总数量={self.trade_size}, 限价={price}, "
             f"执行周期={self.horizon_secs}秒, 分配间隔={self.interval_secs}秒, 紧迫度={self.urgency}"
         )
         self.submit_order(order)

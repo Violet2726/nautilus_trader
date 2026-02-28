@@ -1,7 +1,7 @@
 import requests
 import hashlib
 import json
-
+from datetime import datetime, timedelta
 def generate_md5(params, api_key="noesis_2025"):
     # 复制参数并加入 apiKey
     md5_params = params.copy()
@@ -33,8 +33,8 @@ HEADERS = {
 
 PAYLOAD = {
     "capital": "1000000",
-    "date": "20260226",
-    "initDate": "20260227",
+    "date": (datetime.now() - timedelta(days=1)).strftime("%Y%m%d"),
+    "initDate": datetime.now().strftime("%Y%m%d"),
     "license": "c5ddbf5f-2917-44d4-9b66-d4ab239cbac5",
     "macAddress": "00:16:3E:41:EA:AF",
     "positionStockCodes": "",

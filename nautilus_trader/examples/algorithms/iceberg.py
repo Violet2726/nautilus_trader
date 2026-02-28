@@ -29,6 +29,7 @@ from nautilus_trader.model.identifiers import ClientOrderId
 from nautilus_trader.model.identifiers import ExecAlgorithmId
 from nautilus_trader.model.instruments import Instrument
 from nautilus_trader.model.objects import Quantity
+from nautilus_trader.model.orders import LimitOrder
 from nautilus_trader.model.orders import MarketOrder
 from nautilus_trader.model.orders import Order
 
@@ -171,10 +172,10 @@ class IcebergExecAlgorithm(ExecAlgorithm):
         )
         self.log.info(repr(order), LogColor.CYAN)
 
-        # 仅支持市价单
-        if order.order_type != OrderType.MARKET:
+        # 支持市价单和限价单
+        if order.order_type not in (OrderType.MARKET, OrderType.LIMIT):
             self.log.error(
-                f"无法执行订单：仅支持市价单，当前类型为 {order.order_type=}",
+                f"无法执行订单：仅支持市价单和限价单，当前类型为 {order.order_type=}",
             )
             return
 
@@ -385,13 +386,23 @@ class IcebergExecAlgorithm(ExecAlgorithm):
         quantity: Quantity = instrument.make_qty(current_slice)
 
         # 生成并提交子订单
-        spawned_order: MarketOrder = self.spawn_market(
-            primary=primary,
-            quantity=quantity,
-            time_in_force=primary.time_in_force,
-            reduce_only=primary.is_reduce_only,
-            tags=primary.tags,
-        )
+        if primary.order_type == OrderType.LIMIT:
+            spawned_order = self.spawn_limit(
+                primary=primary,
+                quantity=quantity,
+                price=primary.price,
+                time_in_force=primary.time_in_force,
+                reduce_only=primary.is_reduce_only,
+                tags=primary.tags,
+            )
+        else:
+            spawned_order: MarketOrder = self.spawn_market(
+                primary=primary,
+                quantity=quantity,
+                time_in_force=primary.time_in_force,
+                reduce_only=primary.is_reduce_only,
+                tags=primary.tags,
+            )
 
         # 记录子订单到主订单的映射
         self._active_spawns[spawned_order.client_order_id] = primary_id

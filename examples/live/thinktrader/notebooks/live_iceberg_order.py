@@ -102,10 +102,17 @@ class IcebergOrderStrategy(Strategy):
             "randomize_pct": self.randomize_pct,
         }
 
-        # 构建订单
-        order = self.order_factory.market(
+        # 构建订单: 替换为限价单
+        quote = self.cache.quote_tick(self.instrument_id)
+        if not quote:
+            self.log.error(f"无法获取合约 {self.instrument_id} 的最新盘口数据，取消发单")
+            return
+        
+        price = quote.bid_price
+        order = self.order_factory.limit(
             instrument_id=self.instrument_id,
             order_side=OrderSide.BUY,
+            price=price,
             quantity=self.instrument.make_qty(self.trade_size),
             time_in_force=TimeInForce.GTC,
             exec_algorithm_id=exec_algorithm_id,
@@ -114,7 +121,7 @@ class IcebergOrderStrategy(Strategy):
 
         self.log.info(
             f"正在提交 Iceberg 订单: 标的={self.instrument_id}, 总数量={self.trade_size}, "
-            f"单次切片数量={self.slice_qty}, 随机浮动={self.randomize_pct*100}%"
+            f"单次切片数量={self.slice_qty}, 限价={price}, 随机浮动={self.randomize_pct*100}%"
         )
         self.submit_order(order)
 

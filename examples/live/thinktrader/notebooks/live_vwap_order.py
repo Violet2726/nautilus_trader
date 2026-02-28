@@ -97,15 +97,29 @@ class VWAPOrderStrategy(Strategy):
 
         # 执行参数
         exec_algorithm_id = ExecAlgorithmId("VWAP")
+        
+        # 模拟生成一个 6 个切片的 historical volume profile
+        # 该配置相当于预测各个时刻成交占比
+        volume_profile = [0.10, 0.15, 0.25, 0.20, 0.15, 0.15]
+
         exec_algorithm_params = {
             "horizon_secs": self.horizon_secs,
             "interval_secs": self.interval_secs,
+            "volume_profile": volume_profile
         }
 
-        # 构建订单
-        order = self.order_factory.market(
+        # 构建订单: 这里修改成限价单，依靠最新的出价挂单
+        quote = self.cache.quote_tick(self.instrument_id)
+        if not quote:
+            self.log.error(f"无法获取合约 {self.instrument_id} 的最新盘口数据，取消发单")
+            return
+            
+        # 以第一笔 QuoteTick 的买一价发 Limit 订单
+        price = quote.bid_price
+        order = self.order_factory.limit(
             instrument_id=self.instrument_id,
             order_side=OrderSide.BUY,
+            price=price,
             quantity=self.instrument.make_qty(self.trade_size),
             time_in_force=TimeInForce.GTC,
             exec_algorithm_id=exec_algorithm_id,
@@ -114,7 +128,7 @@ class VWAPOrderStrategy(Strategy):
 
         self.log.info(
             f"正在提交 VWAP 订单: 标的={self.instrument_id}, 数量={self.trade_size}, "
-            f"周期={self.horizon_secs}秒, 间隔={self.interval_secs}秒"
+            f"限价={price}, 周期={self.horizon_secs}秒, 间隔={self.interval_secs}秒"
         )
         self.submit_order(order)
 

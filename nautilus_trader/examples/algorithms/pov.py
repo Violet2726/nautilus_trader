@@ -25,12 +25,14 @@ from nautilus_trader.config import ExecAlgorithmConfig
 from nautilus_trader.core.correctness import PyCondition
 from nautilus_trader.execution.algorithm import ExecAlgorithm
 from nautilus_trader.model.data import TradeTick
+from nautilus_trader.model.enums import OrderSide
 from nautilus_trader.model.enums import OrderType
 from nautilus_trader.model.identifiers import ClientOrderId
 from nautilus_trader.model.identifiers import ExecAlgorithmId
 from nautilus_trader.model.identifiers import InstrumentId
 from nautilus_trader.model.instruments import Instrument
 from nautilus_trader.model.objects import Quantity
+from nautilus_trader.model.orders import LimitOrder
 from nautilus_trader.model.orders import MarketOrder
 from nautilus_trader.model.orders import Order
 
@@ -101,6 +103,10 @@ class POVExecAlgorithm(ExecAlgorithm):
         self._max_horizon_secs: dict[ClientOrderId, float] = {}
         # 每个主订单的启动时间戳（纳秒），用于判断是否超时
         self._start_time_ns: dict[ClientOrderId, int] = {}
+        # 限制每笔子订单的最大发单量，防冲击
+        self._max_slice_qty: dict[ClientOrderId, Decimal] = {}
+        # 跟踪当前活跃的子订单，以便在下个切片时撤销旧单
+        self._active_spawned_orders: dict[ClientOrderId, ClientOrderId] = {}
         # 跟踪已订阅 TradeTick 的合约 ID
         self._subscribed_instruments: set[InstrumentId] = set()
 
@@ -127,6 +133,8 @@ class POVExecAlgorithm(ExecAlgorithm):
         self._order_instrument_ids.clear()
         self._max_horizon_secs.clear()
         self._start_time_ns.clear()
+        self._max_slice_qty.clear()
+        self._active_spawned_orders.clear()
         self._subscribed_instruments.clear()
 
     def on_save(self) -> dict[str, bytes]:
@@ -184,10 +192,10 @@ class POVExecAlgorithm(ExecAlgorithm):
         )
         self.log.info(repr(order), LogColor.CYAN)
 
-        # 仅支持市价单
-        if order.order_type != OrderType.MARKET:
+        # 支持市价单和限价单
+        if order.order_type not in (OrderType.MARKET, OrderType.LIMIT):
             self.log.error(
-                f"无法执行订单：仅支持市价单，当前类型为 {order.order_type=}",
+                f"无法执行订单：不支持的订单类型 {order.order_type=}",
             )
             return
 
@@ -233,6 +241,9 @@ class POVExecAlgorithm(ExecAlgorithm):
         # 获取最大执行时间（秒），可选参数，默认无限制
         max_horizon_secs = exec_params.get("max_horizon_secs", 0)
 
+        # 获取最大切片限制（可选参数），防止突然放量导致发单过大冲击盘口
+        max_slice_qty = exec_params.get("max_slice_qty")
+
         # 初始化该订单的跟踪状态
         self._remaining_qty[order.client_order_id] = order.quantity.as_decimal()
         self._interval_volume[order.client_order_id] = Decimal(0)
@@ -240,6 +251,8 @@ class POVExecAlgorithm(ExecAlgorithm):
         self._order_instrument_ids[order.client_order_id] = order.instrument_id
         self._max_horizon_secs[order.client_order_id] = float(max_horizon_secs)
         self._start_time_ns[order.client_order_id] = self.clock.timestamp_ns()
+        if max_slice_qty:
+            self._max_slice_qty[order.client_order_id] = Decimal(str(max_slice_qty))
 
         # 订阅该合约的逐笔成交数据（用于跟踪市场成交量）
         if order.instrument_id not in self._subscribed_instruments:
@@ -323,6 +336,15 @@ class POVExecAlgorithm(ExecAlgorithm):
             self.complete_sequence(primary.client_order_id)
             return
 
+        # 撤销上一轮未成交完的子订单
+        if exec_spawn_id in self._active_spawned_orders:
+            prev_spawn_id = self._active_spawned_orders[exec_spawn_id]
+            prev_order = self.cache.order(prev_spawn_id)
+            if prev_order and not prev_order.is_closed:
+                self.log.info(f"由于新的时间片到达，撤销尚未完全成交的上一轮订单: {prev_spawn_id}")
+                self.cancel_order(prev_order)
+            self._active_spawned_orders.pop(exec_spawn_id)
+
         # 检查是否已超过最大执行时间
         max_horizon = self._max_horizon_secs.get(exec_spawn_id, 0)
         if max_horizon > 0:
@@ -332,6 +354,11 @@ class POVExecAlgorithm(ExecAlgorithm):
                 self.log.warning(
                     f"已达到最大执行时间 {max_horizon}s，提交剩余数量 {remaining}",
                 )
+                if primary.order_type == OrderType.LIMIT:
+                    quote = self.cache.quote_tick(primary.instrument_id)
+                    if quote:
+                        price = quote.bid_price if primary.side == OrderSide.BUY else quote.ask_price
+                        self.modify_order_in_place(primary, quantity=primary.quantity, price=price)
                 self.submit_order(primary)
                 self.complete_sequence(primary.client_order_id)
                 return
@@ -356,6 +383,12 @@ class POVExecAlgorithm(ExecAlgorithm):
 
         # 确保不超过剩余数量
         target_qty = min(target_qty, remaining)
+
+        # 防冲击：应用最大单笔限制
+        max_slice = self._max_slice_qty.get(exec_spawn_id)
+        if max_slice and target_qty > max_slice:
+            self.log.info(f"POV 计算量 {target_qty} 超过限制 {max_slice}，进行截断", LogColor.YELLOW)
+            target_qty = max_slice
 
         # 获取最小可执行数量
         min_qty_decimal = instrument.size_increment.as_decimal()
@@ -384,6 +417,11 @@ class POVExecAlgorithm(ExecAlgorithm):
         new_remaining = self._remaining_qty[exec_spawn_id]
         if new_remaining <= 0 or new_remaining < min_qty_decimal:
             # 剩余量不足或归零，将剩余量合并到本次，直接提交主订单
+            if primary.order_type == OrderType.LIMIT:
+                quote = self.cache.quote_tick(primary.instrument_id)
+                if quote:
+                    price = quote.bid_price if primary.side == OrderSide.BUY else quote.ask_price
+                    self.modify_order_in_place(primary, quantity=primary.quantity, price=price)
             self.submit_order(primary)
             self.complete_sequence(primary.client_order_id)
             return
@@ -395,14 +433,32 @@ class POVExecAlgorithm(ExecAlgorithm):
         )
 
         # 生成并提交子订单
-        spawned_order: MarketOrder = self.spawn_market(
-            primary=primary,
-            quantity=quantity,
-            time_in_force=primary.time_in_force,
-            reduce_only=primary.is_reduce_only,
-            tags=primary.tags,
-        )
+        if primary.order_type == OrderType.LIMIT:
+            quote = self.cache.quote_tick(primary.instrument_id)
+            if not quote:
+                self.log.warning(f"无法获取合约 {primary.instrument_id} 的最新盘口数据，跳过本次限价单执行")
+                self._remaining_qty[exec_spawn_id] += target_qty # 退回数量
+                return
+                
+            price = quote.bid_price if primary.side == OrderSide.BUY else quote.ask_price
+            spawned_order = self.spawn_limit(
+                primary=primary,
+                quantity=quantity,
+                price=price,
+                time_in_force=primary.time_in_force,
+                reduce_only=primary.is_reduce_only,
+                tags=primary.tags,
+            )
+        else:
+            spawned_order = self.spawn_market(
+                primary=primary,
+                quantity=quantity,
+                time_in_force=primary.time_in_force,
+                reduce_only=primary.is_reduce_only,
+                tags=primary.tags,
+            )
 
+        self._active_spawned_orders[exec_spawn_id] = spawned_order.client_order_id
         self.submit_order(spawned_order)
 
     def complete_sequence(self, exec_spawn_id: ClientOrderId) -> None:
@@ -428,6 +484,8 @@ class POVExecAlgorithm(ExecAlgorithm):
         instrument_id = self._order_instrument_ids.pop(exec_spawn_id, None)
         self._max_horizon_secs.pop(exec_spawn_id, None)
         self._start_time_ns.pop(exec_spawn_id, None)
+        self._max_slice_qty.pop(exec_spawn_id, None)
+        self._active_spawned_orders.pop(exec_spawn_id, None)
 
         # 如果没有其他订单使用该合约的 TradeTick，则取消订阅
         if instrument_id and not any(
