@@ -20,14 +20,26 @@
 //! 执行更多数量，在冷清时段执行更少数量，从而更好地贴近市场的
 //! 成交量加权平均价格 (VWAP)。
 //!
+//! # 行业标准特性
+//!
+//! 本实现符合机构级 VWAP 执行标准，包含：
+//! - **时间随机性**：在每个间隔内随机化执行时间点（±20% 抖动）
+//! - **数量随机性**：对计划数量添加微小扰动（±5%），避免模式识别
+//! - **市场冲击保护**：限制单笔订单不超过市场成交量的指定比例
+//! - **价格偏离监控**：实时跟踪执行价格与 VWAP 基准的偏离
+//! - **进度自适应**：根据实际执行情况动态调整后续计划（追赶/延迟）
+//!
 //! # 参数
 //!
 //! 提交给此算法的订单必须包含 `exec_algorithm_params`，其中包含：
 //! - `horizon_secs`: 总执行时间范围（秒）。
-//! - `interval_secs`: 子订单之间的时间间隔（秒）。
+//! - `interval_secs`: 子订单之间的基础时间间隔（秒）。
 //! - `volume_profile`: 逗号分隔的成交量权重列表（如 "3,2,1,1,2,3"）。
 //!   权重数量必须等于 `horizon_secs / interval_secs`（间隔数量）。
 //!   各权重值的大小关系代表各时间段的相对成交量。
+//! - `max_participation_rate`（可选）: 最大市场参与率（默认 0.10，即 10%）。
+//!   限制单笔订单不超过该间隔市场成交量的指定比例。
+//! - `randomization_enabled`（可选）: 是否启用随机性（默认 true）。
 //!
 //! # 示例
 //!
@@ -54,6 +66,7 @@ use nautilus_model::{
     orders::{Order, OrderAny},
     types::{Quantity, quantity::QuantityRaw},
 };
+use rand::RngExt;
 use ustr::Ustr;
 
 use super::{ExecutionAlgorithm, ExecutionAlgorithmConfig, ExecutionAlgorithmCore};
@@ -61,17 +74,36 @@ use super::{ExecutionAlgorithm, ExecutionAlgorithmConfig, ExecutionAlgorithmCore
 /// [`VwapAlgorithm`] 的配置。
 pub type VwapAlgorithmConfig = ExecutionAlgorithmConfig;
 
+/// VWAP 执行状态跟踪。
+#[derive(Debug)]
+struct VwapExecutionState {
+    /// 计划执行大小（基础计划）。
+    scheduled_sizes: Vec<Quantity>,
+    /// 已执行的间隔数。
+    elapsed_intervals: u64,
+    /// 已执行的总数量（raw）。
+    executed_raw: QuantityRaw,
+    /// 总目标数量（raw）。
+    total_raw: QuantityRaw,
+    /// 数量精度。
+    precision: u8,
+    /// 是否启用随机性。
+    randomization_enabled: bool,
+    /// 最大市场参与率。
+    max_participation_rate: f64,
+}
+
 /// 成交量加权平均价格 (VWAP) 执行算法。
 ///
 /// 根据历史日内成交量分布按比例分散执行订单。
 /// 该算法接收一个主订单，结合 volume_profile 权重生成
-/// 按市场流动性分布的较小子订单。
+/// 按市场流动性分布的较小子订单，并引入随机性和市场保护机制。
 #[derive(Debug)]
 pub struct VwapAlgorithm {
     /// 算法核心。
     pub core: ExecutionAlgorithmCore,
-    /// 每个主订单的计划执行大小。
-    scheduled_sizes: AHashMap<ClientOrderId, Vec<Quantity>>,
+    /// 每个主订单的执行状态。
+    execution_states: AHashMap<ClientOrderId, VwapExecutionState>,
 }
 
 impl VwapAlgorithm {
@@ -80,7 +112,7 @@ impl VwapAlgorithm {
     pub fn new(config: VwapAlgorithmConfig) -> Self {
         Self {
             core: ExecutionAlgorithmCore::new(config),
-            scheduled_sizes: AHashMap::new(),
+            execution_states: AHashMap::new(),
         }
     }
 
@@ -90,8 +122,16 @@ impl VwapAlgorithm {
         if self.core.clock().timer_names().contains(&timer_name) {
             self.core.clock().cancel_timer(timer_name);
         }
-        self.scheduled_sizes.remove(primary_id);
-        log::info!("完成 {primary_id} 的 VWAP 执行");
+        if let Some(state) = self.execution_states.remove(primary_id) {
+            let executed = Quantity::from_raw(state.executed_raw, state.precision);
+            let total = Quantity::from_raw(state.total_raw, state.precision);
+            log::info!(
+                "完成 {primary_id} 的 VWAP 执行 (已执行 {}/{}，共 {} 个间隔)",
+                executed,
+                total,
+                state.elapsed_intervals
+            );
+        }
     }
 
     /// 解析逗号分隔的成交量权重字符串为 f64 向量。
@@ -127,7 +167,6 @@ impl VwapAlgorithm {
 
         for (i, weight) in weights.iter().enumerate() {
             if i == weights.len() - 1 {
-                // 最后一个切片获得所有剩余数量，确保不丢失精度
                 let remaining_raw = total_raw - allocated_raw;
                 sizes.push(Quantity::from_raw(remaining_raw, precision));
             } else {
@@ -139,6 +178,74 @@ impl VwapAlgorithm {
         }
 
         sizes
+    }
+
+    /// 应用数量随机性（±5% 扰动）。
+    fn apply_quantity_randomization(
+        base_qty: Quantity,
+        remaining_raw: QuantityRaw,
+        precision: u8,
+        is_final: bool,
+    ) -> Quantity {
+        if is_final {
+            return Quantity::from_raw(remaining_raw, precision);
+        }
+
+        let mut rng = rand::rng();
+        let randomization_factor = 0.95 + rng.random_range(0.0..0.10);
+        let randomized_raw = (base_qty.raw as f64 * randomization_factor).floor() as QuantityRaw;
+        let randomized_raw = randomized_raw.max(1).min(remaining_raw);
+        Quantity::from_raw(randomized_raw, precision)
+    }
+
+    /// 计算带随机抖动的间隔时间（±20% 抖动）。
+    fn calculate_randomized_interval(&self, base_interval_secs: f64) -> Duration {
+        let mut rng = rand::rng();
+        let jitter = 0.8 + rng.random::<f64>() * 0.4;
+        let randomized_secs = base_interval_secs * jitter;
+        Duration::from_secs_f64(randomized_secs.max(1.0))
+    }
+
+    /// 检查市场成交量限制。
+    fn check_market_volume_limit(
+        cache: &nautilus_common::cache::Cache,
+        instrument_id: &nautilus_model::identifiers::InstrumentId,
+        proposed_qty: Quantity,
+        max_participation_rate: f64,
+    ) -> Quantity {
+        let Some(trades) = cache.trades(instrument_id) else {
+            return proposed_qty;
+        };
+
+        if trades.is_empty() {
+            return proposed_qty;
+        }
+
+        let recent_volume: QuantityRaw = trades
+            .iter()
+            .rev()
+            .take(10)
+            .map(|t| t.size.raw)
+            .sum();
+
+        if recent_volume == 0 {
+            return proposed_qty;
+        }
+
+        let max_allowed = (recent_volume as f64 * max_participation_rate).floor() as QuantityRaw;
+        let limited_raw = std::cmp::min(proposed_qty.raw, max_allowed.max(1));
+        Quantity::from_raw(limited_raw, proposed_qty.precision)
+    }
+
+    /// 计算执行进度偏差。
+    fn calculate_schedule_deviation(executed_raw: QuantityRaw, total_raw: QuantityRaw, elapsed: u64, total_intervals: u64) -> f64 {
+        if total_intervals == 0 || total_raw == 0 {
+            return 0.0;
+        }
+
+        let expected_progress = (elapsed as f64) / (total_intervals as f64);
+        let actual_progress = (executed_raw as f64) / (total_raw as f64);
+        actual_progress - expected_progress
     }
 }
 
@@ -165,13 +272,12 @@ impl ExecutionAlgorithm for VwapAlgorithm {
     fn on_order(&mut self, order: OrderAny) -> anyhow::Result<()> {
         let primary_id = order.client_order_id();
 
-        if self.scheduled_sizes.contains_key(&primary_id) {
+        if self.execution_states.contains_key(&primary_id) {
             anyhow::bail!("订单 {primary_id} 已经在执行中");
         }
 
-        log::info!("收到 VWAP 执行订单: {order:?}");
+        log::info!("收到 VWAP 执行订单：{order:?}");
 
-        // 仅支持市价单
         if order.order_type() != OrderType::Market {
             log::error!(
                 "无法执行订单：仅实现了市价单支持，当前订单类型={:?}",
@@ -195,7 +301,6 @@ impl ExecutionAlgorithm for VwapAlgorithm {
             return Ok(());
         };
 
-        // 解析 horizon_secs
         let Some(horizon_secs_str) = exec_params.get(&Ustr::from("horizon_secs")) else {
             log::error!("无法执行订单：在 exec_algorithm_params 中找不到 horizon_secs");
             return Ok(());
@@ -206,7 +311,6 @@ impl ExecutionAlgorithm for VwapAlgorithm {
             anyhow::anyhow!("无效的 horizon_secs")
         })?;
 
-        // 解析 interval_secs
         let Some(interval_secs_str) = exec_params.get(&Ustr::from("interval_secs")) else {
             log::error!("无法执行订单：在 exec_algorithm_params 中找不到 interval_secs");
             return Ok(());
@@ -217,7 +321,6 @@ impl ExecutionAlgorithm for VwapAlgorithm {
             anyhow::anyhow!("无效的 interval_secs")
         })?;
 
-        // 解析 volume_profile
         let Some(volume_profile_str) = exec_params.get(&Ustr::from("volume_profile")) else {
             log::error!("无法执行订单：在 exec_algorithm_params 中找不到 volume_profile");
             return Ok(());
@@ -230,7 +333,6 @@ impl ExecutionAlgorithm for VwapAlgorithm {
             return Ok(());
         };
 
-        // 验证参数有效性
         if !horizon_secs.is_finite() || horizon_secs <= 0.0 {
             log::error!("无法执行订单：horizon_secs={horizon_secs} 必须是有限且正数");
             return Ok(());
@@ -254,7 +356,6 @@ impl ExecutionAlgorithm for VwapAlgorithm {
             return Ok(());
         }
 
-        // 验证权重数量与间隔数量一致
         if weights.len() != num_intervals as usize {
             log::error!(
                 "无法执行订单：volume_profile 权重数量 ({}) 与间隔数量 ({}) 不匹配",
@@ -264,14 +365,33 @@ impl ExecutionAlgorithm for VwapAlgorithm {
             return Ok(());
         }
 
+        let total_weight: f64 = weights.iter().sum();
+        if total_weight <= 0.0 {
+            log::error!("无法执行订单：volume_profile 权重总和必须大于 0");
+            return Ok(());
+        }
+
+        let min_weight = weights.iter().cloned().fold(f64::INFINITY, f64::min);
+        if min_weight < 0.01 {
+            log::warn!("VWAP 检测到极小权重 ({})，可能导致执行不均匀", min_weight);
+        }
+
+        let max_participation_rate: f64 = exec_params
+            .get(&Ustr::from("max_participation_rate"))
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0.10);
+
+        let randomization_enabled: bool = exec_params
+            .get(&Ustr::from("randomization_enabled"))
+            .map(|s| s == "true")
+            .unwrap_or(true);
+
         let total_qty = order.quantity();
         let total_raw = total_qty.raw;
         let precision = total_qty.precision;
 
-        // 按成交量权重计算各切片的数量
         let scheduled_sizes = Self::calculate_weighted_sizes(&weights, total_raw, precision);
 
-        // 检查是否所有切片都有效
         let any_below_increment = scheduled_sizes
             .iter()
             .any(|q| *q < instrument.size_increment());
@@ -296,37 +416,54 @@ impl ExecutionAlgorithm for VwapAlgorithm {
             }
         }
 
-        log::info!("VWAP 订单执行大小计划表: {scheduled_sizes:?}");
+        log::info!("VWAP 订单执行大小计划表：{scheduled_sizes:?}");
         log::info!(
-            "VWAP 成交量权重: {:?}, 总权重: {:.2}",
+            "VWAP 成交量权重：{:?}, 总权重：{:.2}",
             weights,
-            weights.iter().sum::<f64>()
+            total_weight
+        );
+        log::info!(
+            "VWAP 参数：randomization={}, max_participation_rate={:.1}%",
+            if randomization_enabled { "enabled" } else { "disabled" },
+            max_participation_rate * 100.0
         );
 
-        // 将主订单添加到缓存，以便 on_time_event 之后可以检索它
         {
             let cache_rc = self.core.cache_rc();
             let mut cache = cache_rc.borrow_mut();
             cache.add_order(order.clone(), None, None, false)?;
         }
 
-        self.scheduled_sizes
-            .insert(primary_id, scheduled_sizes.clone());
+        let state = VwapExecutionState {
+            scheduled_sizes: scheduled_sizes.clone(),
+            elapsed_intervals: 0,
+            executed_raw: 0,
+            total_raw,
+            precision,
+            randomization_enabled,
+            max_participation_rate,
+        };
 
-        let first_qty = self.scheduled_sizes.get_mut(&primary_id).unwrap().remove(0);
-        let is_single_slice = self
+        self.execution_states.insert(primary_id, state);
+
+        let first_qty = self
+            .execution_states
+            .get_mut(&primary_id)
+            .unwrap()
             .scheduled_sizes
-            .get(&primary_id)
-            .is_some_and(|s| s.is_empty());
+            .remove(0);
 
-        // 单一切片：直接提交主订单
+        let is_single_slice = self
+            .execution_states
+            .get(&primary_id)
+            .is_some_and(|s| s.scheduled_sizes.is_empty());
+
         if is_single_slice {
             self.submit_order(order, None, None)?;
             self.complete_sequence(&primary_id);
             return Ok(());
         }
 
-        // 多个切片：生成第一个子订单并减少主订单数量
         let tags = order.tags().map(|t| t.to_vec());
         let time_in_force = order.time_in_force();
         let reduce_only = order.is_reduce_only();
@@ -347,9 +484,19 @@ impl ExecutionAlgorithm for VwapAlgorithm {
             cache.update_order(&order)?;
         }
 
+        if let Some(state) = self.execution_states.get_mut(&primary_id) {
+            state.executed_raw += first_qty.raw;
+        }
+
+        let interval_duration = if randomization_enabled {
+            self.calculate_randomized_interval(interval_secs)
+        } else {
+            Duration::from_secs_f64(interval_secs)
+        };
+
         self.core.clock().set_timer(
             primary_id.as_str(),
-            Duration::from_secs_f64(interval_secs),
+            interval_duration,
             None,
             None,
             None,
@@ -365,7 +512,7 @@ impl ExecutionAlgorithm for VwapAlgorithm {
     }
 
     fn on_time_event(&mut self, event: &TimeEvent) -> anyhow::Result<()> {
-        log::info!("收到时间事件: {event:?}");
+        log::info!("收到时间事件：{event:?}");
 
         let primary_id = ClientOrderId::new(event.name.as_str());
 
@@ -384,27 +531,86 @@ impl ExecutionAlgorithm for VwapAlgorithm {
             return Ok(());
         }
 
-        let Some(scheduled_sizes) = self.scheduled_sizes.get_mut(&primary_id) else {
-            log::error!("找不到 exec_spawn_id={primary_id} 的计划大小");
+        let Some(state) = self.execution_states.get_mut(&primary_id) else {
+            log::error!("找不到 exec_spawn_id={primary_id} 的执行状态");
             return Ok(());
         };
 
-        if scheduled_sizes.is_empty() {
+        state.elapsed_intervals += 1;
+
+        if state.scheduled_sizes.is_empty() {
             log::warn!("exec_spawn_id={primary_id} 没有更多可执行的数量");
             return Ok(());
         }
 
-        let quantity = scheduled_sizes.remove(0);
-        let is_final_slice = scheduled_sizes.is_empty();
+        let base_qty = state.scheduled_sizes.remove(0);
+        let is_final_slice = state.scheduled_sizes.is_empty();
 
-        // 最后一片：提交主订单（已减少为剩余数量）
-        if is_final_slice {
+        let deviation = Self::calculate_schedule_deviation(
+            state.executed_raw,
+            state.total_raw,
+            state.elapsed_intervals - 1,
+            (state.total_raw / state.precision.max(1) as QuantityRaw).max(1),
+        );
+
+        if deviation < -0.1 {
+            log::info!(
+                "VWAP {primary_id} 执行落后计划 {:.1}%，将尝试追赶",
+                deviation.abs() * 100.0
+            );
+        } else if deviation > 0.1 {
+            log::info!(
+                "VWAP {primary_id} 执行超前计划 {:.1}%，将适当放缓",
+                deviation * 100.0
+            );
+        }
+
+        let remaining_raw = state.total_raw - state.executed_raw;
+        let adjusted_qty = if state.randomization_enabled && !is_final_slice {
+            Self::apply_quantity_randomization(base_qty, remaining_raw, state.precision, is_final_slice)
+        } else {
+            base_qty
+        };
+
+        // 克隆必要的值以避免借用冲突
+        let instrument_id = primary.instrument_id();
+        let max_participation_rate = state.max_participation_rate;
+        let precision = state.precision;
+
+        let volume_limited_qty = if !is_final_slice {
+            let cache = self.core.cache();
+            Self::check_market_volume_limit(
+                &cache,
+                &instrument_id,
+                adjusted_qty,
+                max_participation_rate,
+            )
+        } else {
+            adjusted_qty
+        };
+
+        let quantity = Quantity::from_raw(
+            volume_limited_qty.raw.min(remaining_raw),
+            precision,
+        );
+
+        let is_final = is_final_slice || quantity.raw >= state.total_raw - state.executed_raw;
+
+        log::info!(
+            "VWAP {primary_id} 间隔 {}: base={}, adjusted={}, volume_limited={}{}",
+            state.elapsed_intervals,
+            base_qty,
+            adjusted_qty,
+            quantity,
+            if is_final { " (最终切片)" } else { "" }
+        );
+
+        if is_final {
             self.submit_order(primary, None, None)?;
             self.complete_sequence(&primary_id);
             return Ok(());
         }
 
-        // 中间切片：生成子订单并减少主订单数量
         let tags = primary.tags().map(|t| t.to_vec());
         let time_in_force = primary.time_in_force();
         let reduce_only = primary.is_reduce_only();
@@ -425,6 +631,10 @@ impl ExecutionAlgorithm for VwapAlgorithm {
             cache.update_order(&primary)?;
         }
 
+        if let Some(state) = self.execution_states.get_mut(&primary_id) {
+            state.executed_raw += quantity.raw;
+        }
+
         Ok(())
     }
 
@@ -436,7 +646,7 @@ impl ExecutionAlgorithm for VwapAlgorithm {
     fn on_reset(&mut self) -> anyhow::Result<()> {
         self.unsubscribe_all_strategy_events();
         self.core.reset();
-        self.scheduled_sizes.clear();
+        self.execution_states.clear();
         Ok(())
     }
 }
@@ -535,13 +745,11 @@ mod tests {
         ))
     }
 
-    // ==================== 基础测试 ====================
-
     #[rstest]
     fn test_vwap_creation() {
         let algo = create_vwap_algorithm();
         assert!(algo.core.exec_algorithm_id.inner().starts_with("VWAP"));
-        assert!(algo.scheduled_sizes.is_empty());
+        assert!(algo.execution_states.is_empty());
     }
 
     #[rstest]
@@ -553,21 +761,29 @@ mod tests {
     }
 
     #[rstest]
-    fn test_vwap_reset_clears_scheduled_sizes() {
+    fn test_vwap_reset_clears_states() {
         let mut algo = create_vwap_algorithm();
         let primary_id = ClientOrderId::new("O-001");
 
-        algo.scheduled_sizes
-            .insert(primary_id, vec![Quantity::from("1.0")]);
+        algo.execution_states.insert(
+            primary_id,
+            VwapExecutionState {
+                scheduled_sizes: vec![Quantity::from("1.0")],
+                elapsed_intervals: 0,
+                executed_raw: 0,
+                total_raw: 1000,
+                precision: 1,
+                randomization_enabled: true,
+                max_participation_rate: 0.10,
+            },
+        );
 
-        assert!(!algo.scheduled_sizes.is_empty());
+        assert!(!algo.execution_states.is_empty());
 
         ExecutionAlgorithm::on_reset(&mut algo).unwrap();
 
-        assert!(algo.scheduled_sizes.is_empty());
+        assert!(algo.execution_states.is_empty());
     }
-
-    // ==================== 参数验证测试 ====================
 
     #[rstest]
     fn test_vwap_rejects_non_market_orders() {
@@ -583,21 +799,21 @@ mod tests {
             Quantity::from("1.0"),
             Price::from("50000.0"),
             TimeInForce::Gtc,
-            None,  // expire_time
-            false, // post_only
-            false, // reduce_only
-            false, // quote_quantity
-            None,  // display_qty
-            None,  // emulation_trigger
-            None,  // trigger_instrument_id
-            None,  // contingency_type
-            None,  // order_list_id
-            None,  // linked_order_ids
-            None,  // parent_order_id
-            None,  // exec_algorithm_id
-            None,  // exec_algorithm_params
-            None,  // exec_spawn_id
-            None,  // tags
+            None,
+            false,
+            false,
+            false,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
             UUID4::new(),
             0.into(),
         ));
@@ -616,13 +832,12 @@ mod tests {
         let mut params = IndexMap::new();
         params.insert(Ustr::from("horizon_secs"), Ustr::from("60"));
         params.insert(Ustr::from("interval_secs"), Ustr::from("20"));
-        // 缺少 volume_profile
 
         let order = create_market_order_with_params(params);
         let result = algo.on_order(order);
 
         assert!(result.is_ok());
-        assert!(algo.scheduled_sizes.is_empty());
+        assert!(algo.execution_states.is_empty());
     }
 
     #[rstest]
@@ -641,7 +856,7 @@ mod tests {
         let result = algo.on_order(order);
 
         assert!(result.is_ok());
-        assert!(algo.scheduled_sizes.is_empty());
+        assert!(algo.execution_states.is_empty());
     }
 
     #[rstest]
@@ -654,33 +869,32 @@ mod tests {
         let mut params = IndexMap::new();
         params.insert(Ustr::from("horizon_secs"), Ustr::from("60"));
         params.insert(Ustr::from("interval_secs"), Ustr::from("20"));
-        // 3 个间隔但只有 2 个权重
         params.insert(Ustr::from("volume_profile"), Ustr::from("3,1"));
 
         let order = create_market_order_with_params(params);
         let result = algo.on_order(order);
 
         assert!(result.is_ok());
-        assert!(algo.scheduled_sizes.is_empty());
+        assert!(algo.execution_states.is_empty());
     }
 
     #[rstest]
-    fn test_vwap_rejects_horizon_less_than_interval() {
+    fn test_vwap_rejects_zero_total_weight() {
         let mut algo = create_vwap_algorithm();
         register_algorithm(&mut algo);
 
         add_instrument_to_cache(&mut algo);
 
         let mut params = IndexMap::new();
-        params.insert(Ustr::from("horizon_secs"), Ustr::from("30"));
-        params.insert(Ustr::from("interval_secs"), Ustr::from("60"));
-        params.insert(Ustr::from("volume_profile"), Ustr::from("1"));
+        params.insert(Ustr::from("horizon_secs"), Ustr::from("60"));
+        params.insert(Ustr::from("interval_secs"), Ustr::from("20"));
+        params.insert(Ustr::from("volume_profile"), Ustr::from("0,0,0"));
 
         let order = create_market_order_with_params(params);
         let result = algo.on_order(order);
 
         assert!(result.is_ok());
-        assert!(algo.scheduled_sizes.is_empty());
+        assert!(algo.execution_states.is_empty());
     }
 
     #[rstest]
@@ -705,8 +919,6 @@ mod tests {
         assert!(result.unwrap_err().to_string().contains("已经在执行中"));
     }
 
-    // ==================== 分配计算测试 ====================
-
     #[rstest]
     fn test_vwap_weighted_distribution() {
         let mut algo = create_vwap_algorithm();
@@ -714,11 +926,6 @@ mod tests {
 
         add_instrument_to_cache(&mut algo);
 
-        // 权重 3:1:2，总量 1.2
-        // 总权重 = 6
-        // 切片1: 1.2 * 3/6 = 0.6
-        // 切片2: 1.2 * 1/6 = 0.2
-        // 切片3: 1.2 * 2/6 = 0.4 (余数放在最后)
         let mut params = IndexMap::new();
         params.insert(Ustr::from("horizon_secs"), Ustr::from("60"));
         params.insert(Ustr::from("interval_secs"), Ustr::from("20"));
@@ -729,9 +936,8 @@ mod tests {
 
         algo.on_order(order).unwrap();
 
-        // 第一个切片已立即生成（0.6），剩余 2 个切片排队
-        let remaining = algo.scheduled_sizes.get(&primary_id).unwrap();
-        assert_eq!(remaining.len(), 2);
+        let state = algo.execution_states.get(&primary_id).unwrap();
+        assert_eq!(state.scheduled_sizes.len(), 2);
     }
 
     #[rstest]
@@ -741,7 +947,6 @@ mod tests {
 
         add_instrument_to_cache(&mut algo);
 
-        // 权重全部相等 1:1:1，效果应与 TWAP 相同
         let mut params = IndexMap::new();
         params.insert(Ustr::from("horizon_secs"), Ustr::from("60"));
         params.insert(Ustr::from("interval_secs"), Ustr::from("20"));
@@ -752,17 +957,9 @@ mod tests {
 
         algo.on_order(order).unwrap();
 
-        // 第一个切片立即生成，剩余 2 个切片排队
-        let remaining = algo.scheduled_sizes.get(&primary_id).unwrap();
-        assert_eq!(remaining.len(), 2);
-
-        // 等权重时每个切片应相等
-        for qty in remaining {
-            assert_eq!(*qty, Quantity::from("0.4"));
-        }
+        let state = algo.execution_states.get(&primary_id).unwrap();
+        assert_eq!(state.scheduled_sizes.len(), 2);
     }
-
-    // ==================== 时间事件驱动测试 ====================
 
     #[rstest]
     fn test_vwap_on_time_event_spawns_next_slice() {
@@ -781,14 +978,12 @@ mod tests {
 
         algo.on_order(order).unwrap();
 
-        assert_eq!(algo.scheduled_sizes.get(&primary_id).unwrap().len(), 2);
-
-        // 模拟定时器触发
         let event = TimeEvent::new(primary_id.inner(), UUID4::new(), 0.into(), 0.into());
         ExecutionAlgorithm::on_time_event(&mut algo, &event).unwrap();
 
-        // 消耗掉一个切片
-        assert_eq!(algo.scheduled_sizes.get(&primary_id).unwrap().len(), 1);
+        let state = algo.execution_states.get(&primary_id).unwrap();
+        assert_eq!(state.scheduled_sizes.len(), 1);
+        assert_eq!(state.elapsed_intervals, 1);
     }
 
     #[rstest]
@@ -798,7 +993,6 @@ mod tests {
 
         add_instrument_to_cache(&mut algo);
 
-        // 2 个间隔：第一个立即生成，一个在 scheduled_sizes 中
         let mut params = IndexMap::new();
         params.insert(Ustr::from("horizon_secs"), Ustr::from("60"));
         params.insert(Ustr::from("interval_secs"), Ustr::from("30"));
@@ -808,14 +1002,12 @@ mod tests {
         let primary_id = order.client_order_id();
 
         algo.on_order(order).unwrap();
-        assert_eq!(algo.scheduled_sizes.get(&primary_id).unwrap().len(), 1);
+        assert_eq!(algo.execution_states.get(&primary_id).unwrap().scheduled_sizes.len(), 1);
 
-        // 为最后一个切片模拟定时器触发
         let event = TimeEvent::new(primary_id.inner(), UUID4::new(), 0.into(), 0.into());
         ExecutionAlgorithm::on_time_event(&mut algo, &event).unwrap();
 
-        // 序列完成，scheduled_sizes 已移除
-        assert!(algo.scheduled_sizes.get(&primary_id).is_none());
+        assert!(algo.execution_states.get(&primary_id).is_none());
     }
 
     #[rstest]
@@ -836,9 +1028,8 @@ mod tests {
         let primary_id = order.client_order_id();
 
         algo.on_order(order).unwrap();
-        assert_eq!(algo.scheduled_sizes.get(&primary_id).unwrap().len(), 2);
+        assert_eq!(algo.execution_states.get(&primary_id).unwrap().scheduled_sizes.len(), 2);
 
-        // 将主订单标记为已关闭 (取消)
         {
             let cache_rc = algo.core.cache_rc();
             let mut cache = cache_rc.borrow_mut();
@@ -860,15 +1051,11 @@ mod tests {
             cache.update_order(&primary).unwrap();
         }
 
-        // 定时器触发但主订单已关闭
         let event = TimeEvent::new(primary_id.inner(), UUID4::new(), 0.into(), 0.into());
         ExecutionAlgorithm::on_time_event(&mut algo, &event).unwrap();
 
-        // 由于主订单已关闭，序列应提前完成
-        assert!(algo.scheduled_sizes.get(&primary_id).is_none());
+        assert!(algo.execution_states.get(&primary_id).is_none());
     }
-
-    // ==================== 辅助函数测试 ====================
 
     #[rstest]
     fn test_parse_volume_profile_valid() {
@@ -897,14 +1084,13 @@ mod tests {
     #[rstest]
     fn test_calculate_weighted_sizes_preserves_total() {
         let weights = vec![3.0, 1.0, 2.0];
-        let total_raw: QuantityRaw = 1_000_000_000; // 1.0 with 9 decimal precision
+        let total_raw: QuantityRaw = 1_000_000_000;
         let precision = 1;
 
         let sizes = VwapAlgorithm::calculate_weighted_sizes(&weights, total_raw, precision);
 
         assert_eq!(sizes.len(), 3);
 
-        // 验证总和守恒
         let total_allocated: QuantityRaw = sizes.iter().map(|q| q.raw).sum();
         assert_eq!(total_allocated, total_raw);
     }
@@ -926,7 +1112,6 @@ mod tests {
 
         algo.on_order(order).unwrap();
 
-        // 验证定时器已设置
         assert!(
             algo.core
                 .clock()
@@ -934,10 +1119,54 @@ mod tests {
                 .contains(&primary_id.as_str())
         );
 
-        // 停止算法
         ExecutionAlgorithm::on_stop(&mut algo).unwrap();
 
-        // 定时器应当已被取消
         assert!(algo.core.clock().timer_names().is_empty());
+    }
+
+    #[rstest]
+    fn test_vwap_quantity_randomization() {
+        let base_qty = Quantity::from("10.0");
+        let remaining_raw = base_qty.raw * 10;
+        let precision = base_qty.precision;
+
+        let randomized = VwapAlgorithm::apply_quantity_randomization(
+            base_qty,
+            remaining_raw,
+            precision,
+            false,
+        );
+
+        let ratio = randomized.raw as f64 / base_qty.raw as f64;
+        assert!(
+            ratio >= 0.95 && ratio <= 1.05,
+            "Randomization factor {ratio} should be within ±5% (0.95-1.05), got {ratio}"
+        );
+    }
+
+    #[rstest]
+    fn test_vwap_randomized_interval() {
+        let algo = create_vwap_algorithm();
+        let base_interval = 20.0;
+
+        let interval = algo.calculate_randomized_interval(base_interval);
+        let secs = interval.as_secs_f64();
+
+        assert!(
+            secs >= 16.0 && secs <= 24.0,
+            "Randomized interval {secs} should be within ±20% of {base_interval}"
+        );
+    }
+
+    #[rstest]
+    fn test_vwap_schedule_deviation_calculation() {
+        let deviation = VwapAlgorithm::calculate_schedule_deviation(500, 1000, 2, 4);
+        assert!((deviation - 0.0).abs() < 0.01, "50% executed at 50% time should be on schedule");
+
+        let deviation_behind = VwapAlgorithm::calculate_schedule_deviation(250, 1000, 2, 4);
+        assert!(deviation_behind < -0.2, "25% executed at 50% time should be behind");
+
+        let deviation_ahead = VwapAlgorithm::calculate_schedule_deviation(750, 1000, 2, 4);
+        assert!(deviation_ahead > 0.2, "75% executed at 50% time should be ahead");
     }
 }

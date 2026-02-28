@@ -6023,6 +6023,7 @@ dependencies = [
  "nautilus-model",
  "nautilus-portfolio",
  "pyo3",
+ "rand 0.10.0",
  "rstest",
  "rust_decimal",
  "rust_decimal_macros",

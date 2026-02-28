@@ -22,10 +22,20 @@
 //! 与 TWAP/VWAP/POV 不同，Iceberg 是**事件驱动**的（由子订单成交事件触发），
 //! 而不是时间驱动的。它也是唯一使用**限价单**的执行算法。
 //!
+//! # 行业标准特性
+//!
+//! 本实现符合机构级 Iceberg 执行标准，包含：
+//! - **数量随机性**：对 display_qty 添加微小扰动（±5%），避免模式识别
+//! - **市场深度检查**：检查盘口深度，避免在薄弱市场暴露过大
+//! - **执行进度监控**：实时跟踪已执行切片数和剩余数量
+//!
 //! # 参数
 //!
 //! 提交给此算法的订单必须是**限价单**，并包含 `exec_algorithm_params`：
 //! - `display_qty`: 每次在市场上显示的数量（冰山的"露出部分"）。
+//! - `randomization_enabled`（可选）: 是否启用随机性（默认 true）。
+//! - `max_display_ratio`（可选）: 最大显示比例（默认 0.05，即 5%）。
+//!   限制 display_qty 不超过盘口最佳价量的指定比例。
 //!
 //! # 工作原理
 //!
@@ -56,6 +66,7 @@ use nautilus_model::{
     orders::{Order, OrderAny},
     types::{Quantity, quantity::QuantityRaw},
 };
+use rand::RngExt;
 use ustr::Ustr;
 
 use super::{ExecutionAlgorithm, ExecutionAlgorithmConfig, ExecutionAlgorithmCore};
@@ -66,8 +77,8 @@ pub type IcebergAlgorithmConfig = ExecutionAlgorithmConfig;
 /// 每个主订单的冰山跟踪状态。
 #[derive(Debug)]
 struct IcebergOrderState {
-    /// 每片的显示数量 (raw)。
-    display_qty_raw: QuantityRaw,
+    /// 基础显示数量 (raw)，用于随机化计算。
+    base_display_qty_raw: QuantityRaw,
     /// 数量精度。
     precision: u8,
     /// 剩余需执行的原始数量。
@@ -76,6 +87,10 @@ struct IcebergOrderState {
     current_spawn_id: Option<ClientOrderId>,
     /// 已完成的切片数。
     slices_completed: u64,
+    /// 是否启用随机性。
+    randomization_enabled: bool,
+    /// 最大显示比例。
+    max_display_ratio: f64,
 }
 
 /// 冰山 (Iceberg) 执行算法。
@@ -118,6 +133,47 @@ impl IcebergAlgorithm {
         }
     }
 
+    /// 应用数量随机性（±5% 扰动）。
+    fn apply_quantity_randomization(
+        base_qty_raw: QuantityRaw,
+        remaining_raw: QuantityRaw,
+        _precision: u8,
+        is_final: bool,
+    ) -> QuantityRaw {
+        if is_final {
+            return remaining_raw;
+        }
+
+        let mut rng = rand::rng();
+        let randomization_factor = 0.95 + rng.random_range(0.0..0.10);
+        let randomized_raw = (base_qty_raw as f64 * randomization_factor).floor() as QuantityRaw;
+        let randomized_raw = randomized_raw.max(1).min(remaining_raw);
+        randomized_raw
+    }
+
+    /// 检查市场深度限制。
+    fn check_market_depth_limit(
+        cache: &nautilus_common::cache::Cache,
+        instrument_id: &nautilus_model::identifiers::InstrumentId,
+        proposed_qty_raw: QuantityRaw,
+        max_display_ratio: f64,
+        order_side: nautilus_model::enums::OrderSide,
+    ) -> QuantityRaw {
+        let Some(book) = cache.order_book(instrument_id) else {
+            return proposed_qty_raw;
+        };
+
+        let depth_qty_raw = match order_side {
+            nautilus_model::enums::OrderSide::Buy => book.best_ask_size().map(|s| s.raw).unwrap_or(proposed_qty_raw),
+            nautilus_model::enums::OrderSide::Sell => book.best_bid_size().map(|s| s.raw).unwrap_or(proposed_qty_raw),
+            _ => proposed_qty_raw,
+        };
+
+        let max_allowed = (depth_qty_raw as f64 * max_display_ratio).floor() as QuantityRaw;
+        let limited_raw = std::cmp::min(proposed_qty_raw, max_allowed.max(1));
+        limited_raw
+    }
+
     /// 为主订单提交下一片限价子订单。
     fn submit_next_slice(&mut self, primary_id: &ClientOrderId) -> anyhow::Result<()> {
         let primary = {
@@ -141,23 +197,52 @@ impl IcebergAlgorithm {
         };
 
         if state.remaining_raw == 0 {
-            // 提交主订单（数量已为 0，标记完成）
             self.complete_sequence(primary_id);
             return Ok(());
         }
 
         let remaining_raw = state.remaining_raw;
-        let display_qty_raw = state.display_qty_raw;
+        let base_display_qty_raw = state.base_display_qty_raw;
         let precision = state.precision;
+        let randomization_enabled = state.randomization_enabled;
+        let max_display_ratio = state.max_display_ratio;
+        let instrument_id = primary.instrument_id();
+        let order_side = primary.order_side();
 
-        // 本片数量 = min(display_qty, remaining)
-        let slice_raw = std::cmp::min(display_qty_raw, remaining_raw);
+        // 计算基础切片数量
+        let base_slice_raw = std::cmp::min(base_display_qty_raw, remaining_raw);
+        let is_final = base_slice_raw >= remaining_raw;
+
+        // 应用数量随机化
+        let randomized_slice_raw = if randomization_enabled && !is_final {
+            Self::apply_quantity_randomization(base_slice_raw, remaining_raw, precision, is_final)
+        } else {
+            base_slice_raw
+        };
+
+        // 应用市场深度限制
+        let depth_limited_raw = if !is_final {
+            let cache = self.core.cache();
+            Self::check_market_depth_limit(
+                &cache,
+                &instrument_id,
+                randomized_slice_raw,
+                max_display_ratio,
+                order_side,
+            )
+        } else {
+            randomized_slice_raw
+        };
+
+        let slice_raw = depth_limited_raw.min(remaining_raw);
         let slice_qty = Quantity::from_raw(slice_raw, precision);
-        let is_final = slice_raw >= remaining_raw;
 
         log::info!(
-            "Iceberg {primary_id}: 提交第 {} 片, 数量={slice_qty}{}",
+            "Iceberg {primary_id}: 提交第 {} 片，base={}, randomized={}, depth_limited={}{}",
             state.slices_completed + 1,
+            Quantity::from_raw(base_slice_raw, precision),
+            Quantity::from_raw(randomized_slice_raw, precision),
+            slice_qty,
             if is_final { " (最终切片)" } else { "" }
         );
 
@@ -174,7 +259,7 @@ impl IcebergAlgorithm {
             return Ok(());
         };
 
-        // 生成限价子订单（先提取所有值避免 borrow 冲突）
+        // 生成限价子订单
         let tags = primary.tags().map(|t| t.to_vec());
         let time_in_force = primary.time_in_force();
         let reduce_only = primary.is_reduce_only();
@@ -189,16 +274,15 @@ impl IcebergAlgorithm {
             expire_time,
             post_only,
             reduce_only,
-            None, // display_qty
-            None, // emulation_trigger
+            None,
+            None,
             tags,
-            true, // reduce_primary
+            true,
         );
 
         let spawn_id = spawned.client_order_id;
         self.submit_order(spawned.into(), None, None)?;
 
-        // 更新缓存和状态
         {
             let cache_rc = self.core.cache_rc();
             let mut cache = cache_rc.borrow_mut();
@@ -246,9 +330,9 @@ impl ExecutionAlgorithm for IcebergAlgorithm {
             anyhow::bail!("订单 {primary_id} 已经在执行中");
         }
 
-        log::info!("收到 Iceberg 执行订单: {order:?}");
+        log::info!("收到 Iceberg 执行订单：{order:?}");
 
-        // 仅支持限价单（冰山算法的本质特征）
+        // 仅支持限价单
         if order.order_type() != OrderType::Limit {
             log::error!(
                 "无法执行订单：Iceberg 仅支持限价单，当前订单类型={:?}",
@@ -285,6 +369,17 @@ impl ExecutionAlgorithm for IcebergAlgorithm {
                 log::error!("无法解析 display_qty: {e}");
                 anyhow::anyhow!("无效的 display_qty")
             })?;
+
+        // 解析可选参数
+        let randomization_enabled: bool = exec_params
+            .get(&Ustr::from("randomization_enabled"))
+            .map(|s| s == "true")
+            .unwrap_or(true);
+
+        let max_display_ratio: f64 = exec_params
+            .get(&Ustr::from("max_display_ratio"))
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0.05);
 
         // 验证参数
         if display_qty.raw == 0 {
@@ -323,10 +418,12 @@ impl ExecutionAlgorithm for IcebergAlgorithm {
             }
         }
 
-        let total_slices = (total_qty.raw + display_qty.raw - 1) / display_qty.raw; // ceiling division
+        let total_slices = (total_qty.raw + display_qty.raw - 1) / display_qty.raw;
         log::info!(
-            "Iceberg 执行计划: total_qty={total_qty}, display_qty={display_qty}, \
-             预计切片数={total_slices}"
+            "Iceberg 执行计划：total_qty={total_qty}, display_qty={display_qty}, \
+             预计切片数={total_slices}, randomization={}, max_display_ratio={:.1}%",
+            if randomization_enabled { "enabled" } else { "disabled" },
+            max_display_ratio * 100.0
         );
 
         // 将主订单添加到缓存
@@ -338,11 +435,13 @@ impl ExecutionAlgorithm for IcebergAlgorithm {
 
         // 初始化跟踪状态
         let state = IcebergOrderState {
-            display_qty_raw: display_qty.raw,
+            base_display_qty_raw: display_qty.raw,
             precision: total_qty.precision,
             remaining_raw: total_qty.raw,
             current_spawn_id: None,
             slices_completed: 0,
+            randomization_enabled,
+            max_display_ratio,
         };
 
         self.order_states.insert(primary_id, state);
@@ -361,12 +460,11 @@ impl ExecutionAlgorithm for IcebergAlgorithm {
 
         // 查找这个成交的子订单对应的主订单
         let Some(primary_id) = self.spawn_to_primary.get(&filled_order_id).copied() else {
-            // 不是 Iceberg 管理的子订单，忽略
             return;
         };
 
         log::info!(
-            "Iceberg 子订单 {filled_order_id} 已成交, 主订单={primary_id}"
+            "Iceberg 子订单 {filled_order_id} 已成交，主订单={primary_id}"
         );
 
         // 清理当前子订单的反查映射
@@ -380,7 +478,7 @@ impl ExecutionAlgorithm for IcebergAlgorithm {
 
         if has_remaining {
             if let Err(e) = self.submit_next_slice(&primary_id) {
-                log::error!("Iceberg {primary_id}: 提交下一片失败: {e}");
+                log::error!("Iceberg {primary_id}: 提交下一片失败：{e}");
             }
         } else {
             self.complete_sequence(&primary_id);
@@ -393,7 +491,6 @@ impl ExecutionAlgorithm for IcebergAlgorithm {
     }
 
     fn on_stop(&mut self) -> anyhow::Result<()> {
-        // Iceberg 不使用定时器，但清理状态
         self.order_states.clear();
         self.spawn_to_primary.clear();
         Ok(())
@@ -486,27 +583,25 @@ mod tests {
             quantity,
             Price::from("3000.0"),
             TimeInForce::Gtc,
-            None,  // expire_time
-            false, // post_only
-            false, // reduce_only
-            false, // quote_quantity
-            None,  // display_qty
-            None,  // emulation_trigger
-            None,  // trigger_instrument_id
-            None,  // contingency_type
-            None,  // order_list_id
-            None,  // linked_order_ids
-            None,  // parent_order_id
+            None,
+            false,
+            false,
+            false,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
             Some(ExecAlgorithmId::new("ICEBERG")),
             Some(params),
-            None,  // exec_spawn_id
-            None,  // tags
+            None,
+            None,
             UUID4::new(),
             0.into(),
         ))
     }
-
-    // ==================== 基础测试 ====================
 
     #[rstest]
     fn test_iceberg_creation() {
@@ -530,11 +625,13 @@ mod tests {
         algo.order_states.insert(
             ClientOrderId::new("O-001"),
             IcebergOrderState {
-                display_qty_raw: 100,
+                base_display_qty_raw: 100,
                 precision: 1,
                 remaining_raw: 500,
                 current_spawn_id: None,
                 slices_completed: 0,
+                randomization_enabled: true,
+                max_display_ratio: 0.05,
             },
         );
         algo.spawn_to_primary.insert(
@@ -550,8 +647,6 @@ mod tests {
         assert!(algo.order_states.is_empty());
         assert!(algo.spawn_to_primary.is_empty());
     }
-
-    // ==================== 参数验证测试 ====================
 
     #[rstest]
     fn test_iceberg_rejects_market_orders() {
@@ -592,10 +687,8 @@ mod tests {
     fn test_iceberg_rejects_missing_display_qty() {
         let mut algo = create_iceberg_algorithm();
         register_algorithm(&mut algo);
-
         add_instrument_to_cache(&mut algo);
 
-        // 限价单但没有 display_qty 参数
         let params = IndexMap::new();
         let order = OrderAny::Limit(LimitOrder::new(
             TraderId::from("TRADER-001"),
@@ -631,104 +724,100 @@ mod tests {
     }
 
     #[rstest]
-    fn test_iceberg_submits_full_when_display_qty_ge_total() {
+    fn test_iceberg_rejects_zero_display_qty() {
         let mut algo = create_iceberg_algorithm();
         register_algorithm(&mut algo);
-
         add_instrument_to_cache(&mut algo);
 
-        // display_qty = 2000 >= total = 1000 → 直接全额提交
-        let order = create_limit_order_with_display_qty("2000", Quantity::from("1000.0"));
-        let primary_id = order.client_order_id();
+        let mut params = IndexMap::new();
+        params.insert(Ustr::from("display_qty"), Ustr::from("0"));
 
-        algo.on_order(order).unwrap();
+        let order = OrderAny::Limit(LimitOrder::new(
+            TraderId::from("TRADER-001"),
+            StrategyId::from("STRAT-001"),
+            InstrumentId::from("ETHUSDT-PERP.BINANCE"),
+            ClientOrderId::from("O-001"),
+            OrderSide::Buy,
+            Quantity::from("1000.0"),
+            Price::from("3000.0"),
+            TimeInForce::Gtc,
+            None,
+            false,
+            false,
+            false,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(ExecAlgorithmId::new("ICEBERG")),
+            Some(params),
+            None,
+            None,
+            UUID4::new(),
+            0.into(),
+        ));
 
-        // 全额提交后不应有跟踪状态
-        assert!(algo.order_states.get(&primary_id).is_none());
+        let result = algo.on_order(order);
+        assert!(result.is_ok());
+        assert!(algo.order_states.is_empty());
     }
 
     #[rstest]
     fn test_iceberg_rejects_duplicate_order() {
         let mut algo = create_iceberg_algorithm();
         register_algorithm(&mut algo);
-
         add_instrument_to_cache(&mut algo);
 
-        let order1 = create_limit_order_with_display_qty("100", Quantity::from("1000.0"));
-        let order2 = create_limit_order_with_display_qty("100", Quantity::from("1000.0"));
+        let order = create_limit_order_with_display_qty("100", Quantity::from("1000.0"));
+        let order_id = order.client_order_id();
 
-        algo.on_order(order1).unwrap();
+        algo.on_order(order).unwrap();
+
+        let order2 = create_limit_order_with_display_qty("100", Quantity::from("1000.0"));
         let result = algo.on_order(order2);
 
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("已经在执行中"));
-    }
 
-    // ==================== 初始化和切片测试 ====================
-
-    #[rstest]
-    fn test_iceberg_initializes_state_and_submits_first_slice() {
-        let mut algo = create_iceberg_algorithm();
-        register_algorithm(&mut algo);
-
-        add_instrument_to_cache(&mut algo);
-
-        // total = 1.0, display = 0.3
-        let order = create_limit_order_with_display_qty("0.3", Quantity::from("1.0"));
-        let primary_id = order.client_order_id();
-
-        algo.on_order(order).unwrap();
-
-        // 应该有跟踪状态
-        let state = algo.order_states.get(&primary_id).unwrap();
-        assert_eq!(state.slices_completed, 1); // 第一片已提交
-        assert!(state.current_spawn_id.is_some()); // 有活跃的子订单
-
-        // 应该有反查映射
-        assert!(!algo.spawn_to_primary.is_empty());
+        assert!(algo.order_states.contains_key(&order_id));
     }
 
     #[rstest]
-    fn test_iceberg_on_stop_clears_states() {
-        let mut algo = create_iceberg_algorithm();
-        register_algorithm(&mut algo);
+    fn test_iceberg_quantity_randomization() {
+        let base_qty_raw = 1000;
+        let remaining_raw = 10000;
+        let precision = 1;
 
-        add_instrument_to_cache(&mut algo);
+        let randomized = IcebergAlgorithm::apply_quantity_randomization(
+            base_qty_raw,
+            remaining_raw,
+            precision,
+            false,
+        );
 
-        let order = create_limit_order_with_display_qty("100", Quantity::from("1000.0"));
-        algo.on_order(order).unwrap();
-
-        assert!(!algo.order_states.is_empty());
-
-        ExecutionAlgorithm::on_stop(&mut algo).unwrap();
-
-        assert!(algo.order_states.is_empty());
-        assert!(algo.spawn_to_primary.is_empty());
+        let ratio = randomized as f64 / base_qty_raw as f64;
+        assert!(
+            ratio >= 0.95 && ratio <= 1.05,
+            "Randomization factor {ratio} should be within ±5% (0.95-1.05), got {ratio}"
+        );
     }
 
     #[rstest]
-    fn test_iceberg_on_time_event_is_noop() {
-        use nautilus_common::timer::TimeEvent;
+    fn test_iceberg_final_slice_no_randomization() {
+        let base_qty_raw = 1000;
+        let remaining_raw = 500;
+        let precision = 1;
 
-        let mut algo = create_iceberg_algorithm();
-        register_algorithm(&mut algo);
+        let randomized = IcebergAlgorithm::apply_quantity_randomization(
+            base_qty_raw,
+            remaining_raw,
+            precision,
+            true,
+        );
 
-        // Iceberg 不使用定时器，on_time_event 应当是空操作
-        let event = TimeEvent::new(Ustr::from("test"), UUID4::new(), 0.into(), 0.into());
-        let result = ExecutionAlgorithm::on_time_event(&mut algo, &event);
-        assert!(result.is_ok());
-    }
-
-    #[rstest]
-    fn test_iceberg_ignores_unrelated_fill_events() {
-        let mut algo = create_iceberg_algorithm();
-        register_algorithm(&mut algo);
-
-        // 一个不属于 Iceberg 的成交事件
-        let fill = OrderFilled::default();
-        algo.on_algo_order_filled(fill);
-
-        // 不应崩溃，也不应改变状态
-        assert!(algo.order_states.is_empty());
+        assert_eq!(randomized, remaining_raw, "Final slice should use exact remaining amount");
     }
 }

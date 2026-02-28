@@ -25,14 +25,25 @@
 //! - `participation_rate`: 参与比例 (0.0 ~ 1.0)，例如 0.10 表示跟踪市场总量的 10%。
 //! - `interval_secs`: 检查市场成交量并提交子订单的时间间隔（秒）。
 //! - `max_intervals`: 最大检查次数（安全上限），防止无限等待。
+//! - `randomization_enabled`（可选）: 是否启用随机性（默认 true）。
+//! - `max_display_ratio`（可选）: 最大显示比例（默认 0.05，即 5%）。
+//!   限制单次下单量不超过盘口最佳价量的指定比例。
+//!
+//! # 行业标准特性
+//!
+//! 本实现符合机构级 POV 执行标准，包含：
+//! - **时间随机性**：每个间隔的实际执行时间会在基础间隔时间上添加 ±20% 的随机抖动
+//! - **数量随机性**：对计算出的参与量添加微小扰动（±5%），避免模式识别
+//! - **市场深度检查**：检查订单簿深度，避免在流动性薄弱时过度暴露
 //!
 //! # 工作原理
 //!
 //! 1. 算法在每个 `interval_secs` 间隔查询缓存中的 TradeTick 数据。
 //! 2. 计算自上次检查以来的新增市场成交量。
 //! 3. 按 `participation_rate` 比例计算本次应发送的数量。
-//! 4. 提交子订单（不超过剩余总量）。
-//! 5. 当总量全部下完或达到 `max_intervals` 时结束。
+//! 4. 应用随机性和市场深度检查。
+//! 5. 提交子订单（不超过剩余总量）。
+//! 6. 当总量全部下完或达到 `max_intervals` 时结束。
 //!
 //! # 注意
 //!
@@ -67,6 +78,7 @@ use nautilus_model::{
     orders::{Order, OrderAny},
     types::{Quantity, quantity::QuantityRaw},
 };
+use rand::RngExt;
 use ustr::Ustr;
 
 use super::{ExecutionAlgorithm, ExecutionAlgorithmConfig, ExecutionAlgorithmCore};
@@ -91,6 +103,10 @@ struct PovOrderState {
     elapsed_intervals: u64,
     /// 最大间隔次数。
     max_intervals: u64,
+    /// 是否启用随机性。
+    randomization_enabled: bool,
+    /// 最大显示比例。
+    max_display_ratio: f64,
 }
 
 /// 成交量百分比 (POV) 执行算法。
@@ -128,6 +144,54 @@ impl PovAlgorithm {
                 state.elapsed_intervals
             );
         }
+    }
+
+    /// 应用时间随机性（±20% 抖动）。
+    fn apply_time_randomization(base_interval_secs: f64) -> Duration {
+        let mut rng = rand::rng();
+        let jitter = 0.8 + rng.random_range(0.0..0.4);
+        let randomized_secs = base_interval_secs * jitter;
+        Duration::from_secs_f64(randomized_secs.max(1.0))
+    }
+
+    /// 应用数量随机性（±5% 扰动）。
+    fn apply_quantity_randomization(
+        base_qty_raw: QuantityRaw,
+        remaining_raw: QuantityRaw,
+        is_final: bool,
+    ) -> QuantityRaw {
+        if is_final {
+            return remaining_raw;
+        }
+
+        let mut rng = rand::rng();
+        let randomization_factor = 0.95 + rng.random_range(0.0..0.10);
+        let randomized_raw = (base_qty_raw as f64 * randomization_factor).floor() as QuantityRaw;
+        let randomized_raw = randomized_raw.max(1).min(remaining_raw);
+        randomized_raw
+    }
+
+    /// 检查市场深度限制。
+    fn check_market_depth_limit(
+        cache: &nautilus_common::cache::Cache,
+        instrument_id: &InstrumentId,
+        proposed_qty_raw: QuantityRaw,
+        max_display_ratio: f64,
+        order_side: nautilus_model::enums::OrderSide,
+    ) -> QuantityRaw {
+        let Some(book) = cache.order_book(instrument_id) else {
+            return proposed_qty_raw;
+        };
+
+        let depth_qty_raw = match order_side {
+            nautilus_model::enums::OrderSide::Buy => book.best_ask_size().map(|s| s.raw).unwrap_or(proposed_qty_raw),
+            nautilus_model::enums::OrderSide::Sell => book.best_bid_size().map(|s| s.raw).unwrap_or(proposed_qty_raw),
+            _ => proposed_qty_raw,
+        };
+
+        let max_allowed = (depth_qty_raw as f64 * max_display_ratio).floor() as QuantityRaw;
+        let limited_raw = std::cmp::min(proposed_qty_raw, max_allowed.max(1));
+        limited_raw
     }
 }
 
@@ -217,6 +281,17 @@ impl ExecutionAlgorithm for PovAlgorithm {
             anyhow::anyhow!("无效的 max_intervals")
         })?;
 
+        // 解析可选参数
+        let randomization_enabled: bool = exec_params
+            .get(&Ustr::from("randomization_enabled"))
+            .map(|s| s == "true")
+            .unwrap_or(true);
+
+        let max_display_ratio: f64 = exec_params
+            .get(&Ustr::from("max_display_ratio"))
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0.05);
+
         // 验证参数有效性
         if !participation_rate.is_finite() || participation_rate <= 0.0 || participation_rate > 1.0 {
             log::error!(
@@ -270,14 +345,22 @@ impl ExecutionAlgorithm for PovAlgorithm {
             last_trade_count: initial_trade_count,
             elapsed_intervals: 0,
             max_intervals,
+            randomization_enabled,
+            max_display_ratio,
         };
 
         self.order_states.insert(primary_id, state);
 
-        // 设置定时器
+        // 设置带随机性的定时器
+        let randomized_interval = if randomization_enabled {
+            Self::apply_time_randomization(interval_secs)
+        } else {
+            Duration::from_secs_f64(interval_secs)
+        };
+
         self.core.clock().set_timer(
             primary_id.as_str(),
-            Duration::from_secs_f64(interval_secs),
+            randomized_interval,
             None,
             None,
             None,
@@ -288,7 +371,9 @@ impl ExecutionAlgorithm for PovAlgorithm {
         log::info!(
             "开始执行 {primary_id} 的 POV：participation_rate={participation_rate}, \
              interval_secs={interval_secs}, max_intervals={max_intervals}, \
-             total_qty={total_qty}"
+             total_qty={total_qty}, randomization={}, max_display_ratio={:.1}%",
+            if randomization_enabled { "enabled" } else { "disabled" },
+            max_display_ratio * 100.0
         );
 
         Ok(())
@@ -375,9 +460,9 @@ impl ExecutionAlgorithm for PovAlgorithm {
         }
 
         // 计算本次应发送的数量 = 市场成交量 × 参与比例
-        let target_raw = (new_market_volume_raw as f64 * participation_rate).floor() as QuantityRaw;
+        let base_target_raw = (new_market_volume_raw as f64 * participation_rate).floor() as QuantityRaw;
 
-        if target_raw == 0 {
+        if base_target_raw == 0 {
             log::info!(
                 "POV {primary_id} 间隔 {}: 计算的目标数量为 0，跳过本次下单",
                 state.elapsed_intervals
@@ -385,16 +470,40 @@ impl ExecutionAlgorithm for PovAlgorithm {
             return Ok(());
         }
 
+        // 应用数量随机化
+        let randomized_target_raw = if state.randomization_enabled {
+            Self::apply_quantity_randomization(base_target_raw, remaining_raw, false)
+        } else {
+            base_target_raw
+        };
+
+        // 应用市场深度限制
+        let depth_limited_raw = if state.max_display_ratio > 0.0 {
+            let cache = self.core.cache();
+            Self::check_market_depth_limit(
+                &cache,
+                &state.instrument_id,
+                randomized_target_raw,
+                state.max_display_ratio,
+                primary.order_side(),
+            )
+        } else {
+            randomized_target_raw
+        };
+
         // 不超过剩余数量
-        let slice_raw = std::cmp::min(target_raw, remaining_raw);
+        let slice_raw = std::cmp::min(depth_limited_raw, remaining_raw);
         let slice_qty = Quantity::from_raw(slice_raw, precision);
         let is_final = slice_raw >= remaining_raw;
 
         log::info!(
-            "POV {primary_id} 间隔 {}: 市场成交量={}, 目标数量={}, 实际下单={}{}",
-            self.order_states.get(&primary_id).map_or(0, |s| s.elapsed_intervals),
+            "POV {primary_id} 间隔 {}: 市场成交量={}, base_target={}, randomized={}, \
+             depth_limited={}, actual={}{}",
+            state.elapsed_intervals,
             new_market_volume_raw,
-            Quantity::from_raw(target_raw, precision),
+            Quantity::from_raw(base_target_raw, precision),
+            Quantity::from_raw(randomized_target_raw, precision),
+            Quantity::from_raw(depth_limited_raw, precision),
             slice_qty,
             if is_final { " (最终切片)" } else { "" }
         );
@@ -580,6 +689,8 @@ mod tests {
                 last_trade_count: 0,
                 elapsed_intervals: 0,
                 max_intervals: 100,
+                randomization_enabled: true,
+                max_display_ratio: 0.05,
             },
         );
 

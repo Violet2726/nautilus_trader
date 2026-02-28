@@ -38,11 +38,17 @@
 //! 1. **紧迫度加权调度**：根据 `urgency` 参数生成一个前倾的执行调度表。
 //!    权重公式为 `w_i = (N - i)^(urgency × 2)`，`urgency` 越大越前倾。
 //!
-//! 2. **价格自适应**：每个间隔检查当前市场价格与到达价格的偏差。
+//! 2. **时间随机性**：每个间隔的实际执行时间会在基础间隔时间上添加 ±20% 的随机抖动，
+//!    避免被市场参与者识别出规律性。
+//!
+//! 3. **价格自适应**：每个间隔检查当前市场价格与到达价格的偏差。
 //!    - 价格有利时（买入时价格下跌/卖出时价格上涨），增加执行量（最多 +50%）。
 //!    - 价格不利时，减少执行量（最多 -50%）。
 //!
-//! 3. **兜底机制**：最后一个间隔无论如何都会提交剩余全部数量。
+//! 4. **市场冲击保护**：检查订单簿深度，确保单个切片不超过盘口最佳价量的一定比例（默认 5%），
+//!    避免在流动性薄弱时过度暴露。
+//!
+//! 5. **兜底机制**：最后一个间隔无论如何都会提交剩余全部数量。
 //!
 //! # 示例
 //!
@@ -70,6 +76,7 @@ use nautilus_model::{
     orders::{Order, OrderAny},
     types::{Quantity, quantity::QuantityRaw},
 };
+use rand::RngExt;
 use ustr::Ustr;
 
 use super::{ExecutionAlgorithm, ExecutionAlgorithmConfig, ExecutionAlgorithmCore};
@@ -94,6 +101,10 @@ struct IsOrderState {
     scheduled_sizes: Vec<Quantity>,
     /// 已执行的间隔计数。
     elapsed_intervals: u64,
+    /// 是否启用随机性。
+    randomization_enabled: bool,
+    /// 市场冲击保护比例。
+    max_market_impact_ratio: f64,
 }
 
 /// 执行缺口 (IS) 执行算法。
@@ -205,6 +216,54 @@ impl IsAlgorithm {
 
         factor.clamp(0.5, 1.5)
     }
+
+    /// 应用时间随机性（±20% 抖动）。
+    fn apply_time_randomization(base_interval_secs: f64) -> Duration {
+        let mut rng = rand::rng();
+        let jitter = 0.8 + rng.random_range(0.0..0.4);
+        let randomized_secs = base_interval_secs * jitter;
+        Duration::from_secs_f64(randomized_secs.max(1.0))
+    }
+
+    /// 应用数量随机性（±5% 扰动）。
+    fn apply_quantity_randomization(
+        base_qty_raw: QuantityRaw,
+        remaining_raw: QuantityRaw,
+        is_final: bool,
+    ) -> QuantityRaw {
+        if is_final {
+            return remaining_raw;
+        }
+
+        let mut rng = rand::rng();
+        let randomization_factor = 0.95 + rng.random_range(0.0..0.10);
+        let randomized_raw = (base_qty_raw as f64 * randomization_factor).floor() as QuantityRaw;
+        let randomized_raw = randomized_raw.max(1).min(remaining_raw);
+        randomized_raw
+    }
+
+    /// 检查市场冲击限制。
+    fn check_market_impact_limit(
+        cache: &nautilus_common::cache::Cache,
+        instrument_id: &InstrumentId,
+        proposed_qty_raw: QuantityRaw,
+        max_impact_ratio: f64,
+        order_side: OrderSide,
+    ) -> QuantityRaw {
+        let Some(book) = cache.order_book(instrument_id) else {
+            return proposed_qty_raw;
+        };
+
+        let depth_qty_raw = match order_side {
+            OrderSide::Buy => book.best_ask_size().map(|s| s.raw).unwrap_or(proposed_qty_raw),
+            OrderSide::Sell => book.best_bid_size().map(|s| s.raw).unwrap_or(proposed_qty_raw),
+            _ => proposed_qty_raw,
+        };
+
+        let max_allowed = (depth_qty_raw as f64 * max_impact_ratio).floor() as QuantityRaw;
+        let limited_raw = std::cmp::min(proposed_qty_raw, max_allowed.max(1));
+        limited_raw
+    }
 }
 
 impl Deref for IsAlgorithm {
@@ -315,6 +374,17 @@ impl ExecutionAlgorithm for IsAlgorithm {
             }
         };
 
+        // 解析可选参数
+        let randomization_enabled: bool = exec_params
+            .get(&Ustr::from("randomization_enabled"))
+            .map(|s| s == "true")
+            .unwrap_or(true);
+
+        let max_market_impact_ratio: f64 = exec_params
+            .get(&Ustr::from("max_market_impact_ratio"))
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0.05);
+
         // 验证参数有效性
         if !horizon_secs.is_finite() || horizon_secs <= 0.0 {
             log::error!("无法执行订单：horizon_secs={horizon_secs} 必须是有限且正数");
@@ -378,10 +448,13 @@ impl ExecutionAlgorithm for IsAlgorithm {
             }
         }
 
-        log::info!("IS 紧迫度加权调度表: {scheduled_sizes:?}");
+        log::info!("IS 紧迫度加权调度表：{scheduled_sizes:?}");
         log::info!(
-            "IS 参数: urgency={urgency}, arrival_price={arrival_price}, \
-             horizon_secs={horizon_secs}, interval_secs={interval_secs}, 切片数={num_intervals}"
+            "IS 参数：urgency={urgency}, arrival_price={arrival_price}, \
+             horizon_secs={horizon_secs}, interval_secs={interval_secs}, 切片数={num_intervals}, \
+             randomization={}, max_market_impact_ratio={:.1}%",
+            if randomization_enabled { "enabled" } else { "disabled" },
+            max_market_impact_ratio * 100.0
         );
 
         // 将主订单添加到缓存
@@ -399,6 +472,8 @@ impl ExecutionAlgorithm for IsAlgorithm {
             precision,
             scheduled_sizes: scheduled_sizes.clone(),
             elapsed_intervals: 0,
+            randomization_enabled,
+            max_market_impact_ratio,
         };
 
         self.order_states.insert(primary_id, state);
@@ -449,9 +524,16 @@ impl ExecutionAlgorithm for IsAlgorithm {
             cache.update_order(&order)?;
         }
 
+        // 设置带随机性的定时器
+        let randomized_interval = if randomization_enabled {
+            Self::apply_time_randomization(interval_secs)
+        } else {
+            Duration::from_secs_f64(interval_secs)
+        };
+
         self.core.clock().set_timer(
             primary_id.as_str(),
-            Duration::from_secs_f64(interval_secs),
+            randomized_interval,
             None,
             None,
             None,
@@ -460,7 +542,14 @@ impl ExecutionAlgorithm for IsAlgorithm {
         )?;
 
         log::info!(
-            "开始执行 {primary_id} 的 IS：urgency={urgency}, arrival_price={arrival_price}"
+            "开始执行 {primary_id} 的 IS：urgency={urgency}, arrival_price={arrival_price}, \
+             interval={:.2}s{}",
+            interval_secs,
+            if randomization_enabled {
+                format!(" (randomized: {:.2}s)", randomized_interval.as_secs_f64())
+            } else {
+                String::new()
+            }
         );
 
         Ok(())
@@ -508,6 +597,13 @@ impl ExecutionAlgorithm for IsAlgorithm {
             return Ok(());
         }
 
+        // 应用数量随机化
+        let randomized_base_raw = if state.randomization_enabled {
+            Self::apply_quantity_randomization(base_qty.raw, state.remaining_raw, is_final_slice)
+        } else {
+            base_qty.raw
+        };
+
         // 查询当前市场价格，进行价格自适应调整
         let current_price = {
             let cache = self.core.cache();
@@ -520,12 +616,26 @@ impl ExecutionAlgorithm for IsAlgorithm {
             .map(|cp| Self::price_adaptation_factor(state.arrival_price, cp, state.order_side))
             .unwrap_or(1.0);
 
-        // 应用价格自适应因子到基础调度量
+        // 应用价格自适应因子到随机化后的数量
         let adjusted_raw =
-            (base_qty.raw as f64 * adaptation_factor).floor() as QuantityRaw;
+            (randomized_base_raw as f64 * adaptation_factor).floor() as QuantityRaw;
+
+        // 应用市场冲击保护
+        let market_impact_limited_raw = if state.max_market_impact_ratio > 0.0 {
+            let cache = self.core.cache();
+            Self::check_market_impact_limit(
+                &cache,
+                &state.instrument_id,
+                adjusted_raw,
+                state.max_market_impact_ratio,
+                state.order_side,
+            )
+        } else {
+            adjusted_raw
+        };
 
         // 不超过剩余数量
-        let slice_raw = std::cmp::min(adjusted_raw, state.remaining_raw);
+        let slice_raw = std::cmp::min(market_impact_limited_raw, state.remaining_raw);
         // 保证至少为 1（如果 remaining_raw > 0）
         let slice_raw = if slice_raw == 0 && state.remaining_raw > 0 {
             1
@@ -535,9 +645,14 @@ impl ExecutionAlgorithm for IsAlgorithm {
         let slice_qty = Quantity::from_raw(slice_raw, state.precision);
 
         log::info!(
-            "IS {primary_id} 间隔 {}: base={base_qty}, adaptation={adaptation_factor:.3}, \
-             adjusted={slice_qty}{}",
+            "IS {primary_id} 间隔 {}: base={}, randomized={}, adaptation={:.3}, \
+             market_limited={}, adjusted={}{}",
             state.elapsed_intervals,
+            base_qty,
+            Quantity::from_raw(randomized_base_raw, state.precision),
+            adaptation_factor,
+            Quantity::from_raw(market_impact_limited_raw, state.precision),
+            slice_qty,
             current_price.map_or(String::new(), |cp| {
                 format!(
                     ", current_price={cp:.4}, arrival_price={:.4}",
@@ -726,6 +841,8 @@ mod tests {
                 precision: 1,
                 scheduled_sizes: vec![],
                 elapsed_intervals: 0,
+                randomization_enabled: true,
+                max_market_impact_ratio: 0.05,
             },
         );
 
@@ -1108,5 +1225,76 @@ mod tests {
 
         algo.on_order(order).unwrap();
         assert!(algo.order_states.contains_key(&primary_id));
+    }
+
+    // ==================== 随机性和市场冲击保护测试 ====================
+
+    #[rstest]
+    fn test_is_time_randomization() {
+        let base_interval = 20.0;
+        let randomized = IsAlgorithm::apply_time_randomization(base_interval);
+        let ratio = randomized.as_secs_f64() / base_interval;
+        
+        assert!(
+            ratio >= 0.8 && ratio <= 1.2,
+            "Time randomization factor {ratio} should be within ±20% (0.8-1.2)"
+        );
+    }
+
+    #[rstest]
+    fn test_is_quantity_randomization() {
+        let base_qty_raw = 1000;
+        let remaining_raw = 10000;
+        
+        let randomized = IsAlgorithm::apply_quantity_randomization(
+            base_qty_raw,
+            remaining_raw,
+            false,
+        );
+        
+        let ratio = randomized as f64 / base_qty_raw as f64;
+        assert!(
+            ratio >= 0.95 && ratio <= 1.05,
+            "Quantity randomization factor {ratio} should be within ±5% (0.95-1.05)"
+        );
+    }
+
+    #[rstest]
+    fn test_is_final_slice_no_randomization() {
+        let base_qty_raw = 1000;
+        let remaining_raw = 500;
+        
+        let randomized = IsAlgorithm::apply_quantity_randomization(
+            base_qty_raw,
+            remaining_raw,
+            true,
+        );
+        
+        assert_eq!(
+            randomized, remaining_raw,
+            "Final slice should use exact remaining amount"
+        );
+    }
+
+    #[rstest]
+    fn test_is_market_impact_limit() {
+        let mut algo = create_is_algorithm();
+        register_algorithm(&mut algo);
+        add_instrument_to_cache(&mut algo);
+
+        let proposed_qty_raw = 1000;
+        let max_impact_ratio = 0.05;
+        
+        let cache = algo.core.cache();
+        let limited = IsAlgorithm::check_market_impact_limit(
+            &cache,
+            &InstrumentId::from("ETHUSDT-PERP.BINANCE"),
+            proposed_qty_raw,
+            max_impact_ratio,
+            OrderSide::Buy,
+        );
+        
+        // 如果没有订单簿数据，应该返回原始数量
+        assert_eq!(limited, proposed_qty_raw);
     }
 }
