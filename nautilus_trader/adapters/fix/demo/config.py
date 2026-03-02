@@ -65,7 +65,7 @@ class Config:
     )
     
     # 默认账号
-    Account = ACCOUNT_B
+    Account = ACCOUNT_A
     
     # ============ 账号映射表 ============
     ACCOUNTS = {

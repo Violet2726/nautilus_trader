@@ -315,7 +315,7 @@ class VWAPExecAlgorithm(ExecAlgorithm):
         """
         # 如果进度落后，适当增加执行量
         if progress_ratio < 0.8:  # 进度落后于时间
-            adjustment_factor = 1.0 + (0.8 - progress_ratio) * 0.5  # 最多增加 10%
+            adjustment_factor = 1.0 + (0.8 - progress_ratio) * 0.125  # 最多增加 10%
             adjusted_raw = float(base_qty.as_double()) * adjustment_factor
             instrument = self.cache.instrument(base_qty.instrument_id)
             return instrument.make_qty(Decimal(str(adjusted_raw)))
