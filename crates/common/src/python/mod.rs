@@ -58,6 +58,8 @@ pub fn common(_: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<crate::enums::LogFormat>()?;
     m.add_class::<crate::logging::logger::LoggerConfig>()?;
     m.add_class::<crate::logging::logger::LogGuard>()?;
+    m.add_class::<crate::session::TradingPhase>()?;
+    m.add_class::<crate::session::ashare::AShareSessionProvider>()?;
     m.add_class::<crate::logging::writer::FileWriterConfig>()?;
     m.add_function(wrap_pyfunction!(logging::py_init_logging, m)?)?;
     m.add_function(wrap_pyfunction!(logging::py_logger_flush, m)?)?;
