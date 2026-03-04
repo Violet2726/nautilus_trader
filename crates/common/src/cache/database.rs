@@ -13,9 +13,9 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! Provides a `Cache` database backing.
+//! 提供 `Cache` 的数据库后端支持。
 
-// Under development
+// 开发中
 #![allow(dead_code)]
 #![allow(unused_variables)]
 
@@ -54,476 +54,476 @@ pub struct CacheMap {
 
 #[async_trait::async_trait]
 pub trait CacheDatabaseAdapter {
-    /// Closes the cache database connection.
+    /// 关闭缓存数据库连接。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if the database fails to close properly.
+    /// 如果数据库未能正常关闭，则返回错误。
     fn close(&mut self) -> anyhow::Result<()>;
 
-    /// Flushes any pending changes to the database.
+    /// 将任何挂起的更改刷新到数据库。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if flushing changes fails.
+    /// 如果刷新更改失败，则返回错误。
     fn flush(&mut self) -> anyhow::Result<()>;
 
-    /// Loads all cached data into memory.
+    /// 将所有缓存数据加载到内存中。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if loading data from the database fails.
+    /// 如果从数据库加载数据失败，则返回错误。
     async fn load_all(&self) -> anyhow::Result<CacheMap>;
 
-    /// Loads raw key-value data from the database.
+    /// 从数据库加载原始键值数据。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if the load operation fails.
+    /// 如果加载操作失败，则返回错误。
     fn load(&self) -> anyhow::Result<AHashMap<String, Bytes>>;
 
-    /// Loads all currencies from the cache.
+    /// 从缓存中加载所有货币。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if loading currencies fails.
+    /// 如果加载货币失败，则返回错误。
     async fn load_currencies(&self) -> anyhow::Result<AHashMap<Ustr, Currency>>;
 
-    /// Loads all instruments from the cache.
+    /// 从缓存中加载所有金融工具。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if loading instruments fails.
+    /// 如果加载金融工具失败，则返回错误。
     async fn load_instruments(&self) -> anyhow::Result<AHashMap<InstrumentId, InstrumentAny>>;
 
-    /// Loads all synthetic instruments from the cache.
+    /// 从缓存中加载所有合成金融工具。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if loading synthetic instruments fails.
+    /// 如果加载合成金融工具失败，则返回错误。
     async fn load_synthetics(&self) -> anyhow::Result<AHashMap<InstrumentId, SyntheticInstrument>>;
 
-    /// Loads all accounts from the cache.
+    /// 从缓存中加载所有账户。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if loading accounts fails.
+    /// 如果加载账户失败，则返回错误。
     async fn load_accounts(&self) -> anyhow::Result<AHashMap<AccountId, AccountAny>>;
 
-    /// Loads all orders from the cache.
+    /// 从缓存中加载所有订单。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if loading orders fails.
+    /// 如果加载订单失败，则返回错误。
     async fn load_orders(&self) -> anyhow::Result<AHashMap<ClientOrderId, OrderAny>>;
 
-    /// Loads all positions from the cache.
+    /// 从缓存中加载所有持仓。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if loading positions fails.
+    /// 如果加载持仓失败，则返回错误。
     async fn load_positions(&self) -> anyhow::Result<AHashMap<PositionId, Position>>;
 
-    /// Loads all [`GreeksData`] from the cache.
+    /// 从缓存中加载所有 [`GreeksData`]。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if loading greeks data fails.
+    /// 如果加载希腊字母数据失败，则返回错误。
     async fn load_greeks(&self) -> anyhow::Result<AHashMap<InstrumentId, GreeksData>> {
         Ok(AHashMap::new())
     }
 
-    /// Loads all [`YieldCurveData`] from the cache.
+    /// 从缓存中加载所有 [`YieldCurveData`]。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if loading yield curve data fails.
+    /// 如果加载收益率曲线数据失败，则返回错误。
     async fn load_yield_curves(&self) -> anyhow::Result<AHashMap<String, YieldCurveData>> {
         Ok(AHashMap::new())
     }
 
-    /// Loads mapping from order IDs to position IDs.
+    /// 加载订单 ID 到持仓 ID 的映射。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if loading the index order-position mapping fails.
+    /// 如果加载订单-持仓索引映射失败，则返回错误。
     fn load_index_order_position(&self) -> anyhow::Result<AHashMap<ClientOrderId, Position>>;
 
-    /// Loads mapping from order IDs to client IDs.
+    /// 加载订单 ID 到客户端 ID 的映射。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if loading the index order-client mapping fails.
+    /// 如果加载订单-客户端索引映射失败，则返回错误。
     fn load_index_order_client(&self) -> anyhow::Result<AHashMap<ClientOrderId, ClientId>>;
 
-    /// Loads a single currency by code.
+    /// 根据代码加载单个货币。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if loading a single currency fails.
+    /// 如果加载单个货币失败，则返回错误。
     async fn load_currency(&self, code: &Ustr) -> anyhow::Result<Option<Currency>>;
 
-    /// Loads a single instrument by ID.
+    /// 根据 ID 加载单个金融工具。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if loading a single instrument fails.
+    /// 如果加载单个金融工具失败，则返回错误。
     async fn load_instrument(
         &self,
         instrument_id: &InstrumentId,
     ) -> anyhow::Result<Option<InstrumentAny>>;
 
-    /// Loads a single synthetic instrument by ID.
+    /// 根据 ID 加载单个合成金融工具。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if loading a single synthetic instrument fails.
+    /// 如果加载单个合成金融工具失败，则返回错误。
     async fn load_synthetic(
         &self,
         instrument_id: &InstrumentId,
     ) -> anyhow::Result<Option<SyntheticInstrument>>;
 
-    /// Loads a single account by ID.
+    /// 根据 ID 加载单个账户。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if loading a single account fails.
+    /// 如果加载单个账户失败，则返回错误。
     async fn load_account(&self, account_id: &AccountId) -> anyhow::Result<Option<AccountAny>>;
 
-    /// Loads a single order by client order ID.
+    /// 根据客户订单 ID 加载单个订单。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if loading a single order fails.
+    /// 如果加载单个订单失败，则返回错误。
     async fn load_order(&self, client_order_id: &ClientOrderId)
     -> anyhow::Result<Option<OrderAny>>;
 
-    /// Loads a single position by position ID.
+    /// 根据持仓 ID 加载单个持仓。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if loading a single position fails.
+    /// 如果加载单个持仓失败，则返回错误。
     async fn load_position(&self, position_id: &PositionId) -> anyhow::Result<Option<Position>>;
 
-    /// Loads actor state by component ID.
+    /// 根据组件 ID 加载 Actor 状态。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if loading actor state fails.
+    /// 如果加载 Actor 状态失败，则返回错误。
     fn load_actor(&self, component_id: &ComponentId) -> anyhow::Result<AHashMap<String, Bytes>>;
 
-    /// Loads strategy state by strategy ID.
+    /// 根据策略 ID 加载策略状态。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if loading strategy state fails.
+    /// 如果加载策略状态失败，则返回错误。
     fn load_strategy(&self, strategy_id: &StrategyId) -> anyhow::Result<AHashMap<String, Bytes>>;
 
-    /// Loads signals by name.
+    /// 根据名称加载信号。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if loading signals fails.
+    /// 如果加载信号失败，则返回错误。
     fn load_signals(&self, name: &str) -> anyhow::Result<Vec<Signal>>;
 
-    /// Loads custom data by data type.
+    /// 根据数据类型加载自定义数据。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if loading custom data fails.
+    /// 如果加载自定义数据失败，则返回错误。
     fn load_custom_data(&self, data_type: &DataType) -> anyhow::Result<Vec<CustomData>>;
 
-    /// Loads an order snapshot by client order ID.
+    /// 根据客户订单 ID 加载订单快照。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if loading the order snapshot fails.
+    /// 如果加载订单快照失败，则返回错误。
     fn load_order_snapshot(
         &self,
         client_order_id: &ClientOrderId,
     ) -> anyhow::Result<Option<OrderSnapshot>>;
 
-    /// Loads a position snapshot by position ID.
+    /// 根据持仓 ID 加载持仓快照。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if loading the position snapshot fails.
+    /// 如果加载持仓快照失败，则返回错误。
     fn load_position_snapshot(
         &self,
         position_id: &PositionId,
     ) -> anyhow::Result<Option<PositionSnapshot>>;
 
-    /// Loads quote ticks by instrument ID.
+    /// 根据金融工具 ID 加载报价 Tick。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if loading quotes fails.
+    /// 如果加载报价失败，则返回错误。
     fn load_quotes(&self, instrument_id: &InstrumentId) -> anyhow::Result<Vec<QuoteTick>>;
 
-    /// Loads trade ticks by instrument ID.
+    /// 根据金融工具 ID 加载成交 Tick。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if loading trades fails.
+    /// 如果加载成交失败，则返回错误。
     fn load_trades(&self, instrument_id: &InstrumentId) -> anyhow::Result<Vec<TradeTick>>;
 
-    /// Loads funding rate updates by instrument ID.
+    /// 根据金融工具 ID 加载资金费率更新。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if loading funding rates fails.
+    /// 如果加载资金费率失败，则返回错误。
     fn load_funding_rates(
         &self,
         instrument_id: &InstrumentId,
     ) -> anyhow::Result<Vec<FundingRateUpdate>>;
 
-    /// Loads bars by instrument ID.
+    /// 根据金融工具 ID 加载 Bar 数据。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if loading bars fails.
+    /// 如果加载 Bar 数据失败，则返回错误。
     fn load_bars(&self, instrument_id: &InstrumentId) -> anyhow::Result<Vec<Bar>>;
 
-    /// Adds a generic key-value pair to the cache.
+    /// 向缓存添加一个通用的键值对。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if adding a generic key/value fails.
+    /// 如果添加通用的键/值失败，则返回错误。
     fn add(&self, key: String, value: Bytes) -> anyhow::Result<()>;
 
-    /// Adds a currency to the cache.
+    /// 向缓存添加一种货币。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if adding a currency fails.
+    /// 如果添加货币失败，则返回错误。
     fn add_currency(&self, currency: &Currency) -> anyhow::Result<()>;
 
-    /// Adds an instrument to the cache.
+    /// 向缓存添加一个金融工具。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if adding an instrument fails.
+    /// 如果添加金融工具失败，则返回错误。
     fn add_instrument(&self, instrument: &InstrumentAny) -> anyhow::Result<()>;
 
-    /// Adds a synthetic instrument to the cache.
+    /// 向缓存添加一个合成金融工具。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if adding a synthetic instrument fails.
+    /// 如果添加合成金融工具失败，则返回错误。
     fn add_synthetic(&self, synthetic: &SyntheticInstrument) -> anyhow::Result<()>;
 
-    /// Adds an account to the cache.
+    /// 向缓存添加一个账户。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if adding an account fails.
+    /// 如果添加账户失败，则返回错误。
     fn add_account(&self, account: &AccountAny) -> anyhow::Result<()>;
 
-    /// Adds an order to the cache.
+    /// 向缓存添加一个订单。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if adding an order fails.
+    /// 如果添加订单失败，则返回错误。
     fn add_order(&self, order: &OrderAny, client_id: Option<ClientId>) -> anyhow::Result<()>;
 
-    /// Adds an order snapshot to the cache.
+    /// 向缓存添加一个订单快照。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if adding an order snapshot fails.
+    /// 如果添加订单快照失败，则返回错误。
     fn add_order_snapshot(&self, snapshot: &OrderSnapshot) -> anyhow::Result<()>;
 
-    /// Adds a position to the cache.
+    /// 向缓存添加一个持仓。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if adding a position fails.
+    /// 如果添加持仓失败，则返回错误。
     fn add_position(&self, position: &Position) -> anyhow::Result<()>;
 
-    /// Adds a position snapshot to the cache.
+    /// 向缓存添加一个持仓快照。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if adding a position snapshot fails.
+    /// 如果添加持仓快照失败，则返回错误。
     fn add_position_snapshot(&self, snapshot: &PositionSnapshot) -> anyhow::Result<()>;
 
-    /// Adds an order book to the cache.
+    /// 向缓存添加一个订单簿。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if adding an order book fails.
+    /// 如果添加订单簿失败，则返回错误。
     fn add_order_book(&self, order_book: &OrderBook) -> anyhow::Result<()>;
 
-    /// Adds a signal to the cache.
+    /// 向缓存添加一个信号。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if adding a signal fails.
+    /// 如果添加信号失败，则返回错误。
     fn add_signal(&self, signal: &Signal) -> anyhow::Result<()>;
 
-    /// Adds custom data to the cache.
+    /// 向缓存添加自定义数据。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if adding custom data fails.
+    /// 如果添加自定义数据失败，则返回错误。
     fn add_custom_data(&self, data: &CustomData) -> anyhow::Result<()>;
 
-    /// Adds a quote tick to the cache.
+    /// 向缓存添加一个报价 Tick。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if adding a quote tick fails.
+    /// 如果添加报价 Tick 失败，则返回错误。
     fn add_quote(&self, quote: &QuoteTick) -> anyhow::Result<()>;
 
-    /// Adds a trade tick to the cache.
+    /// 向缓存添加一个成交 Tick。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if adding a trade tick fails.
+    /// 如果添加成交 Tick 失败，则返回错误。
     fn add_trade(&self, trade: &TradeTick) -> anyhow::Result<()>;
 
-    /// Adds a funding rate update to the cache.
+    /// 向缓存添加资金费率更新。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if adding a funding rate update fails.
+    /// 如果添加资金费率更新失败，则返回错误。
     fn add_funding_rate(&self, funding_rate: &FundingRateUpdate) -> anyhow::Result<()>;
 
-    /// Adds a bar to the cache.
+    /// 向缓存添加 Bar 数据。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if adding a bar fails.
+    /// 如果添加 Bar 数据失败，则返回错误。
     fn add_bar(&self, bar: &Bar) -> anyhow::Result<()>;
 
-    /// Adds greeks data to the cache.
+    /// 向缓存添加希腊字母数据。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if adding greeks data fails.
+    /// 如果添加希腊字母数据失败，则返回错误。
     fn add_greeks(&self, greeks: &GreeksData) -> anyhow::Result<()> {
         Ok(())
     }
 
-    /// Adds yield curve data to the cache.
+    /// 向缓存添加收益率曲线数据。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if adding yield curve data fails.
+    /// 如果添加收益率曲线数据失败，则返回错误。
     fn add_yield_curve(&self, yield_curve: &YieldCurveData) -> anyhow::Result<()> {
         Ok(())
     }
 
-    /// Deletes actor state from the cache.
+    /// 从缓存中删除 Actor 状态。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if deleting actor state fails.
+    /// 如果删除 Actor 状态失败，则返回错误。
     fn delete_actor(&self, component_id: &ComponentId) -> anyhow::Result<()>;
 
-    /// Deletes strategy state from the cache.
+    /// 从缓存中删除策略状态。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if deleting strategy state fails.
+    /// 如果删除策略状态失败，则返回错误。
     fn delete_strategy(&self, component_id: &StrategyId) -> anyhow::Result<()>;
 
-    /// Deletes an order from the cache.
+    /// 从缓存中删除订单。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if deleting an order fails.
+    /// 如果删除订单失败，则返回错误。
     fn delete_order(&self, client_order_id: &ClientOrderId) -> anyhow::Result<()>;
 
-    /// Deletes a position from the cache.
+    /// 从缓存中删除持仓。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if deleting a position fails.
+    /// 如果删除持仓失败，则返回错误。
     fn delete_position(&self, position_id: &PositionId) -> anyhow::Result<()>;
 
-    /// Deletes an account event from the cache.
+    /// 从缓存中删除账户事件。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if deleting account events fails.
+    /// 如果删除账户事件失败，则返回错误。
     fn delete_account_event(&self, account_id: &AccountId, event_id: &str) -> anyhow::Result<()>;
 
-    /// Indexes a venue order ID with its client order ID.
+    /// 索引交易所订单 ID 及其对应的客户订单 ID。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if indexing venue order ID fails.
+    /// 如果索引交易所订单 ID 失败，则返回错误。
     fn index_venue_order_id(
         &self,
         client_order_id: ClientOrderId,
         venue_order_id: VenueOrderId,
     ) -> anyhow::Result<()>;
 
-    /// Indexes an order-position mapping.
+    /// 索引订单-持仓映射。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if indexing order-position mapping fails.
+    /// 如果索引订单-持仓映射失败，则返回错误。
     fn index_order_position(
         &self,
         client_order_id: ClientOrderId,
         position_id: PositionId,
     ) -> anyhow::Result<()>;
 
-    /// Updates actor state in the cache.
+    /// 在缓存中更新 Actor 状态。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if updating actor state fails.
+    /// 如果更新 Actor 状态失败，则返回错误。
     fn update_actor(&self) -> anyhow::Result<()>;
 
-    /// Updates strategy state in the cache.
+    /// 在缓存中更新策略状态。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if updating strategy state fails.
+    /// 如果更新策略状态失败，则返回错误。
     fn update_strategy(&self) -> anyhow::Result<()>;
 
-    /// Updates an account in the cache.
+    /// 在缓存中更新账户。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if updating an account fails.
+    /// 如果更新账户失败，则返回错误。
     fn update_account(&self, account: &AccountAny) -> anyhow::Result<()>;
 
-    /// Updates an order in the cache with an order event.
+    /// 使用订单事件在缓存中更新订单。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if updating an order fails.
+    /// 如果更新订单失败，则返回错误。
     fn update_order(&self, order_event: &OrderEventAny) -> anyhow::Result<()>;
 
-    /// Updates a position in the cache.
+    /// 在缓存中更新持仓。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if updating a position fails.
+    /// 如果更新持仓失败，则返回错误。
     fn update_position(&self, position: &Position) -> anyhow::Result<()>;
 
-    /// Creates a snapshot of order state.
+    /// 创建订单状态快照。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if snapshotting order state fails.
+    /// 如果订单状态快照失败，则返回错误。
     fn snapshot_order_state(&self, order: &OrderAny) -> anyhow::Result<()>;
 
-    /// Creates a snapshot of position state.
+    /// 创建持仓状态快照。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if snapshotting position state fails.
+    /// 如果持仓状态快照失败，则返回错误。
     fn snapshot_position_state(&self, position: &Position) -> anyhow::Result<()>;
 
-    /// Records a heartbeat timestamp.
+    /// 记录心跳时间戳。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if heartbeat recording fails.
+    /// 如果记录心跳失败，则返回错误。
     fn heartbeat(&self, timestamp: UnixNanos) -> anyhow::Result<()>;
 }

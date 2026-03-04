@@ -13,14 +13,14 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! A user custom data type.
+//! 用户自定义数据类型。
 
 use bytes::Bytes;
 use nautilus_core::UnixNanos;
 use nautilus_model::data::DataType;
 use serde::{Deserialize, Serialize};
 
-/// Represents a custom data.
+/// 代表一个自定义数据。
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(
@@ -35,7 +35,7 @@ pub struct CustomData {
 }
 
 impl CustomData {
-    /// Creates a new [`CustomData`] instance.
+    /// 创建一个新的 [`CustomData`] 实例。
     pub const fn new(
         data_type: DataType,
         value: Bytes,

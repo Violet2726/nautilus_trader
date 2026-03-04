@@ -13,7 +13,7 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! Tests module for `Cache`.
+//! `Cache` 的测试模块。
 
 #[cfg(feature = "defi")]
 use std::sync::Arc;
@@ -171,7 +171,7 @@ fn test_order_when_submitted(mut cache: Cache, audusd_sim: CurrencyPair) {
     order.apply(OrderEventAny::Submitted(submitted)).unwrap();
     cache.update_order(&order).unwrap();
 
-    // check the status change of the cached order
+    // 检查缓存订单的状态更改
     let cached_order = cache.order(&client_order_id).unwrap();
     assert_eq!(cached_order.status(), OrderStatus::Submitted);
 
@@ -206,19 +206,19 @@ fn test_order_when_submitted(mut cache: Cache, audusd_sim: CurrencyPair) {
     assert_eq!(cache.venue_order_id(&order.client_order_id()), None);
 }
 
-// Test order state transitions and cache queries when an order is rejected.
+// 测试订单被拒绝时的状态转换和缓存查询。
 //
-// This test verifies cache behavior for the complete lifecycle: initialized -> submitted -> rejected.
+// 此测试验证完整生命周期的缓存行为：已初始化 -> 已提交 -> 已拒绝。
 //
-// PRODUCTION CODE BUG: This test fails at line 220 with:
+// 生产代码 BUG：此测试在第 220 行失败，原因如下：
 //   assertion failed: cache.orders_emulated(None, None, None, None, None).is_empty()
 //
-// When an order transitions to REJECTED state, it incorrectly appears in the emulated orders
-// collection. The cache should only track emulated orders separately, not include rejected orders.
+// 当订单转换到 REJECTED 状态时，它错误地出现在模拟订单集合中。
+// 缓存应该仅单独追踪模拟订单，不应包含被拒绝的订单。
 //
-// TODO: Fix cache order state management - rejected orders should not appear in emulated list.
-// The bug is in production code (cache.rs), not in this test.
-#[ignore = "Production bug: rejected orders incorrectly showing in emulated list"]
+// TODO：修复订单状态管理 - 被拒绝的订单不应出现在模拟列表中。
+// 该 Bug 存在于生产代码 (cache.rs) 中，而非此测试中。
+#[ignore = "生产环境 Bug：被拒绝的订单错误地显示在模拟列表中"]
 #[rstest]
 fn test_order_when_rejected(mut cache: Cache, audusd_sim: CurrencyPair) {
     let mut order = OrderTestBuilder::new(OrderType::Market)
@@ -236,7 +236,7 @@ fn test_order_when_rejected(mut cache: Cache, audusd_sim: CurrencyPair) {
     order.apply(OrderEventAny::Rejected(rejected)).unwrap();
     cache.update_order(&order).unwrap();
 
-    // check the status change of the cached order
+    // 检查缓存订单的状态更改
     let cached_order = cache.order(&order.client_order_id()).unwrap();
     assert_eq!(cached_order.status(), OrderStatus::Rejected);
 
@@ -335,7 +335,7 @@ fn test_order_when_accepted(mut cache: Cache, audusd_sim: CurrencyPair) {
 
 #[rstest]
 fn test_client_order_ids_filtering(mut cache: Cache) {
-    // Build a small deterministic universe: 2 venues × 3 instruments × 2 orders
+    // 构建一个确定性的小型数据环境：2 个交易所 × 3 个交易工具 × 2 个订单
     let venue_a = Venue::from("VENUE-A");
     let _venue_b = Venue::from("VENUE-B");
 
@@ -351,18 +351,18 @@ fn test_client_order_ids_filtering(mut cache: Cache) {
     // Sanity-check the generated volume: 2 × 3 × 2 = 12
     assert_eq!(orders.len(), 12);
 
-    // Load into cache so indices are built on the fly
+    // 加载到缓存中以实时构建索引
     for order in &orders {
         cache.add_order(order.clone(), None, None, false).unwrap();
     }
 
-    // No filters – expect all orders
+    // 无过滤器 – 期望所有订单
     assert_eq!(
         cache.client_order_ids(None, None, None, None).len(),
         orders.len()
     );
 
-    // Venue only
+    // 仅按交易所查询
     let expected_venue_a = orders
         .iter()
         .filter(|o| o.instrument_id().venue == venue_a)
@@ -374,7 +374,7 @@ fn test_client_order_ids_filtering(mut cache: Cache) {
         expected_venue_a
     );
 
-    // Venue + instrument
+    // 交易所 + 交易工具查询
     let instrument_a0 = InstrumentId::from("SYMBOL-0.VENUE-A");
     assert_eq!(
         cache
@@ -420,7 +420,7 @@ fn test_position_ids_filtering(mut cache: Cache) {
     let venue_a = Venue::from("VENUE-A");
     let _venue_b = Venue::from("VENUE-B");
 
-    // Build two open positions and one closed position across venues
+    // 跨交易所构建两个开仓头寸和一个平仓头寸
     let instr_a0 = make_pair("PAIR-0.VENUE-A");
     let instr_b0 = make_pair("PAIR-0.VENUE-B");
 
@@ -448,7 +448,7 @@ fn test_position_ids_filtering(mut cache: Cache) {
     };
     let pos_a = Position::new(&InstrumentAny::CurrencyPair(instr_a0.clone()), fill_a);
 
-    // Second open position on venue B
+    // 在交易所 B 上的第二个开仓头寸
     let order_b = OrderTestBuilder::new(OrderType::Market)
         .instrument_id(instr_b0.id)
         .side(OrderSide::Buy)
@@ -473,7 +473,7 @@ fn test_position_ids_filtering(mut cache: Cache) {
     };
     let pos_b = Position::new(&InstrumentAny::CurrencyPair(instr_b0), fill_b);
 
-    // Closed position on venue A (side Flat + ts_closed)
+    // 在交易所 A 上的平仓头寸 (side Flat + ts_closed)
     let mut pos_closed = pos_a.clone();
     pos_closed.id = PositionId::new("POS-C");
     pos_closed.side = PositionSide::Flat;
@@ -484,16 +484,16 @@ fn test_position_ids_filtering(mut cache: Cache) {
     cache.add_position(pos_b, OmsType::Netting).unwrap();
     cache.add_position(pos_closed, OmsType::Netting).unwrap();
 
-    // Assertions
+    // 断言
     assert_eq!(cache.position_ids(None, None, None, None).len(), 3);
 
-    // Venue filter
+    // 交易所过滤器
     assert_eq!(
         cache.position_ids(Some(&venue_a), None, None, None).len(),
         2
     );
 
-    // Venue + instrument filter
+    // 交易所 + 交易工具过滤器
     assert_eq!(
         cache
             .position_ids(Some(&venue_a), Some(&instr_a0.id), None, None)
@@ -501,7 +501,7 @@ fn test_position_ids_filtering(mut cache: Cache) {
         2 // open + closed on venue A instrument
     );
 
-    // Open / closed separation
+    // 开仓 / 平仓分离
     assert!(
         cache
             .position_open_ids(None, None, None, None)
@@ -509,19 +509,17 @@ fn test_position_ids_filtering(mut cache: Cache) {
     );
 }
 
-// Test order state transitions and cache queries when an order is filled.
+// 测试订单成交时的状态转换和缓存查询。
 //
-// This test verifies cache behavior for the complete lifecycle: initialized -> submitted -> accepted -> filled.
-// It also tests that position creation and order-position relationships are properly cached.
+// 此测试验证完整生命周期的缓存行为：已初始化 -> 已提交 -> 已接受 -> 已成交。
+// 同时也测试持仓创建以及订单-持仓关系是否被正确缓存。
 //
-// PRODUCTION CODE BUG: This test likely fails for similar reasons as test_order_when_rejected.
-// The cache may incorrectly categorize filled orders or fail to update state properly during
-// the order lifecycle transitions.
+// 生产代码 BUG：此测试可能会因为与 test_order_when_rejected 类似的原因失败。
+// 缓存可能会错误地分类已成交订单，或者在订单生命周期转换期间未能正确更新状态。
 //
-// TODO: Fix cache order state management during order lifecycle. Run this test after fixing
-// test_order_when_rejected to see the specific failure.
-// The bug is in production code (cache.rs), not in this test.
-#[ignore = "Production bug: cache state management during order lifecycle"]
+// TODO：修复订单生命周期中的缓存状态管理。在修复 test_order_when_rejected 后运行此测试以查看具体失败。
+// 该 Bug 存在于生产代码 (cache.rs) 中，而非此测试中。
+#[ignore = "生产环境 Bug：订单生命周期中的缓存状态管理"]
 #[rstest]
 fn test_order_when_filled(mut cache: Cache, audusd_sim: CurrencyPair) {
     let audusd_sim = InstrumentAny::CurrencyPair(audusd_sim);
@@ -638,7 +636,7 @@ fn test_correct_order_indexing(mut cache: Cache) {
     orders_generator.add_venue_and_total_instruments(binance, 10);
     orders_generator.set_orders_per_instrument(2);
     let orders = orders_generator.build();
-    // There will be 2 Venues * 10 Instruments * 2 Orders = 40 Orders
+    // 将会有 2 个交易所 * 10 个工具 * 2 个订单 = 40 个订单
     assert_eq!(orders.len(), 40);
     for order in orders {
         cache.add_order(order, None, None, false).unwrap();
@@ -677,7 +675,7 @@ fn test_correct_order_indexing(mut cache: Cache) {
 
 #[rstest]
 fn test_add_order_with_account_id_populates_account_index() {
-    // Verify add_order populates account_orders index when account_id already set
+    // 验证当 account_id 已设置时，add_order 是否填充 account_orders 索引
     let mut cache = Cache::default();
     let audusd_sim = audusd_sim();
     let instrument = InstrumentAny::CurrencyPair(audusd_sim);
@@ -689,14 +687,14 @@ fn test_add_order_with_account_id_populates_account_index() {
         .quantity(Quantity::from(100_000))
         .build();
 
-    // Set account_id before adding (e.g., order loaded from database)
+    // 在添加之前设置 account_id (例如，从数据库加载的订单)
     let submitted = TestOrderEventStubs::submitted(&order, account_id);
     order.apply(submitted).unwrap();
 
     let client_order_id = order.client_order_id();
     cache.add_order(order.clone(), None, None, false).unwrap();
 
-    // Verify order is in account_orders index
+    // 验证订单是否在 account_orders 索引中
     assert!(cache.index.account_orders.contains_key(&account_id));
     assert!(
         cache
@@ -707,7 +705,7 @@ fn test_add_order_with_account_id_populates_account_index() {
             .contains(&client_order_id)
     );
 
-    // Verify account-filtered query returns the order
+    // 验证账户过滤查询是否返回该订单
     let orders_for_account = cache.orders(None, None, None, Some(&account_id), None);
     assert_eq!(orders_for_account.len(), 1);
     assert!(orders_for_account.contains(&&order));
@@ -834,7 +832,7 @@ fn test_position_when_some(mut cache: Cache, audusd_sim: CurrencyPair) {
     );
 }
 
-// -- DATA ------------------------------------------------------------------------------------
+// -- 数据 (DATA) ------------------------------------------------------------------------------------
 
 #[rstest]
 fn test_cache_currencies_when_no_database(mut cache: Cache) {
@@ -1353,7 +1351,7 @@ fn test_bars_when_some(mut cache: Cache) {
     assert_eq!(result, Some(bars));
 }
 
-// -- ACCOUNT ---------------------------------------------------------------------------------
+// -- 账户 (ACCOUNT) ---------------------------------------------------------------------------------
 
 #[rstest]
 fn test_cache_accounts_when_no_database(mut cache: Cache) {
@@ -1394,7 +1392,7 @@ fn test_cache_account_for_venue_return_correct(mut cache: Cache) {
 
 #[rstest]
 fn test_get_mark_xrate_returns_none(cache: Cache) {
-    // When no mark xrate is set for (USD, EUR), it should return None
+    // 当没有为 (USD, EUR) 设置标记汇率时，应返回 None
     assert!(
         cache
             .get_mark_xrate(Currency::USD(), Currency::EUR())
@@ -1404,7 +1402,7 @@ fn test_get_mark_xrate_returns_none(cache: Cache) {
 
 #[rstest]
 fn test_set_and_get_mark_xrate(mut cache: Cache) {
-    // Set a mark xrate for (USD, EUR) and check both forward and inverse rates
+    // 为 (USD, EUR) 设置标记汇率，并检查正向和反向汇率
     let xrate = 1.25;
     cache.set_mark_xrate(Currency::USD(), Currency::EUR(), xrate);
     assert_eq!(
@@ -1419,7 +1417,7 @@ fn test_set_and_get_mark_xrate(mut cache: Cache) {
 
 #[rstest]
 fn test_clear_mark_xrate(mut cache: Cache) {
-    // Set a rate and then clear the forward key
+    // 设置汇率，然后清除正向键 (forward key)
     let xrate = 1.25;
     cache.set_mark_xrate(Currency::USD(), Currency::EUR(), xrate);
     assert!(
@@ -1441,7 +1439,7 @@ fn test_clear_mark_xrate(mut cache: Cache) {
 
 #[rstest]
 fn test_clear_mark_xrates(mut cache: Cache) {
-    // Set two mark xrates and then clear them all
+    // 设置两个标记汇率，然后全部清除
     cache.set_mark_xrate(Currency::USD(), Currency::EUR(), 1.25);
     cache.set_mark_xrate(Currency::AUD(), Currency::USD(), 0.75);
     cache.clear_mark_xrates();
@@ -1470,7 +1468,7 @@ fn test_clear_mark_xrates(mut cache: Cache) {
 #[rstest]
 #[should_panic(expected = "xrate was zero")]
 fn test_set_mark_xrate_panics_on_zero(mut cache: Cache) {
-    // Setting a mark xrate of zero should panic
+    // 设置标记汇率为零应触发 Panic
     cache.set_mark_xrate(Currency::USD(), Currency::EUR(), 0.0);
 }
 
@@ -1480,7 +1478,7 @@ fn test_purge_order() {
     let audusd_sim = audusd_sim();
     let audusd_sim = InstrumentAny::CurrencyPair(audusd_sim);
 
-    // Create an order and fill to generate a position
+    // 创建一个订单并成交以生成一个持仓
     let order = OrderTestBuilder::new(OrderType::Limit)
         .instrument_id(audusd_sim.id())
         .side(OrderSide::Buy)
@@ -1511,7 +1509,7 @@ fn test_purge_order() {
         .add_position(position.clone(), OmsType::Netting)
         .unwrap();
 
-    // Close the position to test purging from closed positions
+    // 关闭持仓以测试从已关闭持仓中清除
     let order_close = OrderTestBuilder::new(OrderType::Market)
         .instrument_id(audusd_sim.id())
         .side(OrderSide::Sell)
@@ -1535,39 +1533,39 @@ fn test_purge_order() {
     position.apply(&filled_close.into());
     cache.update_position(&position).unwrap();
 
-    // Verify position is now closed
+    // 验证持仓现已关闭
     assert!(position.is_closed());
 
-    // Verify the order exists
+    // 验证订单是否存在
     assert!(cache.order_exists(&client_order_id));
     assert_eq!(cache.orders_total_count(None, None, None, None, None), 1);
 
-    // Add the closing order to cache so it can be purged
+    // 将平仓订单添加到缓存中，以便可以将其清除
     let client_order_id_close = order_close.client_order_id();
     cache
         .add_order(order_close, Some(position_id), None, false)
         .unwrap();
 
-    // Purge both orders - fills should NOT be purged from the position
+    // 清除这两个订单 - 成交（fills）不应从持仓中清除
     cache.purge_order(client_order_id);
     cache.purge_order(client_order_id_close);
 
-    // Verify the orders are gone
+    // 验证订单已消失
     assert!(!cache.order_exists(&client_order_id));
     assert!(!cache.order_exists(&client_order_id_close));
     assert_eq!(cache.orders_total_count(None, None, None, None, None), 0);
-    // Verify position fills are preserved (purge_order doesn't touch position fills)
+    // 验证持仓成交信息被保留 (purge_order 不会触及持仓成交信息)
     assert_eq!(cache.position(&position_id).unwrap().event_count(), 2);
 }
 
 #[rstest]
 fn test_purge_open_order_skips_purge() {
-    // Test that attempting to purge an open order is prevented by the guard
+    // 测试防护机制：尝试清除一个开仓订单应被阻止
     let mut cache = Cache::default();
     let audusd_sim = audusd_sim();
     let audusd_sim = InstrumentAny::CurrencyPair(audusd_sim);
 
-    // Create and accept an order to make it open
+    // 创建并接受一个订单使其成为开仓状态
     let mut order = OrderTestBuilder::new(OrderType::Limit)
         .instrument_id(audusd_sim.id())
         .side(OrderSide::Buy)
@@ -1586,15 +1584,15 @@ fn test_purge_open_order_skips_purge() {
     order.apply(OrderEventAny::Accepted(accepted)).unwrap();
     cache.update_order(&order).unwrap();
 
-    // Verify order is open
+    // 验证订单为开仓状态
     assert!(order.is_open());
     assert!(cache.order_exists(&client_order_id));
     assert_eq!(cache.orders_total_count(None, None, None, None, None), 1);
 
-    // Attempt to purge the open order - should be prevented by guard
+    // 尝试清除开仓订单 - 应被防护机制阻止
     cache.purge_order(client_order_id);
 
-    // Verify the order still exists (guard prevented purge)
+    // 验证订单仍然存在 (防护机制阻止了清除操作)
     assert!(cache.order_exists(&client_order_id));
     assert_eq!(cache.orders_total_count(None, None, None, None, None), 1);
     assert!(cache.order(&client_order_id).is_some());
@@ -1606,7 +1604,7 @@ fn test_purge_position() {
     let audusd_sim = audusd_sim();
     let audusd_sim = InstrumentAny::CurrencyPair(audusd_sim);
 
-    // Create an order and fill to generate a position
+    // 创建一个订单并成交以生成一个持仓
     let order = OrderTestBuilder::new(OrderType::Market)
         .instrument_id(audusd_sim.id())
         .side(OrderSide::Buy)
@@ -1629,17 +1627,17 @@ fn test_purge_position() {
     let mut position = Position::new(&audusd_sim, filled.into());
     let position_id = position.id;
 
-    // Add position to cache
+    // 将持仓添加到缓存中
     cache
         .add_position(position.clone(), OmsType::Netting)
         .unwrap();
 
-    // Verify the position exists and is open
+    // 验证持仓存在且为开仓状态
     assert!(cache.position_exists(&position_id));
     assert!(position.is_open());
     assert_eq!(cache.positions_total_count(None, None, None, None, None), 1);
 
-    // Close the position first (create a closing order and fill)
+    // 首先平仓 (创建一个平仓订单并成交)
     let order_close = OrderTestBuilder::new(OrderType::Market)
         .instrument_id(audusd_sim.id())
         .side(OrderSide::Sell)
@@ -1663,25 +1661,25 @@ fn test_purge_position() {
     position.apply(&filled_close.into());
     cache.update_position(&position).unwrap();
 
-    // Verify position is now closed
+    // 验证持仓现已关闭
     assert!(position.is_closed());
 
-    // Purge the position
+    // 清除该持仓
     cache.purge_position(position_id);
 
-    // Verify the position is gone
+    // 验证持仓已消失
     assert!(!cache.position_exists(&position_id));
     assert_eq!(cache.positions_total_count(None, None, None, None, None), 0);
 }
 
 #[rstest]
 fn test_purge_open_position_skips_purge() {
-    // Test that attempting to purge an open position is prevented by the guard
+    // 测试防护机制：尝试清除一个开仓持仓应被阻止
     let mut cache = Cache::default();
     let audusd_sim = audusd_sim();
     let audusd_sim = InstrumentAny::CurrencyPair(audusd_sim);
 
-    // Create an order and fill to generate an open position
+    // 创建一个订单并成交以生成一个开仓持仓状态
     let order = OrderTestBuilder::new(OrderType::Market)
         .instrument_id(audusd_sim.id())
         .side(OrderSide::Buy)
@@ -1708,41 +1706,40 @@ fn test_purge_open_position_skips_purge() {
         .add_position(position.clone(), OmsType::Netting)
         .unwrap();
 
-    // Verify position is open
+    // 验证持仓为开仓状态
     assert!(position.is_open());
     assert!(cache.position_exists(&position_id));
     assert_eq!(cache.positions_total_count(None, None, None, None, None), 1);
     assert_eq!(position.event_count(), 1);
 
-    // Attempt to purge the open position - should be prevented by guard
+    // 尝试清除开仓持仓 - 应被防护机制阻止
     cache.purge_position(position_id);
 
-    // Verify the position still exists (guard prevented purge)
+    // 验证持仓仍然存在 (防护机制阻止了清除操作)
     assert!(cache.position_exists(&position_id));
     assert_eq!(cache.positions_total_count(None, None, None, None, None), 1);
     assert!(cache.position(&position_id).is_some());
-    // Verify events are preserved
+    // 验证事件被保留
     assert_eq!(cache.position(&position_id).unwrap().event_count(), 1);
 }
 
 #[rstest]
 fn test_purge_closed_positions_does_not_purge_reopened_position() {
-    // Create a position that goes FLAT then reopens
-    // This test verifies the fix for the race condition where positions that were
-    // previously closed but later reopened were incorrectly purged
+    // 创建一个先平仓 (FLAT) 后重新开启的持仓
+    // 此测试验证针对竞态条件的修复：以前被关闭但后来重新开启的持仓会被错误清除的问题。
 
     let mut cache = Cache::default();
     let audusd_sim = audusd_sim();
     let audusd_sim = InstrumentAny::CurrencyPair(audusd_sim);
 
-    // Create initial buy order to open position
+    // 创建初始买单以开启持仓
     let order1 = OrderTestBuilder::new(OrderType::Market)
         .instrument_id(audusd_sim.id())
         .side(OrderSide::Buy)
         .quantity(Quantity::from(100_000))
         .build();
 
-    // Fill the buy order to open LONG position
+    // 成交买单以开启多头头寸 (LONG)
     let fill1 = TestOrderEventStubs::filled(
         &order1,
         &audusd_sim,
@@ -1759,25 +1756,25 @@ fn test_purge_closed_positions_does_not_purge_reopened_position() {
     let mut position = Position::new(&audusd_sim, fill1.into());
     let position_id = position.id;
 
-    // Add position to cache
+    // 将持仓添加到缓存中
     cache
         .add_position(position.clone(), OmsType::Netting)
         .unwrap();
     cache.update_position(&position).unwrap();
 
-    // Verify position is LONG
+    // 验证持仓为多头头寸 (LONG)
     assert!(position.is_long());
     assert!(!position.is_closed());
     assert!(cache.is_position_open(&position_id));
 
-    // Create sell order to close position (make it FLAT)
+    // 创建卖单以平仓 (使其变为 FLAT)
     let order2 = OrderTestBuilder::new(OrderType::Market)
         .instrument_id(audusd_sim.id())
         .side(OrderSide::Sell)
         .quantity(Quantity::from(100_000))
         .build();
 
-    // Fill the sell order to close position (FLAT)
+    // 成交卖单以平仓 (FLAT)
     let fill2 = TestOrderEventStubs::filled(
         &order2,
         &audusd_sim,
@@ -1794,21 +1791,21 @@ fn test_purge_closed_positions_does_not_purge_reopened_position() {
     position.apply(&fill2.into());
     cache.update_position(&position).unwrap();
 
-    // Verify position is now FLAT (closed)
+    // 验证持仓现为平仓状态 (FLAT/closed)
     assert_eq!(position.side, PositionSide::Flat);
     assert!(position.is_closed());
     assert!(position.ts_closed.is_some());
     let ts_closed_original = position.ts_closed.unwrap();
     assert!(cache.is_position_closed(&position_id));
 
-    // Create another buy order to REOPEN the position
+    // 创建另一个买单以重新开启 (REOPEN) 状态持仓
     let order3 = OrderTestBuilder::new(OrderType::Market)
         .instrument_id(audusd_sim.id())
         .side(OrderSide::Buy)
         .quantity(Quantity::from(50_000))
         .build();
 
-    // Fill the buy order to reopen position (LONG again)
+    // 成交买单以重新开启持仓 (再次变为 LONG)
     let fill3 = TestOrderEventStubs::filled(
         &order3,
         &audusd_sim,
@@ -1825,22 +1822,21 @@ fn test_purge_closed_positions_does_not_purge_reopened_position() {
     position.apply(&fill3.into());
     cache.update_position(&position).unwrap();
 
-    // Verify position is LONG again (reopened)
+    // 验证持仓再次变为多头 (已重新开启)
     assert!(position.is_long());
     assert!(!position.is_closed());
     assert_eq!(position.ts_closed, None); // Close timestamp should be reset
     assert!(cache.is_position_open(&position_id));
 
-    // Attempt to purge closed positions
-    // This should NOT purge our position even though it was closed before,
-    // because it's currently OPEN
-    // Use a timestamp far in the future to ensure any old ts_closed would trigger purge
+    // 尝试清除已关闭持仓
+    // 即使该持仓之前曾被关闭，现在也不应被清除，因为它当前处于开启 (OPEN) 状态。
+    // 使用一个遥远未来的时间戳，以确保任何旧的 ts_closed 都会触发清除。
     cache.purge_closed_positions(
         UnixNanos::from(ts_closed_original.as_u64() + 1_000_000_000_000),
         0, // No buffer
     );
 
-    // Position should still exist because it's currently OPEN
+    // 持仓应仍然存在，因为它当前为开启状态
     assert!(cache.position_exists(&position_id));
     assert!(cache.position(&position_id).is_some());
     assert!(cache.is_position_open(&position_id));
@@ -1855,13 +1851,13 @@ fn test_purge_closed_positions_does_not_purge_reopened_position() {
 
 #[rstest]
 fn test_purge_order_cleans_up_strategy_orders_index() {
-    // Regression test for strategy_orders index cleanup bug
-    // Verifies that after purging an order, it is removed from the strategy's set
+    // 关于 strategy_orders 索引清理 Bug 的回归测试
+    // 验证在清除一个订单后，它会从策略的集合中移除
     let mut cache = Cache::default();
     let audusd_sim = audusd_sim();
     let audusd_sim = InstrumentAny::CurrencyPair(audusd_sim);
 
-    // Create and add a closed order
+    // 创建并添加一个已关闭的订单
     let mut order = OrderTestBuilder::new(OrderType::Market)
         .instrument_id(audusd_sim.id())
         .side(OrderSide::Buy)
@@ -1896,7 +1892,7 @@ fn test_purge_order_cleans_up_strategy_orders_index() {
     order.apply(filled).unwrap();
     cache.update_order(&order).unwrap();
 
-    // Verify order is in strategy index
+    // 验证订单在策略索引中
     assert!(cache.index.strategy_orders.contains_key(&strategy_id));
     assert!(
         cache
@@ -1907,36 +1903,36 @@ fn test_purge_order_cleans_up_strategy_orders_index() {
             .contains(&client_order_id)
     );
 
-    // Purge the order
+    // 清除订单
     cache.purge_order(client_order_id);
 
-    // Verify order is removed from strategy index
+    // 验证订单已从策略索引中移除
     if let Some(strategy_orders) = cache.index.strategy_orders.get(&strategy_id) {
         assert!(!strategy_orders.contains(&client_order_id));
-        // If this was the only order, the strategy key should be removed
+        // 如果这是唯一的订单，策略键应当被移除
         assert!(
             !strategy_orders.is_empty(),
             "Empty strategy_orders set should have been removed"
         );
     }
 
-    // Query orders for strategy should not crash and should not include purged order
+    // 查询该策略的订单不应崩溃，且不应包含已清除的订单
     let orders_for_strategy = cache.orders(None, None, Some(&strategy_id), None, None);
     assert!(!orders_for_strategy.contains(&&order));
 }
 
 #[rstest]
 fn test_purge_order_cleans_up_exec_spawn_orders_index() {
-    // Regression test for exec_spawn_orders index cleanup bug
-    // Verifies that after purging a spawned child order, it is removed from the parent's set
+    // 关于 exec_spawn_orders 索引清理 Bug 的回归测试
+    // 验证在清除一个生成的子订单后，它会从父订单的集合中移除
     let mut cache = Cache::default();
     let audusd_sim = audusd_sim();
     let audusd_sim = InstrumentAny::CurrencyPair(audusd_sim);
 
-    // Create parent order
+    // 创建父订单
     let parent_id = ClientOrderId::new("PARENT-001");
 
-    // Create and add a child order with exec_spawn_id
+    // 创建并添加一个带有 exec_spawn_id 的子订单
     let mut child_order = OrderTestBuilder::new(OrderType::Market)
         .instrument_id(audusd_sim.id())
         .side(OrderSide::Buy)
@@ -1977,7 +1973,7 @@ fn test_purge_order_cleans_up_exec_spawn_orders_index() {
     child_order.apply(filled).unwrap();
     cache.update_order(&child_order).unwrap();
 
-    // Verify child is in parent's spawn set
+    // 验证子订单在父订单的生成集合中
     assert!(cache.index.exec_spawn_orders.contains_key(&parent_id));
     assert!(
         cache
@@ -1988,28 +1984,28 @@ fn test_purge_order_cleans_up_exec_spawn_orders_index() {
             .contains(&child_id)
     );
 
-    // Purge the child order
+    // 清除子订单
     cache.purge_order(child_id);
 
-    // Verify child is removed from parent's spawn set
+    // 验证子订单已从父订单的生成集合中移除
     if let Some(spawn_orders) = cache.index.exec_spawn_orders.get(&parent_id) {
         assert!(!spawn_orders.contains(&child_id));
     }
 
-    // Query orders for exec spawn should not crash and should not include purged order
+    // 查询执行生成的订单不应崩溃，且不应包含已清除的订单
     let orders_for_spawn = cache.orders_for_exec_spawn(&parent_id);
     assert!(!orders_for_spawn.contains(&&child_order));
 }
 
 #[rstest]
 fn test_purge_order_when_order_not_in_cache_still_cleans_up_indices() {
-    // Test that even when order is not in cache, indices are cleaned up using forward mapping
+    // 测试即使订单不在缓存中，索引也能使用正向映射进行清理
     let mut cache = Cache::default();
 
     let client_order_id = ClientOrderId::new("O-NOT-IN-CACHE");
     let strategy_id = StrategyId::test_default();
 
-    // Manually add to indices (simulating a corrupted state)
+    // 手动添加到索引 (模拟损坏的状态)
     cache
         .index
         .order_strategy
@@ -2021,7 +2017,7 @@ fn test_purge_order_when_order_not_in_cache_still_cleans_up_indices() {
         .or_default()
         .insert(client_order_id);
 
-    // Verify indices are set up
+    // 验证索引已设置
     assert!(cache.index.order_strategy.contains_key(&client_order_id));
     assert!(
         cache
@@ -2032,10 +2028,10 @@ fn test_purge_order_when_order_not_in_cache_still_cleans_up_indices() {
             .contains(&client_order_id)
     );
 
-    // Purge order that doesn't exist
+    // 清除不存在的订单
     cache.purge_order(client_order_id);
 
-    // Verify indices are cleaned up even though order wasn't in cache
+    // 验证即使订单不在缓存中也能清理索引
     assert!(!cache.index.order_strategy.contains_key(&client_order_id));
     if let Some(strategy_orders) = cache.index.strategy_orders.get(&strategy_id) {
         assert!(!strategy_orders.contains(&client_order_id));
@@ -2044,7 +2040,7 @@ fn test_purge_order_when_order_not_in_cache_still_cleans_up_indices() {
 
 #[rstest]
 fn test_purge_order_cleans_up_account_orders_index() {
-    // Regression test: purging an order must remove it from account_orders index
+    // 回归测试：清除订单必须将其从账户订单索引中移除
     let mut cache = Cache::default();
     let audusd_sim = audusd_sim();
     let audusd_sim = InstrumentAny::CurrencyPair(audusd_sim);
@@ -2083,7 +2079,7 @@ fn test_purge_order_cleans_up_account_orders_index() {
     order.apply(filled).unwrap();
     cache.update_order(&order).unwrap();
 
-    // Verify order is in account index (populated by update_order)
+    // 验证订单在账户索引中 (由 update_order 填充)
     assert!(cache.index.account_orders.contains_key(&account_id));
     assert!(
         cache
@@ -2096,7 +2092,7 @@ fn test_purge_order_cleans_up_account_orders_index() {
 
     cache.purge_order(client_order_id);
 
-    // Since this was the only order, the account key should be removed entirely
+    // 由于这是唯一的订单，账户键应当被完全移除
     assert!(!cache.index.account_orders.contains_key(&account_id));
 
     let orders_for_account = cache.orders(None, None, None, Some(&account_id), None);
@@ -2105,7 +2101,7 @@ fn test_purge_order_cleans_up_account_orders_index() {
 
 #[rstest]
 fn test_purge_position_cleans_up_account_positions_index() {
-    // Regression test: purging a position must remove it from account_positions index
+    // 回归测试：清除持仓必须将其从账户持仓索引中移除
     let mut cache = Cache::default();
     let audusd_sim = audusd_sim();
     let instrument = InstrumentAny::CurrencyPair(audusd_sim);
@@ -2148,7 +2144,7 @@ fn test_purge_position_cleans_up_account_positions_index() {
     let position_id = position.id;
     cache.add_position(position, OmsType::Hedging).unwrap();
 
-    // Verify position is in account index (populated by add_position)
+    // 验证持仓在账户索引中 (由 add_position 填充)
     assert!(cache.index.account_positions.contains_key(&account_id));
     assert!(
         cache
@@ -2159,7 +2155,7 @@ fn test_purge_position_cleans_up_account_positions_index() {
             .contains(&position_id)
     );
 
-    // Close position so it can be purged (open positions are protected)
+    // 平仓以便可以进行清除 (开仓持仓受保护)
     let mut position = cache.position(&position_id).unwrap().clone();
     let close_order = OrderTestBuilder::new(OrderType::Market)
         .instrument_id(instrument.id())
@@ -2188,7 +2184,7 @@ fn test_purge_position_cleans_up_account_positions_index() {
 
     cache.purge_position(position_id);
 
-    // Since this was the only position, the account key should be removed entirely
+    // 由于这是唯一的持仓，账户键应当被完全移除
     assert!(!cache.index.account_positions.contains_key(&account_id));
 
     let positions_for_account = cache.positions(None, None, None, Some(&account_id), None);
@@ -2202,7 +2198,7 @@ fn test_update_own_order_book_with_market_order_does_not_panic(mut cache: Cache)
         .add_instrument(InstrumentAny::CurrencyPair(audusd_sim.clone()))
         .unwrap();
 
-    // Create a LIMIT order to establish an own book for the instrument
+    // 为交易工具创建一个限价单以建立自己的订单簿
     let limit_order = OrderTestBuilder::new(OrderType::Limit)
         .instrument_id(audusd_sim.id())
         .side(OrderSide::Buy)
@@ -2216,7 +2212,7 @@ fn test_update_own_order_book_with_market_order_does_not_panic(mut cache: Cache)
     cache.update_own_order_book(&limit_order);
     assert!(cache.own_order_book(&audusd_sim.id()).is_some());
 
-    // Create a MARKET order (no price) and transition it to FILLED
+    // 创建一个市价单 (无价格) 并在状态上转换为 FILLED
     let market_order = OrderTestBuilder::new(OrderType::Market)
         .instrument_id(audusd_sim.id())
         .side(OrderSide::Buy)
@@ -2253,7 +2249,7 @@ fn test_update_own_order_book_with_market_order_does_not_panic(mut cache: Cache)
     );
     market_order_mut.apply(filled).unwrap();
 
-    // Should not panic - previously would panic at `.expect("OwnBookOrder must have a price")`
+    // 不应发生 Panic - 此前会在 `.expect("OwnBookOrder must have a price")` 处发生 Panic
     cache.update_own_order_book(&market_order_mut);
 
     assert!(cache.own_order_book(&audusd_sim.id()).is_some());
@@ -2300,7 +2296,7 @@ fn test_purge_closed_orders_also_purges_order_lists() {
 
     assert!(cache.order_list_exists(&order_list_id));
 
-    // Transition order1: Initialized -> Submitted -> Accepted -> Filled
+    // 转换订单 1：Initialized -> Submitted -> Accepted -> Filled
     let submitted1 = TestOrderEventStubs::submitted(&order1, account_id);
     order1.apply(submitted1).unwrap();
     cache.update_order(&order1).unwrap();
@@ -2324,7 +2320,7 @@ fn test_purge_closed_orders_also_purges_order_lists() {
     order1.apply(filled1).unwrap();
     cache.update_order(&order1).unwrap();
 
-    // Transition order2: Initialized -> Submitted -> Accepted -> Canceled
+    // 转换订单 2：Initialized -> Submitted -> Accepted -> Canceled
     let submitted2 = TestOrderEventStubs::submitted(&order2, account_id);
     order2.apply(submitted2).unwrap();
     cache.update_order(&order2).unwrap();
@@ -2388,7 +2384,7 @@ fn test_purge_closed_orders_does_not_purge_order_list_with_open_orders() {
     cache.add_order(order2.clone(), None, None, false).unwrap();
     cache.add_order_list(order_list).unwrap();
 
-    // Close order1, leave order2 open
+    // 关闭订单 1，保持订单 2 为处于开启（open）状态
     let submitted1 = TestOrderEventStubs::submitted(&order1, account_id);
     order1.apply(submitted1).unwrap();
     cache.update_order(&order1).unwrap();
@@ -2426,7 +2422,7 @@ fn test_purge_closed_orders_does_not_purge_order_list_with_open_orders() {
     let ts_now = UnixNanos::from(1_000_000_000_000);
     cache.purge_closed_orders(ts_now, 0);
 
-    // Order1 purged, order2 and list remain (order2 still in cache)
+    // 订单 1 已清除，订单 2 和列表保留 (订单 2 仍然在缓存中)
     assert!(!cache.order_exists(&order1.client_order_id()));
     assert!(cache.order_exists(&order2.client_order_id()));
     assert!(cache.order_list_exists(&order_list_id));
@@ -2872,7 +2868,7 @@ fn test_position_flip_netting_mode_cleans_up_closed_index() {
 
 #[rstest]
 fn test_add_trades_same_timestamp_adds_all(mut cache: Cache) {
-    // multiple trades at same timestamp (e.g., large order sweeping levels)
+    // 在同一时间戳发生的多个成交 (例如，大额订单扫盘)
     let ts = UnixNanos::from(1000);
     let instrument_id = InstrumentId::from("AUDUSD.SIM");
 
@@ -2909,7 +2905,7 @@ fn test_add_trades_same_timestamp_adds_all(mut cache: Cache) {
     cache.add_trade(trade1).unwrap();
     cache.add_trades(&[trade2, trade3]).unwrap();
 
-    // all three trades should be in cache
+    // 所有三个成交信息都应位于缓存中
     let result = cache.trades(&instrument_id).unwrap();
     assert_eq!(
         result.len(),
@@ -2920,7 +2916,7 @@ fn test_add_trades_same_timestamp_adds_all(mut cache: Cache) {
 
 #[rstest]
 fn test_add_quotes_same_timestamp_adds_all(mut cache: Cache) {
-    // multiple quotes at same timestamp
+    // 同一时间戳的多个报价信息
     let ts = UnixNanos::from(1000);
     let instrument_id = InstrumentId::from("AUDUSD.SIM");
 
@@ -2957,7 +2953,7 @@ fn test_add_quotes_same_timestamp_adds_all(mut cache: Cache) {
     cache.add_quote(quote1).unwrap();
     cache.add_quotes(&[quote2, quote3]).unwrap();
 
-    // all three quotes should be in cache
+    // 所有三个报价信息都应位于缓存中
     let result = cache.quotes(&instrument_id).unwrap();
     assert_eq!(
         result.len(),
@@ -2968,7 +2964,7 @@ fn test_add_quotes_same_timestamp_adds_all(mut cache: Cache) {
 
 #[rstest]
 fn test_add_bars_same_timestamp_adds_all(mut cache: Cache) {
-    // multiple bars at same timestamp
+    // 同一时间戳的多个 K 线信息
     let ts = UnixNanos::from(1000);
     let bar_type = BarType::from("AUDUSD.SIM-1-MINUTE-BID-EXTERNAL");
 
@@ -3008,7 +3004,7 @@ fn test_add_bars_same_timestamp_adds_all(mut cache: Cache) {
     cache.add_bar(bar1).unwrap();
     cache.add_bars(&[bar2, bar3]).unwrap();
 
-    // all three bars should be in cache
+    // 所有三个 K 线信息都应位于缓存中
     let result = cache.bars(&bar_type).unwrap();
     assert_eq!(
         result.len(),
@@ -3017,7 +3013,7 @@ fn test_add_bars_same_timestamp_adds_all(mut cache: Cache) {
     );
 }
 
-// -- orders_emulated index tests ------------------------------------------------------------------
+// -- orders_emulated 索引测试 ------------------------------------------------------------------
 
 #[rstest]
 fn test_add_emulated_order_indexes_in_orders_emulated(mut cache: Cache, audusd_sim: CurrencyPair) {
@@ -3085,7 +3081,7 @@ fn test_update_released_order_removes_from_orders_emulated(
         "Emulated order should be in orders_emulated index after add"
     );
 
-    // Apply released event (order sent to venue, no longer emulated)
+    // 应用释放 (released) 事件 (订单已发送到交易所，不再是模拟状态)
     let released = OrderReleased::new(
         order.trader_id(),
         order.strategy_id(),
@@ -3133,7 +3129,7 @@ fn test_update_closed_emulated_order_removes_from_orders_emulated(
         "Emulated order should be in orders_emulated index after add"
     );
 
-    // Apply emulated event first
+    // 首先应用模拟 (emulated) 事件
     let emulated = OrderEmulated::new(
         order.trader_id(),
         order.strategy_id(),
@@ -3147,7 +3143,7 @@ fn test_update_closed_emulated_order_removes_from_orders_emulated(
     order.apply(OrderEventAny::Emulated(emulated)).unwrap();
     cache.update_order(&order).unwrap();
 
-    // Order should still be emulated
+    // 订单应仍处于模拟状态销
     assert!(
         cache
             .index
@@ -3156,7 +3152,7 @@ fn test_update_closed_emulated_order_removes_from_orders_emulated(
         "Order should still be in orders_emulated after emulated event"
     );
 
-    // Apply canceled event (order is now closed)
+    // 应用撤单 (canceled) 事件 (订单现已关闭)
     let canceled = OrderCanceled::new(
         order.trader_id(),
         order.strategy_id(),

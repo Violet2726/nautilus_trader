@@ -94,7 +94,7 @@ use crate::{
     timer::{TimeEvent, TimeEventCallback},
 };
 
-/// Common configuration for [`DataActor`] based components.
+/// 基于 [`DataActor`] 的组件的通用配置。
 #[derive(Debug, Clone)]
 #[cfg_attr(
     feature = "python",
@@ -105,11 +105,11 @@ use crate::{
     )
 )]
 pub struct DataActorConfig {
-    /// The custom identifier for the Actor.
+    /// Actor 的自定义标识符。
     pub actor_id: Option<ActorId>,
-    /// If events should be logged.
+    /// 是否记录事件日志。
     pub log_events: bool,
-    /// If commands should be logged.
+    /// 是否记录命令日志。
     pub log_commands: bool,
 }
 
@@ -123,18 +123,18 @@ impl Default for DataActorConfig {
     }
 }
 
-/// Configuration for creating actors from importable paths.
+/// 用于从可导入路径创建 Actor 的配置。
 #[derive(Debug, Clone)]
 #[cfg_attr(
     feature = "python",
     pyo3::pyclass(module = "nautilus_trader.core.nautilus_pyo3.common", from_py_object)
 )]
 pub struct ImportableActorConfig {
-    /// The fully qualified name of the Actor class.
+    /// Actor 类的完全限定名称。
     pub actor_path: String,
-    /// The fully qualified name of the Actor config class.
+    /// Actor 配置类的完全限定名称。
     pub config_path: String,
-    /// The actor configuration as a dictionary.
+    /// 以字典形式表示的 Actor 配置。
     pub config: HashMap<String, serde_json::Value>,
 }
 
@@ -143,369 +143,369 @@ type RequestCallback = Arc<dyn Fn(UUID4) + Send + Sync>;
 pub trait DataActor:
     Component + Deref<Target = DataActorCore> + DerefMut<Target = DataActorCore>
 {
-    /// Actions to be performed when the actor state is saved.
+    /// 当保存 Actor 状态时要执行的操作。
     ///
-    /// # Errors
+    /// # 错误 (Errors)
     ///
-    /// Returns an error if saving the actor state fails.
+    /// 如果保存 Actor 状态失败，则返回错误。
     fn on_save(&self) -> anyhow::Result<IndexMap<String, Vec<u8>>> {
         Ok(IndexMap::new())
     }
 
-    /// Actions to be performed when the actor state is loaded.
+    /// 当加载 Actor 状态时要执行的操作。
     ///
-    /// # Errors
+    /// # 错误 (Errors)
     ///
-    /// Returns an error if loading the actor state fails.
+    /// 如果加载 Actor 状态失败，则返回错误。
     #[allow(unused_variables)]
     fn on_load(&mut self, state: IndexMap<String, Vec<u8>>) -> anyhow::Result<()> {
         Ok(())
     }
 
-    /// Actions to be performed on start.
+    /// 启动时要执行的操作。
     ///
-    /// # Errors
+    /// # 错误 (Errors)
     ///
-    /// Returns an error if starting the actor fails.
+    /// 如果启动 Actor 失败，则返回错误。
     fn on_start(&mut self) -> anyhow::Result<()> {
         log::warn!(
-            "The `on_start` handler was called when not overridden, \
-            it's expected that any actions required when starting the actor \
-            occur here, such as subscribing/requesting data"
+            "调用了未被重写的 `on_start` 处理程序，\
+            预计启动 Actor 时所需的任何操作（如订阅/请求数据）\
+            应在此处发生"
         );
         Ok(())
     }
 
-    /// Actions to be performed on stop.
+    /// 停止时要执行的操作。
     ///
-    /// # Errors
+    /// # 错误 (Errors)
     ///
-    /// Returns an error if stopping the actor fails.
+    /// 如果停止 Actor 失败，则返回错误。
     fn on_stop(&mut self) -> anyhow::Result<()> {
         log::warn!(
-            "The `on_stop` handler was called when not overridden, \
-            it's expected that any actions required when stopping the actor \
-            occur here, such as unsubscribing from data",
+            "调用了未被重写的 `on_stop` 处理程序，\
+            预计停止 Actor 时所需的任何操作（如取消订阅数据）\
+            应在此处发生",
         );
         Ok(())
     }
 
-    /// Actions to be performed on resume.
+    /// 恢复时要执行的操作。
     ///
-    /// # Errors
+    /// # 错误 (Errors)
     ///
-    /// Returns an error if resuming the actor fails.
+    /// 如果恢复 Actor 失败，则返回错误。
     fn on_resume(&mut self) -> anyhow::Result<()> {
         log::warn!(
-            "The `on_resume` handler was called when not overridden, \
-            it's expected that any actions required when resuming the actor \
-            following a stop occur here"
+            "调用了未被重写的 `on_resume` 处理程序，\
+            预计在停止后恢复 Actor 时所需的任何操作\
+            应在此处发生"
         );
         Ok(())
     }
 
-    /// Actions to be performed on reset.
+    /// 重置时要执行的操作。
     ///
-    /// # Errors
+    /// # 错误 (Errors)
     ///
-    /// Returns an error if resetting the actor fails.
+    /// 如果重置 Actor 失败，则返回错误。
     fn on_reset(&mut self) -> anyhow::Result<()> {
         log::warn!(
-            "The `on_reset` handler was called when not overridden, \
-            it's expected that any actions required when resetting the actor \
-            occur here, such as resetting indicators and other state"
+            "调用了未被重写的 `on_reset` 处理程序，\
+            预计重置 Actor 时所需的任何操作（如重置指标和其他状态）\
+            应在此处发生"
         );
         Ok(())
     }
 
-    /// Actions to be performed on dispose.
+    /// 销毁 (Dispose) 时要执行的操作。
     ///
-    /// # Errors
+    /// # 错误 (Errors)
     ///
-    /// Returns an error if disposing the actor fails.
+    /// 如果销毁 Actor 失败，则返回错误。
     fn on_dispose(&mut self) -> anyhow::Result<()> {
         Ok(())
     }
 
-    /// Actions to be performed on degrade.
+    /// 降级 (Degrade) 时要执行的操作。
     ///
-    /// # Errors
+    /// # 错误 (Errors)
     ///
-    /// Returns an error if degrading the actor fails.
+    /// 如果降级 Actor 失败，则返回错误。
     fn on_degrade(&mut self) -> anyhow::Result<()> {
         Ok(())
     }
 
-    /// Actions to be performed on fault.
+    /// 故障 (Fault) 时要执行的操作。
     ///
-    /// # Errors
+    /// # 错误 (Errors)
     ///
-    /// Returns an error if faulting the actor fails.
+    /// 如果 Actor 进入故障状态失败，则返回错误。
     fn on_fault(&mut self) -> anyhow::Result<()> {
         Ok(())
     }
 
-    /// Actions to be performed when receiving a time event.
+    /// 接收时间事件时要执行的操作。
     ///
-    /// # Errors
+    /// # 错误 (Errors)
     ///
-    /// Returns an error if handling the time event fails.
+    /// 如果处理时间事件失败，则返回错误。
     #[allow(unused_variables)]
     fn on_time_event(&mut self, event: &TimeEvent) -> anyhow::Result<()> {
         Ok(())
     }
 
-    /// Actions to be performed when receiving custom data.
+    /// 接收自定义数据时要执行的操作。
     ///
-    /// # Errors
+    /// # 错误 (Errors)
     ///
-    /// Returns an error if handling the data fails.
+    /// 如果处理数据失败，则返回错误。
     #[allow(unused_variables)]
     fn on_data(&mut self, data: &dyn Any) -> anyhow::Result<()> {
         Ok(())
     }
 
-    /// Actions to be performed when receiving a signal.
+    /// 接收信号时要执行的操作。
     ///
-    /// # Errors
+    /// # 错误 (Errors)
     ///
-    /// Returns an error if handling the signal fails.
+    /// 如果处理信号失败，则返回错误。
     #[allow(unused_variables)]
     fn on_signal(&mut self, signal: &Signal) -> anyhow::Result<()> {
         Ok(())
     }
 
-    /// Actions to be performed when receiving an instrument.
+    /// 接收工具定义 (Instrument) 时要执行的操作。
     ///
-    /// # Errors
+    /// # 错误 (Errors)
     ///
-    /// Returns an error if handling the instrument fails.
+    /// 如果处理工具定义失败，则返回错误。
     #[allow(unused_variables)]
     fn on_instrument(&mut self, instrument: &InstrumentAny) -> anyhow::Result<()> {
         Ok(())
     }
 
-    /// Actions to be performed when receiving order book deltas.
+    /// 接收订单簿增量 (Order book deltas) 时要执行的操作。
     ///
-    /// # Errors
+    /// # 错误 (Errors)
     ///
-    /// Returns an error if handling the book deltas fails.
+    /// 如果处理订单簿增量失败，则返回错误。
     #[allow(unused_variables)]
     fn on_book_deltas(&mut self, deltas: &OrderBookDeltas) -> anyhow::Result<()> {
         Ok(())
     }
 
-    /// Actions to be performed when receiving an order book.
+    /// 接收订单簿 (Order book) 时要执行的操作。
     ///
-    /// # Errors
+    /// # 错误 (Errors)
     ///
-    /// Returns an error if handling the book fails.
+    /// 如果处理订单簿失败，则返回错误。
     #[allow(unused_variables)]
     fn on_book(&mut self, order_book: &OrderBook) -> anyhow::Result<()> {
         Ok(())
     }
 
-    /// Actions to be performed when receiving a quote.
+    /// 接收报价 (Quote) 时要执行的操作。
     ///
-    /// # Errors
+    /// # 错误 (Errors)
     ///
-    /// Returns an error if handling the quote fails.
+    /// 如果处理报价失败，则返回错误。
     #[allow(unused_variables)]
     fn on_quote(&mut self, quote: &QuoteTick) -> anyhow::Result<()> {
         Ok(())
     }
 
-    /// Actions to be performed when receiving a trade.
+    /// 接收逐笔成交 (Trade) 时要执行的操作。
     ///
-    /// # Errors
+    /// # 错误 (Errors)
     ///
-    /// Returns an error if handling the trade fails.
+    /// 如果处理逐笔成交失败，则返回错误。
     #[allow(unused_variables)]
     fn on_trade(&mut self, tick: &TradeTick) -> anyhow::Result<()> {
         Ok(())
     }
 
-    /// Actions to be performed when receiving a bar.
+    /// 接收 K 线 (Bar) 时要执行的操作。
     ///
-    /// # Errors
+    /// # 错误 (Errors)
     ///
-    /// Returns an error if handling the bar fails.
+    /// 如果处理 K 线失败，则返回错误。
     #[allow(unused_variables)]
     fn on_bar(&mut self, bar: &Bar) -> anyhow::Result<()> {
         Ok(())
     }
 
-    /// Actions to be performed when receiving a mark price update.
+    /// 接收标记价格更新 (Mark price update) 时要执行的操作。
     ///
-    /// # Errors
+    /// # 错误 (Errors)
     ///
-    /// Returns an error if handling the mark price update fails.
+    /// 如果处理标记价格更新失败，则返回错误。
     #[allow(unused_variables)]
     fn on_mark_price(&mut self, mark_price: &MarkPriceUpdate) -> anyhow::Result<()> {
         Ok(())
     }
 
-    /// Actions to be performed when receiving an index price update.
+    /// 接收指数价格更新 (Index price update) 时要执行的操作。
     ///
-    /// # Errors
+    /// # 错误 (Errors)
     ///
-    /// Returns an error if handling the index price update fails.
+    /// 如果处理指数价格更新失败，则返回错误。
     #[allow(unused_variables)]
     fn on_index_price(&mut self, index_price: &IndexPriceUpdate) -> anyhow::Result<()> {
         Ok(())
     }
 
-    /// Actions to be performed when receiving a funding rate update.
+    /// 接收资金费率更新 (Funding rate update) 时要执行的操作。
     ///
-    /// # Errors
+    /// # 错误 (Errors)
     ///
-    /// Returns an error if handling the funding rate update fails.
+    /// 如果处理资金费率更新失败，则返回错误。
     #[allow(unused_variables)]
     fn on_funding_rate(&mut self, funding_rate: &FundingRateUpdate) -> anyhow::Result<()> {
         Ok(())
     }
 
-    /// Actions to be performed when receiving an instrument status update.
+    /// 接收工具状态更新 (Instrument status update) 时要执行的操作。
     ///
-    /// # Errors
+    /// # 错误 (Errors)
     ///
-    /// Returns an error if handling the instrument status update fails.
+    /// 如果处理工具状态更新失败，则返回错误。
     #[allow(unused_variables)]
     fn on_instrument_status(&mut self, data: &InstrumentStatus) -> anyhow::Result<()> {
         Ok(())
     }
 
-    /// Actions to be performed when receiving an instrument close update.
+    /// 接收工具收盘更新 (Instrument close update) 时要执行的操作。
     ///
-    /// # Errors
+    /// # 错误 (Errors)
     ///
-    /// Returns an error if handling the instrument close update fails.
+    /// 如果处理工具收盘更新失败，则返回错误。
     #[allow(unused_variables)]
     fn on_instrument_close(&mut self, update: &InstrumentClose) -> anyhow::Result<()> {
         Ok(())
     }
 
-    /// Actions to be performed when receiving an order filled event.
+    /// 接收订单成交 (Order filled) 事件时要执行的操作。
     ///
-    /// # Errors
+    /// # 错误 (Errors)
     ///
-    /// Returns an error if handling the order filled event fails.
+    /// 如果处理订单成交事件失败，则返回错误。
     #[allow(unused_variables)]
     fn on_order_filled(&mut self, event: &OrderFilled) -> anyhow::Result<()> {
         Ok(())
     }
 
-    /// Actions to be performed when receiving an order canceled event.
+    /// 接收订单取消 (Order canceled) 事件时要执行的操作。
     ///
-    /// # Errors
+    /// # 错误 (Errors)
     ///
-    /// Returns an error if handling the order canceled event fails.
+    /// 如果处理订单取消事件失败，则返回错误。
     #[allow(unused_variables)]
     fn on_order_canceled(&mut self, event: &OrderCanceled) -> anyhow::Result<()> {
         Ok(())
     }
 
     #[cfg(feature = "defi")]
-    /// Actions to be performed when receiving a block.
+    /// 接收区块 (Block) 时要执行的操作。
     ///
-    /// # Errors
+    /// # 错误 (Errors)
     ///
-    /// Returns an error if handling the block fails.
+    /// 如果处理区块失败，则返回错误。
     #[allow(unused_variables)]
     fn on_block(&mut self, block: &Block) -> anyhow::Result<()> {
         Ok(())
     }
 
     #[cfg(feature = "defi")]
-    /// Actions to be performed when receiving a pool.
+    /// 接收流动性池 (Pool) 时要执行的操作。
     ///
-    /// # Errors
+    /// # 错误 (Errors)
     ///
-    /// Returns an error if handling the pool fails.
+    /// 如果处理流动性池失败，则返回错误。
     #[allow(unused_variables)]
     fn on_pool(&mut self, pool: &Pool) -> anyhow::Result<()> {
         Ok(())
     }
 
     #[cfg(feature = "defi")]
-    /// Actions to be performed when receiving a pool swap.
+    /// 接收流动性池交换 (Pool swap) 时要执行的操作。
     ///
-    /// # Errors
+    /// # 错误 (Errors)
     ///
-    /// Returns an error if handling the pool swap fails.
+    /// 如果处理流动性池交换失败，则返回错误。
     #[allow(unused_variables)]
     fn on_pool_swap(&mut self, swap: &PoolSwap) -> anyhow::Result<()> {
         Ok(())
     }
 
     #[cfg(feature = "defi")]
-    /// Actions to be performed when receiving a pool liquidity update.
+    /// 接收流动性池流动性更新 (Pool liquidity update) 时要执行的操作。
     ///
-    /// # Errors
+    /// # 错误 (Errors)
     ///
-    /// Returns an error if handling the pool liquidity update fails.
+    /// 如果处理流动性池流动性更新失败，则返回错误。
     #[allow(unused_variables)]
     fn on_pool_liquidity_update(&mut self, update: &PoolLiquidityUpdate) -> anyhow::Result<()> {
         Ok(())
     }
 
     #[cfg(feature = "defi")]
-    /// Actions to be performed when receiving a pool fee collect event.
+    /// 接收流动性池费用收取事件时要执行的操作。
     ///
-    /// # Errors
+    /// # 错误 (Errors)
     ///
-    /// Returns an error if handling the pool fee collect fails.
+    /// 如果处理流动性池费用收取失败，则返回错误。
     #[allow(unused_variables)]
     fn on_pool_fee_collect(&mut self, collect: &PoolFeeCollect) -> anyhow::Result<()> {
         Ok(())
     }
 
     #[cfg(feature = "defi")]
-    /// Actions to be performed when receiving a pool flash event.
+    /// 接收流动性池闪电贷事件时要执行的操作。
     ///
-    /// # Errors
+    /// # 错误 (Errors)
     ///
-    /// Returns an error if handling the pool flash fails.
+    /// 如果处理流动性池闪电贷失败，则返回错误。
     #[allow(unused_variables)]
     fn on_pool_flash(&mut self, flash: &PoolFlash) -> anyhow::Result<()> {
         Ok(())
     }
 
-    /// Actions to be performed when receiving historical data.
+    /// 接收历史数据时要执行的操作。
     ///
-    /// # Errors
+    /// # 错误 (Errors)
     ///
-    /// Returns an error if handling the historical data fails.
+    /// 如果处理历史数据失败，则返回错误。
     #[allow(unused_variables)]
     fn on_historical_data(&mut self, data: &dyn Any) -> anyhow::Result<()> {
         Ok(())
     }
 
-    /// Actions to be performed when receiving historical quotes.
+    /// 接收历史报价时要执行的操作。
     ///
-    /// # Errors
+    /// # 错误 (Errors)
     ///
-    /// Returns an error if handling the historical quotes fails.
+    /// 如果处理历史报价失败，则返回错误。
     #[allow(unused_variables)]
     fn on_historical_quotes(&mut self, quotes: &[QuoteTick]) -> anyhow::Result<()> {
         Ok(())
     }
 
-    /// Actions to be performed when receiving historical trades.
+    /// 接收历史逐笔成交时要执行的操作。
     ///
-    /// # Errors
+    /// # 错误 (Errors)
     ///
-    /// Returns an error if handling the historical trades fails.
+    /// 如果处理历史逐笔成交失败，则返回错误。
     #[allow(unused_variables)]
     fn on_historical_trades(&mut self, trades: &[TradeTick]) -> anyhow::Result<()> {
         Ok(())
     }
 
-    /// Actions to be performed when receiving historical funding rates.
+    /// 接收历史资金费率时要执行的操作。
     ///
-    /// # Errors
+    /// # 错误 (Errors)
     ///
-    /// Returns an error if handling the historical funding rates fails.
+    /// 如果处理历史资金费率失败，则返回错误。
     #[allow(unused_variables)]
     fn on_historical_funding_rates(
         &mut self,
@@ -514,31 +514,31 @@ pub trait DataActor:
         Ok(())
     }
 
-    /// Actions to be performed when receiving historical bars.
+    /// 接收历史 K 线时要执行的操作。
     ///
-    /// # Errors
+    /// # 错误 (Errors)
     ///
-    /// Returns an error if handling the historical bars fails.
+    /// 如果处理历史 K 线失败，则返回错误。
     #[allow(unused_variables)]
     fn on_historical_bars(&mut self, bars: &[Bar]) -> anyhow::Result<()> {
         Ok(())
     }
 
-    /// Actions to be performed when receiving historical mark prices.
+    /// 接收历史标记价格时要执行的操作。
     ///
-    /// # Errors
+    /// # 错误 (Errors)
     ///
-    /// Returns an error if handling the historical mark prices fails.
+    /// 如果处理历史标记价格失败，则返回错误。
     #[allow(unused_variables)]
     fn on_historical_mark_prices(&mut self, mark_prices: &[MarkPriceUpdate]) -> anyhow::Result<()> {
         Ok(())
     }
 
-    /// Actions to be performed when receiving historical index prices.
+    /// 接收历史指数价格时要执行的操作。
     ///
-    /// # Errors
+    /// # 错误 (Errors)
     ///
-    /// Returns an error if handling the historical index prices fails.
+    /// 如果处理历史指数价格失败，则返回错误。
     #[allow(unused_variables)]
     fn on_historical_index_prices(
         &mut self,
@@ -547,7 +547,7 @@ pub trait DataActor:
         Ok(())
     }
 
-    /// Handles a received time event.
+    /// 处理接收到的时间事件。
     fn handle_time_event(&mut self, event: &TimeEvent) {
         log_received(&event);
 
@@ -556,7 +556,7 @@ pub trait DataActor:
         }
     }
 
-    /// Handles a received custom data point.
+    /// 处理接收到的自定义数据点。
     fn handle_data(&mut self, data: &dyn Any) {
         log_received(&data);
 
@@ -570,7 +570,7 @@ pub trait DataActor:
         }
     }
 
-    /// Handles a received signal.
+    /// 处理接收到的信号。
     fn handle_signal(&mut self, signal: &Signal) {
         log_received(&signal);
 
@@ -584,7 +584,7 @@ pub trait DataActor:
         }
     }
 
-    /// Handles a received instrument.
+    /// 处理接收到的工具定义。
     fn handle_instrument(&mut self, instrument: &InstrumentAny) {
         log_received(&instrument);
 
@@ -598,7 +598,7 @@ pub trait DataActor:
         }
     }
 
-    /// Handles received order book deltas.
+    /// 处理接收到的订单簿增量。
     fn handle_book_deltas(&mut self, deltas: &OrderBookDeltas) {
         log_received(&deltas);
 
@@ -612,7 +612,7 @@ pub trait DataActor:
         }
     }
 
-    /// Handles a received order book reference.
+    /// 处理接收到的订单簿引用。
     fn handle_book(&mut self, book: &OrderBook) {
         log_received(&book);
 
@@ -626,7 +626,7 @@ pub trait DataActor:
         };
     }
 
-    /// Handles a received quote.
+    /// 处理接收到的报价。
     fn handle_quote(&mut self, quote: &QuoteTick) {
         log_received(&quote);
 
@@ -640,7 +640,7 @@ pub trait DataActor:
         }
     }
 
-    /// Handles a received trade.
+    /// 处理接收到的逐笔成交。
     fn handle_trade(&mut self, trade: &TradeTick) {
         log_received(&trade);
 
@@ -654,7 +654,7 @@ pub trait DataActor:
         }
     }
 
-    /// Handles a receiving bar.
+    /// 处理接收到的 K 线。
     fn handle_bar(&mut self, bar: &Bar) {
         log_received(&bar);
 
@@ -668,7 +668,7 @@ pub trait DataActor:
         }
     }
 
-    /// Handles a received mark price update.
+    /// 处理接收到的标记价格更新。
     fn handle_mark_price(&mut self, mark_price: &MarkPriceUpdate) {
         log_received(&mark_price);
 
@@ -682,7 +682,7 @@ pub trait DataActor:
         }
     }
 
-    /// Handles a received index price update.
+    /// 处理接收到的指数价格更新。
     fn handle_index_price(&mut self, index_price: &IndexPriceUpdate) {
         log_received(&index_price);
 
@@ -696,7 +696,7 @@ pub trait DataActor:
         }
     }
 
-    /// Handles a received funding rate update.
+    /// 处理接收到的资金费率更新。
     fn handle_funding_rate(&mut self, funding_rate: &FundingRateUpdate) {
         log_received(&funding_rate);
 
@@ -710,7 +710,7 @@ pub trait DataActor:
         }
     }
 
-    /// Handles a received instrument status.
+    /// 处理接收到的工具状态。
     fn handle_instrument_status(&mut self, status: &InstrumentStatus) {
         log_received(&status);
 
@@ -724,7 +724,7 @@ pub trait DataActor:
         }
     }
 
-    /// Handles a received instrument close.
+    /// 处理接收到的工具收盘。
     fn handle_instrument_close(&mut self, close: &InstrumentClose) {
         log_received(&close);
 
@@ -738,13 +738,13 @@ pub trait DataActor:
         }
     }
 
-    /// Handles a received order filled event.
+    /// 处理接收到的订单成交事件。
     fn handle_order_filled(&mut self, event: &OrderFilled) {
         log_received(&event);
 
-        // Check for double-handling: if the event's strategy_id matches this actor's id,
-        // it means a Strategy is receiving its own fill event through both automatic
-        // subscription and manual subscribe_order_fills, so skip the manual handler.
+        // 检查重复处理：如果事件的 strategy_id 与此 Actor 的 id 匹配，
+        // 意味着策略通过自动订阅和手动 subscribe_order_fills 同时接收到了自己的成交事件，
+        // 因此跳过手动处理程序。
         if event.strategy_id.inner() == self.actor_id().inner() {
             return;
         }
@@ -759,13 +759,13 @@ pub trait DataActor:
         }
     }
 
-    /// Handles a received order canceled event.
+    /// 处理接收到的订单取消事件。
     fn handle_order_canceled(&mut self, event: &OrderCanceled) {
         log_received(&event);
 
-        // Check for double-handling: if the event's strategy_id matches this actor's id,
-        // it means a Strategy is receiving its own cancel event through both automatic
-        // subscription and manual subscribe_order_cancels, so skip the manual handler.
+        // 检查重复处理：如果事件的 strategy_id 与此 Actor 的 id 匹配，
+        // 意味着策略通过自动订阅和手动 subscribe_order_cancels 同时接收到了自己的取消事件，
+        // 因此跳过手动处理程序。
         if event.strategy_id.inner() == self.actor_id().inner() {
             return;
         }
@@ -781,7 +781,7 @@ pub trait DataActor:
     }
 
     #[cfg(feature = "defi")]
-    /// Handles a received block.
+    /// 处理接收到的区块。
     fn handle_block(&mut self, block: &Block) {
         log_received(&block);
 
@@ -796,7 +796,7 @@ pub trait DataActor:
     }
 
     #[cfg(feature = "defi")]
-    /// Handles a received pool definition update.
+    /// 处理接收到的流动性池定义更新。
     fn handle_pool(&mut self, pool: &Pool) {
         log_received(&pool);
 
@@ -811,7 +811,7 @@ pub trait DataActor:
     }
 
     #[cfg(feature = "defi")]
-    /// Handles a received pool swap.
+    /// 处理接收到的流动性池交换。
     fn handle_pool_swap(&mut self, swap: &PoolSwap) {
         log_received(&swap);
 
@@ -826,7 +826,7 @@ pub trait DataActor:
     }
 
     #[cfg(feature = "defi")]
-    /// Handles a received pool liquidity update.
+    /// 处理接收到的流动性池流动性更新。
     fn handle_pool_liquidity_update(&mut self, update: &PoolLiquidityUpdate) {
         log_received(&update);
 
@@ -841,7 +841,7 @@ pub trait DataActor:
     }
 
     #[cfg(feature = "defi")]
-    /// Handles a received pool fee collect.
+    /// 处理接收到的流动性池费用收取。
     fn handle_pool_fee_collect(&mut self, collect: &PoolFeeCollect) {
         log_received(&collect);
 
@@ -856,7 +856,7 @@ pub trait DataActor:
     }
 
     #[cfg(feature = "defi")]
-    /// Handles a received pool flash event.
+    /// 处理接收到的流动性池闪电贷事件。
     fn handle_pool_flash(&mut self, flash: &PoolFlash) {
         log_received(&flash);
 
@@ -870,7 +870,7 @@ pub trait DataActor:
         }
     }
 
-    /// Handles received historical data.
+    /// 处理接收到的历史数据。
     fn handle_historical_data(&mut self, data: &dyn Any) {
         log_received(&data);
 
@@ -879,7 +879,7 @@ pub trait DataActor:
         }
     }
 
-    /// Handles a data response.
+    /// 处理数据响应 (Data response)。
     fn handle_data_response(&mut self, resp: &CustomDataResponse) {
         log_received(&resp);
 
@@ -888,7 +888,7 @@ pub trait DataActor:
         }
     }
 
-    /// Handles an instrument response.
+    /// 处理工具定义响应 (Instrument response)。
     fn handle_instrument_response(&mut self, resp: &InstrumentResponse) {
         log_received(&resp);
 
@@ -897,7 +897,7 @@ pub trait DataActor:
         }
     }
 
-    /// Handles an instruments response.
+    /// 处理多工具定义响应 (Instruments response)。
     fn handle_instruments_response(&mut self, resp: &InstrumentsResponse) {
         log_received(&resp);
 
@@ -908,7 +908,7 @@ pub trait DataActor:
         }
     }
 
-    /// Handles a book response.
+    /// 处理订单簿响应 (Book response)。
     fn handle_book_response(&mut self, resp: &BookResponse) {
         log_received(&resp);
 
@@ -917,7 +917,7 @@ pub trait DataActor:
         }
     }
 
-    /// Handles a quotes response.
+    /// 处理报价响应 (Quotes response)。
     fn handle_quotes_response(&mut self, resp: &QuotesResponse) {
         log_received(&resp);
 
@@ -926,7 +926,7 @@ pub trait DataActor:
         }
     }
 
-    /// Handles a trades response.
+    /// 处理逐笔成交响应 (Trades response)。
     fn handle_trades_response(&mut self, resp: &TradesResponse) {
         log_received(&resp);
 
@@ -935,7 +935,7 @@ pub trait DataActor:
         }
     }
 
-    /// Handles a funding rates response.
+    /// 处理资金费率响应 (Funding rates response)。
     fn handle_funding_rates_response(&mut self, resp: &FundingRatesResponse) {
         log_received(&resp);
 
@@ -944,7 +944,7 @@ pub trait DataActor:
         }
     }
 
-    /// Handles a bars response.
+    /// 处理 K 线响应 (Bars response)。
     fn handle_bars_response(&mut self, resp: &BarsResponse) {
         log_received(&resp);
 
@@ -953,7 +953,7 @@ pub trait DataActor:
         }
     }
 
-    /// Subscribe to streaming `data_type` data.
+    /// 订阅流式 `data_type` 数据。
     fn subscribe_data(
         &mut self,
         data_type: DataType,
@@ -970,7 +970,7 @@ pub trait DataActor:
         DataActorCore::subscribe_data(self, handler, data_type, client_id, params);
     }
 
-    /// Subscribe to streaming [`QuoteTick`] data for the `instrument_id`.
+    /// 订阅针对 `instrument_id` 的流式 [`QuoteTick`]（行情报价）数据。
     fn subscribe_quotes(
         &mut self,
         instrument_id: InstrumentId,
@@ -986,14 +986,14 @@ pub trait DataActor:
             if let Some(mut actor) = try_get_actor_unchecked::<Self>(&actor_id) {
                 actor.handle_quote(quote);
             } else {
-                log::error!("Actor {actor_id} not found for quote handling");
+                log::error!("未找到用于报价处理的 Actor {actor_id}");
             }
         });
 
         DataActorCore::subscribe_quotes(self, topic, handler, instrument_id, client_id, params);
     }
 
-    /// Subscribe to streaming [`InstrumentAny`] data for the `venue`.
+    /// 订阅针对 `venue`（场地）的流式 [`InstrumentAny`]（工具定义）数据。
     fn subscribe_instruments(
         &mut self,
         venue: Venue,
@@ -1009,14 +1009,14 @@ pub trait DataActor:
             if let Some(mut actor) = try_get_actor_unchecked::<Self>(&actor_id) {
                 actor.handle_instrument(instrument);
             } else {
-                log::error!("Actor {actor_id} not found for instruments handling");
+                log::error!("未找到用于多工具定义处理的 Actor {actor_id}");
             }
         });
 
         DataActorCore::subscribe_instruments(self, topic, handler, venue, client_id, params);
     }
 
-    /// Subscribe to streaming [`InstrumentAny`] data for the `instrument_id`.
+    /// 订阅针对 `instrument_id` 的流式 [`InstrumentAny`]（工具定义）数据。
     fn subscribe_instrument(
         &mut self,
         instrument_id: InstrumentId,
@@ -1032,14 +1032,14 @@ pub trait DataActor:
             if let Some(mut actor) = try_get_actor_unchecked::<Self>(&actor_id) {
                 actor.handle_instrument(instrument);
             } else {
-                log::error!("Actor {actor_id} not found for instrument handling");
+                log::error!("未找到用于工具定义处理的 Actor {actor_id}");
             }
         });
 
         DataActorCore::subscribe_instrument(self, topic, handler, instrument_id, client_id, params);
     }
 
-    /// Subscribe to streaming [`OrderBookDeltas`] data for the `instrument_id`.
+    /// 订阅针对 `instrument_id` 的流式 [`OrderBookDeltas`]（订单簿增量）数据。
     fn subscribe_book_deltas(
         &mut self,
         instrument_id: InstrumentId,
@@ -1071,7 +1071,7 @@ pub trait DataActor:
         );
     }
 
-    /// Subscribe to [`OrderBook`] snapshots at a specified interval for the `instrument_id`.
+    /// 订阅针对 `instrument_id` 的指定时间间隔的 [`OrderBook`]（订单簿）快照。
     fn subscribe_book_at_interval(
         &mut self,
         instrument_id: InstrumentId,
@@ -1103,7 +1103,7 @@ pub trait DataActor:
         );
     }
 
-    /// Subscribe to streaming [`TradeTick`] data for the `instrument_id`.
+    /// 订阅针对 `instrument_id` 的流式 [`TradeTick`]（逐笔成交）数据。
     fn subscribe_trades(
         &mut self,
         instrument_id: InstrumentId,
@@ -1122,7 +1122,7 @@ pub trait DataActor:
         DataActorCore::subscribe_trades(self, topic, handler, instrument_id, client_id, params);
     }
 
-    /// Subscribe to streaming [`Bar`] data for the `bar_type`.
+    /// 订阅针对 `bar_type` 的流式 [`Bar`]（K 线）数据。
     fn subscribe_bars(
         &mut self,
         bar_type: BarType,
@@ -1141,7 +1141,7 @@ pub trait DataActor:
         DataActorCore::subscribe_bars(self, topic, handler, bar_type, client_id, params);
     }
 
-    /// Subscribe to streaming [`MarkPriceUpdate`] data for the `instrument_id`.
+    /// 订阅针对 `instrument_id` 的流式 [`MarkPriceUpdate`]（标记价格更新）数据。
     fn subscribe_mark_prices(
         &mut self,
         instrument_id: InstrumentId,
@@ -1167,7 +1167,7 @@ pub trait DataActor:
         );
     }
 
-    /// Subscribe to streaming [`IndexPriceUpdate`] data for the `instrument_id`.
+    /// 订阅针对 `instrument_id` 的流式 [`IndexPriceUpdate`]（指数价格更新）数据。
     fn subscribe_index_prices(
         &mut self,
         instrument_id: InstrumentId,
@@ -1193,7 +1193,7 @@ pub trait DataActor:
         );
     }
 
-    /// Subscribe to streaming [`FundingRateUpdate`] data for the `instrument_id`.
+    /// 订阅针对 `instrument_id` 的流式 [`FundingRateUpdate`]（资金费率更新）数据。
     fn subscribe_funding_rates(
         &mut self,
         instrument_id: InstrumentId,
@@ -1219,7 +1219,7 @@ pub trait DataActor:
         );
     }
 
-    /// Subscribe to streaming [`InstrumentStatus`] data for the `instrument_id`.
+    /// 订阅针对 `instrument_id` 的流式 [`InstrumentStatus`]（工具状态）数据。
     fn subscribe_instrument_status(
         &mut self,
         instrument_id: InstrumentId,
@@ -1245,7 +1245,7 @@ pub trait DataActor:
         );
     }
 
-    /// Subscribe to streaming [`InstrumentClose`] data for the `instrument_id`.
+    /// 订阅针对 `instrument_id` 的流式 [`InstrumentClose`]（工具收盘）数据。
     fn subscribe_instrument_close(
         &mut self,
         instrument_id: InstrumentId,
@@ -1271,7 +1271,7 @@ pub trait DataActor:
         );
     }
 
-    /// Subscribe to [`OrderFilled`] events for the `instrument_id`.
+    /// 订阅针对 `instrument_id` 的 [`OrderFilled`]（订单成交）事件。
     fn subscribe_order_fills(&mut self, instrument_id: InstrumentId)
     where
         Self: 'static + Debug + Sized,
@@ -1288,7 +1288,7 @@ pub trait DataActor:
         DataActorCore::subscribe_order_fills(self, topic, handler);
     }
 
-    /// Subscribe to [`OrderCanceled`] events for the `instrument_id`.
+    /// 订阅针对 `instrument_id` 的 [`OrderCanceled`]（订单取消）事件。
     fn subscribe_order_cancels(&mut self, instrument_id: InstrumentId)
     where
         Self: 'static + Debug + Sized,
@@ -1306,7 +1306,7 @@ pub trait DataActor:
     }
 
     #[cfg(feature = "defi")]
-    /// Subscribe to streaming [`Block`] data for the `chain`.
+    /// 订阅针对 `chain` 的流式 [`Block`]（区块）数据。
     fn subscribe_blocks(
         &mut self,
         chain: Blockchain,
@@ -1326,7 +1326,7 @@ pub trait DataActor:
     }
 
     #[cfg(feature = "defi")]
-    /// Subscribe to streaming [`Pool`] definition updates for the AMM pool at the `instrument_id`.
+    /// 订阅针对位于 `instrument_id` 的 AMM 流动性池的流式 [`Pool`] 定义更新。
     fn subscribe_pool(
         &mut self,
         instrument_id: InstrumentId,
@@ -1346,7 +1346,7 @@ pub trait DataActor:
     }
 
     #[cfg(feature = "defi")]
-    /// Subscribe to streaming [`PoolSwap`] data for the `instrument_id`.
+    /// 订阅针对 `instrument_id` 的流式 [`PoolSwap`]（流动性池交换）数据。
     fn subscribe_pool_swaps(
         &mut self,
         instrument_id: InstrumentId,
@@ -1366,7 +1366,7 @@ pub trait DataActor:
     }
 
     #[cfg(feature = "defi")]
-    /// Subscribe to streaming [`PoolLiquidityUpdate`] data for the `instrument_id`.
+    /// 订阅针对 `instrument_id` 的流式 [`PoolLiquidityUpdate`]（流动性池流动性更新）数据。
     fn subscribe_pool_liquidity_updates(
         &mut self,
         instrument_id: InstrumentId,
@@ -1393,7 +1393,7 @@ pub trait DataActor:
     }
 
     #[cfg(feature = "defi")]
-    /// Subscribe to streaming [`PoolFeeCollect`] data for the `instrument_id`.
+    /// 订阅针对 `instrument_id` 的流式 [`PoolFeeCollect`]（流动性池费用收取）数据。
     fn subscribe_pool_fee_collects(
         &mut self,
         instrument_id: InstrumentId,
@@ -1420,7 +1420,7 @@ pub trait DataActor:
     }
 
     #[cfg(feature = "defi")]
-    /// Subscribe to streaming [`PoolFlash`] events for the given `instrument_id`.
+    /// 订阅针对给定 `instrument_id` 的流式 [`PoolFlash`]（流动性池闪电贷）事件。
     fn subscribe_pool_flash_events(
         &mut self,
         instrument_id: InstrumentId,
@@ -1446,7 +1446,7 @@ pub trait DataActor:
         );
     }
 
-    /// Unsubscribe from streaming `data_type` data.
+    /// 取消订阅流式 `data_type` 数据。
     fn unsubscribe_data(
         &mut self,
         data_type: DataType,
@@ -1458,7 +1458,7 @@ pub trait DataActor:
         DataActorCore::unsubscribe_data(self, data_type, client_id, params);
     }
 
-    /// Unsubscribe from streaming [`InstrumentAny`] data for the `venue`.
+    /// 取消订阅针对 `venue` 的流式 [`InstrumentAny`] 数据。
     fn unsubscribe_instruments(
         &mut self,
         venue: Venue,
@@ -1470,7 +1470,7 @@ pub trait DataActor:
         DataActorCore::unsubscribe_instruments(self, venue, client_id, params);
     }
 
-    /// Unsubscribe from streaming [`InstrumentAny`] data for the `instrument_id`.
+    /// 取消订阅针对 `instrument_id` 的流式 [`InstrumentAny`] 数据。
     fn unsubscribe_instrument(
         &mut self,
         instrument_id: InstrumentId,
@@ -1482,7 +1482,7 @@ pub trait DataActor:
         DataActorCore::unsubscribe_instrument(self, instrument_id, client_id, params);
     }
 
-    /// Unsubscribe from streaming [`OrderBookDeltas`] data for the `instrument_id`.
+    /// 取消订阅针对 `instrument_id` 的流式 [`OrderBookDeltas`] 数据。
     fn unsubscribe_book_deltas(
         &mut self,
         instrument_id: InstrumentId,
@@ -1494,7 +1494,7 @@ pub trait DataActor:
         DataActorCore::unsubscribe_book_deltas(self, instrument_id, client_id, params);
     }
 
-    /// Unsubscribe from [`OrderBook`] snapshots at a specified interval for the `instrument_id`.
+    /// 取消订阅针对 `instrument_id` 的指定时间间隔的 [`OrderBook`] 快照。
     fn unsubscribe_book_at_interval(
         &mut self,
         instrument_id: InstrumentId,
@@ -1513,7 +1513,7 @@ pub trait DataActor:
         );
     }
 
-    /// Unsubscribe from streaming [`QuoteTick`] data for the `instrument_id`.
+    /// 取消订阅针对 `instrument_id` 的流式 [`QuoteTick`] 数据。
     fn unsubscribe_quotes(
         &mut self,
         instrument_id: InstrumentId,
@@ -1525,7 +1525,7 @@ pub trait DataActor:
         DataActorCore::unsubscribe_quotes(self, instrument_id, client_id, params);
     }
 
-    /// Unsubscribe from streaming [`TradeTick`] data for the `instrument_id`.
+    /// 取消订阅针对 `instrument_id` 的流式 [`TradeTick`] 数据。
     fn unsubscribe_trades(
         &mut self,
         instrument_id: InstrumentId,
@@ -1537,7 +1537,7 @@ pub trait DataActor:
         DataActorCore::unsubscribe_trades(self, instrument_id, client_id, params);
     }
 
-    /// Unsubscribe from streaming [`Bar`] data for the `bar_type`.
+    /// 取消订阅针对 `bar_type` 的流式 [`Bar`] 数据。
     fn unsubscribe_bars(
         &mut self,
         bar_type: BarType,
@@ -1549,7 +1549,7 @@ pub trait DataActor:
         DataActorCore::unsubscribe_bars(self, bar_type, client_id, params);
     }
 
-    /// Unsubscribe from streaming [`MarkPriceUpdate`] data for the `instrument_id`.
+    /// 取消订阅针对 `instrument_id` 的流式 [`MarkPriceUpdate`] 数据。
     fn unsubscribe_mark_prices(
         &mut self,
         instrument_id: InstrumentId,
@@ -1561,7 +1561,7 @@ pub trait DataActor:
         DataActorCore::unsubscribe_mark_prices(self, instrument_id, client_id, params);
     }
 
-    /// Unsubscribe from streaming [`IndexPriceUpdate`] data for the `instrument_id`.
+    /// 取消订阅针对 `instrument_id` 的流式 [`IndexPriceUpdate`] 数据。
     fn unsubscribe_index_prices(
         &mut self,
         instrument_id: InstrumentId,
@@ -1573,7 +1573,7 @@ pub trait DataActor:
         DataActorCore::unsubscribe_index_prices(self, instrument_id, client_id, params);
     }
 
-    /// Unsubscribe from streaming [`FundingRateUpdate`] data for the `instrument_id`.
+    /// 取消订阅针对 `instrument_id` 的流式 [`FundingRateUpdate`] 数据。
     fn unsubscribe_funding_rates(
         &mut self,
         instrument_id: InstrumentId,
@@ -1585,7 +1585,7 @@ pub trait DataActor:
         DataActorCore::unsubscribe_funding_rates(self, instrument_id, client_id, params);
     }
 
-    /// Unsubscribe from streaming [`InstrumentStatus`] data for the `instrument_id`.
+    /// 取消订阅针对 `instrument_id` 的流式 [`InstrumentStatus`] 数据。
     fn unsubscribe_instrument_status(
         &mut self,
         instrument_id: InstrumentId,
@@ -1597,7 +1597,7 @@ pub trait DataActor:
         DataActorCore::unsubscribe_instrument_status(self, instrument_id, client_id, params);
     }
 
-    /// Unsubscribe from streaming [`InstrumentClose`] data for the `instrument_id`.
+    /// 取消订阅针对 `instrument_id` 的流式 [`InstrumentClose`] 数据。
     fn unsubscribe_instrument_close(
         &mut self,
         instrument_id: InstrumentId,
@@ -1609,7 +1609,7 @@ pub trait DataActor:
         DataActorCore::unsubscribe_instrument_close(self, instrument_id, client_id, params);
     }
 
-    /// Unsubscribe from [`OrderFilled`] events for the `instrument_id`.
+    /// 取消订阅针对 `instrument_id` 的 [`OrderFilled`] 事件。
     fn unsubscribe_order_fills(&mut self, instrument_id: InstrumentId)
     where
         Self: 'static + Debug + Sized,
@@ -1617,7 +1617,7 @@ pub trait DataActor:
         DataActorCore::unsubscribe_order_fills(self, instrument_id);
     }
 
-    /// Unsubscribe from [`OrderCanceled`] events for the `instrument_id`.
+    /// 取消订阅针对 `instrument_id` 的 [`OrderCanceled`] 事件。
     fn unsubscribe_order_cancels(&mut self, instrument_id: InstrumentId)
     where
         Self: 'static + Debug + Sized,
@@ -1626,7 +1626,7 @@ pub trait DataActor:
     }
 
     #[cfg(feature = "defi")]
-    /// Unsubscribe from streaming [`Block`] data for the `chain`.
+    /// 取消订阅针对 `chain` 的流式 [`Block`] 数据。
     fn unsubscribe_blocks(
         &mut self,
         chain: Blockchain,
@@ -1639,7 +1639,7 @@ pub trait DataActor:
     }
 
     #[cfg(feature = "defi")]
-    /// Unsubscribe from streaming [`Pool`] definition updates for the AMM pool at the `instrument_id`.
+    /// 取消订阅针对位于 `instrument_id` 的 AMM 流动性池的流式 [`Pool`] 定义更新。
     fn unsubscribe_pool(
         &mut self,
         instrument_id: InstrumentId,
@@ -1652,7 +1652,7 @@ pub trait DataActor:
     }
 
     #[cfg(feature = "defi")]
-    /// Unsubscribe from streaming [`PoolSwap`] data for the `instrument_id`.
+    /// 取消订阅针对 `instrument_id` 的流式 [`PoolSwap`] 数据。
     fn unsubscribe_pool_swaps(
         &mut self,
         instrument_id: InstrumentId,
@@ -1665,7 +1665,7 @@ pub trait DataActor:
     }
 
     #[cfg(feature = "defi")]
-    /// Unsubscribe from streaming [`PoolLiquidityUpdate`] data for the `instrument_id`.
+    /// 取消订阅针对 `instrument_id` 的流式 [`PoolLiquidityUpdate`] 数据。
     fn unsubscribe_pool_liquidity_updates(
         &mut self,
         instrument_id: InstrumentId,
@@ -1678,7 +1678,7 @@ pub trait DataActor:
     }
 
     #[cfg(feature = "defi")]
-    /// Unsubscribe from streaming [`PoolFeeCollect`] data for the `instrument_id`.
+    /// 取消订阅针对 `instrument_id` 的流式 [`PoolFeeCollect`] 数据。
     fn unsubscribe_pool_fee_collects(
         &mut self,
         instrument_id: InstrumentId,
@@ -1691,7 +1691,7 @@ pub trait DataActor:
     }
 
     #[cfg(feature = "defi")]
-    /// Unsubscribe from streaming [`PoolFlash`] events for the given `instrument_id`.
+    /// 取消订阅针对给定 `instrument_id` 的流式 [`PoolFlash`] 事件。
     fn unsubscribe_pool_flash_events(
         &mut self,
         instrument_id: InstrumentId,
@@ -1703,11 +1703,11 @@ pub trait DataActor:
         DataActorCore::unsubscribe_pool_flash_events(self, instrument_id, client_id, params);
     }
 
-    /// Request historical custom data of the given `data_type`.
+    /// 请求给定 `data_type` 的历史自定义数据。
     ///
-    /// # Errors
+    /// # 错误 (Errors)
     ///
-    /// Returns an error if input parameters are invalid.
+    /// 如果输入参数无效，则返回错误。
     fn request_data(
         &mut self,
         data_type: DataType,
@@ -1730,11 +1730,11 @@ pub trait DataActor:
         )
     }
 
-    /// Request historical [`InstrumentResponse`] data for the given `instrument_id`.
+    /// 请求给定 `instrument_id` 的历史 [`InstrumentResponse`] 数据。
     ///
-    /// # Errors
+    /// # 错误 (Errors)
     ///
-    /// Returns an error if input parameters are invalid.
+    /// 如果输入参数无效，则返回错误。
     fn request_instrument(
         &mut self,
         instrument_id: InstrumentId,
@@ -1762,11 +1762,11 @@ pub trait DataActor:
         )
     }
 
-    /// Request historical [`InstrumentsResponse`] definitions for the optional `venue`.
+    /// 请求可选 `venue` 的历史 [`InstrumentsResponse`] 定义。
     ///
-    /// # Errors
+    /// # 错误 (Errors)
     ///
-    /// Returns an error if input parameters are invalid.
+    /// 如果输入参数无效，则返回错误。
     fn request_instruments(
         &mut self,
         venue: Option<Venue>,
@@ -1786,11 +1786,11 @@ pub trait DataActor:
         DataActorCore::request_instruments(self, venue, start, end, client_id, params, handler)
     }
 
-    /// Request an [`OrderBook`] snapshot for the given `instrument_id`.
+    /// 请求给定 `instrument_id` 的 [`OrderBook`] 快照。
     ///
-    /// # Errors
+    /// # 错误 (Errors)
     ///
-    /// Returns an error if input parameters are invalid.
+    /// 如果输入参数无效，则返回错误。
     fn request_book_snapshot(
         &mut self,
         instrument_id: InstrumentId,
@@ -1809,11 +1809,11 @@ pub trait DataActor:
         DataActorCore::request_book_snapshot(self, instrument_id, depth, client_id, params, handler)
     }
 
-    /// Request historical [`QuoteTick`] data for the given `instrument_id`.
+    /// 请求给定 `instrument_id` 的历史 [`QuoteTick`] 数据。
     ///
-    /// # Errors
+    /// # 错误 (Errors)
     ///
-    /// Returns an error if input parameters are invalid.
+    /// 如果输入参数无效，则返回错误。
     fn request_quotes(
         &mut self,
         instrument_id: InstrumentId,
@@ -1843,11 +1843,11 @@ pub trait DataActor:
         )
     }
 
-    /// Request historical [`TradeTick`] data for the given `instrument_id`.
+    /// 请求给定 `instrument_id` 的历史 [`TradeTick`] 数据。
     ///
-    /// # Errors
+    /// # 错误 (Errors)
     ///
-    /// Returns an error if input parameters are invalid.
+    /// 如果输入参数无效，则返回错误。
     fn request_trades(
         &mut self,
         instrument_id: InstrumentId,
@@ -1877,11 +1877,11 @@ pub trait DataActor:
         )
     }
 
-    /// Request historical [`FundingRateUpdate`] data for the given `instrument_id`.
+    /// 请求给定 `instrument_id` 的历史 [`FundingRateUpdate`] 数据。
     ///
-    /// # Errors
+    /// # 错误 (Errors)
     ///
-    /// Returns an error if input parameters are invalid.
+    /// 如果输入参数无效，则返回错误。
     fn request_funding_rates(
         &mut self,
         instrument_id: InstrumentId,
@@ -1911,11 +1911,11 @@ pub trait DataActor:
         )
     }
 
-    /// Request historical [`Bar`] data for the given `bar_type`.
+    /// 请求给定 `bar_type` 的历史 [`Bar`] 数据。
     ///
-    /// # Errors
+    /// # 错误 (Errors)
     ///
-    /// Returns an error if input parameters are invalid.
+    /// 如果输入参数无效，则返回错误。
     fn request_bars(
         &mut self,
         bar_type: BarType,
@@ -1939,7 +1939,7 @@ pub trait DataActor:
     }
 }
 
-// Blanket implementation: any DataActor automatically implements Actor
+// 通用实现：任何 DataActor 自动实现 Actor
 impl<T> Actor for T
 where
     T: DataActor + Debug + 'static,
@@ -1950,7 +1950,7 @@ where
 
     #[allow(unused_variables)]
     fn handle(&mut self, msg: &dyn Any) {
-        // Default empty implementation - concrete actors can override if needed
+        // 默认空实现 - 具体 Actor 可以根据需要重写
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -1958,7 +1958,7 @@ where
     }
 }
 
-// Blanket implementation: any DataActor automatically implements Component
+// 通用实现：任何 DataActor 自动实现 Component
 impl<T> Component for T
 where
     T: DataActor + Debug + 'static,
@@ -1985,13 +1985,13 @@ where
     ) -> anyhow::Result<()> {
         DataActorCore::register(self, trader_id, clock.clone(), cache)?;
 
-        // Register default time event handler for this actor
+        // 为此 Actor 注册默认的时间事件处理程序
         let actor_id = self.actor_id().inner();
         let callback = TimeEventCallback::from(move |event: TimeEvent| {
             if let Some(mut actor) = try_get_actor_unchecked::<Self>(&actor_id) {
                 actor.handle_time_event(&event);
             } else {
-                log::error!("Actor {actor_id} not found for time event handling");
+                log::error!("未找到用于时间事件处理的 Actor {actor_id}");
             }
         });
 
@@ -2029,20 +2029,20 @@ where
     }
 }
 
-/// Core functionality for all actors.
+/// 所有 Actor 的核心功能。
 #[derive(Clone)]
 #[allow(
     dead_code,
     reason = "TODO: Under development (pending_requests, signal_classes)"
 )]
 pub struct DataActorCore {
-    /// The actor identifier.
+    /// Actor 标识符。
     pub actor_id: ActorId,
-    /// The actors configuration.
+    /// Actor 配置。
     pub config: DataActorConfig,
     trader_id: Option<TraderId>,
-    clock: Option<Rc<RefCell<dyn Clock>>>, // Wired up on registration
-    cache: Option<Rc<RefCell<Cache>>>,     // Wired up on registration
+    clock: Option<Rc<RefCell<dyn Clock>>>, // 在注册时连接
+    cache: Option<Rc<RefCell<Cache>>>,     // 在注册时连接
     state: ComponentState,
     topic_handlers: AHashMap<MStr<Topic>, ShareableMessageHandler>,
     deltas_handlers: AHashMap<MStr<Topic>, TypedHandler<OrderBookDeltas>>,
@@ -2086,9 +2086,9 @@ impl Debug for DataActorCore {
 }
 
 impl DataActorCore {
-    /// Adds a subscription handler for the `topic`.
+    /// 为 `topic`（主题）添加一个订阅处理程序。
     ///
-    //// Logs a warning if the actor is already subscribed to the topic.
+    /// 如果 Actor 已经订阅了该主题，则记录一条警告。
     pub(crate) fn add_subscription_any(
         &mut self,
         topic: MStr<Topic>,
@@ -2096,7 +2096,7 @@ impl DataActorCore {
     ) {
         if self.topic_handlers.contains_key(&topic) {
             log::warn!(
-                "Actor {} attempted duplicate subscription to topic '{topic}'",
+                "Actor {} 尝试重复订阅主题 '{topic}'",
                 self.actor_id,
             );
             return;
@@ -2106,15 +2106,15 @@ impl DataActorCore {
         msgbus::subscribe_any(topic.into(), handler, None);
     }
 
-    /// Removes a subscription handler for the `topic` if present.
+    /// 如果存在，则移除 `topic` 的订阅处理程序。
     ///
-    /// Logs a warning if the actor is not currently subscribed to the topic.
+    /// 如果 Actor 当前未订阅该主题，则记录一条警告。
     pub(crate) fn remove_subscription_any(&mut self, topic: MStr<Topic>) {
         if let Some(handler) = self.topic_handlers.remove(&topic) {
             msgbus::unsubscribe_any(topic.into(), handler);
         } else {
             log::warn!(
-                "Actor {} attempted to unsubscribe from topic '{topic}' when not subscribed",
+                "Actor {} 尝试取消未订阅的主题 '{topic}'",
                 self.actor_id,
             );
         }
@@ -2127,7 +2127,7 @@ impl DataActorCore {
     ) {
         if self.quote_handlers.contains_key(&topic) {
             log::warn!(
-                "Actor {} attempted duplicate quote subscription to '{topic}'",
+                "Actor {} 尝试重复订阅报价 '{topic}'",
                 self.actor_id
             );
             return;
@@ -2150,7 +2150,7 @@ impl DataActorCore {
     ) {
         if self.trade_handlers.contains_key(&topic) {
             log::warn!(
-                "Actor {} attempted duplicate trade subscription to '{topic}'",
+                "Actor {} 尝试重复订阅逐笔成交 '{topic}'",
                 self.actor_id
             );
             return;
@@ -2169,7 +2169,7 @@ impl DataActorCore {
     pub(crate) fn add_bar_subscription(&mut self, topic: MStr<Topic>, handler: TypedHandler<Bar>) {
         if self.bar_handlers.contains_key(&topic) {
             log::warn!(
-                "Actor {} attempted duplicate bar subscription to '{topic}'",
+                "Actor {} 尝试重复订阅 K 线 '{topic}'",
                 self.actor_id
             );
             return;
@@ -2192,7 +2192,7 @@ impl DataActorCore {
     ) {
         if self.order_event_handlers.contains_key(&topic) {
             log::warn!(
-                "Actor {} attempted duplicate order event subscription to '{topic}'",
+                "Actor {} 尝试重复订阅订单事件 '{topic}'",
                 self.actor_id
             );
             return;
@@ -2215,7 +2215,7 @@ impl DataActorCore {
     ) {
         if self.deltas_handlers.contains_key(&topic) {
             log::warn!(
-                "Actor {} attempted duplicate deltas subscription to '{topic}'",
+                "Actor {} 尝试重复订阅增量 '{topic}'",
                 self.actor_id
             );
             return;
@@ -2239,7 +2239,7 @@ impl DataActorCore {
     ) {
         if self.depth10_handlers.contains_key(&topic) {
             log::warn!(
-                "Actor {} attempted duplicate depth10 subscription to '{topic}'",
+                "Actor {} 尝试重复订阅 depth10 '{topic}'",
                 self.actor_id
             );
             return;
@@ -2262,7 +2262,7 @@ impl DataActorCore {
     ) {
         if self.topic_handlers.contains_key(&topic) {
             log::warn!(
-                "Actor {} attempted duplicate instrument subscription to '{topic}'",
+                "Actor {} 尝试重复订阅工具定义 '{topic}'",
                 self.actor_id
             );
             return;
@@ -2285,7 +2285,7 @@ impl DataActorCore {
     ) {
         if self.topic_handlers.contains_key(&topic) {
             log::warn!(
-                "Actor {} attempted duplicate instrument close subscription to '{topic}'",
+                "Actor {} 尝试重复订阅工具收盘 '{topic}'",
                 self.actor_id
             );
             return;
@@ -2308,7 +2308,7 @@ impl DataActorCore {
     ) {
         if self.book_handlers.contains_key(&topic) {
             log::warn!(
-                "Actor {} attempted duplicate book snapshot subscription to '{topic}'",
+                "Actor {} 尝试重复订阅订单簿快照 '{topic}'",
                 self.actor_id
             );
             return;
@@ -2331,7 +2331,7 @@ impl DataActorCore {
     ) {
         if self.mark_price_handlers.contains_key(&topic) {
             log::warn!(
-                "Actor {} attempted duplicate mark price subscription to '{topic}'",
+                "Actor {} 尝试重复订阅标记价格 '{topic}'",
                 self.actor_id
             );
             return;
@@ -2354,7 +2354,7 @@ impl DataActorCore {
     ) {
         if self.index_price_handlers.contains_key(&topic) {
             log::warn!(
-                "Actor {} attempted duplicate index price subscription to '{topic}'",
+                "Actor {} 尝试重复订阅指数价格 '{topic}'",
                 self.actor_id
             );
             return;
@@ -2377,7 +2377,7 @@ impl DataActorCore {
     ) {
         if self.funding_rate_handlers.contains_key(&topic) {
             log::warn!(
-                "Actor {} attempted duplicate funding rate subscription to '{topic}'",
+                "Actor {} 尝试重复订阅资金费率 '{topic}'",
                 self.actor_id
             );
             return;
@@ -2401,7 +2401,7 @@ impl DataActorCore {
     ) {
         if self.block_handlers.contains_key(&topic) {
             log::warn!(
-                "Actor {} attempted duplicate block subscription to '{topic}'",
+                "Actor {} 尝试重复订阅区块 '{topic}'",
                 self.actor_id
             );
             return;
@@ -2426,7 +2426,7 @@ impl DataActorCore {
     ) {
         if self.pool_handlers.contains_key(&topic) {
             log::warn!(
-                "Actor {} attempted duplicate pool subscription to '{topic}'",
+                "Actor {} 尝试重复订阅流动性池 '{topic}'",
                 self.actor_id
             );
             return;
@@ -2451,7 +2451,7 @@ impl DataActorCore {
     ) {
         if self.pool_swap_handlers.contains_key(&topic) {
             log::warn!(
-                "Actor {} attempted duplicate pool swap subscription to '{topic}'",
+                "Actor {} 尝试重复订阅流动性池交换 '{topic}'",
                 self.actor_id
             );
             return;
@@ -2476,7 +2476,7 @@ impl DataActorCore {
     ) {
         if self.pool_liquidity_handlers.contains_key(&topic) {
             log::warn!(
-                "Actor {} attempted duplicate pool liquidity subscription to '{topic}'",
+                "Actor {} 尝试重复订阅流动性池流动性更新 '{topic}'",
                 self.actor_id
             );
             return;
@@ -2501,7 +2501,7 @@ impl DataActorCore {
     ) {
         if self.pool_collect_handlers.contains_key(&topic) {
             log::warn!(
-                "Actor {} attempted duplicate pool collect subscription to '{topic}'",
+                "Actor {} 尝试重复订阅流动性池费用收取 '{topic}'",
                 self.actor_id
             );
             return;
@@ -2526,7 +2526,7 @@ impl DataActorCore {
     ) {
         if self.pool_flash_handlers.contains_key(&topic) {
             log::warn!(
-                "Actor {} attempted duplicate pool flash subscription to '{topic}'",
+                "Actor {} 尝试重复订阅流动性池闪电贷 '{topic}'",
                 self.actor_id
             );
             return;
@@ -2543,7 +2543,7 @@ impl DataActorCore {
         }
     }
 
-    /// Creates a new [`DataActorCore`] instance.
+    /// 创建一个新的 [`DataActorCore`] 实例。
     pub fn new(config: DataActorConfig) -> Self {
         let actor_id = config
             .actor_id
@@ -2587,23 +2587,23 @@ impl DataActorCore {
         }
     }
 
-    /// Returns the memory address of this instance as a hexadecimal string.
+    /// 将此实例的内存地址作为十六进制字符串返回。
     #[must_use]
     pub fn mem_address(&self) -> String {
         format!("{self:p}")
     }
 
-    /// Returns the actors state.
+    /// 返回 Actor 的状态。
     pub fn state(&self) -> ComponentState {
         self.state
     }
 
-    /// Returns the trader ID this actor is registered to.
+    /// 返回此 Actor 注册到的交易员 ID。
     pub fn trader_id(&self) -> Option<TraderId> {
         self.trader_id
     }
 
-    /// Returns the actors ID.
+    /// 返回 Actor 的 ID。
     pub fn actor_id(&self) -> ActorId {
         self.actor_id
     }
@@ -2613,37 +2613,37 @@ impl DataActorCore {
         ActorId::from(format!("{}-{memory_address}", stringify!(DataActor)))
     }
 
-    /// Returns a UNIX nanoseconds timestamp from the actor's internal clock.
+    /// 从 Actor 的内部时钟获取 UNIX 纳秒时间戳。
     pub fn timestamp_ns(&self) -> UnixNanos {
         self.clock_ref().timestamp_ns()
     }
 
-    /// Returns the clock for the actor (if registered).
+    /// 返回 Actor 的时钟（如果已注册）。
     ///
     /// # Panics
     ///
-    /// Panics if the actor has not been registered with a trader.
+    /// 如果 Actor 尚未注册到交易员，则会 panic。
     pub fn clock(&mut self) -> RefMut<'_, dyn Clock> {
         self.clock
             .as_ref()
             .unwrap_or_else(|| {
                 panic!(
-                    "DataActor {} must be registered before calling `clock()` - trader_id: {:?}",
+                    "DataActor {} 在调用 `clock()` 之前必须先注册 - 交易员 ID: {:?}",
                     self.actor_id, self.trader_id
                 )
             })
             .borrow_mut()
     }
 
-    /// Returns a clone of the reference-counted clock.
+    /// 返回引用计数时钟的一个克隆。
     ///
     /// # Panics
     ///
-    /// Panics if the actor has not yet been registered (clock is `None`).
+    /// 如果 Actor 尚未注册（时钟为 `None`），则会 panic。
     pub fn clock_rc(&self) -> Rc<RefCell<dyn Clock>> {
         self.clock
             .as_ref()
-            .expect("DataActor must be registered before accessing clock")
+            .expect("DataActor 在访问时钟之前必须先注册")
             .clone()
     }
 
@@ -2652,45 +2652,44 @@ impl DataActorCore {
             .as_ref()
             .unwrap_or_else(|| {
                 panic!(
-                    "DataActor {} must be registered before calling `clock_ref()` - trader_id: {:?}",
+                    "DataActor {} 在调用 `clock_ref()` 之前必须先注册 - 交易员 ID: {:?}",
                     self.actor_id, self.trader_id
                 )
             })
             .borrow()
     }
 
-    /// Returns a read-only reference to the cache.
+    /// 返回缓存的只读引用。
     ///
     /// # Panics
     ///
-    /// Panics if the actor has not yet been registered (cache is `None`).
+    /// 如果 Actor 尚未注册（缓存为 `None`），则会 panic。
     pub fn cache(&self) -> Ref<'_, Cache> {
         self.cache
             .as_ref()
-            .expect("DataActor must be registered before accessing cache")
+            .expect("DataActor 在访问缓存之前必须先注册")
             .borrow()
     }
 
-    /// Returns a clone of the reference-counted cache.
+    /// 返回引用计数缓存的一个克隆。
     ///
     /// # Panics
     ///
-    /// Panics if the actor has not yet been registered (cache is `None`).
+    /// 如果 Actor 尚未注册（缓存为 `None`），则会 panic。
     pub fn cache_rc(&self) -> Rc<RefCell<Cache>> {
         self.cache
             .as_ref()
-            .expect("DataActor must be registered before accessing cache")
+            .expect("DataActor 在访问缓存之前必须先注册")
             .clone()
     }
 
     // -- REGISTRATION ----------------------------------------------------------------------------
 
-    /// Register the data actor with a trader.
+    /// 向交易员注册数据 Actor。
     ///
-    /// # Errors
+    /// # 错误 (Errors)
     ///
-    /// Returns an error if the actor has already been registered with a trader
-    /// or if the provided dependencies are invalid.
+    /// 如果 Actor 已经注册到交易员，或者提供的依赖项无效，则返回错误。
     pub fn register(
         &mut self,
         trader_id: TraderId,
@@ -2699,17 +2698,17 @@ impl DataActorCore {
     ) -> anyhow::Result<()> {
         if let Some(existing_trader_id) = self.trader_id {
             anyhow::bail!(
-                "DataActor {} already registered with trader {existing_trader_id}",
+                "DataActor {} 已经注册到交易员 {existing_trader_id}",
                 self.actor_id
             );
         }
 
-        // Validate clock by attempting to access it
+        // 通过尝试访问来验证时钟
         {
             let _timestamp = clock.borrow().timestamp_ns();
         }
 
-        // Validate cache by attempting to access it
+        // 通过尝试访问来验证缓存
         {
             let _cache_borrow = cache.borrow();
         }
@@ -2718,28 +2717,28 @@ impl DataActorCore {
         self.clock = Some(clock);
         self.cache = Some(cache);
 
-        // Verify complete registration
+        // 验证注册是否完成
         if !self.is_properly_registered() {
             anyhow::bail!(
-                "DataActor {} registration incomplete - validation failed",
+                "DataActor {} 注册不完整 - 验证失败",
                 self.actor_id
             );
         }
 
-        log::debug!("Registered {} with trader {trader_id}", self.actor_id);
+        log::debug!("已将 {} 注册到交易员 {trader_id}", self.actor_id);
         Ok(())
     }
 
-    /// Register an event type for warning log levels.
+    /// 为警告日志级别注册事件类型。
     pub fn register_warning_event(&mut self, event_type: &str) {
         self.warning_events.insert(event_type.to_string());
-        log::debug!("Registered event type '{event_type}' for warning logs");
+        log::debug!("已为警告日志注册事件类型 '{event_type}'");
     }
 
-    /// Deregister an event type from warning log levels.
+    /// 从警告日志级别注销事件类型。
     pub fn deregister_warning_event(&mut self, event_type: &str) {
         self.warning_events.remove(event_type);
-        log::debug!("Deregistered event type '{event_type}' from warning logs");
+        log::debug!("已从警告日志注销事件类型 '{event_type}'");
     }
 
     pub fn is_registered(&self) -> bool {
@@ -2749,11 +2748,11 @@ impl DataActorCore {
     pub(crate) fn check_registered(&self) {
         assert!(
             self.is_registered(),
-            "Actor has not been registered with a Trader"
+            "Actor 尚未向交易员注册"
         );
     }
 
-    /// Validates registration state without panicking.
+    /// 在不产生 panic 的情况下验证注册状态。
     fn is_properly_registered(&self) -> bool {
         self.trader_id.is_some() && self.clock.is_some() && self.cache.is_some()
     }
@@ -2773,21 +2772,21 @@ impl DataActorCore {
             log::info!("{REQ}{SEND} {request:?}");
         }
 
-        // For now, simplified approach - data requests without dynamic handlers
-        // TODO: Implement proper dynamic dispatch for response handlers
+        // 目前采用简化方法 - 不带动态处理程序的数据请求
+        // TODO: 为响应处理程序实现适当的动态分发
         let endpoint = MessagingSwitchboard::data_engine_queue_execute();
         msgbus::send_any(endpoint, request.as_any());
     }
 
-    /// Sends a shutdown command to the system with an optional reason.
+    /// 向系统发送带有可选原因的关机命令。
     ///
     /// # Panics
     ///
-    /// Panics if the actor is not registered or has no trader ID.
+    /// 如果 Actor 未注册或没有交易员 ID，则会 panic。
     pub fn shutdown_system(&self, reason: Option<String>) {
         self.check_registered();
 
-        // SAFETY: Checked registered before unwrapping trader ID
+        // 安全性：在解包交易员 ID 之前检查是否已注册
         let command = ShutdownSystem::new(
             self.trader_id().unwrap(),
             self.actor_id.inner(),
@@ -2802,11 +2801,11 @@ impl DataActorCore {
 
     // -- SUBSCRIPTIONS ---------------------------------------------------------------------------
 
-    /// Helper method for registering data subscriptions from the trait.
+    /// 用于注册来自 trait 的数据订阅的辅助方法。
     ///
     /// # Panics
     ///
-    /// Panics if the actor is not properly registered.
+    /// 如果 Actor 未正确注册，则会 panic。
     pub fn subscribe_data(
         &mut self,
         handler: ShareableMessageHandler,
@@ -2816,7 +2815,7 @@ impl DataActorCore {
     ) {
         assert!(
             self.is_properly_registered(),
-            "DataActor {} is not properly registered - trader_id: {:?}, clock: {}, cache: {}",
+            "DataActor {} 未正确注册 - 交易员 ID: {:?}, 时钟: {}, 缓存: {}",
             self.actor_id,
             self.trader_id,
             self.clock.is_some(),
@@ -2826,7 +2825,7 @@ impl DataActorCore {
         let topic = get_custom_topic(&data_type);
         self.add_subscription_any(topic, handler);
 
-        // If no client ID specified, just subscribe to the topic
+        // 如果未指定客户端 ID，只需订阅该主题即可
         if client_id.is_none() {
             return;
         }
@@ -2844,7 +2843,7 @@ impl DataActorCore {
         self.send_data_cmd(DataCommand::Subscribe(command));
     }
 
-    /// Helper method for registering quotes subscriptions from the trait.
+    /// 用于注册来自 trait 的报价订阅的辅助方法。
     pub fn subscribe_quotes(
         &mut self,
         topic: MStr<Topic>,
@@ -2870,7 +2869,7 @@ impl DataActorCore {
         self.send_data_cmd(DataCommand::Subscribe(command));
     }
 
-    /// Helper method for registering instruments subscriptions from the trait.
+    /// 用于注册来自 trait 的多工具定义订阅的辅助方法。
     pub fn subscribe_instruments(
         &mut self,
         topic: MStr<Topic>,
@@ -2895,7 +2894,7 @@ impl DataActorCore {
         self.send_data_cmd(DataCommand::Subscribe(command));
     }
 
-    /// Helper method for registering instrument subscriptions from the trait.
+    /// 用于注册来自 trait 的工具定义订阅的辅助方法。
     pub fn subscribe_instrument(
         &mut self,
         topic: MStr<Topic>,
@@ -2921,7 +2920,7 @@ impl DataActorCore {
         self.send_data_cmd(DataCommand::Subscribe(command));
     }
 
-    /// Helper method for registering book deltas subscriptions from the trait.
+    /// 用于注册来自 trait 的订单簿增量订阅的辅助方法。
     #[allow(clippy::too_many_arguments)]
     pub fn subscribe_book_deltas(
         &mut self,
@@ -2954,7 +2953,7 @@ impl DataActorCore {
         self.send_data_cmd(DataCommand::Subscribe(command));
     }
 
-    /// Helper method for registering book snapshots subscriptions from the trait.
+    /// 用于注册来自 trait 的订单簿快照订阅的辅助方法。
     #[allow(clippy::too_many_arguments)]
     pub fn subscribe_book_at_interval(
         &mut self,
@@ -2987,7 +2986,7 @@ impl DataActorCore {
         self.send_data_cmd(DataCommand::Subscribe(command));
     }
 
-    /// Helper method for registering trades subscriptions from the trait.
+    /// 用于注册来自 trait 的逐笔成交订阅的辅助方法。
     pub fn subscribe_trades(
         &mut self,
         topic: MStr<Topic>,
@@ -3013,7 +3012,7 @@ impl DataActorCore {
         self.send_data_cmd(DataCommand::Subscribe(command));
     }
 
-    /// Helper method for registering bars subscriptions from the trait.
+    /// 用于注册来自 trait 的 K 线订阅的辅助方法。
     pub fn subscribe_bars(
         &mut self,
         topic: MStr<Topic>,
@@ -3039,7 +3038,7 @@ impl DataActorCore {
         self.send_data_cmd(DataCommand::Subscribe(command));
     }
 
-    /// Helper method for registering mark prices subscriptions from the trait.
+    /// 用于注册来自 trait 的标记价格订阅的辅助方法。
     pub fn subscribe_mark_prices(
         &mut self,
         topic: MStr<Topic>,
@@ -3065,7 +3064,7 @@ impl DataActorCore {
         self.send_data_cmd(DataCommand::Subscribe(command));
     }
 
-    /// Helper method for registering index prices subscriptions from the trait.
+    /// 用于注册来自 trait 的指数价格订阅的辅助方法。
     pub fn subscribe_index_prices(
         &mut self,
         topic: MStr<Topic>,
@@ -3091,7 +3090,7 @@ impl DataActorCore {
         self.send_data_cmd(DataCommand::Subscribe(command));
     }
 
-    /// Helper method for registering funding rates subscriptions from the trait.
+    /// 用于注册来自 trait 的资金费率订阅的辅助方法。
     pub fn subscribe_funding_rates(
         &mut self,
         topic: MStr<Topic>,
@@ -3117,7 +3116,7 @@ impl DataActorCore {
         self.send_data_cmd(DataCommand::Subscribe(command));
     }
 
-    /// Helper method for registering instrument status subscriptions from the trait.
+    /// 用于注册来自 trait 的工具状态订阅的辅助方法。
     pub fn subscribe_instrument_status(
         &mut self,
         topic: MStr<Topic>,
@@ -3143,7 +3142,7 @@ impl DataActorCore {
         self.send_data_cmd(DataCommand::Subscribe(command));
     }
 
-    /// Helper method for registering instrument close subscriptions from the trait.
+    /// 用于注册来自 trait 的工具收盘订阅的辅助方法。
     pub fn subscribe_instrument_close(
         &mut self,
         topic: MStr<Topic>,
@@ -3169,7 +3168,7 @@ impl DataActorCore {
         self.send_data_cmd(DataCommand::Subscribe(command));
     }
 
-    /// Helper method for registering order fills subscriptions from the trait.
+    /// 用于注册来自 trait 的订单成交订阅的辅助方法。
     pub fn subscribe_order_fills(
         &mut self,
         topic: MStr<Topic>,
@@ -3179,7 +3178,7 @@ impl DataActorCore {
         self.add_order_event_subscription(topic, handler);
     }
 
-    /// Helper method for registering order cancels subscriptions from the trait.
+    /// 用于注册来自 trait 的订单取消订阅的辅助方法。
     pub fn subscribe_order_cancels(
         &mut self,
         topic: MStr<Topic>,
@@ -3189,7 +3188,7 @@ impl DataActorCore {
         self.add_order_event_subscription(topic, handler);
     }
 
-    /// Helper method for unsubscribing from data.
+    /// 用于取消订阅数据的辅助方法。
     pub fn unsubscribe_data(
         &mut self,
         data_type: DataType,
@@ -3218,7 +3217,7 @@ impl DataActorCore {
         self.send_data_cmd(DataCommand::Unsubscribe(command));
     }
 
-    /// Helper method for unsubscribing from instruments.
+    /// 用于从 `instruments`（工具定义）取消订阅的辅助方法。
     pub fn unsubscribe_instruments(
         &mut self,
         venue: Venue,
@@ -3242,7 +3241,7 @@ impl DataActorCore {
         self.send_data_cmd(DataCommand::Unsubscribe(command));
     }
 
-    /// Helper method for unsubscribing from instrument.
+    /// 用于从 `instrument`（工具定义）取消订阅的辅助方法。
     pub fn unsubscribe_instrument(
         &mut self,
         instrument_id: InstrumentId,
@@ -3267,7 +3266,7 @@ impl DataActorCore {
         self.send_data_cmd(DataCommand::Unsubscribe(command));
     }
 
-    /// Helper method for unsubscribing from book deltas.
+    /// 用于从 `book deltas`（订单簿增量）取消订阅的辅助方法。
     pub fn unsubscribe_book_deltas(
         &mut self,
         instrument_id: InstrumentId,
@@ -3292,7 +3291,7 @@ impl DataActorCore {
         self.send_data_cmd(DataCommand::Unsubscribe(command));
     }
 
-    /// Helper method for unsubscribing from book snapshots at interval.
+    /// 用于取消订阅指定时间间隔的订单簿快照的辅助方法。
     pub fn unsubscribe_book_at_interval(
         &mut self,
         instrument_id: InstrumentId,
@@ -3318,7 +3317,7 @@ impl DataActorCore {
         self.send_data_cmd(DataCommand::Unsubscribe(command));
     }
 
-    /// Helper method for unsubscribing from quotes.
+    /// 用于取消订阅报价的辅助方法。
     pub fn unsubscribe_quotes(
         &mut self,
         instrument_id: InstrumentId,
@@ -3343,7 +3342,7 @@ impl DataActorCore {
         self.send_data_cmd(DataCommand::Unsubscribe(command));
     }
 
-    /// Helper method for unsubscribing from trades.
+    /// 用于取消订阅逐笔成交的辅助方法。
     pub fn unsubscribe_trades(
         &mut self,
         instrument_id: InstrumentId,
@@ -3368,7 +3367,7 @@ impl DataActorCore {
         self.send_data_cmd(DataCommand::Unsubscribe(command));
     }
 
-    /// Helper method for unsubscribing from bars.
+    /// 用于取消订阅 K 线的辅助方法。
     pub fn unsubscribe_bars(
         &mut self,
         bar_type: BarType,
@@ -3393,7 +3392,7 @@ impl DataActorCore {
         self.send_data_cmd(DataCommand::Unsubscribe(command));
     }
 
-    /// Helper method for unsubscribing from mark prices.
+    /// 用于取消订阅标记价格的辅助方法。
     pub fn unsubscribe_mark_prices(
         &mut self,
         instrument_id: InstrumentId,
@@ -3418,7 +3417,7 @@ impl DataActorCore {
         self.send_data_cmd(DataCommand::Unsubscribe(command));
     }
 
-    /// Helper method for unsubscribing from index prices.
+    /// 用于取消订阅指数价格的辅助方法。
     pub fn unsubscribe_index_prices(
         &mut self,
         instrument_id: InstrumentId,
@@ -3443,7 +3442,7 @@ impl DataActorCore {
         self.send_data_cmd(DataCommand::Unsubscribe(command));
     }
 
-    /// Helper method for unsubscribing from funding rates.
+    /// 用于取消订阅资金费率的辅助方法。
     pub fn unsubscribe_funding_rates(
         &mut self,
         instrument_id: InstrumentId,
@@ -3468,7 +3467,7 @@ impl DataActorCore {
         self.send_data_cmd(DataCommand::Unsubscribe(command));
     }
 
-    /// Helper method for unsubscribing from instrument status.
+    /// 用于取消订阅工具状态的辅助方法。
     pub fn unsubscribe_instrument_status(
         &mut self,
         instrument_id: InstrumentId,
@@ -3493,7 +3492,7 @@ impl DataActorCore {
         self.send_data_cmd(DataCommand::Unsubscribe(command));
     }
 
-    /// Helper method for unsubscribing from instrument close.
+    /// 用于取消订阅工具收盘的辅助方法。
     pub fn unsubscribe_instrument_close(
         &mut self,
         instrument_id: InstrumentId,
@@ -3518,7 +3517,7 @@ impl DataActorCore {
         self.send_data_cmd(DataCommand::Unsubscribe(command));
     }
 
-    /// Helper method for unsubscribing from order fills.
+    /// 用于取消订阅订单成交的辅助方法。
     pub fn unsubscribe_order_fills(&mut self, instrument_id: InstrumentId) {
         self.check_registered();
 
@@ -3526,7 +3525,7 @@ impl DataActorCore {
         self.remove_order_event_subscription(topic);
     }
 
-    /// Helper method for unsubscribing from order cancels.
+    /// 用于取消订阅订单取消的辅助方法。
     pub fn unsubscribe_order_cancels(&mut self, instrument_id: InstrumentId) {
         self.check_registered();
 
@@ -3534,11 +3533,11 @@ impl DataActorCore {
         self.remove_order_event_subscription(topic);
     }
 
-    /// Helper method for requesting data.
+    /// 用于请求数据的辅助方法。
     ///
-    /// # Errors
+    /// # 错误 (Errors)
     ///
-    /// Returns an error if input parameters are invalid.
+    /// 如果输入参数无效，则返回错误。
     #[allow(clippy::too_many_arguments)]
     pub fn request_data(
         &self,
@@ -3576,11 +3575,11 @@ impl DataActorCore {
         Ok(request_id)
     }
 
-    /// Helper method for requesting instrument.
+    /// 用于请求工具定义的辅助方法。
     ///
-    /// # Errors
+    /// # 错误 (Errors)
     ///
-    /// Returns an error if input parameters are invalid.
+    /// 如果输入参数无效，则返回错误。
     pub fn request_instrument(
         &self,
         instrument_id: InstrumentId,
@@ -3615,11 +3614,11 @@ impl DataActorCore {
         Ok(request_id)
     }
 
-    /// Helper method for requesting instruments.
+    /// 用于请求多工具定义的辅助方法。
     ///
-    /// # Errors
+    /// # 错误 (Errors)
     ///
-    /// Returns an error if input parameters are invalid.
+    /// 如果输入参数无效，则返回错误。
     pub fn request_instruments(
         &self,
         venue: Option<Venue>,
@@ -3654,11 +3653,11 @@ impl DataActorCore {
         Ok(request_id)
     }
 
-    /// Helper method for requesting book snapshot.
+    /// 用于请求订单簿快照的辅助方法。
     ///
-    /// # Errors
+    /// # 错误 (Errors)
     ///
-    /// Returns an error if input parameters are invalid.
+    /// 如果输入参数无效，则返回错误。
     pub fn request_book_snapshot(
         &self,
         instrument_id: InstrumentId,
@@ -3688,11 +3687,11 @@ impl DataActorCore {
         Ok(request_id)
     }
 
-    /// Helper method for requesting quotes.
+    /// 用于请求报价的辅助方法。
     ///
-    /// # Errors
+    /// # 错误 (Errors)
     ///
-    /// Returns an error if input parameters are invalid.
+    /// 如果输入参数无效，则返回错误。
     #[allow(clippy::too_many_arguments)]
     pub fn request_quotes(
         &self,
@@ -3730,11 +3729,11 @@ impl DataActorCore {
         Ok(request_id)
     }
 
-    /// Helper method for requesting trades.
+    /// 用于请求逐笔成交的辅助方法。
     ///
-    /// # Errors
+    /// # 错误 (Errors)
     ///
-    /// Returns an error if input parameters are invalid.
+    /// 如果输入参数无效，则返回错误。
     #[allow(clippy::too_many_arguments)]
     pub fn request_trades(
         &self,
@@ -3772,11 +3771,11 @@ impl DataActorCore {
         Ok(request_id)
     }
 
-    /// Helper method for requesting funding rates.
+    /// 用于请求资金费率的辅助方法。
     ///
-    /// # Errors
+    /// # 错误 (Errors)
     ///
-    /// Returns an error if input parameters are invalid.
+    /// 如果输入参数无效，则返回错误。
     #[allow(clippy::too_many_arguments)]
     pub fn request_funding_rates(
         &self,
@@ -3814,11 +3813,11 @@ impl DataActorCore {
         Ok(request_id)
     }
 
-    /// Helper method for requesting bars.
+    /// 用于请求 K 线的辅助方法。
     ///
-    /// # Errors
+    /// # 错误 (Errors)
     ///
-    /// Returns an error if input parameters are invalid.
+    /// 如果输入参数无效，则返回错误。
     #[allow(clippy::too_many_arguments)]
     pub fn request_bars(
         &self,
@@ -3906,14 +3905,14 @@ fn check_timestamps(
     end: Option<DateTime<Utc>>,
 ) -> anyhow::Result<()> {
     if let Some(start) = start {
-        check_predicate_true(start <= now, "start was > now")?;
+        check_predicate_true(start <= now, "开始时间大于当前时间")?;
     }
     if let Some(end) = end {
-        check_predicate_true(end <= now, "end was > now")?;
+        check_predicate_true(end <= now, "结束时间大于当前时间")?;
     }
 
     if let (Some(start), Some(end)) = (start, end) {
-        check_predicate_true(start < end, "start was >= end")?;
+        check_predicate_true(start < end, "开始时间大于或等于结束时间")?;
     }
 
     Ok(())
@@ -3927,7 +3926,7 @@ fn log_not_running<T>(msg: &T)
 where
     T: Debug,
 {
-    log::trace!("Received message when not running - skipping {msg:?}");
+    log::trace!("在未运行时接收到消息 - 正在跳过 {msg:?}");
 }
 
 fn log_received<T>(msg: &T)

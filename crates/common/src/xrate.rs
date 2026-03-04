@@ -13,28 +13,27 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! Exchange rate calculations between currencies.
+//! 货币之间的汇率计算。
 //!
-//! An exchange rate is the value of one asset versus that of another.
+//! 汇率是一种资产相对于另一种资产的价值。
 
 use ahash::{AHashMap, AHashSet};
 use nautilus_model::enums::PriceType;
 use ustr::Ustr;
 
-/// Calculates the exchange rate between two currencies using provided bid and ask quotes.
+/// 使用提供的买入 (bid) 和卖出 (ask) 报价计算两种货币之间的汇率。
 ///
-/// This function builds a graph of direct conversion rates from the quotes and uses a DFS to
-/// accumulate the conversion rate along a valid conversion path. While a full Floyd–Warshall
-/// algorithm could compute all-pairs conversion rates, the DFS approach here provides a quick
-/// solution for a single conversion query.
+/// 此函数根据报价构建直接转换率图，并使用深度优先搜索 (DFS) 来累积有效转换路径上的转换率。
+/// 虽然完整的 Floyd-Warshall 算法可以计算所有货币对之间的转换率，但此处的 DFS 方法
+/// 为单个转换查询提供了一个快速解决方案。
 ///
-/// # Errors
+/// # 错误
 ///
-/// Returns an error if:
-/// - `price_type` is equal to `Last` or `Mark` (cannot calculate from quotes).
-/// - `quotes_bid` or `quotes_ask` is empty.
-/// - `quotes_bid` and `quotes_ask` lengths are not equal.
-/// - The bid or ask side of a pair is missing.
+/// 如果发生以下情况，则返回错误：
+/// - `price_type` 等于 `Last` 或 `Mark`（无法从报价中计算）。
+/// - `quotes_bid` 或 `quotes_ask` 为空。
+/// - `quotes_bid` 和 `quotes_ask` 长度不相等。
+/// - 缺失某个货币对的买入或卖出端。
 pub fn get_exchange_rate(
     from_currency: Ustr,
     to_currency: Ustr,
@@ -43,8 +42,8 @@ pub fn get_exchange_rate(
     quotes_ask: AHashMap<String, f64>,
 ) -> anyhow::Result<Option<f64>> {
     if from_currency == to_currency {
-        // When the source and target currencies are identical,
-        // no conversion is needed; return an exchange rate of 1.0.
+        // 当源货币和目标货币相同时，
+        // 不需要转换；返回汇率为 1.0。
         return Ok(Some(1.0));
     }
 
@@ -55,7 +54,7 @@ pub fn get_exchange_rate(
         anyhow::bail!("Quote maps must have equal lengths");
     }
 
-    // Build effective quotes based on the requested price type
+    // 根据请求的价格类型构建有效报价
     let effective_quotes: AHashMap<String, f64> = match price_type {
         PriceType::Bid => quotes_bid,
         PriceType::Ask => quotes_ask,
@@ -72,7 +71,7 @@ pub fn get_exchange_rate(
         _ => anyhow::bail!("Invalid `price_type`, was '{price_type}'"),
     };
 
-    // Construct a graph: each currency maps to its neighbors and corresponding conversion rate
+    // 构建图：每种货币映射到其邻居及相应的转换率
     let mut graph: AHashMap<Ustr, Vec<(Ustr, f64)>> = AHashMap::new();
     for (pair, rate) in effective_quotes {
         let parts: Vec<&str> = pair.split('/').collect();
@@ -87,7 +86,7 @@ pub fn get_exchange_rate(
         graph.entry(quote).or_default().push((base, 1.0 / rate));
     }
 
-    // DFS: search for a conversion path from `from_currency` to `to_currency`
+    // DFS：搜索从 `from_currency` 到 `to_currency` 的转换路径
     let mut stack: Vec<(Ustr, f64)> = vec![(from_currency, 1.0)];
     let mut visited: AHashSet<Ustr> = AHashSet::new();
     visited.insert(from_currency);
@@ -105,7 +104,7 @@ pub fn get_exchange_rate(
         }
     }
 
-    // No conversion path found
+    // 未找到转换路径
     Ok(None)
 }
 
@@ -121,7 +120,7 @@ mod tests {
         let mut quotes_bid = AHashMap::new();
         let mut quotes_ask = AHashMap::new();
 
-        // Direct pairs
+        // 直接交易对
         quotes_bid.insert("EUR/USD".to_string(), 1.1000);
         quotes_ask.insert("EUR/USD".to_string(), 1.1002);
 
@@ -141,10 +140,10 @@ mod tests {
     fn test_invalid_pair_string() {
         let mut quotes_bid = AHashMap::new();
         let mut quotes_ask = AHashMap::new();
-        // Invalid pair string (missing '/')
+        // 无效的交易对字符串（缺少 '/'）
         quotes_bid.insert("EURUSD".to_string(), 1.1000);
         quotes_ask.insert("EURUSD".to_string(), 1.1002);
-        // Valid pair string
+        // 有效的交易对字符串
         quotes_bid.insert("EUR/USD".to_string(), 1.1000);
         quotes_ask.insert("EUR/USD".to_string(), 1.1002);
 
@@ -194,7 +193,7 @@ mod tests {
         )
         .unwrap();
 
-        let rate = rate.unwrap_or_else(|| panic!("Expected a conversion rate for {price_type}"));
+        let rate = rate.unwrap_or_else(|| panic!("预期 {price_type} 有一个转换率"));
         assert!((rate - expected).abs() < 0.0001);
     }
 
@@ -221,7 +220,7 @@ mod tests {
         if let (Some(eur_usd), Some(usd_eur)) = (rate_eur_usd, rate_usd_eur) {
             assert!(eur_usd.mul_add(usd_eur, -1.0).abs() < 0.0001);
         } else {
-            panic!("Expected valid conversion rates for inverse conversion");
+            panic!("逆向转换预期应有有效的转换率");
         }
     }
 
@@ -236,14 +235,14 @@ mod tests {
             quotes_ask,
         )
         .unwrap();
-        // Expected rate: (EUR/USD mid) * (USD/JPY mid)
+        // 预期汇率: (EUR/USD mid) * (USD/JPY mid)
         let mid_eur_usd = f64::midpoint(1.1000, 1.1002);
         let mid_usd_jpy = f64::midpoint(110.00, 110.02);
         let expected = mid_eur_usd * mid_usd_jpy;
         if let Some(val) = rate {
             assert!((val - expected).abs() < 0.1);
         } else {
-            panic!("Expected conversion rate through USD but got None");
+            panic!("预期应有通过 USD 转换的汇率，但得到的是 None");
         }
     }
 
@@ -252,11 +251,11 @@ mod tests {
         let mut quotes_bid = AHashMap::new();
         let mut quotes_ask = AHashMap::new();
 
-        // Only one pair provided
+        // 仅提供了一个交易对
         quotes_bid.insert("EUR/USD".to_string(), 1.1000);
         quotes_ask.insert("EUR/USD".to_string(), 1.1002);
 
-        // Attempt conversion from EUR to JPY should yield None
+        // 尝试从 EUR 转换到 JPY 应该得到 None
         let rate = get_exchange_rate(
             Ustr::from("EUR"),
             Ustr::from("JPY"),
@@ -305,7 +304,7 @@ mod tests {
     #[rstest]
     fn test_invalid_price_type() {
         let (quotes_bid, quotes_ask) = setup_test_quotes();
-        // Using an invalid price type variant (assume PriceType::Last is unsupported)
+        // 使用无效的价格类型变体（假设不支持 PriceType::Last）
         let result = get_exchange_rate(
             Ustr::from("EUR"),
             Ustr::from("USD"),

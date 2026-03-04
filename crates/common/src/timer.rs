@@ -13,7 +13,7 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! Real-time and test timers for use with `Clock` implementations.
+//! 用于 `Clock` 实现的实时和测试定时器。
 
 use std::{
     cmp::Ordering,
@@ -31,13 +31,13 @@ use nautilus_core::{
 use pyo3::{Py, PyAny, Python};
 use ustr::Ustr;
 
-/// Creates a valid nanoseconds interval that is guaranteed to be positive.
+/// 创建一个合法的纳秒间隔，保证为正数。
 ///
-/// Coerces zero to one to ensure a valid `NonZeroU64`.
+/// 将 0 强制转换为 1 以确保返回一个有效的 `NonZeroU64`。
 #[must_use]
 #[allow(clippy::missing_panics_doc)] // Value is coerced to >= 1
 pub fn create_valid_interval(interval_ns: u64) -> NonZeroU64 {
-    NonZeroU64::new(std::cmp::max(interval_ns, 1)).expect("`interval_ns` must be positive")
+    NonZeroU64::new(std::cmp::max(interval_ns, 1)).expect("`interval_ns` 必须为正数")
 }
 
 #[repr(C)]
@@ -46,27 +46,27 @@ pub fn create_valid_interval(interval_ns: u64) -> NonZeroU64 {
     feature = "python",
     pyo3::pyclass(module = "nautilus_trader.core.nautilus_pyo3.common", from_py_object)
 )]
-/// Represents a time event occurring at the event timestamp.
+/// 表示在事件时间戳处发生的一个时间事件 (Time Event)。
 ///
-/// A `TimeEvent` carries metadata such as the event's name, a unique event ID,
-/// and timestamps indicating when the event was scheduled to occur and when it was initialized.
+/// 一个 `TimeEvent` 携带元数据，如事件名称、唯一的事件 ID，
+/// 以及指明事件计划发生时间和初始化时间的时间戳。
 pub struct TimeEvent {
-    /// The event name, identifying the nature or purpose of the event.
+    /// 事件名称，标识事件的性质或目的。
     pub name: Ustr,
-    /// The unique identifier for the event.
+    /// 事件的唯一标识符。
     pub event_id: UUID4,
-    /// UNIX timestamp (nanoseconds) when the event occurred.
+    /// 事件发生时的 UNIX 时间戳（纳秒）。
     pub ts_event: UnixNanos,
-    /// UNIX timestamp (nanoseconds) when the instance was created.
+    /// 实例创建时的 UNIX 时间戳（纳秒）。
     pub ts_init: UnixNanos,
 }
 
 impl TimeEvent {
-    /// Creates a new [`TimeEvent`] instance.
+    /// 创建一个新的 [`TimeEvent`] 实例。
     ///
-    /// # Safety
+    /// # 安全性 (Safety)
     ///
-    /// Assumes `name` is a valid string.
+    /// 假设 `name` 是一个有效的字符串。
     #[must_use]
     pub const fn new(name: Ustr, event_id: UUID4, ts_event: UnixNanos, ts_init: UnixNanos) -> Self {
         Self {
@@ -92,23 +92,23 @@ impl Display for TimeEvent {
     }
 }
 
-/// Wrapper for [`TimeEvent`] that implements ordering by timestamp for heap scheduling.
+/// [`TimeEvent`] 的包装器，实现了基于时间戳的排序，以便堆调度 (heap scheduling)。
 ///
-/// This newtype allows time events to be ordered in a priority queue (max heap) by their
-/// timestamp while keeping [`TimeEvent`] itself clean with standard field-based equality.
-/// Events are ordered in reverse (earlier timestamps have higher priority).
-#[repr(transparent)] // Guarantees zero-cost abstraction with identical memory layout
+/// 这个新类型允许时间事件在优先级队列（最大堆）中按其时间戳进行排序，
+/// 同时保持 [`TimeEvent`] 本身具有标准的基于字段的等价性。
+/// 事件按倒序排列（越早的时间戳具有越高的优先级）。
+#[repr(transparent)] // 保证与相同内存布局的零成本抽象 (zero-cost abstraction)
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ScheduledTimeEvent(pub TimeEvent);
 
 impl ScheduledTimeEvent {
-    /// Creates a new scheduled time event.
+    /// 创建一个新的已安排时间事件。
     #[must_use]
     pub const fn new(event: TimeEvent) -> Self {
         Self(event)
     }
 
-    /// Extracts the inner time event.
+    /// 提取内部的时间事件。
     #[must_use]
     pub fn into_inner(self) -> TimeEvent {
         self.0
@@ -123,45 +123,44 @@ impl PartialOrd for ScheduledTimeEvent {
 
 impl Ord for ScheduledTimeEvent {
     fn cmp(&self, other: &Self) -> Ordering {
-        // Reverse order for max heap: earlier timestamps have higher priority
+        // 最大堆的逆序：越早的时间戳优先级越高
         other.0.ts_event.cmp(&self.0.ts_event)
     }
 }
 
-/// Callback type for time events.
+/// 时间事件的回调类型。
 ///
-/// # Variants
+/// # 变体 (Variants)
 ///
-/// - `Python`: For Python callbacks (requires `python` feature).
-/// - `Rust`: Thread-safe callbacks using `Arc`. Use when the closure is `Send + Sync`.
-/// - `RustLocal`: Single-threaded callbacks using `Rc`. Use when capturing `Rc<RefCell<...>>`.
+/// - `Python`: 用于 Python 回调（需要 `python` feature）。
+/// - `Rust`: 使用 `Arc` 的线程安全回调。当闭包是 `Send + Sync` 时使用。
+/// - `RustLocal`: 使用 `Rc` 的单线程回调。在捕获 `Rc<RefCell<...>>` 时使用。
 ///
-/// # Choosing Between `Rust` and `RustLocal`
+/// # 在 `Rust` 和 `RustLocal` 之间做出选择
 ///
-/// Use `Rust` (thread-safe) when:
-/// - The callback doesn't capture `Rc<RefCell<...>>` or other non-`Send` types.
-/// - The closure is `Send + Sync` (most simple closures qualify).
+/// 在以下情况下使用 `Rust`（线程安全）：
+/// - 回调不会捕获 `Rc<RefCell<...>>` 或其他非 `Send` 类型。
+/// - 闭包是 `Send + Sync`（大多数简单的闭包都符合要求）。
 ///
-/// Use `RustLocal` when:
-/// - The callback captures `Rc<RefCell<...>>` for shared mutable state.
-/// - Thread safety constraints prevent using `Arc`.
+/// 在以下情况下使用 `RustLocal`：
+/// - 回调捕获 `Rc<RefCell<...>>` 用于共享可变状态。
+/// - 线程安全性限制了 `Arc` 的使用。
 ///
-/// Both variants work with `TestClock` and `LiveClock`. The `RustLocal` variant is safe
-/// with `LiveClock` because callbacks are sent through a channel and executed on the
-/// originating thread's event loop - they never actually cross thread boundaries.
+/// 这两种变体都适用于 `TestClock` 和 `LiveClock`。`RustLocal` 变体与 `LiveClock` 配合使用是安全的，
+/// 因为回调通过通道发送并在发起线程的时间事件循环中执行 - 它们实际上从未跨越线程边界。
 ///
-/// # Automatic Conversion
+/// # 自动转换
 ///
-/// - Closures that are `Fn + Send + Sync + 'static` automatically convert to `Rust`.
-/// - `Rc<dyn Fn(TimeEvent)>` converts to `RustLocal`.
-/// - `Arc<dyn Fn(TimeEvent) + Send + Sync>` converts to `Rust`.
+/// - 符合 `Fn + Send + Sync + 'static` 的闭包会自动转换为 `Rust`。
+/// - `Rc<dyn Fn(TimeEvent)>` 转换为 `RustLocal`。
+/// - `Arc<dyn Fn(TimeEvent) + Send + Sync>` 转换为 `Rust`。
 pub enum TimeEventCallback {
-    /// Python callable for use from Python via PyO3.
+    /// 适用于通过 PyO3 从 Python 中使用的 Python Callable。
     #[cfg(feature = "python")]
     Python(Py<PyAny>),
-    /// Thread-safe Rust callback using `Arc` (`Send + Sync`).
+    /// 使用 `Arc` 的线程安全 Rust 回调 (`Send + Sync`)。
     Rust(Arc<dyn Fn(TimeEvent) + Send + Sync>),
-    /// Local Rust callback using `Rc` (not `Send`/`Sync`).
+    /// 使用 `Rc` 的本地 Rust 回调（非 `Send`/`Sync`）。
     RustLocal(Rc<dyn Fn(TimeEvent)>),
 }
 
@@ -188,31 +187,31 @@ impl Debug for TimeEventCallback {
 }
 
 impl TimeEventCallback {
-    /// Returns `true` if this is a thread-safe Rust callback.
+    /// 如果这是线程安全的 Rust 回调，则返回 `true`。
     #[must_use]
     pub const fn is_rust(&self) -> bool {
         matches!(self, Self::Rust(_))
     }
 
-    /// Returns `true` if this is a local (non-thread-safe) Rust callback.
+    /// 如果这是本地（非线程安全）的 Rust 回调，则返回 `true`。
     ///
-    /// Local callbacks use `Rc` internally. They work with both `TestClock` and
-    /// `LiveClock` since callbacks are executed on the originating thread.
+    /// 本地回调在内部使用 `Rc`。它们同时适用于 `TestClock` 和 `LiveClock`，
+    /// 因为回调在发起线程上执行。
     #[must_use]
     pub const fn is_local(&self) -> bool {
         matches!(self, Self::RustLocal(_))
     }
 
-    /// Invokes the callback for the given `TimeEvent`.
+    /// 为给定的 `TimeEvent` 调用回调。
     ///
-    /// For Python callbacks, exceptions are logged as errors rather than panicking.
+    /// 对于 Python 回调，异常会被记录为错误，而不是直接抛出 panic。
     pub fn call(&self, event: TimeEvent) {
         match self {
             #[cfg(feature = "python")]
             Self::Python(callback) => {
                 Python::attach(|py| {
                     if let Err(e) = callback.call1(py, (event,)) {
-                        log::error!("Python time event callback raised exception: {e}");
+                        log::error!("Python 时间事件回调引发了异常: {e}");
                     }
                 });
             }
@@ -250,21 +249,20 @@ impl From<Py<PyAny>> for TimeEventCallback {
     }
 }
 
-// SAFETY: TimeEventCallback is Send + Sync with the following invariants:
+// 安全性 (SAFETY): TimeEventCallback 是 Send + Sync，基于以下不变性：
 //
-// - Python variant: Py<PyAny> is inherently Send + Sync (GIL acquired when needed).
+// - Python 变体: Py<PyAny> 本质上是 Send + Sync（在需要时获取 GIL）。
 //
-// - Rust variant: Arc<dyn Fn + Send + Sync> is inherently Send + Sync.
+// - Rust 变体: Arc<dyn Fn + Send + Sync> 本质上是 Send + Sync。
 //
-// - RustLocal variant: Uses Rc<dyn Fn> which is NOT Send/Sync. This is safe because:
-//   1. RustLocal callbacks are created and executed on the same thread
-//   2. They are sent through a channel but execution happens on the originating thread's
-//      event loop (see LiveClock/TestClock usage patterns)
-//   3. The Rc is never cloned across thread boundaries
+// - RustLocal 变体: 使用了 Rc<dyn Fn>，它不是 Send/Sync。这是安全的，因为：
+//   1. RustLocal 回调在同一线程上创建和执行
+//   2. 它们虽然通过通道发送，但执行发生在发起线程的时间事件循环中（见 LiveClock/TestClock 使用模式）
+//   3. Rc 绝不会跨线程边界被克隆
 //
-//   INVARIANT: RustLocal callbacks must only be called from the thread that created them.
-//   Violating this invariant causes undefined behavior (data races on Rc's reference count).
-//   Use the Rust variant (with Arc) if cross-thread execution is needed.
+//   不变性 (INVARIANT): RustLocal 回调必须仅从创建它们的线程中调用。
+//   违反此不变性会导致未定义行为（Rc 引用计数上的数据竞争）。
+//   如果需要跨线程执行，请使用 Rust 变体（使用 Arc）。
 #[allow(unsafe_code)]
 unsafe impl Send for TimeEventCallback {}
 #[allow(unsafe_code)]
@@ -272,25 +270,24 @@ unsafe impl Sync for TimeEventCallback {}
 
 #[repr(C)]
 #[derive(Clone, Debug)]
-/// Represents a time event and its associated handler.
+/// 表示一个时间事件及其关联的处理器。
 ///
-/// `TimeEventHandler` associates a `TimeEvent` with a callback function that is triggered
-/// when the event's timestamp is reached.
+/// `TimeEventHandler` 将一个 `TimeEvent` 与一个回调函数关联起来，该函数在达到事件时间戳时触发。
 pub struct TimeEventHandler {
-    /// The time event.
+    /// 时间事件。
     pub event: TimeEvent,
-    /// The callable handler for the event.
+    /// 事件的回调处理器。
     pub callback: TimeEventCallback,
 }
 
 impl TimeEventHandler {
-    /// Creates a new [`TimeEventHandler`] instance.
+    /// 创建一个新的 [`TimeEventHandler`] 实例。
     #[must_use]
     pub const fn new(event: TimeEvent, callback: TimeEventCallback) -> Self {
         Self { event, callback }
     }
 
-    /// Executes the handler by invoking its callback for the associated event.
+    /// 通过为其关联的事件调用回调来执行处理器。
     pub fn run(self) {
         let Self { event, callback } = self;
         callback.call(event);
@@ -317,36 +314,35 @@ impl Ord for TimeEventHandler {
     }
 }
 
-/// A test timer for user with a `TestClock`.
+/// 用于 `TestClock` 的测试定时器。
 ///
-/// `TestTimer` simulates time progression in a controlled environment,
-/// allowing for precise control over event generation in test scenarios.
+/// `TestTimer` 在受控环境中模拟时间推进，允许在测试场景中精确控制事件生成。
 ///
-/// # Threading
+/// # 线程安全性 (Threading)
 ///
-/// The timer mutates its internal state and should only be used from its owning thread.
+/// 该定时器会修改其内部状态，因此只能从其所属线程中使用。
 #[derive(Clone, Debug)]
 pub struct TestTimer {
-    /// The name of the timer.
+    /// 定时器的名称。
     pub name: Ustr,
-    /// The interval between timer events in nanoseconds.
+    /// 定时器事件之间的时间间隔（以纳秒为单位）。
     pub interval_ns: NonZeroU64,
-    /// The start time of the timer in UNIX nanoseconds.
+    /// 定时器的开始时间（采用 UNIX 纳秒格式）。
     pub start_time_ns: UnixNanos,
-    /// The optional stop time of the timer in UNIX nanoseconds.
+    /// 可选的定时器停止时间（采用 UNIX 纳秒格式）。
     pub stop_time_ns: Option<UnixNanos>,
-    /// If the timer should fire immediately at start time.
+    /// 定时器是否应在开始时间立即触发。
     pub fire_immediately: bool,
     next_time_ns: UnixNanos,
     is_expired: bool,
 }
 
 impl TestTimer {
-    /// Creates a new [`TestTimer`] instance.
+    /// 创建一个新的 [`TestTimer`] 实例。
     ///
     /// # Panics
     ///
-    /// Panics if `name` is not a valid string.
+    /// 如果 `name` 不是有效的字符串，则会抛出 panic。
     #[must_use]
     pub fn new(
         name: Ustr,
@@ -374,13 +370,13 @@ impl TestTimer {
         }
     }
 
-    /// Returns the next time in UNIX nanoseconds when the timer will fire.
+    /// 返回定时器下次触发的 UNIX 纳秒时间。
     #[must_use]
     pub const fn next_time_ns(&self) -> UnixNanos {
         self.next_time_ns
     }
 
-    /// Returns whether the timer is expired.
+    /// 返回定时器是否已过期。
     #[must_use]
     pub const fn is_expired(&self) -> bool {
         self.is_expired
@@ -396,11 +392,10 @@ impl TestTimer {
         }
     }
 
-    /// Advance the test timer forward to the given time, generating a sequence
-    /// of events. A [`TimeEvent`] is appended for each time a next event is
-    /// <= the given `to_time_ns`.
+    /// 将测试定时器向前推进到给定时间，生成一系列事件。
+    /// 每当下一个事件时间 <= 给定的 `to_time_ns` 时，就会添加一个 [`TimeEvent`]。
     ///
-    /// This allows testing of multiple time intervals within a single step.
+    /// 这允许在单个步骤中测试多个时间间隔。
     pub fn advance(&mut self, to_time_ns: UnixNanos) -> impl Iterator<Item = TimeEvent> + '_ {
         // Calculate how many events should fire up to and including to_time_ns
         let advances = if self.next_time_ns <= to_time_ns {
@@ -412,9 +407,9 @@ impl TestTimer {
         self.take(advances as usize).map(|(event, _)| event)
     }
 
-    /// Cancels the timer (the timer will not generate an event).
+    /// 取消定时器（定时器将不再生成事件）。
     ///
-    /// Used to stop the timer before its scheduled stop time.
+    /// 用于在计划停用时间之前停止定时器。
     pub const fn cancel(&mut self) {
         self.is_expired = true;
     }

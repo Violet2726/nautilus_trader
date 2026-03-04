@@ -13,7 +13,7 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! Common test related helper functions.
+//! 常用的测试相关辅助函数。
 
 #[cfg(feature = "live")]
 use std::future::Future;
@@ -31,9 +31,9 @@ use crate::logging::{
     writer::FileWriterConfig,
 };
 
-/// # Errors
+/// # 错误
 ///
-/// Returns an error if initializing the logger fails.
+/// 如果初始化日志记录器失败，则返回错误。
 pub fn init_logger_for_testing(stdout_level: Option<log::LevelFilter>) -> anyhow::Result<LogGuard> {
     let config = LoggerConfig {
         stdout_level: stdout_level.unwrap_or(log::LevelFilter::Trace),
@@ -47,13 +47,13 @@ pub fn init_logger_for_testing(stdout_level: Option<log::LevelFilter>) -> anyhow
     )
 }
 
-/// Repeatedly evaluates a condition with a delay until it becomes true or a timeout occurs.
+/// 带有延迟地重复评估某个条件，直到该条件变为 true 或发生超时。
 ///
 /// # Panics
 ///
-/// This function panics if the timeout duration is exceeded without the condition being met.
+/// 如果在未满足条件的情况下超过了超时持续时间，此函数将抛出 panic。
 ///
-/// # Examples
+/// # 示例
 ///
 /// ```
 /// use std::time::Duration;
@@ -72,8 +72,8 @@ pub fn init_logger_for_testing(stdout_level: Option<log::LevelFilter>) -> anyhow
 /// }, timeout);
 /// ```
 ///
-/// In the above example, the `wait_until` function will block for at least 2 seconds, as that's how long
-/// it takes for the condition to be met. If the condition was not met within 5 seconds, it would panic.
+/// 在上面的示例中，`wait_until` 函数将阻塞至少 2 秒，因为这是满足条件所需的时间。
+/// 如果在 5 秒内未满足条件，它将引发 panic。
 pub fn wait_until<F>(mut condition: F, timeout: Duration)
 where
     F: FnMut() -> bool,
@@ -87,7 +87,7 @@ where
 
         assert!(
             start_time.elapsed() <= timeout,
-            "Timeout waiting for condition"
+            "等待条件超时"
         );
 
         thread::sleep(Duration::from_millis(100));
@@ -96,7 +96,7 @@ where
 
 /// # Panics
 ///
-/// Panics if the timeout duration is exceeded without the condition being met.
+/// 如果在未满足条件的情况下超过了超时持续时间，此函数将抛出 panic。
 #[cfg(feature = "live")]
 pub async fn wait_until_async<F, Fut>(mut condition: F, timeout: Duration)
 where
@@ -112,7 +112,7 @@ where
 
         assert!(
             start_time.elapsed() <= timeout,
-            "Timeout waiting for condition"
+            "等待条件超时"
         );
 
         tokio::time::sleep(Duration::from_millis(100)).await;

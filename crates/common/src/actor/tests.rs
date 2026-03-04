@@ -89,7 +89,7 @@ struct TestDataActor {
     core: DataActorCore,
     pub received_time_events: Vec<TimeEvent>,
     pub received_instruments: Vec<InstrumentAny>,
-    pub received_data: Vec<String>, // Use string for simplicity
+    pub received_data: Vec<String>, // 为简单起见使用字符串
     pub received_books: Vec<OrderBook>,
     pub received_deltas: Vec<OrderBookDelta>,
     pub received_quotes: Vec<QuoteTick>,
@@ -126,7 +126,7 @@ impl DerefMut for TestDataActor {
 
 impl DataActor for TestDataActor {
     fn on_start(&mut self) -> anyhow::Result<()> {
-        log::info!("Starting actor"); // Custom log
+        log::info!("Starting actor"); // 自定义日志
         Ok(())
     }
 
@@ -171,13 +171,13 @@ impl DataActor for TestDataActor {
     }
 
     fn on_historical_quotes(&mut self, quotes: &[QuoteTick]) -> anyhow::Result<()> {
-        // Push to common received vec
+        // 推送到公共接收向量中
         self.received_quotes.extend(quotes);
         Ok(())
     }
 
     fn on_historical_trades(&mut self, trades: &[TradeTick]) -> anyhow::Result<()> {
-        // Push to common received vec
+        // 推送到公共接收向量中
         self.received_trades.extend(trades);
         Ok(())
     }
@@ -191,7 +191,7 @@ impl DataActor for TestDataActor {
     }
 
     fn on_historical_bars(&mut self, bars: &[Bar]) -> anyhow::Result<()> {
-        // Push to common received vec
+        // 推送到公共接收向量中
         self.received_bars.extend(bars);
         Ok(())
     }
@@ -251,7 +251,7 @@ impl DataActor for TestDataActor {
     }
 }
 
-// Custom functionality as required
+// 根据需要提供自定义功能
 impl TestDataActor {
     pub fn new(config: DataActorConfig) -> Self {
         Self {
@@ -306,7 +306,7 @@ fn trader_id() -> TraderId {
 
 #[fixture]
 fn test_logging() -> Option<LogGuard> {
-    // Avoid reinitializing logger if already set
+    // 如果日志记录器已经设置，则避免重新初始化
     if logging_is_initialized() {
         return None;
     }
@@ -314,7 +314,7 @@ fn test_logging() -> Option<LogGuard> {
     Some(init_logger_for_testing(Some(LevelFilter::Trace)).unwrap())
 }
 
-/// A simple Actor implementation for testing.
+/// 一个用于测试的简单 Actor 实现。
 #[derive(Debug)]
 struct DummyActor {
     id_str: Ustr,
@@ -343,11 +343,11 @@ fn register_data_actor(
     cache: Rc<RefCell<Cache>>,
     trader_id: TraderId,
 ) -> Ustr {
-    // Set up sync data command sender for tests
+    // 为测试设置同步数据命令发送器
     set_data_cmd_sender(Arc::new(SyncDataCommandSender));
 
     let config = DataActorConfig::default();
-    // Ensure clean message bus state for this actor's subscriptions
+    // 确保此 Actor 订阅的消息总线状态是干净的
     let bus = get_message_bus();
     *bus.borrow_mut() = MessageBus::default();
     let mut actor = TestDataActor::new(config);
@@ -359,7 +359,7 @@ fn register_data_actor(
     actor_id.inner()
 }
 
-/// Helper to register a dummy actor and return its Rc.
+/// 注册一个哑 Actor (Dummy actor) 并返回其 Rc 的辅助函数。
 fn register_dummy(name: &str) -> Rc<UnsafeCell<dyn Actor>> {
     let actor = DummyActor::new(name);
     register_actor(actor)
@@ -370,10 +370,10 @@ fn register_dummy(name: &str) -> Rc<UnsafeCell<dyn Actor>> {
 #[case("actor-002")]
 fn test_register_and_get(#[case] name: &str) {
     let rc = register_dummy(name);
-    // Retrieve by id
+    // 通过 ID 获取
     let id = unsafe { &*rc.get() }.id();
     let found = get_actor(&id).expect("actor not found");
-    // Should be same Rc pointer
+    // 应该是同一个 Rc 指针
     assert!(Rc::ptr_eq(&rc, &found));
 }
 
@@ -387,7 +387,7 @@ fn test_get_nonexistent() {
 #[rstest]
 fn test_get_actor_unchecked_panic() {
     let id = Ustr::from_str("unknown").unwrap();
-    // Should panic due to missing actor
+    // 由于缺少 Actor，应该 panic
     let _guard = get_actor_unchecked::<DummyActor>(&id);
 }
 
@@ -397,13 +397,13 @@ fn test_get_actor_unchecked_mutate() {
     let _rc = register_dummy(name);
     let id = Ustr::from_str(name).unwrap();
 
-    // Mutate via unchecked - must scope the borrow
+    // 通过 unchecked 变异 - 必须限制 borrow 的作用域
     {
         let mut actor_ref = get_actor_unchecked::<DummyActor>(&id);
         actor_ref.count = 42;
-    } // Guard dropped here, releasing borrow
+    } // Guard 在此处被 drop，释放 borrow
 
-    // Read back via unchecked again (now allowed since previous borrow dropped)
+    // 再次通过 unchecked 读取（由于之前的 borrow 已 drop，现在允许这样做）
     let actor_ref2 = get_actor_unchecked::<DummyActor>(&id);
     assert_eq!(actor_ref2.count, 42);
 }
@@ -451,13 +451,13 @@ fn test_unsubscribe_custom_data(
 
     actor.unsubscribe_data(data_type, None, None);
 
-    // Publish more data
+    // 发布更多数据
     let data = String::from("CustomData-03");
     msgbus::publish_any(topic, &data);
-    let data = String::from("CustomData-04");
+    let data = String::from("CustomData-02");
     msgbus::publish_any(topic, &data);
 
-    // Actor should not receive new data
+    // Actor 不应接收新数据
     assert_eq!(actor.received_data.len(), 2);
 }
 
@@ -602,11 +602,11 @@ fn test_unsubscribe_book_at_interval(
 
     actor.unsubscribe_book_at_interval(audusd_sim.id, interval_ms, None, None);
 
-    // Publish more book refs
+    // 发布更多订单簿引用
     msgbus::publish_book(topic, &book);
     msgbus::publish_book(topic, &book);
 
-    // Should still only have one book
+    // 应该仍然只有一个订单簿
     assert_eq!(actor.received_books.len(), 1);
 }
 
@@ -651,11 +651,11 @@ fn test_unsubscribe_quotes(
 
     actor.unsubscribe_quotes(audusd_sim.id, None, None);
 
-    // Publish more quotes
+    // 发布更多报价
     msgbus::publish_quote(topic, &quote);
     msgbus::publish_quote(topic, &quote);
 
-    // Actor should not receive new quotes
+    // Actor 不应接收新报价
     assert_eq!(actor.received_quotes.len(), 2);
 }
 
@@ -700,11 +700,11 @@ fn test_unsubscribe_trades(
 
     actor.unsubscribe_trades(audusd_sim.id, None, None);
 
-    // Publish more trades
+    // 发布更多逐笔成交
     msgbus::publish_trade(topic, &trade);
     msgbus::publish_trade(topic, &trade);
 
-    // Actor should not receive new trades
+    // Actor 不应接收新成交
     assert_eq!(actor.received_trades.len(), 2);
 }
 
@@ -747,14 +747,14 @@ fn test_unsubscribe_bars(
     let bar = Bar::default();
     msgbus::publish_bar(topic, &bar);
 
-    // Unsubscribe
+    // 取消订阅
     actor.unsubscribe_bars(bar_type, None, None);
 
-    // Publish more bars
+    // 发布更多 K 线
     msgbus::publish_bar(topic, &bar);
     msgbus::publish_bar(topic, &bar);
 
-    // Should still only have one bar
+    // 应该仍然只有一根 K 线
     assert_eq!(actor.received_bars.len(), 1);
 }
 
@@ -1437,16 +1437,16 @@ fn test_request_book_snapshot(
     let mut actor = get_actor_unchecked::<TestDataActor>(&actor_id);
     actor.start().unwrap();
 
-    // Request a book snapshot
+    // 请求订单簿快照
     let request_id = actor
         .request_book_snapshot(audusd_sim.id, None, None, None)
         .unwrap();
 
-    // Build a dummy book and response
+    // 构建一个哑订单簿和响应
     let client_id = ClientId::new("Client2");
     let book = OrderBook::new(audusd_sim.id, BookType::L2_MBP);
 
-    // Provide ts_init and no params
+    // 提供 ts_init 且不带参数
     let ts_init = UnixNanos::default();
     let response = BookResponse::new(
         request_id,
@@ -1461,7 +1461,7 @@ fn test_request_book_snapshot(
     let data_response = DataResponse::Book(response);
     msgbus::send_response(&request_id, data_response);
 
-    // Should trigger on_book and record the book
+    // 应该触发 on_book 并记录该订单簿
     assert_eq!(actor.received_books.len(), 1);
     assert_eq!(actor.received_books[0], book);
 }
@@ -1478,18 +1478,18 @@ fn test_request_data(
     let mut actor = get_actor_unchecked::<TestDataActor>(&actor_id);
     actor.start().unwrap();
 
-    // Request custom data
+    // 请求自定义数据
     let data_type = DataType::new("TestData", None);
     let client_id = ClientId::new("TestClient");
     let request_id = actor
         .request_data(data_type.clone(), client_id, None, None, None, None)
         .unwrap();
 
-    // Build a response payload containing a String
+    // 构建一个包含 String 的响应负载 (payload)
     let payload = Arc::new(Bytes::from("Data-001"));
     let ts_init = UnixNanos::default();
 
-    // Create response with payload type String
+    // 创建负载类型为 String 的响应
     let response = CustomDataResponse::new(
         request_id,
         client_id,
@@ -1502,11 +1502,11 @@ fn test_request_data(
         None,
     );
 
-    // Publish the response
+    // 发布响应
     let data_response = DataResponse::Data(response);
     msgbus::send_response(&request_id, data_response);
 
-    // Actor should receive the custom data
+    // Actor 应该接收到该自定义数据
     assert_eq!(actor.received_data.len(), 1);
     assert_eq!(actor.received_data[0], "Any { .. }");
 }
@@ -1569,7 +1569,7 @@ fn test_unsubscribe_blocks(
     );
     msgbus::publish_defi_block(topic, &block1);
 
-    // Unsubscribe
+    // 取消订阅
     actor.unsubscribe_blocks(blockchain, None, None);
 
     let block2 = Block::new(
@@ -1584,7 +1584,7 @@ fn test_unsubscribe_blocks(
     );
     msgbus::publish_defi_block(topic, &block2);
 
-    // Should still only have one block
+    // 应该仍然只有一个区块
     assert_eq!(actor.received_blocks.len(), 1);
     assert_eq!(actor.received_blocks[0], block1);
 }
@@ -1762,7 +1762,7 @@ fn test_unsubscribe_pool_swaps(
     );
     msgbus::publish_defi_swap(topic, &swap1);
 
-    // Unsubscribe
+    // 取消订阅
     actor.unsubscribe_pool_swaps(instrument_id, None, None);
 
     let swap2 = PoolSwap::new(
@@ -1785,7 +1785,7 @@ fn test_unsubscribe_pool_swaps(
     );
     msgbus::publish_defi_swap(topic, &swap2);
 
-    // Should still only have one swap
+    // 应该仍然只有一个 swap
     assert_eq!(actor.received_pool_swaps.len(), 1);
     assert_eq!(actor.received_pool_swaps[0], swap1);
 }
@@ -1796,22 +1796,22 @@ fn test_duplicate_subscribe_custom_data(
     cache: Rc<RefCell<Cache>>,
     trader_id: TraderId,
 ) {
-    // Register actor
+    // 注册 Actor
     let actor_id = register_data_actor(clock, cache, trader_id);
     let mut actor = get_actor_unchecked::<TestDataActor>(&actor_id);
     actor.start().unwrap();
 
-    // Subscribe twice to the same DataType
+    // 两次订阅同一个 DataType
     let data_type = DataType::new(stringify!(String), None);
     actor.subscribe_data(data_type.clone(), None, None);
     actor.subscribe_data(data_type.clone(), None, None);
 
-    // Publish a single message
+    // 发布单条消息
     let topic = get_custom_topic(&data_type);
     let payload = String::from("Custom-XYZ");
     msgbus::publish_any(topic, &payload);
 
-    // Only a single handler should be active despite duplicate subscribe attempt
+    // 尽管尝试了重复订阅，但应该只有一个处理程序处于活动状态
     assert_eq!(actor.received_data.len(), 1);
 }
 
@@ -1827,7 +1827,7 @@ fn test_unsubscribe_before_subscribe_custom_data(
 
     let data_type = DataType::new(stringify!(String), None);
 
-    // Unsubscribe without prior subscription: should not panic and no data received
+    // 在订阅之前取消订阅：不应 panic 且不应接收到数据
     actor.unsubscribe_data(data_type.clone(), None, None);
 
     let topic = get_custom_topic(&data_type);
@@ -1886,24 +1886,24 @@ fn test_on_save_and_on_load(
 ) {
     let config = DataActorConfig::default();
 
-    // Prepare actor & register
+    // 准备 Actor 并注册
     let mut actor = SaveLoadActor::new(config);
     actor.register(trader_id, clock, cache).unwrap();
     let actor_id = actor.actor_id();
     register_actor(actor);
 
-    // Fetch back to mutate
+    // 获取回来以便进行变异 (mutate)
     let actor_key = actor_id.inner();
     let mut actor_ref = get_actor_unchecked::<SaveLoadActor>(&actor_key);
 
-    // Invoke on_save – emulate persistence snapshot
+    // 调用 on_save —— 模拟持久化快照 (persistence snapshot)
     let snapshot = actor_ref.on_save().unwrap();
     assert!(snapshot.contains_key("answer"));
 
-    // Invoke on_load with snapshot
+    // 使用快照调用 on_load
     actor_ref.on_load(snapshot.clone()).unwrap();
 
-    // Verify state stored
+    // 验证存储的状态
     assert_eq!(actor_ref.loaded_state.as_ref(), Some(&snapshot));
 }
 

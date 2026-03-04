@@ -32,7 +32,7 @@ impl AShareSessionProvider {
     #[cfg(feature = "python")]
     #[pyo3(name = "phase_at")]
     pub fn py_phase_at(&self, ts_ns: u64) -> super::TradingPhase {
-        // We can just create a dummy venue since the phase calculation for Ashare only looks at time
+        // 我们可以直接创建一个虚拟场地，因为 A 股的阶段计算仅由时间决定
         let venue = Venue::new(ustr::ustr("XSHG"));
         <Self as SessionProvider>::phase_at(self, &venue, nautilus_core::UnixNanos::from(ts_ns))
     }
@@ -41,7 +41,7 @@ impl AShareSessionProvider {
 impl SessionProvider for AShareSessionProvider {
     fn phase_at(&self, _venue: &Venue, ts_ns: UnixNanos) -> TradingPhase {
         let secs = ts_ns.as_u64() / 1_000_000_000;
-        // UTC+8 offset, then modulo seconds in a day
+        // UTC+8 偏移，然后对一天的秒数取模
         let seconds_of_day = ((secs + 8 * 3600) % 86400) as u32;
 
         for &(start, end, phase) in PHASES {
@@ -61,10 +61,10 @@ mod tests {
     use ustr::ustr;
 
     fn get_ts(hour: u32, minute: u32) -> UnixNanos {
-        // Base timestamp format: we just need SECONDS OF DAY to be correctly offset.
+        // 基础时间戳格式：我们只需要确保“当天的秒数”具有正确的偏移量。
         // let seconds_of_day = ((secs + 8 * 3600) % 86400) as u32;
-        // So secs = hour_utc * 3600 + minute * 60
-        // hour_utc = hour - 8
+        // 因此 secs = hour_utc * 3600 + minute * 60
+        // hour_utc = hour - 8 (UTC)
         let hour_utc = if hour >= 8 { hour - 8 } else { hour + 24 - 8 };
         let secs = hour_utc * 3600 + minute * 60;
         UnixNanos::from(secs as u64 * 1_000_000_000)

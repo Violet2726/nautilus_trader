@@ -13,7 +13,7 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! Greeks calculator for options and futures.
+//! 期权和期货的希腊字母 (Greeks) 计算器。
 
 use std::{cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc};
 
@@ -29,25 +29,25 @@ use nautilus_model::{
 
 use crate::{cache::Cache, clock::Clock, msgbus, msgbus::TypedHandler};
 
-/// Type alias for a greeks filter function.
+/// 希腊字母过滤函数的类型别名。
 pub type GreeksFilter = Box<dyn Fn(&GreeksData) -> bool>;
 
-/// Cloneable wrapper for greeks filter functions.
+/// 希腊字母过滤函数的可克隆包装器。
 #[derive(Clone)]
 pub enum GreeksFilterCallback {
-    /// Function pointer (non-capturing closure)
+    /// 函数指针（非捕获闭包）
     Function(fn(&GreeksData) -> bool),
-    /// Boxed closure (may capture variables)
+    /// Boxed 闭包（可能捕获变量）
     Closure(std::rc::Rc<dyn Fn(&GreeksData) -> bool>),
 }
 
 impl GreeksFilterCallback {
-    /// Create a new filter from a function pointer.
+    /// 从函数指针创建一个新的过滤器。
     pub fn from_fn(f: fn(&GreeksData) -> bool) -> Self {
         Self::Function(f)
     }
 
-    /// Create a new filter from a closure.
+    /// 从闭包创建一个新的过滤器。
     pub fn from_closure<F>(f: F) -> Self
     where
         F: Fn(&GreeksData) -> bool + 'static,
@@ -55,7 +55,7 @@ impl GreeksFilterCallback {
         Self::Closure(std::rc::Rc::new(f))
     }
 
-    /// Call the filter function.
+    /// 调用过滤器函数。
     pub fn call(&self, data: &GreeksData) -> bool {
         match self {
             Self::Function(f) => f(data),
@@ -63,7 +63,7 @@ impl GreeksFilterCallback {
         }
     }
 
-    /// Convert to the original GreeksFilter type.
+    /// 转换为原始的 GreeksFilter 类型。
     pub fn to_greeks_filter(self) -> GreeksFilter {
         match self {
             Self::Function(f) => Box::new(f),
@@ -84,62 +84,62 @@ impl Debug for GreeksFilterCallback {
     }
 }
 
-/// Builder for instrument greeks calculation parameters.
+/// 标的工具希腊字母计算参数的 Builder。
 #[derive(Debug, Builder)]
 #[builder(setter(into), derive(Debug))]
 pub struct InstrumentGreeksParams {
-    /// The instrument ID to calculate greeks for
+    /// 要计算希腊字母的标的工具 ID
     pub instrument_id: InstrumentId,
-    /// Flat interest rate (default: 0.0425)
+    /// 固定利率 (默认值: 0.0425)
     #[builder(default = "0.0425")]
     pub flat_interest_rate: f64,
-    /// Flat dividend yield
+    /// 固定股息率
     #[builder(default)]
     pub flat_dividend_yield: Option<f64>,
-    /// Spot price shock (default: 0.0)
+    /// 现货价格冲击 (默认值: 0.0)
     #[builder(default = "0.0")]
     pub spot_shock: f64,
-    /// Volatility shock (default: 0.0)
+    /// 波动率冲击 (默认值: 0.0)
     #[builder(default = "0.0")]
     pub vol_shock: f64,
-    /// Time to expiry shock (default: 0.0)
+    /// 到期时间冲击 (默认值: 0.0)
     #[builder(default = "0.0")]
     pub time_to_expiry_shock: f64,
-    /// Whether to use cached greeks (default: false)
+    /// 是否使用缓存的希腊字母 (默认值: false)
     #[builder(default = "false")]
     pub use_cached_greeks: bool,
-    /// Whether to cache greeks (default: false)
+    /// 是否缓存希腊字母 (默认值: false)
     #[builder(default = "false")]
     pub cache_greeks: bool,
-    /// Whether to publish greeks (default: false)
+    /// 是否发布希腊字母数据 (默认值: false)
     #[builder(default = "false")]
     pub publish_greeks: bool,
-    /// Event timestamp
+    /// 事件时间戳
     #[builder(default)]
     pub ts_event: Option<UnixNanos>,
-    /// Position for PnL calculation
+    /// 用于盈亏 (PnL) 计算的持仓信息
     #[builder(default)]
     pub position: Option<Position>,
-    /// Whether to compute percent greeks (default: false)
+    /// 是否计算百分比希腊字母 (默认值: false)
     #[builder(default = "false")]
     pub percent_greeks: bool,
-    /// Index instrument ID for beta weighting
+    /// 用于 Beta 加权的指数工具 ID
     #[builder(default)]
     pub index_instrument_id: Option<InstrumentId>,
-    /// Beta weights for portfolio calculations
+    /// 用于投资组合计算的 Beta 权重
     #[builder(default)]
     pub beta_weights: Option<HashMap<InstrumentId, f64>>,
-    /// Base value in days for time-weighting vega
+    /// Vega 时间加权的天数基准值
     #[builder(default)]
     pub vega_time_weight_base: Option<i32>,
 }
 
 impl InstrumentGreeksParams {
-    /// Calculate instrument greeks using the builder parameters.
+    /// 使用 Builder 参数计算标的工具的希腊字母。
     ///
-    /// # Errors
+    /// # 错误 (Errors)
     ///
-    /// Returns an error if the greeks calculation fails.
+    /// 如果希腊字母计算失败，则返回错误。
     pub fn calculate(&self, calculator: &GreeksCalculator) -> anyhow::Result<GreeksData> {
         calculator.instrument_greeks(
             self.instrument_id,
@@ -161,62 +161,62 @@ impl InstrumentGreeksParams {
     }
 }
 
-/// Builder for portfolio greeks calculation parameters.
+/// 投资组合希腊字母计算参数的 Builder。
 #[derive(Builder)]
 #[builder(setter(into))]
 pub struct PortfolioGreeksParams {
-    /// List of underlying symbols to filter by
+    /// 用于过滤的标的资产符号列表
     #[builder(default)]
     pub underlyings: Option<Vec<String>>,
-    /// Venue to filter positions by
+    /// 用于过滤持仓的交易场所 (Venue)
     #[builder(default)]
     pub venue: Option<Venue>,
-    /// Instrument ID to filter positions by
+    /// 用于过滤持仓的标的工具 ID
     #[builder(default)]
     pub instrument_id: Option<InstrumentId>,
-    /// Strategy ID to filter positions by
+    /// 用于过滤持仓的策略 ID
     #[builder(default)]
     pub strategy_id: Option<StrategyId>,
-    /// Position side to filter by (default: NoPositionSide)
+    /// 用于过滤的持仓方向 (默认值: NoPositionSide)
     #[builder(default)]
     pub side: Option<PositionSide>,
-    /// Flat interest rate (default: 0.0425)
+    /// 固定利率 (默认值: 0.0425)
     #[builder(default = "0.0425")]
     pub flat_interest_rate: f64,
-    /// Flat dividend yield
+    /// 固定股息率
     #[builder(default)]
     pub flat_dividend_yield: Option<f64>,
-    /// Spot price shock (default: 0.0)
+    /// 现货价格冲击 (默认值: 0.0)
     #[builder(default = "0.0")]
     pub spot_shock: f64,
-    /// Volatility shock (default: 0.0)
+    /// 波动率冲击 (默认值: 0.0)
     #[builder(default = "0.0")]
     pub vol_shock: f64,
-    /// Time to expiry shock (default: 0.0)
+    /// 到期时间冲击 (默认值: 0.0)
     #[builder(default = "0.0")]
     pub time_to_expiry_shock: f64,
-    /// Whether to use cached greeks (default: false)
+    /// 是否使用缓存的希腊字母 (默认值: false)
     #[builder(default = "false")]
     pub use_cached_greeks: bool,
-    /// Whether to cache greeks (default: false)
+    /// 是否缓存希腊字母 (默认值: false)
     #[builder(default = "false")]
     pub cache_greeks: bool,
-    /// Whether to publish greeks (default: false)
+    /// 是否发布希腊字母数据 (默认值: false)
     #[builder(default = "false")]
     pub publish_greeks: bool,
-    /// Whether to compute percent greeks (default: false)
+    /// 是否计算百分比希腊字母 (默认值: false)
     #[builder(default = "false")]
     pub percent_greeks: bool,
-    /// Index instrument ID for beta weighting
+    /// 用于 Beta 加权的指数工具 ID
     #[builder(default)]
     pub index_instrument_id: Option<InstrumentId>,
-    /// Beta weights for portfolio calculations
+    /// 用于投资组合计算的 Beta 权重
     #[builder(default)]
     pub beta_weights: Option<HashMap<InstrumentId, f64>>,
-    /// Filter function for greeks
+    /// 希腊字母的过滤函数
     #[builder(default)]
     pub greeks_filter: Option<GreeksFilterCallback>,
-    /// Base value in days for time-weighting vega
+    /// Vega 时间加权的天数基准值
     #[builder(default)]
     pub vega_time_weight_base: Option<i32>,
 }
@@ -246,11 +246,11 @@ impl Debug for PortfolioGreeksParams {
 }
 
 impl PortfolioGreeksParams {
-    /// Calculate portfolio greeks using the builder parameters.
+    /// 使用 Builder 参数计算投资组合的希腊字母。
     ///
-    /// # Errors
+    /// # 错误 (Errors)
     ///
-    /// Returns an error if the portfolio greeks calculation fails.
+    /// 如果投资组合希腊字母计算失败，则返回错误。
     pub fn calculate(&self, calculator: &GreeksCalculator) -> anyhow::Result<PortfolioGreeks> {
         let greeks_filter = self
             .greeks_filter
@@ -280,20 +280,20 @@ impl PortfolioGreeksParams {
     }
 }
 
-/// Calculates instrument and portfolio greeks (sensitivities of price moves with respect to market data moves).
+/// 计算标的工具和投资组合的希腊字母（价格变动对市场数据变动的敏感度）。
 ///
-/// Useful for risk management of options and futures portfolios.
+/// 适用于期权和期货投资组合的风险管理。
 ///
-/// Currently implemented greeks are:
-/// - Delta (first derivative of price with respect to spot move).
-/// - Gamma (second derivative of price with respect to spot move).
-/// - Vega (first derivative of price with respect to implied volatility of an option).
-/// - Theta (first derivative of price with respect to time to expiry).
+/// 目前已实现的希腊字母包括：
+/// - Delta (价格对现货价格变动的一阶导数)。
+/// - Gamma (价格对现货价格变动的二阶导数)。
+/// - Vega (价格对期权隐含波动率的一阶导数)。
+/// - Theta (价格对到期时间的一阶导数)。
 ///
-/// Vega is expressed in terms of absolute percent changes ((dV / dVol) / 100).
-/// Theta is expressed in terms of daily changes ((dV / d(T-t)) / 365.25, where T is the expiry of an option and t is the current time).
+/// Vega 以绝对百分比变化表示 ((dV / dVol) / 100)。
+/// Theta 以每日变化表示 ((dV / d(T-t)) / 365.25，其中 T 是期权的到期时间，t 是当前时间)。
 ///
-/// Also note that for ease of implementation we consider that american options (for stock options for example) are european for the computation of greeks.
+/// 另请注意，为了便于实现，我们在计算希腊字母时将美式期权（例如股票期权）视为欧式期权。
 #[allow(dead_code)]
 #[derive(Debug)]
 pub struct GreeksCalculator {
@@ -302,25 +302,25 @@ pub struct GreeksCalculator {
 }
 
 impl GreeksCalculator {
-    /// Creates a new [`GreeksCalculator`] instance.
+    /// 创建一个新的 [`GreeksCalculator`] 实例。
     pub fn new(cache: Rc<RefCell<Cache>>, clock: Rc<RefCell<dyn Clock>>) -> Self {
         Self { cache, clock }
     }
 
-    /// Calculates option or underlying greeks for a given instrument and a quantity of 1.
+    /// 为给定的工具计算数量为 1 的期权或标的希腊字母。
     ///
-    /// Additional features:
-    /// - Apply shocks to the spot value of the instrument's underlying, implied volatility or time to expiry.
-    /// - Compute percent greeks.
-    /// - Compute beta-weighted delta and gamma with respect to an index.
+    /// 附加功能：
+    /// - 对工具的标的资产现货价值、隐含波动率或到期时间应用冲击 (Shocks)。
+    /// - 计算百分比希腊字母。
+    /// - 计算相对于指数的 Beta 加权 Delta 和 Gamma。
     ///
-    /// # Errors
+    /// # 错误 (Errors)
     ///
-    /// Returns an error if the instrument definition is not found or greeks calculation fails.
+    /// 如果未找到工具定义或希腊字母计算失败，则返回错误。
     ///
     /// # Panics
     ///
-    /// Panics if the instrument has no underlying identifier.
+    /// 如果该工具没有标的资产标识符，则会抛出 panic。
     #[allow(clippy::too_many_arguments)]
     pub fn instrument_greeks(
         &self,
@@ -340,7 +340,7 @@ impl GreeksCalculator {
         beta_weights: Option<HashMap<InstrumentId, f64>>,
         vega_time_weight_base: Option<i32>,
     ) -> anyhow::Result<GreeksData> {
-        // Set default values
+        // 设置默认值
         let flat_interest_rate = flat_interest_rate.unwrap_or(0.0425);
         let spot_shock = spot_shock.unwrap_or(0.0);
         let vol_shock = vol_shock.unwrap_or(0.0);
@@ -356,7 +356,8 @@ impl GreeksCalculator {
         let instrument = match instrument {
             Some(instrument) => instrument,
             None => anyhow::bail!(format!(
-                "Instrument definition for {instrument_id} not found."
+                "未找到 {} 的工具定义。",
+                instrument_id
             )),
         };
 
@@ -397,7 +398,7 @@ impl GreeksCalculator {
         let underlying_str = format!("{}.{}", underlying, instrument_id.venue);
         let underlying_instrument_id = InstrumentId::from(underlying_str);
 
-        // Use cached greeks if requested
+        // 如果有要求，则使用缓存的希腊字母
         if use_cached_greeks && let Some(cached_greeks) = cache.greeks(&instrument_id) {
             greeks_data = Some(cached_greeks);
         }
@@ -427,14 +428,14 @@ impl GreeksCalculator {
                 None => flat_interest_rate,
             };
 
-            // cost of carry is 0 for futures
+            // 期货的持有成本 (cost of carry) 为 0
             let mut cost_of_carry = 0.0;
 
             if let Some(dividend_curve) = cache.yield_curve(&underlying_instrument_id.to_string()) {
                 let dividend_yield = dividend_curve(expiry_in_years);
                 cost_of_carry = interest_rate - dividend_yield;
             } else if let Some(div_yield) = flat_dividend_yield {
-                // Use a dividend rate of 0. to have a cost of carry of interest rate for options on stocks
+                // 对于股票期权，使用 0 的股息率使持有成本等于利率
                 cost_of_carry = interest_rate - div_yield;
             }
 
@@ -497,7 +498,7 @@ impl GreeksCalculator {
                 greeks.itm_prob,
             ));
 
-            // Adding greeks to cache if requested
+            // 如果有要求，将希腊字母添加到缓存中
             if cache_greeks {
                 let mut cache = self.cache.borrow_mut();
                 cache
@@ -505,7 +506,7 @@ impl GreeksCalculator {
                     .unwrap_or_default();
             }
 
-            // Publishing greeks on the message bus if requested
+            // 如果有要求，在消息总线上发布希腊字母
             if publish_greeks {
                 let topic = format!(
                     "data.GreeksData.instrument_id={}",
@@ -580,24 +581,23 @@ impl GreeksCalculator {
         Ok(greeks_data)
     }
 
-    /// Modifies delta and gamma based on beta weighting and percentage calculations.
+    /// 根据 Beta 加权和百分比计算修改 Delta 和 Gamma。
     ///
-    /// The beta weighting of delta and gamma follows this equation linking the returns of a stock x to the ones of an index I:
+    /// Delta 和 Gamma 的 Beta 加权遵循以下连接股票 x 的回报与指数 I 的回报的方程：
     /// (x - x0) / x0 = alpha + beta (I - I0) / I0 + epsilon
     ///
-    /// beta can be obtained by linear regression of stock_return = alpha + beta index_return, it's equal to:
-    /// beta = Covariance(stock_returns, index_returns) / Variance(index_returns)
+    /// beta 可以通过股票回报 (stock_return) = alpha + beta * 指数回报 (index_return) 的线性回归获得，它等于：
+    /// beta = 协方差(stock_returns, index_returns) / 方差(index_returns)
     ///
-    /// Considering alpha == 0:
-    /// x = x0 + beta x0 / I0 (I-I0)
-    /// I = I0 + 1 / beta I0 / x0 (x - x0)
+    /// 假设 alpha == 0:
+    /// x = x0 + beta * x0 / I0 * (I - I0)
+    /// I = I0 + 1 / beta * I0 / x0 * (x - x0)
     ///
-    /// These two last equations explain the beta weighting below, considering the price of an option is V(x) and delta and gamma
-    /// are the first and second derivatives respectively of V.
+    /// 这最后两个方程解释了下面的 Beta 加权，假设期权的价格为 V(x)，Delta 和 Gamma 分别是 V 的一阶和二阶导数。
     ///
-    /// Also percent greeks assume a change of variable to percent returns by writing:
+    /// 此外，百分比希腊字母假设通过以下方式将变量更改为百分百回报：
     /// V(x = x0 * (1 + stock_percent_return / 100))
-    /// or V(I = I0 * (1 + index_percent_return / 100))
+    /// 或 V(I = I0 * (1 + index_percent_return / 100))
     #[allow(clippy::too_many_arguments)]
     pub fn modify_greeks(
         &self,
@@ -658,11 +658,11 @@ impl GreeksCalculator {
                 gamma *= (underlying_price / 100.0).powi(2);
             }
 
-            // Apply percent vega when percent_greeks is True
+            // 当 percent_greeks 为真时应用百分比 vega
             vega *= vol / 100.0;
         }
 
-        // Apply time weighting to vega if vega_time_weight_base is provided
+        // 如果提供了 vega_time_weight_base，则对 vega 应用时间加权
         if let Some(time_base) = vega_time_weight_base
             && expiry_in_days > 0
         {
@@ -673,18 +673,18 @@ impl GreeksCalculator {
         (delta, gamma, vega)
     }
 
-    /// Calculates the portfolio Greeks for a given set of positions.
+    /// 计算给定持仓集合的投资组合希腊字母。
     ///
-    /// Aggregates the Greeks data for all open positions that match the specified criteria.
+    /// 汇总所有符合指定条件的开仓头寸的希腊字母数据。
     ///
-    /// Additional features:
-    /// - Apply shocks to the spot value of an instrument's underlying, implied volatility or time to expiry.
-    /// - Compute percent greeks.
-    /// - Compute beta-weighted delta and gamma with respect to an index.
+    /// 附加功能：
+    /// - 对工具的标的资产现货价值、隐含波动率或到期时间应用冲击 (Shocks)。
+    /// - 计算百分比希腊字母。
+    /// - 计算相对于指数的 Beta 加权 Delta 和 Gamma。
     ///
-    /// # Errors
+    /// # 错误 (Errors)
     ///
-    /// Returns an error if any underlying greeks calculation fails.
+    /// 如果任何底层希腊字母计算失败，则返回错误。
     ///
     #[allow(clippy::too_many_arguments)]
     #[allow(clippy::missing_panics_doc)] // Guarded by is_none check
@@ -713,7 +713,7 @@ impl GreeksCalculator {
         let mut portfolio_greeks =
             PortfolioGreeks::new(ts_event, ts_event, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
 
-        // Set default values
+        // 设置默认值
         let flat_interest_rate = flat_interest_rate.unwrap_or(0.0425);
         let spot_shock = spot_shock.unwrap_or(0.0);
         let vol_shock = vol_shock.unwrap_or(0.0);
@@ -776,7 +776,7 @@ impl GreeksCalculator {
             )?;
             let position_greeks = (quantity * &instrument_greeks).into();
 
-            // Apply greeks filter if provided
+            // 如果提供了希腊字母过滤器，则应用它
             if greeks_filter.is_none() || greeks_filter.as_ref().unwrap()(&instrument_greeks) {
                 portfolio_greeks = portfolio_greeks + position_greeks;
             }
@@ -785,9 +785,9 @@ impl GreeksCalculator {
         Ok(portfolio_greeks)
     }
 
-    /// Subscribes to Greeks data for a given underlying instrument.
+    /// 订阅给定标的工具的希腊字母数据。
     ///
-    /// Useful for reading greeks from a backtesting data catalog and caching them for later use.
+    /// 适用于从回测数据目录中读取希腊字母并将其缓存以供后用。
     pub fn subscribe_greeks<F>(&self, underlying: &str, handler: Option<F>)
     where
         F: Fn(&GreeksData) + 'static,
@@ -830,25 +830,25 @@ mod tests {
     #[rstest]
     fn test_greeks_calculator_creation() {
         let calculator = create_test_calculator();
-        // Test that the calculator can be created
+        // 测试是否可以创建计算器
         assert!(format!("{calculator:?}").contains("GreeksCalculator"));
     }
 
     #[rstest]
     fn test_greeks_calculator_debug() {
         let calculator = create_test_calculator();
-        // Test the debug representation
+        // 测试 Debug 表示形式
         let debug_str = format!("{calculator:?}");
         assert!(debug_str.contains("GreeksCalculator"));
     }
 
     #[rstest]
     fn test_greeks_calculator_has_python_bindings() {
-        // This test just verifies that the GreeksCalculator struct
-        // can be compiled with Python bindings enabled
+        // 此测试仅验证 GreeksCalculator 结构体
+        // 在启用 Python 绑定时是否可以编译
         let calculator = create_test_calculator();
-        // The Python methods are only accessible from Python,
-        // but we can verify the struct compiles correctly
+        // Python 方法只能从 Python 访问，
+        // 但我们可以验证结构体是否编译正确
         assert!(format!("{calculator:?}").contains("GreeksCalculator"));
     }
 
@@ -1016,7 +1016,7 @@ mod tests {
 
     #[rstest]
     fn test_instrument_greeks_params_builder_missing_required_field() {
-        // Test that building without required instrument_id fails
+        // 测试在不提供必需参数 instrument_id 的情况下构建是否失败
         let result = InstrumentGreeksParamsBuilder::default().build();
         assert!(result.is_err());
     }
@@ -1161,7 +1161,7 @@ mod tests {
 
     #[rstest]
     fn test_greeks_filter_callback_function() {
-        // Test function pointer filter
+        // 测试函数指针过滤器
         fn filter_positive_delta(data: &GreeksData) -> bool {
             data.delta > 0.0
         }
@@ -1185,7 +1185,7 @@ mod tests {
 
     #[rstest]
     fn test_greeks_filter_callback_closure() {
-        // Test closure filter that captures a variable
+        // 测试捕获变量的闭包过滤器 (Closure filter)
         let min_delta = 0.3;
         let filter =
             GreeksFilterCallback::from_closure(move |data: &GreeksData| data.delta > min_delta);

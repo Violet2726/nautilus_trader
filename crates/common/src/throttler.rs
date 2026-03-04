@@ -13,11 +13,10 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! Message throttling and rate limiting functionality.
+//! 消息节流 (Throttling) 和速率限制 (Rate limiting) 功能。
 //!
-//! This module provides throttling capabilities to control the rate of message processing
-//! and prevent system overload. The throttler can buffer, drop, or delay messages based
-//! on configured rate limits and time intervals.
+//! 此模块提供节流功能，以控制消息处理速率并防止系统过载。
+//! 节流器可以根据配置的速率限制和时间间隔对消息进行缓冲、丢弃或延迟。
 
 use std::{
     any::Any,
@@ -41,7 +40,7 @@ use crate::{
     timer::{TimeEvent, TimeEventCallback},
 };
 
-/// Represents a throttling limit per interval.
+/// 表示每个时间间隔内的节流限制。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RateLimit {
     pub limit: usize,
@@ -49,41 +48,40 @@ pub struct RateLimit {
 }
 
 impl RateLimit {
-    /// Creates a new [`RateLimit`] instance.
+    /// 创建一个新的 [`RateLimit`] 实例。
     #[must_use]
     pub const fn new(limit: usize, interval_ns: u64) -> Self {
         Self { limit, interval_ns }
     }
 }
 
-/// Throttler rate limits messages by dropping or buffering them.
+/// 节流器通过丢弃或缓冲消息来限制消息速率。
 ///
-/// Throttler takes messages of type T and callback of type F for dropping
-/// or processing messages.
+/// 节流器接收类型为 T 的消息，并使用类型为 F 的回调来丢弃或处理消息。
 pub struct Throttler<T, F> {
-    /// The number of messages received.
+    /// 已接收的消息数量。
     pub recv_count: usize,
-    /// The number of messages sent.
+    /// 已发送的消息数量。
     pub sent_count: usize,
-    /// Whether the throttler is currently limiting the message rate.
+    /// 节流器当前是否正在限制消息速率。
     pub is_limiting: bool,
-    /// The maximum number of messages that can be sent within the interval.
+    /// 在该时间间隔内可以发送的最大消息数量。
     pub limit: usize,
-    /// The buffer of messages to be sent.
+    /// 待发送的消息缓冲区。
     pub buffer: VecDeque<T>,
-    /// The timestamps of the sent messages.
+    /// 已发送消息的时间戳。
     pub timestamps: VecDeque<UnixNanos>,
-    /// The clock used to keep track of time.
+    /// 用于跟踪时间的时钟。
     pub clock: Rc<RefCell<dyn Clock>>,
-    /// The actor ID of the throttler.
+    /// 节流器的 Actor ID。
     pub actor_id: Ustr,
-    /// The interval between messages in nanoseconds.
+    /// 消息之间的时间间隔（以纳秒为单位）。
     interval: u64,
-    /// The name of the timer.
+    /// 定时器的名称。
     timer_name: Ustr,
-    /// The callback to send a message.
+    /// 发送消息的回调。
     output_send: F,
-    /// The callback to drop a message.
+    /// 丢弃消息的回调。
     output_drop: Option<F>,
 }
 
@@ -151,15 +149,15 @@ where
         }
     }
 
-    /// Set timer with a callback to be triggered on next interval.
+    /// 在下一个时间间隔触发时设置带有回调的定时器。
     ///
-    /// Typically used to register callbacks:
-    /// - to process buffered messages
-    /// - to stop buffering
+    /// 通常用于注册回调：
+    /// - 处理缓冲的消息
+    /// - 停止缓冲
     ///
     /// # Panics
     ///
-    /// Panics if setting the time alert on the internal clock fails.
+    /// 如果在内部时钟上设置时间警报失败，则会抛出 panic。
     #[inline]
     pub fn set_timer(&mut self, callback: Option<TimeEventCallback>) {
         let delta = self.delta_next();
@@ -174,7 +172,7 @@ where
             .expect(FAILED);
     }
 
-    /// Time delta when the next message can be sent.
+    /// 可以发送下一条消息的时间增量。
     #[inline]
     pub fn delta_next(&mut self) -> u64 {
         match self.timestamps.get(self.limit - 1) {
@@ -186,7 +184,7 @@ where
         }
     }
 
-    /// Reset the throttler which clears internal state.
+    /// 重置节流器，清除内部状态。
     #[inline]
     pub fn reset(&mut self) {
         self.buffer.clear();
@@ -196,7 +194,7 @@ where
         self.timestamps.clear();
     }
 
-    /// Fractional value of rate limit consumed in current interval.
+    /// 当前时间间隔内已消耗的速率限制比例值。
     #[inline]
     pub fn used(&self) -> f64 {
         if self.timestamps.is_empty() {
@@ -215,7 +213,7 @@ where
         (messages_in_current_interval as f64) / (self.limit as f64)
     }
 
-    /// Number of messages queued in buffer.
+    /// 队列中缓冲的消息数量。
     #[inline]
     pub fn qsize(&self) -> usize {
         self.buffer.len()
@@ -288,10 +286,10 @@ where
     }
 }
 
-/// Process buffered messages for throttler
+/// 为节流器处理缓冲的消息
 ///
-/// When limit is reached, schedules a timer event to call self again. The handler
-/// is registered as a separated endpoint on the message bus as `{actor_id}_process`.
+/// 当达到限制时，安排一个定时器事件以再次调用自身。
+/// 该处理器在消息总线上被注册为一个单独的端点，名称为 `{actor_id}_process`。
 struct ThrottlerProcess<T, F> {
     actor_id: Ustr,
     endpoint: MStr<Endpoint>,
@@ -335,15 +333,14 @@ where
         while let Some(msg) = throttler.buffer.pop_back() {
             throttler.send_msg(msg);
 
-            // Set timer to process more buffered messages
-            // if interval limit reached and there are more
-            // buffered messages to process
+            // 如果达到间隔限制且还有更多缓冲消息待处理，
+            // 则设置定时器以处理更多缓冲消息。
             if !throttler.buffer.is_empty() && throttler.delta_next() > 0 {
                 throttler.is_limiting = true;
 
                 let endpoint = self.endpoint;
 
-                // Send message to throttler process endpoint to resume
+                // 发送消息到节流器处理端点以恢复发送动作
                 throttler.set_timer(Some(TimeEventCallback::from(move |event: TimeEvent| {
                     msgbus::send_any(endpoint, &(event));
                 })));
@@ -355,7 +352,7 @@ where
     }
 }
 
-/// Sets throttler to resume sending messages
+/// 设置节流器恢复发送消息。
 pub fn throttler_resume<T, F>(actor_id: Ustr) -> TimeEventCallback
 where
     T: 'static + Debug,

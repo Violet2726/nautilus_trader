@@ -13,7 +13,7 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! Real-time and static `Clock` implementations.
+//! 实时和静态 `Clock`（时钟）实现。
 
 use std::{any::Any, collections::BTreeMap, fmt::Debug, ops::Deref, time::Duration};
 
@@ -30,60 +30,58 @@ use crate::timer::{
     TestTimer, TimeEvent, TimeEventCallback, TimeEventHandler, create_valid_interval,
 };
 
-/// Represents a type of clock.
+/// 代表一种类型的时钟。
 ///
-/// # Notes
+/// # 注意
 ///
-/// An active timer is one which has not expired (`timer.is_expired == False`).
+/// 活跃的定时器是指尚未过期的定时器 (`timer.is_expired == False`)。
 pub trait Clock: Debug + Any {
-    /// Returns the current date and time as a timezone-aware `DateTime<UTC>`.
+    /// 以时区感知型 `DateTime<UTC>` 格式返回当前日期和时间。
     fn utc_now(&self) -> DateTime<Utc> {
         DateTime::from_timestamp_nanos(self.timestamp_ns().as_i64())
     }
 
-    /// Returns the current UNIX timestamp in nanoseconds (ns).
+    /// 以纳秒 (ns) 为单位返回当前 UNIX 时间戳。
     fn timestamp_ns(&self) -> UnixNanos;
 
-    /// Returns the current UNIX timestamp in microseconds (μs).
+    /// 以微秒 (μs) 为单位返回当前 UNIX 时间戳。
     fn timestamp_us(&self) -> u64;
 
-    /// Returns the current UNIX timestamp in milliseconds (ms).
+    /// 以毫秒 (ms) 为单位返回当前 UNIX 时间戳。
     fn timestamp_ms(&self) -> u64;
 
-    /// Returns the current UNIX timestamp in seconds.
+    /// 以秒为单位返回当前 UNIX 时间戳。
     fn timestamp(&self) -> f64;
 
-    /// Returns the names of active timers in the clock.
+    /// 返回时钟内活跃定时器的名称。
     fn timer_names(&self) -> Vec<&str>;
 
-    /// Returns the count of active timers in the clock.
+    /// 返回时钟内活跃定时器的数量。
     fn timer_count(&self) -> usize;
 
-    /// If a timer with the `name` exists.
+    /// 检查是否存在名为 `name` 的定时器。
     fn timer_exists(&self, name: &Ustr) -> bool;
 
-    /// Register a default event handler for the clock. If a timer
-    /// does not have an event handler, then this handler is used.
+    /// 为时钟注册默认事件处理器。如果定时器没有关联处理器，则使用此处理器。
     fn register_default_handler(&mut self, callback: TimeEventCallback);
 
-    /// Get handler for [`TimeEvent`].
+    /// 获取 [`TimeEvent`] 的处理器。
     ///
-    /// Note: Panics if the event does not have an associated handler
+    /// 注意：如果事件没有关联的处理器，则会抛出 panic。
     fn get_handler(&self, event: TimeEvent) -> TimeEventHandler;
 
-    /// Set a timer to alert at the specified time.
+    /// 设置定时器在指定时间发出警报。
     ///
-    /// See [`Clock::set_time_alert_ns`] for flag semantics.
+    /// 标志语义请参阅 [`Clock::set_time_alert_ns`]。
     ///
-    /// # Callback
+    /// # 回调函数 (Callback)
     ///
-    /// - `callback`: Some, then callback handles the time event.
-    /// - `callback`: None, then the clock's default time event callback is used.
+    /// - `callback`: 如果为 Some，则由该回调处理时间事件。
+    /// - `callback`: 如果为 None，则使用时钟的默认时间事件回调。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if `name` is invalid, `alert_time` is in the past when not allowed,
-    /// or any predicate check fails.
+    /// 如果 `name` 无效、`alert_time` 在过去但不允许、或任何断言检查失败，则返回错误。
     #[allow(clippy::too_many_arguments)]
     fn set_time_alert(
         &mut self,
@@ -95,26 +93,25 @@ pub trait Clock: Debug + Any {
         self.set_time_alert_ns(name, alert_time.into(), callback, allow_past)
     }
 
-    /// Set a timer to alert at the specified time.
+    /// 设置定时器在指定时间发出警报。
     ///
-    /// Any existing timer registered under the same `name` is cancelled with a warning before the new alert is scheduled.
+    /// 任何以同一 `name` 注册的现有定时器在安排新警报之前都会被取消并发出警告。
     ///
-    /// # Flags
+    /// # 标志 (Flags)
     ///
-    /// | `allow_past` | Behavior                                                                                |
-    /// |--------------|-----------------------------------------------------------------------------------------|
-    /// | `true`       | If alert time is **in the past**, the alert fires immediately; otherwise at alert time. |
-    /// | `false`      | Returns an error if alert time is earlier than now.                                     |
+    /// | `allow_past` | 行为                                                                                |
+    /// |--------------|-------------------------------------------------------------------------------------|
+    /// | `true`       | 如果警报时间在**过去**，警报立即触发；否则在警报时间触发。                             |
+    /// | `false`      | 如果警报时间早于当前时间，则返回错误。                                                |
     ///
-    /// # Callback
+    /// # 回调函数 (Callback)
     ///
-    /// - `callback`: Some, then callback handles the time event.
-    /// - `callback`: None, then the clock's default time event callback is used.
+    /// - `callback`: 如果为 Some，则由该回调处理时间事件。
+    /// - `callback`: 如果为 None，则使用时钟的默认时间事件回调。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if `name` is invalid, `alert_time_ns` is earlier than now when not allowed,
-    /// or any predicate check fails.
+    /// 如果 `name` 无效、`alert_time_ns` 早于当前时间且不允许、或任何断言检查失败，则返回错误。
     #[allow(clippy::too_many_arguments)]
     fn set_time_alert_ns(
         &mut self,
@@ -124,21 +121,20 @@ pub trait Clock: Debug + Any {
         allow_past: Option<bool>,
     ) -> anyhow::Result<()>;
 
-    /// Set a timer to fire time events at every interval between start and stop time.
+    /// 设置定时器在开始时间和停止时间之间每隔一定时间间隔触发一次时间事件。
     ///
-    /// Any existing timer registered under the same `name` is cancelled with a warning before the new timer is scheduled.
+    /// 任何以同一 `name` 注册的现有定时器在安排新定时器之前都会被取消并发出警告。
     ///
-    /// See [`Clock::set_timer_ns`] for flag semantics.
+    /// 标志语义请参阅 [`Clock::set_timer_ns`]。
     ///
-    /// # Callback
+    /// # 回调函数 (Callback)
     ///
-    /// - `callback`: Some, then callback handles the time event.
-    /// - `callback`: None, then the clock's default time event callback is used.
+    /// - `callback`: 如果为 Some，则由该回调处理时间事件。
+    /// - `callback`: 如果为 None，则使用时钟的默认时间事件回调。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if `name` is invalid, `interval` is not positive,
-    /// or if any predicate check fails.
+    /// 如果 `name` 无效、`interval` 不为正、或任何断言检查失败，则返回错误。
     #[allow(clippy::too_many_arguments)]
     fn set_timer(
         &mut self,
@@ -161,33 +157,32 @@ pub trait Clock: Debug + Any {
         )
     }
 
-    /// Set a timer to fire time events at every interval between start and stop time.
+    /// 设置定时器在开始时间和停止时间之间每隔一定时间间隔触发一次时间事件。
     ///
-    /// Any existing timer registered under the same `name` is cancelled before the new timer is scheduled.
+    /// 任何以同一 `name` 注册的现有定时器在安排新定时器之前都会被取消。
     ///
-    /// # Start Time
+    /// # 开始时间 (Start Time)
     ///
-    /// - `None` or `Some(0)`: Uses the current time as start time.
-    /// - `Some(non_zero)`: Uses the specified timestamp as start time.
+    /// - `None` 或 `Some(0)`: 使用当前时间作为开始时间。
+    /// - `Some(non_zero)`: 使用指定的时间戳作为开始时间。
     ///
-    /// # Flags
+    /// # 标志 (Flags)
     ///
-    /// | `allow_past` | `fire_immediately` | Behavior                                                                              |
+    /// | `allow_past` | `fire_immediately` | 行为                                                                              |
     /// |--------------|--------------------|---------------------------------------------------------------------------------------|
-    /// | `true`       | `true`             | First event fires immediately at start time, even if start time is in the past.       |
-    /// | `true`       | `false`            | First event fires at start time + interval, even if start time is in the past.        |
-    /// | `false`      | `true`             | Returns error if start time is in the past (first event would be immediate but past). |
-    /// | `false`      | `false`            | Returns error if start time + interval is in the past.                                |
+    /// | `true`       | `true`             | 第一个事件在开始时间立即触发，即使开始时间已过。                                         |
+    /// | `true`       | `false`            | 第一个事件在开始时间 + 间隔处触发，即使开始时间已过。                                     |
+    /// | `false`      | `true`             | 如果开始时间已过（第一个事件将立即但已过期），则返回错误。                               |
+    /// | `false`      | `false`            | 如果开始时间 + 间隔已过，则返回错误。                                                  |
     ///
-    /// # Callback
+    /// # 回调函数 (Callback)
     ///
-    /// - `callback`: Some, then callback handles the time event.
-    /// - `callback`: None, then the clock's default time event callback is used.
+    /// - `callback`: 如果为 Some，则由该回调处理时间事件。
+    /// - `callback`: 如果为 None，则使用时钟的默认时间事件回调。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if `name` is invalid, `interval_ns` is not positive,
-    /// or if any predicate check fails.
+    /// 如果 `name` 无效、`interval_ns` 不为正、或任何断言检查失败，则返回错误。
     #[allow(clippy::too_many_arguments)]
     fn set_timer_ns(
         &mut self,
@@ -200,36 +195,35 @@ pub trait Clock: Debug + Any {
         fire_immediately: Option<bool>,
     ) -> anyhow::Result<()>;
 
-    /// Returns the time interval in which the timer `name` is triggered.
+    /// 返回触发名为 `name` 的定时器的时间间隔。
     ///
-    /// If the timer doesn't exist `None` is returned.
+    /// 如果定时器不存在，则返回 `None`。
     fn next_time_ns(&self, name: &str) -> Option<UnixNanos>;
 
-    /// Cancels the timer with `name`.
+    /// 取消名为 `name` 的定时器。
     fn cancel_timer(&mut self, name: &str);
 
-    /// Cancels all timers.
+    /// 取消所有定时器。
     fn cancel_timers(&mut self);
 
-    /// Resets the clock by clearing it's internal state.
+    /// 通过清除内部状态重置时钟。
     fn reset(&mut self);
 }
 
 impl dyn Clock {
-    /// Returns a reference to this clock as `Any` for downcasting.
+    /// 返回此时钟作为 `Any` 的引用，用于向下转型 (downcasting)。
     pub fn as_any(&self) -> &dyn std::any::Any {
         self
     }
-    /// Returns a mutable reference to this clock as `Any` for downcasting.
+    /// 返回此时钟作为 `Any` 的可变引用，用于向下转型 (downcasting)。
     pub fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
         self
     }
 }
 
-/// Registry for timer event callbacks.
+/// 定时器事件回调的注册表。
 ///
-/// Provides shared callback registration and retrieval logic used by both
-/// `TestClock` and `LiveClock`.
+/// 提供 `TestClock` 和 `LiveClock` 共用的回调注册和检索逻辑。
 #[derive(Debug, Default)]
 pub struct CallbackRegistry {
     default_callback: Option<TimeEventCallback>,
@@ -237,7 +231,7 @@ pub struct CallbackRegistry {
 }
 
 impl CallbackRegistry {
-    /// Creates a new [`CallbackRegistry`] instance.
+    /// 创建一个新的 [`CallbackRegistry`] 实例。
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -246,23 +240,23 @@ impl CallbackRegistry {
         }
     }
 
-    /// Registers a default handler callback.
+    /// 注册一个默认的处理器回调。
     pub fn register_default_handler(&mut self, callback: TimeEventCallback) {
         self.default_callback = Some(callback);
     }
 
-    /// Registers a callback for a specific timer name.
+    /// 为特定的定时器名称注册回调。
     pub fn register_callback(&mut self, name: Ustr, callback: TimeEventCallback) {
         self.callbacks.insert(name, callback);
     }
 
-    /// Returns whether a callback exists for the given name (either specific or default).
+    /// 返回针对给定名称是否存在任何回调（特定或默认）。
     #[must_use]
     pub fn has_any_callback(&self, name: &Ustr) -> bool {
         self.callbacks.contains_key(name) || self.default_callback.is_some()
     }
 
-    /// Gets the callback for a specific timer name, falling back to the default.
+    /// 获取特定定时器名称的回调，回退到默认回调。
     #[must_use]
     pub fn get_callback(&self, name: &Ustr) -> Option<TimeEventCallback> {
         self.callbacks
@@ -271,11 +265,11 @@ impl CallbackRegistry {
             .or_else(|| self.default_callback.clone())
     }
 
-    /// Gets a handler for a time event.
+    /// 获取时间事件的处理器。
     ///
     /// # Panics
     ///
-    /// Panics if no callback exists for the event name.
+    /// 如果该事件名称不存在任何回调，则会抛出 panic。
     #[must_use]
     pub fn get_handler(&self, event: TimeEvent) -> TimeEventHandler {
         let callback = self
@@ -285,19 +279,19 @@ impl CallbackRegistry {
         TimeEventHandler::new(event, callback)
     }
 
-    /// Clears all registered callbacks.
+    /// 清除所有已注册的回调。
     pub fn clear(&mut self) {
         self.callbacks.clear();
     }
 }
 
-/// Validates and prepares parameters for setting a time alert.
+/// 验证并准备设置时间警报的参数。
 ///
-/// Handles name validation, default value unwrapping, and past timestamp adjustment.
+/// 处理名称验证、默认值解包以及过去时间戳调整。
 ///
-/// # Errors
+/// # 错误
 ///
-/// Returns an error if the name is invalid or if the alert time is in the past when not allowed.
+/// 如果名称无效，或者警报时间在过去且不允许，则返回错误。
 pub fn validate_and_prepare_time_alert(
     name: &str,
     mut alert_time_ns: UnixNanos,
@@ -313,12 +307,12 @@ pub fn validate_and_prepare_time_alert(
         if allow_past {
             alert_time_ns = ts_now;
             log::warn!(
-                "Timer '{name}' alert time {} was in the past, adjusted to current time for immediate firing",
+                "定时器 '{name}' 警报时间 {} 是过去的时间，已调整为当前时间以便立即触发",
                 alert_time_ns.to_rfc3339(),
             );
         } else {
             anyhow::bail!(
-                "Timer '{name}' alert time {} was in the past (current time is {ts_now})",
+                "定时器 '{name}' 警报时间 {} 是过去的时间（当前时间是 {ts_now}）",
                 alert_time_ns.to_rfc3339(),
             );
         }
@@ -327,14 +321,13 @@ pub fn validate_and_prepare_time_alert(
     Ok((name, alert_time_ns))
 }
 
-/// Validates and prepares parameters for setting a timer.
+/// 验证并准备设置定时器的参数。
 ///
-/// Handles name and interval validation, default value unwrapping, start time normalization,
-/// and stop time validation.
+/// 处理名称和间隔验证、默认值解包、开始时间归一化以及停止时间验证。
 ///
-/// # Errors
+/// # 错误
 ///
-/// Returns an error if name is invalid, interval is not positive, or stop time validation fails.
+/// 如果名称无效、间隔不为正、或停止时间验证失败，则返回错误。
 pub fn validate_and_prepare_timer(
     name: &str,
     interval_ns: u64,
@@ -354,7 +347,7 @@ pub fn validate_and_prepare_timer(
     let mut start_time_ns = start_time_ns.unwrap_or_default();
 
     if start_time_ns == 0 {
-        // Zero start time indicates no explicit start; we use the current time
+        // 零开始时间表示没有显式指定开始时间；我们使用当前时间
         start_time_ns = ts_now;
     } else if !allow_past {
         let next_event_time = if fire_immediately {
@@ -365,7 +358,7 @@ pub fn validate_and_prepare_timer(
 
         if next_event_time < ts_now {
             anyhow::bail!(
-                "Timer '{name}' next event time {} would be in the past (current time is {ts_now})",
+                "定时器 '{name}' 的下一个事件时间 {} 在过去（当前时间是 {ts_now}）",
                 next_event_time.to_rfc3339(),
             );
         }
@@ -374,14 +367,14 @@ pub fn validate_and_prepare_timer(
     if let Some(stop_time) = stop_time_ns {
         if stop_time <= start_time_ns {
             anyhow::bail!(
-                "Timer '{name}' stop time {} must be after start time {}",
+                "定时器 '{name}' 停止时间 {} 必须在开始时间 {} 之后",
                 stop_time.to_rfc3339(),
                 start_time_ns.to_rfc3339(),
             );
         }
         if !allow_past && stop_time <= ts_now {
             anyhow::bail!(
-                "Timer '{name}' stop time {} is in the past (current time is {ts_now})",
+                "定时器 '{name}' 停止时间 {} 是过去的时间（当前时间是 {ts_now}）",
                 stop_time.to_rfc3339(),
             );
         }
@@ -396,13 +389,13 @@ pub fn validate_and_prepare_timer(
     ))
 }
 
-/// A static test clock.
+/// 一个静态测试时钟。
 ///
-/// Stores the current timestamp internally which can be advanced.
+/// 在内部存储当前时间戳，并且可以推进该时间。
 ///
-/// # Threading
+/// # 线程安全 (Threading)
 ///
-/// This clock is thread-affine; use it only from the thread that created it.
+/// 此时钟是线程相关的 (thread-affine)；仅在创建它的线程中使用。
 #[derive(Debug)]
 pub struct TestClock {
     time: AtomicTime,
@@ -412,7 +405,7 @@ pub struct TestClock {
 }
 
 impl TestClock {
-    /// Creates a new [`TestClock`] instance.
+    /// 创建一个新的 [`TestClock`] 实例。
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -422,28 +415,27 @@ impl TestClock {
         }
     }
 
-    /// Returns a reference to the internal timers for the clock.
+    /// 返回时钟内部定时器的引用。
     #[must_use]
     pub const fn get_timers(&self) -> &BTreeMap<Ustr, TestTimer> {
         &self.timers
     }
 
-    /// Advances the internal clock to the specified `to_time_ns` and optionally sets the clock to that time.
+    /// 将内部时钟推进到指定的 `to_time_ns`，并可选地将时钟设置为该时间。
     ///
-    /// This function ensures that the clock behaves in a non-decreasing manner. If `set_time` is `true`,
-    /// the internal clock will be updated to the value of `to_time_ns`. Otherwise, the clock will advance
-    /// without explicitly setting the time.
+    /// 此时钟确保时间以非递减方式运行。如果 `set_time` 为 `true`，
+    /// 内部时钟将更新为 `to_time_ns` 的值。否则，时钟将推进但不显式设置时间。
     ///
-    /// The method processes active timers, advancing them to `to_time_ns`, and collects any `TimeEvent`
-    /// objects that are triggered as a result. Only timers that are not expired are processed.
+    /// 该方法处理活动定时器，将它们推进到 `to_time_ns`，并收集由于该操作触发的所有 [`TimeEvent`] 
+    /// 对象。仅处理未过期的定时器。
     ///
-    /// # Warnings
+    /// # 警告 (Warnings)
     ///
-    /// Logs a warning if >= 1,000,000 time events are allocated during advancement.
+    /// 如果在推进期间分配了 >= 1,000,000 个时间事件，则记录一条警告。
     ///
     /// # Panics
     ///
-    /// Panics if `to_time_ns` is less than the current internal clock time.
+    /// 如果 `to_time_ns` 小于当前内部时钟时间，则会 panic。
     pub fn advance_time(&mut self, to_time_ns: UnixNanos, set_time: bool) -> Vec<TimeEvent> {
         const WARN_TIME_EVENTS_THRESHOLD: usize = 1_000_000;
 
@@ -458,7 +450,7 @@ impl TestClock {
             self.time.set_time(to_time_ns);
         }
 
-        // Iterate and advance timers and collect events, only retain alive timers
+        // 迭代并推进定时器并收集事件，仅保留存活的定时器
         let mut events: Vec<TimeEvent> = Vec::new();
         self.timers.retain(|_, timer| {
             timer.advance(to_time_ns).for_each(|event| {
@@ -482,15 +474,15 @@ impl TestClock {
         events
     }
 
-    /// Matches `TimeEvent` objects with their corresponding event handlers.
+    /// 将 [`TimeEvent`] 对象与其对应的事件处理器进行匹配。
     ///
-    /// This function takes an `events` vector of `TimeEvent` objects, assumes they are already sorted
-    /// by their `ts_event`, and matches them with the appropriate callback handler from the internal
-    /// registry of callbacks. If no specific callback is found for an event, the default callback is used.
+    /// 此函数接收一个 `TimeEvent` 对象的 `events` 向量，假设它们已经根据 
+    /// `ts_event` 进行了排序，并将它们与内部回调注册表中的适当回调处理器匹配。
+    /// 如果未找到特定事件的回调，则使用默认回调。
     ///
     /// # Panics
     ///
-    /// Panics if the default callback is not set for the clock when matching handlers.
+    /// 如果匹配处理器时仍未为时钟设置默认回调，则会 panic。
     #[must_use]
     pub fn match_handlers(&self, events: Vec<TimeEvent>) -> Vec<TimeEventHandler> {
         events
@@ -508,7 +500,7 @@ impl TestClock {
 }
 
 impl Default for TestClock {
-    /// Creates a new default [`TestClock`] instance.
+    /// 创建一个新的默认 [`TestClock`] 实例。
     fn default() -> Self {
         Self::new()
     }
@@ -562,11 +554,11 @@ impl Clock for TestClock {
         self.callbacks.register_default_handler(callback);
     }
 
-    /// Returns the handler for the given `TimeEvent`.
+    /// 返回给定 [`TimeEvent`] 的处理器。
     ///
     /// # Panics
     ///
-    /// Panics if no event-specific or default callback has been registered for the event.
+    /// 如果未为该事件注册特定事件或默认的回调，则会 panic。
     fn get_handler(&self, event: TimeEvent) -> TimeEventHandler {
         self.callbacks.get_handler(event)
     }
@@ -593,7 +585,7 @@ impl Clock for TestClock {
             self.callbacks.register_callback(name, callback);
         }
 
-        // Safe to calculate interval now that we've ensured alert_time_ns >= ts_now
+        // 在确保 alert_time_ns >= ts_now 之后，现在可以安全计算间隔了
         let interval_ns = create_valid_interval((alert_time_ns - ts_now).into());
         let fire_immediately = alert_time_ns == ts_now;
 
@@ -700,7 +692,7 @@ mod tests {
 
     #[derive(Debug, Default)]
     struct TestCallback {
-        /// Shared flag updated from within the timer callback; Mutex keeps the closure `Send` for tests.
+        /// 在定时器回调内部更新的共享标志；Mutex 保证闭包在测试中是 `Send` 的。
         called: Arc<Mutex<bool>>,
     }
 
@@ -832,7 +824,7 @@ mod tests {
         let call_count = Rc::new(RefCell::new(0_u32));
         let call_count_clone = Rc::clone(&call_count);
 
-        // Create RustLocal callback using Rc (not Send/Sync)
+        // 使用 Rc 创建 RustLocal 回调（非 Send/Sync）
         let callback: Rc<dyn Fn(TimeEvent)> = Rc::new(move |_event: TimeEvent| {
             *call_count_clone.borrow_mut() += 1;
         });
@@ -878,16 +870,16 @@ mod tests {
         let current_time = test_clock.timestamp_ns();
         let past_time = UnixNanos::from(current_time.as_u64() - 1000);
 
-        // With allow_past=true (default), should adjust to current time and succeed
+        // 当 allow_past=true（默认值）时，应调整为当前时间并成功执行
         test_clock
             .set_time_alert_ns("past_timer", past_time, None, Some(true))
             .unwrap();
 
-        // Verify timer was created with adjusted time
+        // 验证是否已使用调整后的时间创建了定时器
         assert_eq!(test_clock.timer_count(), 1);
         assert_eq!(test_clock.timer_names(), vec!["past_timer"]);
 
-        // Next time should be at or after current time, not in the past
+        // 下一次时间应等于或晚于当前时间，而不应在过去
         let next_time = test_clock.next_time_ns("past_timer").unwrap();
         assert!(next_time >= current_time);
     }
@@ -898,14 +890,14 @@ mod tests {
         let current_time = test_clock.timestamp_ns();
         let past_time = current_time - 1000;
 
-        // With allow_past=false, should fail for past times
+        // 当 allow_past=false 时，对于过去的时间应失败
         let result = test_clock.set_time_alert_ns("past_timer", past_time, None, Some(false));
 
-        // Verify the operation failed with appropriate error
+        // 验证操作是否因适当的错误而失败
         assert!(result.is_err());
         assert!(format!("{}", result.unwrap_err()).contains("was in the past"));
 
-        // Verify no timer was created
+        // 验证未创建任何定时器
         assert_eq!(test_clock.timer_count(), 0);
         assert!(test_clock.timer_names().is_empty());
     }
@@ -915,9 +907,9 @@ mod tests {
         test_clock.set_time(UnixNanos::from(2000));
         let current_time = test_clock.timestamp_ns();
         let start_time = current_time + 1000;
-        let stop_time = current_time + 500; // Stop time before start time
+        let stop_time = current_time + 500; // 停止时间在开始时间之前
 
-        // Should fail because stop_time < start_time
+        // 由于 stop_time < start_time，应该失败
         let result = test_clock.set_timer_ns(
             "invalid_timer",
             100,
@@ -928,11 +920,11 @@ mod tests {
             None,
         );
 
-        // Verify the operation failed with appropriate error
+        // 验证操作是否失败并返回适当的错误
         assert!(result.is_err());
         assert!(format!("{}", result.unwrap_err()).contains("must be after start time"));
 
-        // Verify no timer was created
+        // 验证没有创建定时器
         assert_eq!(test_clock.timer_count(), 0);
     }
 
@@ -953,14 +945,14 @@ mod tests {
             )
             .unwrap();
 
-        // Advance time to check immediate firing and subsequent intervals
+        // 推进时间以检查是否立即触发以及随后的间隔
         let events = test_clock.advance_time(start_time + 2500, true);
 
-        // Should fire immediately at start_time (0), then at start_time+1000, then at start_time+2000
+        // 应该在 start_time (0) 立即触发，然后是 start_time+1000，再然后是 start_time+2000
         assert_eq!(events.len(), 3);
-        assert_eq!(*events[0].ts_event, *start_time); // Fires immediately
-        assert_eq!(*events[1].ts_event, *start_time + 1000); // Then after interval
-        assert_eq!(*events[2].ts_event, *start_time + 2000); // Then after second interval
+        assert_eq!(*events[0].ts_event, *start_time); // 立即触发
+        assert_eq!(*events[1].ts_event, *start_time + 1000); // 随后在间隔后触发
+        assert_eq!(*events[2].ts_event, *start_time + 2000); // 再次在第二个间隔后触发
     }
 
     #[rstest]
@@ -980,13 +972,13 @@ mod tests {
             )
             .unwrap();
 
-        // Advance time to check normal behavior
+        // 推进时间以检查正常行为
         let events = test_clock.advance_time(start_time + 2500, true);
 
-        // Should fire after first interval, not immediately
+        // 应该在第一个间隔后触发，而不是立即触发
         assert_eq!(events.len(), 2);
-        assert_eq!(*events[0].ts_event, *start_time + 1000); // Fires after first interval
-        assert_eq!(*events[1].ts_event, *start_time + 2000); // Then after second interval
+        assert_eq!(*events[0].ts_event, *start_time + 1000); // 第一个间隔后触发
+        assert_eq!(*events[1].ts_event, *start_time + 2000); // 随后在第二个间隔后触发
     }
 
     #[rstest]
@@ -994,7 +986,7 @@ mod tests {
         let start_time = test_clock.timestamp_ns();
         let interval_ns = 1000;
 
-        // Don't specify fire_immediately (should default to false)
+        // 不指定 fire_immediately (应该默认为 false)
         test_clock
             .set_timer_ns(
                 "default_timer",
@@ -1009,9 +1001,9 @@ mod tests {
 
         let events = test_clock.advance_time(start_time + 1500, true);
 
-        // Should behave the same as fire_immediately=false
+        // 行为应该与 fire_immediately=false 相同
         assert_eq!(events.len(), 1);
-        assert_eq!(*events[0].ts_event, *start_time + 1000); // Fires after first interval
+        assert_eq!(*events[0].ts_event, *start_time + 1000); // 在第一个间隔后触发
     }
 
     #[rstest]
@@ -1033,10 +1025,10 @@ mod tests {
 
         let events = test_clock.advance_time(UnixNanos::from(7000), true);
 
-        // With zero start time, should use current time as start
-        // Fire immediately at current time (5000), then at 6000, 7000
+        // 当开始时间为零时，应该使用当前时间作为开始时间
+        // 在当前时间 (5000) 立即触发，然后在 6000、7000 触发
         assert_eq!(events.len(), 3);
-        assert_eq!(*events[0].ts_event, 5000); // Immediate fire at current time
+        assert_eq!(*events[0].ts_event, 5000); // 当前时间立即触发
         assert_eq!(*events[1].ts_event, 6000);
         assert_eq!(*events[2].ts_event, 7000);
     }
@@ -1074,23 +1066,23 @@ mod tests {
 
         let events = test_clock.advance_time(start_time + 1500, true);
 
-        // Should have 3 events total: immediate_timer fires at start & 1000, normal_timer fires at 1000
+        // 总共应该有 3 个事件：immediate_timer 在开始时间和 1000 触发，normal_timer 在 1000 触发
         assert_eq!(events.len(), 3);
 
-        // Sort events by timestamp to check order
+        // 按时间戳对事件进行排序以检查顺序
         let mut event_times: Vec<u64> = events.iter().map(|e| e.ts_event.as_u64()).collect();
         event_times.sort_unstable();
 
-        assert_eq!(event_times[0], start_time.as_u64()); // immediate_timer fires immediately
-        assert_eq!(event_times[1], start_time.as_u64() + 1000); // both timers fire at 1000
-        assert_eq!(event_times[2], start_time.as_u64() + 1000); // both timers fire at 1000
+        assert_eq!(event_times[0], start_time.as_u64()); // immediate_timer 立即触发
+        assert_eq!(event_times[1], start_time.as_u64() + 1000); // 两个定时器都在 1000 触发
+        assert_eq!(event_times[2], start_time.as_u64() + 1000); // 两个定时器都在 1000 触发
     }
 
     #[rstest]
     fn test_timer_name_collision_overwrites(mut test_clock: TestClock) {
         let start_time = test_clock.timestamp_ns();
 
-        // Set first timer
+        // 设置第一个定时器
         test_clock
             .set_timer_ns(
                 "collision_timer",
@@ -1103,7 +1095,7 @@ mod tests {
             )
             .unwrap();
 
-        // Setting timer with same name should overwrite the existing one
+        // 设置同名定时器应该覆盖现有定时器
         let result = test_clock.set_timer_ns(
             "collision_timer",
             2000,
@@ -1115,12 +1107,12 @@ mod tests {
         );
 
         assert!(result.is_ok());
-        // Should still only have one timer (overwritten)
+        // 应该仍然只有一个定时器（被覆盖）
         assert_eq!(test_clock.timer_count(), 1);
 
-        // The timer should have the new interval
+        // 定时器应该具有新的时间间隔
         let next_time = test_clock.next_time_ns("collision_timer").unwrap();
-        // With interval 2000 and start at start_time, next time should be start_time + 2000
+        // 间隔为 2000，从 start_time 开始，下一个时间应该是 start_time + 2000
         assert_eq!(next_time, start_time + 2000);
     }
 
@@ -1128,7 +1120,7 @@ mod tests {
     fn test_timer_zero_interval_error(mut test_clock: TestClock) {
         let start_time = test_clock.timestamp_ns();
 
-        // Attempt to set timer with zero interval should fail
+        // 尝试设置间隔为零的定时器应该失败
         let result =
             test_clock.set_timer_ns("zero_interval", 0, Some(start_time), None, None, None, None);
 
@@ -1140,7 +1132,7 @@ mod tests {
     fn test_timer_empty_name_error(mut test_clock: TestClock) {
         let start_time = test_clock.timestamp_ns();
 
-        // Attempt to set timer with empty name should fail
+        // 尝试设置空名称的定时器应该失败
         let result = test_clock.set_timer_ns("", 1000, Some(start_time), None, None, None, None);
 
         assert!(result.is_err());
@@ -1222,10 +1214,10 @@ mod tests {
 
         let events = test_clock.advance_time(stop_time, true);
 
-        // Should fire immediately at start, then at stop time (which equals first interval)
+        // 应该在开始时立即触发，然后在停止时间触发（等于第一个间隔）
         assert_eq!(events.len(), 2);
-        assert_eq!(*events[0].ts_event, *start_time); // Immediate fire
-        assert_eq!(*events[1].ts_event, *stop_time); // Fire at stop time
+        assert_eq!(*events[0].ts_event, *start_time); // 立即触发
+        assert_eq!(*events[1].ts_event, *stop_time); // 在停止时间触发
     }
 
     #[rstest]
@@ -1245,7 +1237,7 @@ mod tests {
             )
             .unwrap();
 
-        // Advance to exactly the next fire time
+        // 推进到准确的下一个触发时间
         let next_time = test_clock.next_time_ns("exact_advance").unwrap();
         let events = test_clock.advance_time(next_time, true);
 
@@ -1255,15 +1247,15 @@ mod tests {
 
     #[rstest]
     fn test_allow_past_bar_aggregation_use_case(mut test_clock: TestClock) {
-        // Simulate bar aggregation scenario: current time is in middle of a bar window
-        test_clock.set_time(UnixNanos::from(100_500)); // 100.5 seconds
+        // 模拟 K 线聚合场景：当前时间处于一个 K 线窗口中间
+        test_clock.set_time(UnixNanos::from(100_500)); // 100.5 秒
 
-        let bar_start_time = UnixNanos::from(100_000); // 100 seconds (0.5 sec ago)
-        let interval_ns = 1000; // 1 second bars
+        let bar_start_time = UnixNanos::from(100_000); // 100 秒 (0.5 秒前)
+        let interval_ns = 1000; // 1 秒一根 K 线
 
-        // With allow_past=false and fire_immediately=false:
-        // start_time is in past (100 sec) but next event (101 sec) is in future
-        // This should be ALLOWED for bar aggregation
+        // 设置 allow_past=false 且 fire_immediately=false：
+        // start_time 在过去（100 秒）但下一个事件（101 秒）在未来
+        // 这对于 K 线聚合应该是 被允许的
         let result = test_clock.set_timer_ns(
             "bar_timer",
             interval_ns,
@@ -1274,25 +1266,25 @@ mod tests {
             Some(false), // fire_immediately = false
         );
 
-        // Should succeed because next event time (100_000 + 1000 = 101_000) > current time (100_500)
+        // 应该成功，因为下一个事件时间 (100_000 + 1000 = 101_000) > 当前时间 (100_500)
         assert!(result.is_ok());
         assert_eq!(test_clock.timer_count(), 1);
 
-        // Next event should be at bar_start_time + interval = 101_000
+        // 下一个事件应该在 bar_start_time + interval = 101_000
         let next_time = test_clock.next_time_ns("bar_timer").unwrap();
         assert_eq!(*next_time, 101_000);
     }
 
     #[rstest]
     fn test_allow_past_false_rejects_when_next_event_in_past(mut test_clock: TestClock) {
-        test_clock.set_time(UnixNanos::from(102_000)); // 102 seconds
+        test_clock.set_time(UnixNanos::from(102_000)); // 102 秒
 
-        let past_start_time = UnixNanos::from(100_000); // 100 seconds (2 sec ago)
-        let interval_ns = 1000; // 1 second interval
+        let past_start_time = UnixNanos::from(100_000); // 100 秒 (2 秒前)
+        let interval_ns = 1000; // 1 秒间隔
 
-        // With allow_past=false and fire_immediately=false:
-        // Next event would be 100_000 + 1000 = 101_000, which is < current time (102_000)
-        // This should be REJECTED
+        // 设置 allow_past=false 且 fire_immediately=false：
+        // 下一个事件将是 100_000 + 1000 = 101_000，小于当前时间 (102_000)
+        // 这应该被 拒绝
         let result = test_clock.set_timer_ns(
             "past_event_timer",
             interval_ns,
@@ -1303,7 +1295,7 @@ mod tests {
             Some(false), // fire_immediately = false
         );
 
-        // Should fail because next event time (101_000) < current time (102_000)
+        // 应该失败，因为下一个事件时间 (101_000) < 当前时间 (102_000)
         assert!(result.is_err());
         assert!(
             result
@@ -1315,13 +1307,13 @@ mod tests {
 
     #[rstest]
     fn test_allow_past_false_with_fire_immediately_true(mut test_clock: TestClock) {
-        test_clock.set_time(UnixNanos::from(100_500)); // 100.5 seconds
+        test_clock.set_time(UnixNanos::from(100_500)); // 100.5 秒
 
-        let past_start_time = UnixNanos::from(100_000); // 100 seconds (0.5 sec ago)
+        let past_start_time = UnixNanos::from(100_000); // 100 秒 (0.5 秒前)
         let interval_ns = 1000;
 
-        // With fire_immediately=true, next event = start_time (which is in past)
-        // This should be REJECTED with allow_past=false
+        // 设置 fire_immediately=true，下个事件 = start_time（在过去）
+        // 当 allow_past=false 时，这应该被 拒绝
         let result = test_clock.set_timer_ns(
             "immediate_past_timer",
             interval_ns,
@@ -1332,7 +1324,7 @@ mod tests {
             Some(true),  // fire_immediately = true
         );
 
-        // Should fail because next event time (100_000) < current time (100_500)
+        // 应该失败，因为下一个事件时间 (100_000) < 当前时间 (100_500)
         assert!(result.is_err());
         assert!(
             result
@@ -1360,12 +1352,12 @@ mod tests {
 
         assert_eq!(test_clock.timer_count(), 1);
 
-        // Cancel the timer
+        // 取消定时器
         test_clock.cancel_timer("cancel_test");
 
         assert_eq!(test_clock.timer_count(), 0);
 
-        // Advance time - should get no events from cancelled timer
+        // 推进时间 - 不应从已取消的定时器处获取任何事件
         let events = test_clock.advance_time(start_time + 2000, true);
         assert_eq!(events.len(), 0);
     }
@@ -1385,12 +1377,12 @@ mod tests {
 
         assert_eq!(test_clock.timer_count(), 3);
 
-        // Cancel all timers
+        // 取消所有定时器
         test_clock.cancel_timers();
 
         assert_eq!(test_clock.timer_count(), 0);
 
-        // Advance time - should get no events
+        // 推进时间 - 不应获取任何事件
         let events = test_clock.advance_time(UnixNanos::from(5000), true);
         assert_eq!(events.len(), 0);
     }
@@ -1403,11 +1395,11 @@ mod tests {
 
         assert_eq!(test_clock.timer_count(), 1);
 
-        // Reset the clock
+        // 重置时钟
         test_clock.reset();
 
         assert_eq!(test_clock.timer_count(), 0);
-        assert_eq!(test_clock.timestamp_ns(), UnixNanos::default()); // Time reset to zero
+        assert_eq!(test_clock.timestamp_ns(), UnixNanos::default()); // 时间重置为零
     }
 
     #[rstest]
@@ -1415,7 +1407,7 @@ mod tests {
         let current_time = test_clock.utc_now();
         let alert_time = current_time + chrono::Duration::seconds(1);
 
-        // Test the default implementation that delegates to set_time_alert_ns
+        // 测试委托给 set_time_alert_ns 的默认实现
         test_clock
             .set_time_alert("alert_test", alert_time, None, None)
             .unwrap();
@@ -1423,11 +1415,11 @@ mod tests {
         assert_eq!(test_clock.timer_count(), 1);
         assert_eq!(test_clock.timer_names(), vec!["alert_test"]);
 
-        // Verify the timer is set for the correct time
+        // 验证定时器是否设置为正确的时间
         let expected_ns = UnixNanos::from(alert_time);
         let next_time = test_clock.next_time_ns("alert_test").unwrap();
 
-        // Should be very close (within a few nanoseconds due to conversion)
+        // 由于转换，时间应该非常接近（在几纳秒之内）
         let diff = if next_time >= expected_ns {
             next_time.as_u64() - expected_ns.as_u64()
         } else {
@@ -1435,7 +1427,7 @@ mod tests {
         };
         assert!(
             diff < 1000,
-            "Timer should be set within 1 microsecond of expected time"
+            "定时器应设置为预期时间的 1 微秒之内"
         );
     }
 
@@ -1445,7 +1437,7 @@ mod tests {
         let start_time = current_time + chrono::Duration::seconds(1);
         let interval = Duration::from_millis(500);
 
-        // Test the default implementation that delegates to set_timer_ns
+        // 测试委托给 set_timer_ns 的默认实现
         test_clock
             .set_timer(
                 "timer_test",
@@ -1461,14 +1453,14 @@ mod tests {
         assert_eq!(test_clock.timer_count(), 1);
         assert_eq!(test_clock.timer_names(), vec!["timer_test"]);
 
-        // Advance time and verify timer fires at correct intervals
+        // 推进时间并验证定时器是否在正确的时间间隔触发
         let start_ns = UnixNanos::from(start_time);
         let interval_ns = interval.as_nanos() as u64;
 
         let events = test_clock.advance_time(start_ns + interval_ns * 3, true);
-        assert_eq!(events.len(), 3); // Should fire 3 times
+        assert_eq!(events.len(), 3); // 应该触发 3 次
 
-        // Verify timing
+        // 验证时间
         assert_eq!(*events[0].ts_event, *start_ns + interval_ns);
         assert_eq!(*events[1].ts_event, *start_ns + interval_ns * 2);
         assert_eq!(*events[2].ts_event, *start_ns + interval_ns * 3);
@@ -1481,7 +1473,7 @@ mod tests {
         let stop_time = current_time + chrono::Duration::seconds(3);
         let interval = Duration::from_secs(1);
 
-        // Test with stop time
+        // 带停止时间的测试
         test_clock
             .set_timer(
                 "timer_with_stop",
@@ -1496,11 +1488,12 @@ mod tests {
 
         assert_eq!(test_clock.timer_count(), 1);
 
-        // Advance beyond stop time
+        // 推进到超出停止时间
         let stop_ns = UnixNanos::from(stop_time);
         let events = test_clock.advance_time(stop_ns + 1000, true);
 
-        // Should fire twice: at start_time + 1s and start_time + 2s, but not at start_time + 3s since that would be at stop_time
+        // 应该触发两次：在 start_time + 1s 和 start_time + 2s，
+        // 但不在 start_time + 3s，因为那已经是在停止时间了
         assert_eq!(events.len(), 2);
 
         let start_ns = UnixNanos::from(start_time);
@@ -1515,7 +1508,7 @@ mod tests {
         let start_time = current_time + chrono::Duration::seconds(1);
         let interval = Duration::from_millis(500);
 
-        // Test with fire_immediately=true
+        // 设置 fire_immediately=true 的测试
         test_clock
             .set_timer(
                 "immediate_timer",
@@ -1531,30 +1524,30 @@ mod tests {
         let start_ns = UnixNanos::from(start_time);
         let interval_ns = interval.as_nanos() as u64;
 
-        // Advance to start time + 1 interval
+        // 推进到开始时间 + 1 个间隔
         let events = test_clock.advance_time(start_ns + interval_ns, true);
 
-        // Should fire immediately at start_time, then again at start_time + interval
+        // 应该在开始时间立即触发，然后在开始时间 + 间隔再次触发
         assert_eq!(events.len(), 2);
-        assert_eq!(*events[0].ts_event, *start_ns); // Immediate fire
-        assert_eq!(*events[1].ts_event, *start_ns + interval_ns); // Regular interval
+        assert_eq!(*events[0].ts_event, *start_ns); // 立即触发
+        assert_eq!(*events[1].ts_event, *start_ns + interval_ns); // 常规间隔触发
     }
 
     #[rstest]
     fn test_set_time_alert_when_alert_time_equals_current_time(mut test_clock: TestClock) {
         let current_time = test_clock.timestamp_ns();
 
-        // Set time alert for exactly the current time
+        // 为准确的当前时间设置时间警报
         test_clock
             .set_time_alert_ns("alert_at_current_time", current_time, None, None)
             .unwrap();
 
         assert_eq!(test_clock.timer_count(), 1);
 
-        // Advance time by exactly 0 (to current time) - should fire immediately
+        // 推进 0 的时间（即到当前时间） - 应该立即触发
         let events = test_clock.advance_time(current_time, true);
 
-        // Should fire immediately since alert_time_ns == ts_now
+        // 由于 alert_time_ns == ts_now，应该立即触发
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].name.as_str(), "alert_at_current_time");
         assert_eq!(*events[0].ts_event, *current_time);

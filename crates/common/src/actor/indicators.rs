@@ -13,7 +13,7 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-// Under development
+// 开发中
 #![allow(dead_code)]
 #![allow(unused_variables)]
 #![allow(unused_imports)]
@@ -23,7 +23,7 @@ use std::{collections::HashMap, sync::Arc};
 use nautilus_indicators::indicator::Indicator;
 use nautilus_model::{data::BarType, identifiers::InstrumentId};
 
-/// Contains all indicator-related references.
+/// 包含所有与指标 (Indicator) 相关的引用。
 #[derive(Clone, Default)]
 pub(crate) struct Indicators {
     pub indicators: Vec<Arc<dyn Indicator>>,
@@ -33,7 +33,7 @@ pub(crate) struct Indicators {
 }
 
 impl Indicators {
-    /// Checks if all registered indicators are initialized.
+    /// 检查所有注册的指标是否都已初始化。
     pub fn is_initialized(&self) -> bool {
         if self.indicators.is_empty() {
             return false;
@@ -44,75 +44,75 @@ impl Indicators {
             .all(|indicator| indicator.initialized())
     }
 
-    /// Register an indicator to receive quote ticks for the given instrument ID.
+    /// 注册一个指标，用以接收给定工具 ID 的报价 Ticks (Quote ticks)。
     pub fn register_indicator_for_quotes(
         &mut self,
         instrument_id: InstrumentId,
         indicator: Arc<dyn Indicator>,
     ) {
-        // Add to overall indicators if not already present
+        // 如果尚未存在，则添加到总体指标列表中
         if !self.indicators.iter().any(|i| Arc::ptr_eq(i, &indicator)) {
             self.indicators.push(indicator.clone());
         }
 
-        // Add to instrument-specific quotes indicators
+        // 添加到工具特定的报价指标中
         let indicators = self.indicators_for_quotes.entry(instrument_id).or_default();
 
         if indicators.iter().any(|i| Arc::ptr_eq(i, &indicator)) {
-            // TODO: Log error - already registered
+            // TODO: 记录错误 - 已经注册过
         } else {
             indicators.push(indicator);
-            // TODO: Log registration
+            // TODO: 记录注册信息
         }
     }
 
-    /// Register an indicator to receive trade ticks for the given instrument ID.
+    /// 注册一个指标，用以接收给定工具 ID 的逐笔成交 Ticks (Trade ticks)。
     pub fn register_indicator_for_trades(
         &mut self,
         instrument_id: InstrumentId,
         indicator: Arc<dyn Indicator>,
     ) {
-        // Add to overall indicators if not already present
+        // 如果尚未存在，则添加到总体指标列表中
         if !self.indicators.iter().any(|i| Arc::ptr_eq(i, &indicator)) {
             self.indicators.push(indicator.clone());
         }
 
-        // Add to instrument-specific trades indicators
+        // 添加到工具特定的逐笔成交指标中
         let indicators = self.indicators_for_trades.entry(instrument_id).or_default();
 
         if indicators.iter().any(|i| Arc::ptr_eq(i, &indicator)) {
-            // TODO: Log error - already registered
+            // TODO: 记录错误 - 已经注册过
         } else {
             indicators.push(indicator);
-            // TODO: Log registration
+            // TODO: 记录注册信息
         }
     }
 
-    /// Register an indicator to receive bar data for the given bar type.
+    /// 注册一个指标，用以接收给定 K 线类型 (Bar type) 的 K 线数据。
     pub fn register_indicator_for_bars(
         &mut self,
         bar_type: BarType,
         indicator: Arc<dyn Indicator>,
     ) {
-        // Add to overall indicators if not already present
+        // 如果尚未存在，则添加到总体指标列表中
         if !self.indicators.iter().any(|i| Arc::ptr_eq(i, &indicator)) {
             self.indicators.push(indicator.clone());
         }
 
-        // Get standard bar type
+        // 获取标准 K 线类型 (Standard bar type)
         let standard_bar_type = bar_type.standard();
 
-        // Add to bar type-specific indicators
+        // 添加到 K 线类型特定的指标中
         let indicators = self
             .indicators_for_bars
             .entry(standard_bar_type)
             .or_default();
 
         if indicators.iter().any(|i| Arc::ptr_eq(i, &indicator)) {
-            // TODO: Log error - already registered
+            // TODO: 记录错误 - 已经注册过
         } else {
             indicators.push(indicator);
-            // TODO: Log registration
+            // TODO: 记录注册信息
         }
     }
 }

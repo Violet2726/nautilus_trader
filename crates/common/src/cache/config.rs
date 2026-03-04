@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{enums::SerializationEncoding, msgbus::database::DatabaseConfig};
 
-/// Configuration for `Cache` instances.
+/// `Cache` 实例配置。
 #[cfg_attr(
     feature = "python",
     pyo3::pyclass(module = "nautilus_trader.core.nautilus_pyo3.common", from_py_object)
@@ -25,35 +25,35 @@ use crate::{enums::SerializationEncoding, msgbus::database::DatabaseConfig};
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct CacheConfig {
-    /// The configuration for the cache backing database.
+    /// 缓存后端数据库配置。
     pub database: Option<DatabaseConfig>,
-    /// The encoding for database operations, controls the type of serializer used.
+    /// 数据库操作的编码方式，控制所使用的序列化器类型。
     pub encoding: SerializationEncoding,
-    /// If timestamps should be persisted as ISO 8601 strings.
+    /// 是否应将时间戳持久化为 ISO 8601 字符串。
     pub timestamps_as_iso8601: bool,
-    /// The buffer interval (milliseconds) between pipelined/batched transactions.
+    /// 流水线/批量事务之间的缓冲间隔 (毫秒)。
     pub buffer_interval_ms: Option<usize>,
-    /// The batch size for bulk read operations (e.g., MGET).
-    /// If set, bulk reads will be batched into chunks of this size.
+    /// 批量读取操作 (例如 MGET) 的批大小。
+    /// 如果已设置，批量读取将按此大小切分为块。
     pub bulk_read_batch_size: Option<usize>,
-    /// If a 'trader-' prefix is used for keys.
+    /// 是否在键中使用 'trader-' 前缀。
     pub use_trader_prefix: bool,
-    /// If the trader's instance ID is used for keys.
+    /// 是否在键中使用交易员实例 ID。
     pub use_instance_id: bool,
-    /// If the database should be flushed on start.
+    /// 是否在启动时刷新数据库。
     pub flush_on_start: bool,
-    /// If instrument data should be dropped from the cache's memory on reset.
+    /// 在重置时是否应从缓存内存中丢弃工具数据。
     pub drop_instruments_on_reset: bool,
-    /// The maximum length for internal tick deques.
+    /// 内部 Tick 队列的最大长度。
     pub tick_capacity: usize,
-    /// The maximum length for internal bar deques.
+    /// 内部 Bar 队列的最大长度。
     pub bar_capacity: usize,
-    /// If market data should be persisted to disk.
+    /// 是否应将市场数据持久化到磁盘。
     pub save_market_data: bool,
 }
 
 impl Default for CacheConfig {
-    /// Creates a new default [`CacheConfig`] instance.
+    /// 创建一个新的默认 [`CacheConfig`] 实例。
     fn default() -> Self {
         Self {
             database: None,
@@ -73,7 +73,7 @@ impl Default for CacheConfig {
 }
 
 impl CacheConfig {
-    /// Creates a new [`CacheConfig`] instance.
+    /// 创建一个新的 [`CacheConfig`] 实例。
     #[allow(clippy::too_many_arguments)]
     #[must_use]
     pub const fn new(

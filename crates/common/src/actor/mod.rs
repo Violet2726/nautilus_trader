@@ -13,11 +13,10 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! Actor system for event-driven message processing.
+//! 用于事件驱动消息处理的 Actor 系统。
 //!
-//! This module provides the actor framework used throughout NautilusTrader for handling
-//! data processing, event management, and asynchronous message handling. Actors are
-//! lightweight components that process messages in isolation.
+//! 此模块提供 NautilusTrader 中用于处理数据处理、事件管理和异步消息处理的 Actor 框架。
+//! Actor 是处理隔离消息的轻量级组件。
 
 #![allow(unsafe_code)]
 
@@ -39,19 +38,19 @@ pub use data_actor::{DataActor, DataActorConfig, DataActorCore};
 pub use crate::component::Component;
 
 pub trait Actor: Any + Debug {
-    /// The unique identifier for the actor.
+    /// Actor 的唯一标识符。
     fn id(&self) -> Ustr;
-    /// Handles the `msg`.
+    /// 处理 `msg`。
     fn handle(&mut self, msg: &dyn Any);
-    /// Returns a reference to `self` as `Any`, for downcasting support.
+    /// 将 `self` 作为 `Any` 的引用返回，以便支持向下转型 (downcasting)。
     fn as_any(&self) -> &dyn Any;
-    /// Returns a mutable reference to `self` as `Any`, for downcasting support.
+    /// 将 `self` 作为 `Any` 的可变引用返回，以便支持向下转型 (downcasting)。
     ///
-    /// Default implementation simply coerces `&mut Self` to `&mut dyn Any`.
+    /// 默认实现仅将 `&mut Self` 强制转换为 `&mut dyn Any`。
     ///
-    /// # Note
+    /// # 注意
     ///
-    /// This method is not object-safe and thus only available on sized `Self`.
+    /// 此方法是非对象安全的，因此仅适用于具有固定大小 (sized) 的 `Self`。
     fn as_any_mut(&mut self) -> &mut dyn Any
     where
         Self: Sized,

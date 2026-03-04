@@ -13,11 +13,10 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! Global runtime machinery and thread-local storage.
+//! 全局运行时机制和线程局部存储 (thread-local storage)。
 //!
-//! This module provides global access to shared runtime resources including clocks,
-//! message queues, and time event channels. It manages thread-local storage for
-//! system-wide components that need to be accessible across threads.
+//! 此模块提供对共享运行时资源的全局访问，包括时钟、消息队列和时间事件通道。
+//! 它管理系统级组件的线程局部存储，使这些组件能够跨线程访问。
 
 use std::{
     cell::{OnceCell, RefCell},
@@ -31,19 +30,19 @@ use crate::{
     timer::TimeEventHandler,
 };
 
-/// Trait for data command sending that can be implemented for both sync and async runners.
+/// 数据命令发送者的 trait，可为同步和异步运行器实现。
 pub trait DataCommandSender {
-    /// Executes a data command.
+    /// 执行一个数据命令。
     ///
-    /// - **Sync runners** send the command to a queue for synchronous execution.
-    /// - **Async runners** send the command to a channel for asynchronous execution.
+    /// - **同步运行器 (Sync runners)** 将命令发送到队列以进行同步执行。
+    /// - **异步运行器 (Async runners)** 将命令发送到通道以进行异步执行。
     fn execute(&self, command: DataCommand);
 }
 
-/// Synchronous [`DataCommandSender`] for backtest environments.
+/// 用于回测环境的同步 [`DataCommandSender`]。
 ///
-/// Buffers commands in a thread-local queue for deferred execution,
-/// avoiding `RefCell` re-entrancy when sent from event handler callbacks.
+/// 将命令缓冲在线程局部队列中以便延迟执行，
+/// 从而避免从事件处理器回调发送时发生 `RefCell` 重入。
 #[derive(Debug)]
 pub struct SyncDataCommandSender;
 
@@ -53,7 +52,7 @@ impl DataCommandSender for SyncDataCommandSender {
     }
 }
 
-/// Drain all buffered data commands, dispatching each to the data engine.
+/// 排空所有缓冲的数据命令，并将每个命令调度到数据引擎。
 pub fn drain_data_cmd_queue() {
     DATA_CMD_QUEUE.with(|q| {
         let commands: Vec<DataCommand> = q.borrow_mut().drain(..).collect();
@@ -64,108 +63,108 @@ pub fn drain_data_cmd_queue() {
     });
 }
 
-/// Returns `true` if the data command queue is empty.
+/// 如果数据命令队列为空，则返回 `true`。
 pub fn data_cmd_queue_is_empty() -> bool {
     DATA_CMD_QUEUE.with(|q| q.borrow().is_empty())
 }
 
-/// Gets the global data command sender.
+/// 获取全局数据命令发送者。
 ///
 /// # Panics
 ///
-/// Panics if the sender is uninitialized.
+/// 如果发送者未初始化，则会抛出 panic。
 #[must_use]
 pub fn get_data_cmd_sender() -> Arc<dyn DataCommandSender> {
     DATA_CMD_SENDER.with(|sender| {
         sender
             .get()
-            .expect("Data command sender should be initialized by runner")
+            .expect("数据命令发送者应由运行器初始化")
             .clone()
     })
 }
 
-/// Sets the global data command sender.
+/// 设置全局数据命令发送者。
 ///
-/// This should be called by the runner when it initializes.
-/// Can only be called once per thread.
+/// 应该在运行器初始化时调用。
+/// 每个线程只能调用一次。
 ///
 /// # Panics
 ///
-/// Panics if a sender has already been set.
+/// 如果已经设置了发送者，则会抛出 panic。
 pub fn set_data_cmd_sender(sender: Arc<dyn DataCommandSender>) {
     DATA_CMD_SENDER.with(|s| {
         assert!(
             s.set(sender).is_ok(),
-            "Data command sender can only be set once"
+            "数据命令发送者只能设置一次"
         );
     });
 }
 
-/// Sets the global data command sender if not already set (idempotent).
+/// 如果尚未设置，则初始化全局数据命令发送者（幂等性）。
 pub fn init_data_cmd_sender(sender: Arc<dyn DataCommandSender>) {
     DATA_CMD_SENDER.with(|s| {
         let _ = s.set(sender); // Ignore if already set
     });
 }
 
-/// Trait for time event sending that can be implemented for both sync and async runners.
+/// 时间事件发送者的 trait，可为同步和异步运行器实现。
 pub trait TimeEventSender: Debug + Send + Sync {
-    /// Sends a time event handler.
+    /// 发送一个时间事件处理器。
     fn send(&self, handler: TimeEventHandler);
 }
 
-/// Gets the global time event sender.
+/// 获取全局时间事件发送者。
 ///
 /// # Panics
 ///
-/// Panics if the sender is uninitialized.
+/// 如果发送者未初始化，则会抛出 panic。
 #[must_use]
 pub fn get_time_event_sender() -> Arc<dyn TimeEventSender> {
     TIME_EVENT_SENDER.with(|sender| {
         sender
             .get()
-            .expect("Time event sender should be initialized by runner")
+            .expect("时间事件发送者应由运行器初始化")
             .clone()
     })
 }
 
-/// Attempts to get the global time event sender without panicking.
+/// 尝试获取全局时间事件发送者而不产生 panic。
 ///
-/// Returns `None` if the sender is not initialized (e.g., in test environments).
+/// 如果发送者未初始化（例如在测试环境中），则返回 `None`。
 #[must_use]
 pub fn try_get_time_event_sender() -> Option<Arc<dyn TimeEventSender>> {
     TIME_EVENT_SENDER.with(|sender| sender.get().cloned())
 }
 
-/// Sets the global time event sender.
+/// 设置全局时间事件发送者。
 ///
-/// Can only be called once per thread.
+/// 每个线程只能调用一次。
 ///
 /// # Panics
 ///
-/// Panics if a sender has already been set.
+/// 如果已经设置了发送者，则会抛出 panic。
 pub fn set_time_event_sender(sender: Arc<dyn TimeEventSender>) {
     TIME_EVENT_SENDER.with(|s| {
         assert!(
             s.set(sender).is_ok(),
-            "Time event sender can only be set once"
+            "时间事件发送者只能设置一次"
         );
     });
 }
 
-/// Trait for trading command sending that can be implemented for both sync and async runners.
+/// 交易命令发送者的 trait，可为同步和异步运行器实现。
 pub trait TradingCommandSender {
-    /// Executes a trading command.
+    /// 执行一个交易命令。
     ///
-    /// - **Sync runners** send the command to a queue for synchronous execution.
-    /// - **Async runners** send the command to a channel for asynchronous execution.
+    /// - **同步运行器 (Sync runners)** 将命令发送到队列以进行同步执行。
+    /// - **异步运行器 (Async runners)** 将命令发送到通道以进行异步执行。
     fn execute(&self, command: TradingCommand);
 }
 
-/// Synchronous [`TradingCommandSender`] for backtest environments.
+/// 用于回测环境的同步 [`TradingCommandSender`]。
 ///
-/// Buffers commands in a thread-local queue for deferred execution,
-/// avoiding `RefCell` re-entrancy when sent from event handler callbacks.
+/// 将命令缓冲在线程局部队列中以便延迟执行，
+/// 从而避免从事件处理器回调发送时发生 `RefCell` 重入。
 #[derive(Debug)]
 pub struct SyncTradingCommandSender;
 
@@ -175,7 +174,7 @@ impl TradingCommandSender for SyncTradingCommandSender {
     }
 }
 
-/// Drain all buffered trading commands, dispatching each to the exec engine.
+/// 排空所有缓冲的交易命令，并将每个命令调度到执行引擎。
 pub fn drain_trading_cmd_queue() {
     TRADING_CMD_QUEUE.with(|q| {
         let commands: Vec<TradingCommand> = q.borrow_mut().drain(..).collect();
@@ -186,52 +185,52 @@ pub fn drain_trading_cmd_queue() {
     });
 }
 
-/// Returns `true` if the trading command queue is empty.
+/// 如果交易命令队列为空，则返回 `true`。
 pub fn trading_cmd_queue_is_empty() -> bool {
     TRADING_CMD_QUEUE.with(|q| q.borrow().is_empty())
 }
 
-/// Gets the global trading command sender.
+/// 获取全局交易命令发送者。
 ///
 /// # Panics
 ///
-/// Panics if the sender is uninitialized.
+/// 如果发送者未初始化，则会抛出 panic。
 #[must_use]
 pub fn get_trading_cmd_sender() -> Arc<dyn TradingCommandSender> {
     EXEC_CMD_SENDER.with(|sender| {
         sender
             .get()
-            .expect("Trading command sender should be initialized by runner")
+            .expect("交易命令发送者应由运行器初始化")
             .clone()
     })
 }
 
-/// Attempts to get the global trading command sender without panicking.
+/// 尝试获取全局交易命令发送者而不产生 panic。
 ///
-/// Returns `None` if the sender is not initialized (e.g., in test environments).
+/// 如果发送者未初始化（例如在测试环境中），则返回 `None`。
 #[must_use]
 pub fn try_get_trading_cmd_sender() -> Option<Arc<dyn TradingCommandSender>> {
     EXEC_CMD_SENDER.with(|sender| sender.get().cloned())
 }
 
-/// Sets the global trading command sender.
+/// 设置全局交易命令发送者。
 ///
-/// This should be called by the runner when it initializes.
-/// Can only be called once per thread.
+/// 应该在运行器初始化时调用。
+/// 每个线程只能调用一次。
 ///
 /// # Panics
 ///
-/// Panics if a sender has already been set.
+/// 如果已经设置了发送者，则会抛出 panic。
 pub fn set_exec_cmd_sender(sender: Arc<dyn TradingCommandSender>) {
     EXEC_CMD_SENDER.with(|s| {
         assert!(
             s.set(sender).is_ok(),
-            "Trading command sender can only be set once"
+            "交易命令发送者只能设置一次"
         );
     });
 }
 
-/// Sets the global trading command sender if not already set (idempotent).
+/// 如果尚未设置，则初始化全局交易命令发送者（幂等性）。
 pub fn init_exec_cmd_sender(sender: Arc<dyn TradingCommandSender>) {
     EXEC_CMD_SENDER.with(|s| {
         let _ = s.set(sender); // Ignore if already set

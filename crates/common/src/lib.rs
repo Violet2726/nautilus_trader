@@ -13,37 +13,34 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! Common componentry for [NautilusTrader](http://nautilustrader.io).
+//! [NautilusTrader](http://nautilustrader.io) 的通用组件。
 //!
-//! The `nautilus-common` crate provides shared components and utilities that form the system foundation for
-//! NautilusTrader applications. This includes the actor system, message bus, caching layer, and other
-//! essential services.
+//! `nautilus-common` crate 提供了共享组件和工具，构成了 NautilusTrader 应用程序的系统基础。
+//! 这包括 Actor 系统、消息总线、缓存层以及其他核心服务。
 //!
-//! # Platform
+//! # 平台
 //!
-//! [NautilusTrader](http://nautilustrader.io) is an open-source, high-performance, production-grade
-//! algorithmic trading platform, providing quantitative traders with the ability to backtest
-//! portfolios of automated trading strategies on historical data with an event-driven engine,
-//! and also deploy those same strategies live, with no code changes.
+//! [NautilusTrader](http://nautilustrader.io) 是一个开源、高性能、生产级的算法交易平台，
+//! 为量化交易者提供了在历史数据上通过事件驱动引擎回测自动化交易策略组合的能力，
+//! 并且可以将同样的策略部署到实盘，无需更改代码。
 //!
-//! NautilusTrader's design, architecture, and implementation philosophy prioritizes software correctness and safety at the
-//! highest level, with the aim of supporting mission-critical, trading system backtesting and live deployment workloads.
+//! NautilusTrader 的设计、架构和实现理念在最高层面上优先考虑软件的正确性和安全性，
+//! 旨在支持关键任务的交易系统回测和实盘部署工作负载。
 //!
-//! # Feature Flags
+//! # 特性标志 (Feature Flags)
 //!
-//! This crate provides feature flags to control source code inclusion during compilation,
-//! depending on the intended use case, i.e. whether to provide Python bindings
-//! for the [nautilus_trader](https://pypi.org/project/nautilus_trader) Python package,
-//! or as part of a Rust only build.
+//! 本 crate 提供了特性标志来控制编译期间源码的包含情况，取决于预期的使用场景。
+//! 例如，是为 [nautilus_trader](https://pypi.org/project/nautilus_trader) Python 包提供 Python 绑定，
+//! 还是作为仅限 Rust 的构建的一部分。
 //!
-//! - `ffi`: Enables the C foreign function interface (FFI) from [cbindgen](https://github.com/mozilla/cbindgen).
-//! - `python`: Enables Python bindings from [PyO3](https://pyo3.rs).
-//! - `defi`: Enables DeFi (Decentralized Finance) support.
-//! - `indicators`: Includes the `nautilus-indicators` crate and indicator utilities.
-//! - `capnp`: Enables [Cap'n Proto](https://capnproto.org/) serialization support.
-//! - `live`: Enables the Tokio async runtime for live trading.
-//! - `tracing-bridge`: Enables the `tracing` subscriber bridge for log integration.
-//! - `extension-module`: Builds the crate as a Python extension module.
+//! - `ffi`: 启用来自 [cbindgen](https://github.com/mozilla/cbindgen) 的 C 外部函数接口 (FFI)。
+//! - `python`: 启用来自 [PyO3](https://pyo3.rs) 的 Python 绑定。
+//! - `defi`: 启用 DeFi (去中心化金融) 支持。
+//! - `indicators`: 包含 `nautilus-indicators` crate 和指标工具。
+//! - `capnp`: 启用 [Cap'n Proto](https://capnproto.org/) 序列化支持。
+//! - `live`: 启用用于实盘交易的 Tokio 异步运行时。
+//! - `tracing-bridge`: 启用用于日志集成的 `tracing` 订阅者桥接。
+//! - `extension-module`: 将 crate 构建为 Python 扩展模块。
 
 #![warn(rustc::all)]
 #![deny(unsafe_code)]

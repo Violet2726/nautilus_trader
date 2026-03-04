@@ -13,9 +13,9 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! In-memory cache for market and execution data, with optional persistent backing.
+//! 市场和执行数据的内存缓存，可选持久化后端支持。
 //!
-//! Provides methods to load, query, and update cached data such as instruments, orders, and prices.
+//! 提供加载、查询和更新缓存数据（如工具、订单和价格）的方法。
 
 pub mod config;
 pub mod database;
@@ -70,7 +70,7 @@ use ustr::Ustr;
 
 use crate::xrate::get_exchange_rate;
 
-/// A common in-memory `Cache` for market and execution related data.
+/// 市场和执行相关数据的通用内存 `Cache`。
 #[cfg_attr(
     feature = "python",
     pyo3::pyclass(module = "nautilus_trader.core.nautilus_pyo3.common", unsendable)
@@ -133,18 +133,18 @@ impl Debug for Cache {
 }
 
 impl Default for Cache {
-    /// Creates a new default [`Cache`] instance.
+    /// 创建一个新的默认 [`Cache`] 实例。
     fn default() -> Self {
         Self::new(Some(CacheConfig::default()), None)
     }
 }
 
 impl Cache {
-    /// Creates a new [`Cache`] instance with optional configuration and database adapter.
+    /// 使用可选配置和数据库适配器创建一个新的 [`Cache`] 实例。
     #[must_use]
-    /// # Note
+    /// # 注意
     ///
-    /// Uses provided `CacheConfig` or defaults, and optional `CacheDatabaseAdapter` for persistence.
+    /// 使用提供的 `CacheConfig` 或默认值，以及可选的 `CacheDatabaseAdapter` 进行持久化。
     pub fn new(
         config: Option<CacheConfig>,
         database: Option<Box<dyn CacheDatabaseAdapter>>,
@@ -178,15 +178,15 @@ impl Cache {
         }
     }
 
-    /// Returns the cache instances memory address.
+    /// 返回缓存实例的内存地址。
     #[must_use]
     pub fn memory_address(&self) -> String {
         format!("{:?}", std::ptr::from_ref(self))
     }
 
-    /// Sets the cache database adapter for persistence.
+    /// 设置用于持久化的缓存数据库适配器。
     ///
-    /// This allows setting or replacing the database adapter after cache construction.
+    /// 这允许在缓存构造后设置或替换数据库适配器。
     pub fn set_database(&mut self, database: Box<dyn CacheDatabaseAdapter>) {
         let type_name = std::any::type_name_of_val(&*database);
         log::info!("Cache database adapter set: {type_name}");
@@ -195,11 +195,11 @@ impl Cache {
 
     // -- COMMANDS --------------------------------------------------------------------------------
 
-    /// Clears and reloads general entries from the database into the cache.
+    /// 清除并从数据库重新加载通用条目到缓存中。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if loading general cache data fails.
+    /// 如果加载通用缓存数据失败，则返回错误。
     pub fn cache_general(&mut self) -> anyhow::Result<()> {
         self.general = match &mut self.database {
             Some(db) => db.load()?,
@@ -213,11 +213,11 @@ impl Cache {
         Ok(())
     }
 
-    /// Loads all core caches (currencies, instruments, accounts, orders, positions) from the database.
+    /// 从数据库加载所有核心缓存（货币、金融工具、账户、订单、持仓）。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if loading all cache data fails.
+    /// 如果加载所有缓存数据失败，则返回错误。
     pub async fn cache_all(&mut self) -> anyhow::Result<()> {
         let cache_map = match &self.database {
             Some(db) => db.load_all().await?,
@@ -233,11 +233,11 @@ impl Cache {
         Ok(())
     }
 
-    /// Clears and reloads the currency cache from the database.
+    /// 清除并从数据库重新加载货币缓存。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if loading currencies cache fails.
+    /// 如果加载货币缓存失败，则返回错误。
     pub async fn cache_currencies(&mut self) -> anyhow::Result<()> {
         self.currencies = match &mut self.database {
             Some(db) => db.load_currencies().await?,
@@ -248,11 +248,11 @@ impl Cache {
         Ok(())
     }
 
-    /// Clears and reloads the instrument cache from the database.
+    /// 清除并从数据库重新加载金融工具缓存。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if loading instruments cache fails.
+    /// 如果加载金融工具缓存失败，则返回错误。
     pub async fn cache_instruments(&mut self) -> anyhow::Result<()> {
         self.instruments = match &mut self.database {
             Some(db) => db.load_instruments().await?,
@@ -263,11 +263,11 @@ impl Cache {
         Ok(())
     }
 
-    /// Clears and reloads the synthetic instrument cache from the database.
+    /// 清除并从数据库重新加载合成金融工具缓存。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if loading synthetic instruments cache fails.
+    /// 如果加载合成金融工具缓存失败，则返回错误。
     pub async fn cache_synthetics(&mut self) -> anyhow::Result<()> {
         self.synthetics = match &mut self.database {
             Some(db) => db.load_synthetics().await?,
@@ -281,11 +281,11 @@ impl Cache {
         Ok(())
     }
 
-    /// Clears and reloads the account cache from the database.
+    /// 清除并从数据库重新加载账户缓存。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if loading accounts cache fails.
+    /// 如果加载账户缓存失败，则返回错误。
     pub async fn cache_accounts(&mut self) -> anyhow::Result<()> {
         self.accounts = match &mut self.database {
             Some(db) => db.load_accounts().await?,
@@ -299,11 +299,11 @@ impl Cache {
         Ok(())
     }
 
-    /// Clears and reloads the order cache from the database.
+    /// 清除并从数据库重新加载订单缓存。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if loading orders cache fails.
+    /// 如果加载订单缓存失败，则返回错误。
     pub async fn cache_orders(&mut self) -> anyhow::Result<()> {
         self.orders = match &mut self.database {
             Some(db) => db.load_orders().await?,
@@ -314,11 +314,11 @@ impl Cache {
         Ok(())
     }
 
-    /// Clears and reloads the position cache from the database.
+    /// 清除并从数据库重新加载持仓缓存。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if loading positions cache fails.
+    /// 如果加载持仓缓存失败，则返回错误。
     pub async fn cache_positions(&mut self) -> anyhow::Result<()> {
         self.positions = match &mut self.database {
             Some(db) => db.load_positions().await?,
@@ -329,64 +329,64 @@ impl Cache {
         Ok(())
     }
 
-    /// Clears the current cache index and re-build.
+    /// 清除当前缓存索引并重建。
     pub fn build_index(&mut self) {
         log::debug!("Building index");
 
-        // Index accounts
+        // 索引账户
         for account_id in self.accounts.keys() {
             self.index
                 .venue_account
                 .insert(account_id.get_issuer(), *account_id);
         }
 
-        // Index orders
+        // 索引订单
         for (client_order_id, order) in &self.orders {
             let instrument_id = order.instrument_id();
             let venue = instrument_id.venue;
             let strategy_id = order.strategy_id();
 
-            // 1: Build index.venue_orders -> {Venue, {ClientOrderId}}
+            // 1: 构建 index.venue_orders -> {Venue, {ClientOrderId}}
             self.index
                 .venue_orders
                 .entry(venue)
                 .or_default()
                 .insert(*client_order_id);
 
-            // 2: Build index.order_ids -> {VenueOrderId, ClientOrderId}
+            // 2: 构建 index.order_ids -> {VenueOrderId, ClientOrderId}
             if let Some(venue_order_id) = order.venue_order_id() {
                 self.index
                     .venue_order_ids
                     .insert(venue_order_id, *client_order_id);
             }
 
-            // 3: Build index.order_position -> {ClientOrderId, PositionId}
+            // 3: 构建 index.order_position -> {ClientOrderId, PositionId}
             if let Some(position_id) = order.position_id() {
                 self.index
                     .order_position
                     .insert(*client_order_id, position_id);
             }
 
-            // 4: Build index.order_strategy -> {ClientOrderId, StrategyId}
+            // 4: 构建 index.order_strategy -> {ClientOrderId, StrategyId}
             self.index
                 .order_strategy
                 .insert(*client_order_id, order.strategy_id());
 
-            // 5: Build index.instrument_orders -> {InstrumentId, {ClientOrderId}}
+            // 5: 构建 index.instrument_orders -> {InstrumentId, {ClientOrderId}}
             self.index
                 .instrument_orders
                 .entry(instrument_id)
                 .or_default()
                 .insert(*client_order_id);
 
-            // 6: Build index.strategy_orders -> {StrategyId, {ClientOrderId}}
+            // 6: 构建 index.strategy_orders -> {StrategyId, {ClientOrderId}}
             self.index
                 .strategy_orders
                 .entry(strategy_id)
                 .or_default()
                 .insert(*client_order_id);
 
-            // 7: Build index.account_orders -> {AccountId, {ClientOrderId}}
+            // 7: 构建 index.account_orders -> {AccountId, {ClientOrderId}}
             if let Some(account_id) = order.account_id() {
                 self.index
                     .account_orders
@@ -395,7 +395,7 @@ impl Cache {
                     .insert(*client_order_id);
             }
 
-            // 8: Build index.exec_algorithm_orders -> {ExecAlgorithmId, {ClientOrderId}}
+            // 8: 构建 index.exec_algorithm_orders -> {ExecAlgorithmId, {ClientOrderId}}
             if let Some(exec_algorithm_id) = order.exec_algorithm_id() {
                 self.index
                     .exec_algorithm_orders
@@ -404,7 +404,7 @@ impl Cache {
                     .insert(*client_order_id);
             }
 
-            // 8: Build index.exec_spawn_orders -> {ClientOrderId, {ClientOrderId}}
+            // 9: 构建 index.exec_spawn_orders -> {ClientOrderId, {ClientOrderId}}
             if let Some(exec_spawn_id) = order.exec_spawn_id() {
                 self.index
                     .exec_spawn_orders
@@ -413,20 +413,20 @@ impl Cache {
                     .insert(*client_order_id);
             }
 
-            // 9: Build index.orders -> {ClientOrderId}
+            // 10: 构建 index.orders -> {ClientOrderId}
             self.index.orders.insert(*client_order_id);
 
-            // 10: Build index.orders_open -> {ClientOrderId}
+            // 11: 构建 index.orders_open -> {ClientOrderId}
             if order.is_open() {
                 self.index.orders_open.insert(*client_order_id);
             }
 
-            // 11: Build index.orders_closed -> {ClientOrderId}
+            // 12: 构建 index.orders_closed -> {ClientOrderId}
             if order.is_closed() {
                 self.index.orders_closed.insert(*client_order_id);
             }
 
-            // 12: Build index.orders_emulated -> {ClientOrderId}
+            // 13: 构建 index.orders_emulated -> {ClientOrderId}
             if let Some(emulation_trigger) = order.emulation_trigger()
                 && emulation_trigger != TriggerType::NoTrigger
                 && !order.is_closed()
@@ -434,91 +434,91 @@ impl Cache {
                 self.index.orders_emulated.insert(*client_order_id);
             }
 
-            // 13: Build index.orders_inflight -> {ClientOrderId}
+            // 14: 构建 index.orders_inflight -> {ClientOrderId}
             if order.is_inflight() {
                 self.index.orders_inflight.insert(*client_order_id);
             }
 
-            // 14: Build index.strategies -> {StrategyId}
+            // 15: 构建 index.strategies -> {StrategyId}
             self.index.strategies.insert(strategy_id);
 
-            // 15: Build index.strategies -> {ExecAlgorithmId}
+            // 16: 构建 index.exec_algorithms -> {ExecAlgorithmId}
             if let Some(exec_algorithm_id) = order.exec_algorithm_id() {
                 self.index.exec_algorithms.insert(exec_algorithm_id);
             }
         }
 
-        // Index positions
+        // 索引持仓
         for (position_id, position) in &self.positions {
             let instrument_id = position.instrument_id;
             let venue = instrument_id.venue;
             let strategy_id = position.strategy_id;
 
-            // 1: Build index.venue_positions -> {Venue, {PositionId}}
+            // 1: 构建 index.venue_positions -> {Venue, {PositionId}}
             self.index
                 .venue_positions
                 .entry(venue)
                 .or_default()
                 .insert(*position_id);
 
-            // 2: Build index.position_strategy -> {PositionId, StrategyId}
+            // 2: 构建 index.position_strategy -> {PositionId, StrategyId}
             self.index
                 .position_strategy
                 .insert(*position_id, position.strategy_id);
 
-            // 3: Build index.position_orders -> {PositionId, {ClientOrderId}}
+            // 3: 构建 index.position_orders -> {PositionId, {ClientOrderId}}
             self.index
                 .position_orders
                 .entry(*position_id)
                 .or_default()
                 .extend(position.client_order_ids().into_iter());
 
-            // 4: Build index.instrument_positions -> {InstrumentId, {PositionId}}
+            // 4: 构建 index.instrument_positions -> {InstrumentId, {PositionId}}
             self.index
                 .instrument_positions
                 .entry(instrument_id)
                 .or_default()
                 .insert(*position_id);
 
-            // 5: Build index.strategy_positions -> {StrategyId, {PositionId}}
+            // 5: 构建 index.strategy_positions -> {StrategyId, {PositionId}}
             self.index
                 .strategy_positions
                 .entry(strategy_id)
                 .or_default()
                 .insert(*position_id);
 
-            // 6: Build index.account_positions -> {AccountId, {PositionId}}
+            // 6: 构建 index.account_positions -> {AccountId, {PositionId}}
             self.index
                 .account_positions
                 .entry(position.account_id)
                 .or_default()
                 .insert(*position_id);
 
-            // 7: Build index.positions -> {PositionId}
+            // 7: 构建 index.positions -> {PositionId}
             self.index.positions.insert(*position_id);
 
-            // 8: Build index.positions_open -> {PositionId}
+            // 8: 构建 index.positions_open -> {PositionId}
             if position.is_open() {
                 self.index.positions_open.insert(*position_id);
             }
 
-            // 9: Build index.positions_closed -> {PositionId}
+            // 9: 构建 index.positions_closed -> {PositionId}
             if position.is_closed() {
                 self.index.positions_closed.insert(*position_id);
             }
 
-            // 10: Build index.strategies -> {StrategyId}
+            // 10: 构建 index.strategies -> {StrategyId}
             self.index.strategies.insert(strategy_id);
         }
     }
 
-    /// Returns whether the cache has a backing database.
+    /// 返回缓存是否有后端数据库。
     #[must_use]
     pub const fn has_backing(&self) -> bool {
         self.config.database.is_some()
     }
 
-    // Calculate the unrealized profit and loss (PnL) for `position`.
+    // 计算 `position` 的未实现盈亏 (PnL)。
     #[must_use]
     pub fn calculate_unrealized_pnl(&self, position: &Position) -> Option<Money> {
         let quote = if let Some(quote) = self.quote(&position.instrument_id) {
@@ -532,7 +532,7 @@ impl Cache {
             return None;
         };
 
-        // Use exit price for mark-to-market: longs exit at bid, shorts exit at ask
+        // 使用退出价格进行盯市（mark-to-market）：多头按买入价退出，空头按卖出价退出
         let last = match position.side {
             PositionSide::Flat | PositionSide::NoPositionSide => {
                 return Some(Money::new(0.0, position.settlement_currency));
@@ -544,14 +544,14 @@ impl Cache {
         Some(position.unrealized_pnl(last))
     }
 
-    /// Checks integrity of data within the cache.
+    /// 检查缓存中数据的完整性。
     ///
-    /// All data should be loaded from the database prior to this call.
-    /// If an error is found then a log error message will also be produced.
+    /// 在调用此函数之前，所有数据都应已从数据库中加载。
+    /// 如果发现错误，也将产生一条日志错误消息。
     ///
     /// # Panics
     ///
-    /// Panics if failure calling system clock.
+    /// 如果调用系统时钟失败，则会抛出 panic。
     #[must_use]
     pub fn check_integrity(&mut self) -> bool {
         let mut error_count = 0;
@@ -665,7 +665,7 @@ impl Cache {
             }
         }
 
-        // Check indexes
+        // 检查索引
         for account_id in self.index.venue_account.values() {
             if !self.accounts.contains_key(account_id) {
                 log::error!(
@@ -702,7 +702,7 @@ impl Cache {
             }
         }
 
-        // Check indexes
+        // 检查索引
         for client_order_id in self.index.order_strategy.keys() {
             if !self.orders.contains_key(client_order_id) {
                 log::error!(
@@ -884,9 +884,9 @@ impl Cache {
         }
     }
 
-    /// Checks for any residual open state and log warnings if any are found.
+    /// 检查是否存在任何残留的“开”状态，如果发现任何残留，则记录警告。
     ///
-    ///'Open state' is considered to be open orders and open positions.
+    /// “开状态”被认为是未完成的订单和未平仓的持仓。
     #[must_use]
     pub fn check_residuals(&self) -> bool {
         log::debug!("Checking residuals");
@@ -908,11 +908,10 @@ impl Cache {
         residuals
     }
 
-    /// Purges all closed orders from the cache that are older than `buffer_secs`.
+    /// 从缓存中清除所有早于 `buffer_secs` 秒的已关闭订单。
     ///
-    ///
-    /// Only orders that have been closed for at least this amount of time will be purged.
-    /// A value of 0 means purge all closed orders regardless of when they were closed.
+    /// 只有关闭时间至少达到此时长的订单才会被清除。
+    /// 值为 0 表示清除所有已关闭订单，无论其关闭时间。
     pub fn purge_closed_orders(&mut self, ts_now: UnixNanos, buffer_secs: u64) {
         log::debug!(
             "Purging closed orders{}",
@@ -933,13 +932,13 @@ impl Cache {
                 && let Some(ts_closed) = order.ts_closed()
                 && ts_closed + buffer_ns <= ts_now
             {
-                // Check any linked orders (contingency orders)
+                // 检查任何关联订单（应急订单 contingency orders）
                 if let Some(linked_order_ids) = order.linked_order_ids() {
                     for linked_order_id in linked_order_ids {
                         if let Some(linked_order) = self.orders.get(linked_order_id)
                             && linked_order.is_open()
                         {
-                            // Do not purge if linked order still open
+                            // 如果关联订单仍开启，则不清除
                             continue 'outer;
                         }
                     }
@@ -967,7 +966,7 @@ impl Cache {
         }
     }
 
-    /// Purges all closed positions from the cache that are older than `buffer_secs`.
+    /// 从缓存中清除早于 `buffer_secs` 秒的所有已平仓持仓。
     pub fn purge_closed_positions(&mut self, ts_now: UnixNanos, buffer_secs: u64) {
         log::debug!(
             "Purging closed positions{}",
@@ -991,9 +990,9 @@ impl Cache {
         }
     }
 
-    /// Purges the order with the `client_order_id` from the cache (if found).
+    /// 从缓存中清除具有 `client_order_id` 的订单（如果找到）。
     ///
-    /// For safety, an order is prevented from being purged if it's open.
+    /// 为了安全起见，如果订单处于开启状态，则禁止将其清除。
     pub fn purge_order(&mut self, client_order_id: ClientOrderId) {
         // Check if order exists and is safe to purge before removing
         let order = self.orders.get(&client_order_id).cloned();
@@ -1006,7 +1005,7 @@ impl Cache {
             return;
         }
 
-        // If order exists in cache, remove it and clean up order-specific indices
+        // 如果订单存在于缓存中，则将其移除并清理特定于订单的索引
         if let Some(ref ord) = order {
             // Safe to purge
             self.orders.remove(&client_order_id);
@@ -1017,26 +1016,26 @@ impl Cache {
                 venue_orders.remove(&client_order_id);
             }
 
-            // Remove venue order ID index if exists
+            // 如果存在，移除交易所订单 ID 索引
             if let Some(venue_order_id) = ord.venue_order_id() {
                 self.index.venue_order_ids.remove(&venue_order_id);
             }
 
-            // Remove from instrument orders index
+            // 从金融工具订单索引中移除
             if let Some(instrument_orders) =
                 self.index.instrument_orders.get_mut(&ord.instrument_id())
             {
                 instrument_orders.remove(&client_order_id);
             }
 
-            // Remove from position orders index if associated with a position
+            // 如果与持仓有关联，则从持仓订单索引中移除
             if let Some(position_id) = ord.position_id()
                 && let Some(position_orders) = self.index.position_orders.get_mut(&position_id)
             {
                 position_orders.remove(&client_order_id);
             }
 
-            // Remove from exec algorithm orders index if it has an exec algorithm
+            // 如果订单有执行算法，则从执行算法订单索引中移除
             if let Some(exec_algorithm_id) = ord.exec_algorithm_id()
                 && let Some(exec_algorithm_orders) =
                     self.index.exec_algorithm_orders.get_mut(&exec_algorithm_id)
@@ -1044,7 +1043,7 @@ impl Cache {
                 exec_algorithm_orders.remove(&client_order_id);
             }
 
-            // Clean up strategy orders reverse index
+            // 清理策略订单反向索引
             if let Some(strategy_orders) = self.index.strategy_orders.get_mut(&ord.strategy_id()) {
                 strategy_orders.remove(&client_order_id);
                 if strategy_orders.is_empty() {
@@ -1052,7 +1051,7 @@ impl Cache {
                 }
             }
 
-            // Clean up account orders index
+            // 清理账户订单索引
             if let Some(account_id) = ord.account_id()
                 && let Some(account_orders) = self.index.account_orders.get_mut(&account_id)
             {
@@ -1062,7 +1061,7 @@ impl Cache {
                 }
             }
 
-            // Clean up exec spawn reverse index (if this order is a spawned child)
+            // 清理执行生成 (exec spawn) 反向索引（如果此订单是一个生成的子订单）
             if let Some(exec_spawn_id) = ord.exec_spawn_id()
                 && let Some(spawn_orders) = self.index.exec_spawn_orders.get_mut(&exec_spawn_id)
             {
@@ -1077,13 +1076,13 @@ impl Cache {
             log::warn!("Order {client_order_id} not found when purging");
         }
 
-        // Always clean up order indices (even if order was not in cache)
+        // 始终清理订单索引（即使订单不在缓存中）
         self.index.order_position.remove(&client_order_id);
         let strategy_id = self.index.order_strategy.remove(&client_order_id);
         self.index.order_client.remove(&client_order_id);
         self.index.client_order_ids.remove(&client_order_id);
 
-        // Clean up reverse index when order not in cache (using forward index)
+        // 当订单不在缓存中时（使用正向索引）清理反向索引
         if let Some(strategy_id) = strategy_id
             && let Some(strategy_orders) = self.index.strategy_orders.get_mut(&strategy_id)
         {
@@ -1093,7 +1092,7 @@ impl Cache {
             }
         }
 
-        // Remove spawn parent entry if this order was a spawn root
+        // 如果此订单是生成根 (spawn root)，移除生成父条目
         self.index.exec_spawn_orders.remove(&client_order_id);
 
         self.index.orders.remove(&client_order_id);
@@ -1104,9 +1103,9 @@ impl Cache {
         self.index.orders_pending_cancel.remove(&client_order_id);
     }
 
-    /// Purges the position with the `position_id` from the cache (if found).
+    /// 从缓存中清除具有 `position_id` 的持仓（如果找到）。
     ///
-    /// For safety, a position is prevented from being purged if it's open.
+    /// 为了安全起见，如果持仓处于未平仓状态，则禁止将其清除。
     pub fn purge_position(&mut self, position_id: PositionId) {
         // Check if position exists and is safe to purge before removing
         let position = self.positions.get(&position_id).cloned();
@@ -1119,32 +1118,32 @@ impl Cache {
             return;
         }
 
-        // If position exists in cache, remove it and clean up position-specific indices
+        // 如果持仓存在于缓存中，则将其移除并清理持仓特定索引
         if let Some(ref pos) = position {
             self.positions.remove(&position_id);
 
-            // Remove from venue positions index
+            // 从交易所持仓索引中移除
             if let Some(venue_positions) =
                 self.index.venue_positions.get_mut(&pos.instrument_id.venue)
             {
                 venue_positions.remove(&position_id);
             }
 
-            // Remove from instrument positions index
+            // 从金融工具持仓索引中移除
             if let Some(instrument_positions) =
                 self.index.instrument_positions.get_mut(&pos.instrument_id)
             {
                 instrument_positions.remove(&position_id);
             }
 
-            // Remove from strategy positions index
+            // 从策略持仓索引中移除
             if let Some(strategy_positions) =
                 self.index.strategy_positions.get_mut(&pos.strategy_id)
             {
                 strategy_positions.remove(&position_id);
             }
 
-            // Remove from account positions index
+            // 从账户持仓索引中移除
             if let Some(account_positions) = self.index.account_positions.get_mut(&pos.account_id) {
                 account_positions.remove(&position_id);
                 if account_positions.is_empty() {
@@ -1152,7 +1151,7 @@ impl Cache {
                 }
             }
 
-            // Remove position ID from orders that reference it
+            // 从引用该持仓的订单中移除持仓 ID
             for client_order_id in pos.client_order_ids() {
                 self.index.order_position.remove(&client_order_id);
             }
@@ -1162,21 +1161,21 @@ impl Cache {
             log::warn!("Position {position_id} not found when purging");
         }
 
-        // Always clean up position indices (even if position not in cache)
+        // 始终清理持仓索引（即使持仓不在缓存中）
         self.index.position_strategy.remove(&position_id);
         self.index.position_orders.remove(&position_id);
         self.index.positions.remove(&position_id);
         self.index.positions_open.remove(&position_id);
         self.index.positions_closed.remove(&position_id);
 
-        // Always clean up position snapshots (even if position not in cache)
+        // 始终清理持仓快照（即使持仓不在缓存中）
         self.position_snapshots.remove(&position_id);
     }
 
-    /// Purges all account state events which are outside the lookback window.
+    /// 清除所有在回顾窗口 (lookback window) 之外的账户状态事件。
     ///
-    /// Only events which are outside the lookback window will be purged.
-    /// A value of 0 means purge all account state events.
+    /// 仅清除回顾窗口之外的事件。
+    /// 值为 0 表示清除所有账户状态事件。
     pub fn purge_account_events(&mut self, ts_now: UnixNanos, lookback_secs: u64) {
         log::debug!(
             "Purging account events{}",
@@ -1201,15 +1200,15 @@ impl Cache {
         }
     }
 
-    /// Clears the caches index.
+    /// 清除缓存索引。
     pub fn clear_index(&mut self) {
         self.index.clear();
         log::debug!("Cleared index");
     }
 
-    /// Resets the cache.
+    /// 重置缓存。
     ///
-    /// All stateful fields are reset to their initial value.
+    /// 所有有状态字段都将被重置为初始值。
     pub fn reset(&mut self) {
         log::debug!("Resetting cache");
 
@@ -1245,9 +1244,9 @@ impl Cache {
         log::info!("Reset cache");
     }
 
-    /// Dispose of the cache which will close any underlying database adapter.
+    /// 销毁缓存，这将关闭任何底层的数据库适配器。
     ///
-    /// If closing the database connection fails, an error is logged.
+    /// 如果关闭数据库连接失败，将记录一条错误信息。
     pub fn dispose(&mut self) {
         if let Some(database) = &mut self.database
             && let Err(e) = database.close()
@@ -1256,9 +1255,9 @@ impl Cache {
         }
     }
 
-    /// Flushes the caches database which permanently removes all persisted data.
+    /// 刷新缓存数据库，这将永久移除所有持久化数据。
     ///
-    /// If flushing the database connection fails, an error is logged.
+    /// 如果刷新数据库连接失败，将记录一条错误信息。
     pub fn flush_db(&mut self) {
         if let Some(database) = &mut self.database
             && let Err(e) = database.flush()
@@ -1267,13 +1266,13 @@ impl Cache {
         }
     }
 
-    /// Adds a raw bytes `value` to the cache under the `key`.
+    /// 在 `key` 下向缓存中添加一个原始字节 `value`。
     ///
-    /// The cache stores only raw bytes; interpretation is the caller's responsibility.
+    /// 缓存仅存储原始字节；解释由调用者负责。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if persisting the entry to the backing database fails.
+    /// 如果将条目持久化到后端数据库失败，则返回错误。
     pub fn add(&mut self, key: &str, value: Bytes) -> anyhow::Result<()> {
         check_valid_string_ascii(key, stringify!(key))?;
         check_predicate_false(value.is_empty(), stringify!(value))?;
@@ -1287,11 +1286,11 @@ impl Cache {
         Ok(())
     }
 
-    /// Adds an `OrderBook` to the cache.
+    /// 向缓存添加一个 `OrderBook`。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if persisting the order book to the backing database fails.
+    /// 如果将订单簿持久化到后端数据库失败，则返回错误。
     pub fn add_order_book(&mut self, book: OrderBook) -> anyhow::Result<()> {
         log::debug!("Adding `OrderBook` {}", book.instrument_id);
 
@@ -1305,11 +1304,11 @@ impl Cache {
         Ok(())
     }
 
-    /// Adds an `OwnOrderBook` to the cache.
+    /// 向缓存添加一个 `OwnOrderBook`。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if persisting the own order book fails.
+    /// 如果持久化自有订单簿失败，则返回错误。
     pub fn add_own_order_book(&mut self, own_book: OwnOrderBook) -> anyhow::Result<()> {
         log::debug!("Adding `OwnOrderBook` {}", own_book.instrument_id);
 
@@ -1317,11 +1316,11 @@ impl Cache {
         Ok(())
     }
 
-    /// Adds the `mark_price` update to the cache.
+    /// 向缓存添加 `mark_price` 更新。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if persisting the mark price to the backing database fails.
+    /// 如果将标记价格持久化到后端数据库失败，则返回错误。
     pub fn add_mark_price(&mut self, mark_price: MarkPriceUpdate) -> anyhow::Result<()> {
         log::debug!("Adding `MarkPriceUpdate` for {}", mark_price.instrument_id);
 
@@ -1337,11 +1336,11 @@ impl Cache {
         Ok(())
     }
 
-    /// Adds the `index_price` update to the cache.
+    /// 向缓存添加 `index_price` 更新。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if persisting the index price to the backing database fails.
+    /// 如果将指数价格持久化到后端数据库失败，则返回错误。
     pub fn add_index_price(&mut self, index_price: IndexPriceUpdate) -> anyhow::Result<()> {
         log::debug!(
             "Adding `IndexPriceUpdate` for {}",
@@ -1360,11 +1359,11 @@ impl Cache {
         Ok(())
     }
 
-    /// Adds the `funding_rate` update to the cache.
+    /// 向缓存添加 `funding_rate` 更新。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if persisting the funding rate update to the backing database fails.
+    /// 如果将资金费率更新持久化到后端数据库失败，则返回错误。
     pub fn add_funding_rate(&mut self, funding_rate: FundingRateUpdate) -> anyhow::Result<()> {
         log::debug!(
             "Adding `FundingRateUpdate` for {}",
@@ -1383,11 +1382,11 @@ impl Cache {
         Ok(())
     }
 
-    /// Adds the given `funding rates` to the cache.
+    /// 向缓存添加给定的 `funding rates`。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if persisting the trade ticks to the backing database fails.
+    /// 如果将成交 Tick 持久化到后端数据库失败，则返回错误。
     pub fn add_funding_rates(&mut self, funding_rates: &[FundingRateUpdate]) -> anyhow::Result<()> {
         check_slice_not_empty(funding_rates, stringify!(funding_rates))?;
 
@@ -1416,11 +1415,11 @@ impl Cache {
         Ok(())
     }
 
-    /// Adds the `quote` tick to the cache.
+    /// 向缓存中添加 `quote` Tick。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if persisting the quote tick to the backing database fails.
+    /// 如果将报价 Tick 持久化到后端数据库失败，则返回错误。
     pub fn add_quote(&mut self, quote: QuoteTick) -> anyhow::Result<()> {
         log::debug!("Adding `QuoteTick` {}", quote.instrument_id);
 
@@ -1438,11 +1437,11 @@ impl Cache {
         Ok(())
     }
 
-    /// Adds the `quotes` to the cache.
+    /// 向缓存中添加 `quotes`。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if persisting the quote ticks to the backing database fails.
+    /// 如果将报价 Tick 持久化到后端数据库失败，则返回错误。
     pub fn add_quotes(&mut self, quotes: &[QuoteTick]) -> anyhow::Result<()> {
         check_slice_not_empty(quotes, stringify!(quotes))?;
 
@@ -1468,11 +1467,11 @@ impl Cache {
         Ok(())
     }
 
-    /// Adds the `trade` tick to the cache.
+    /// 向缓存中添加 `trade` Tick。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if persisting the trade tick to the backing database fails.
+    /// 如果将成交 Tick 持久化到后端数据库失败，则返回错误。
     pub fn add_trade(&mut self, trade: TradeTick) -> anyhow::Result<()> {
         log::debug!("Adding `TradeTick` {}", trade.instrument_id);
 
@@ -1490,11 +1489,11 @@ impl Cache {
         Ok(())
     }
 
-    /// Adds the give `trades` to the cache.
+    /// 向缓存添加给定的 `trades`。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if persisting the trade ticks to the backing database fails.
+    /// 如果将成交 Tick 持久化到后端数据库失败，则返回错误。
     pub fn add_trades(&mut self, trades: &[TradeTick]) -> anyhow::Result<()> {
         check_slice_not_empty(trades, stringify!(trades))?;
 
@@ -1520,11 +1519,11 @@ impl Cache {
         Ok(())
     }
 
-    /// Adds the `bar` to the cache.
+    /// 向缓存中添加 `bar`。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if persisting the bar to the backing database fails.
+    /// 如果将 Bar 持久化到后端数据库失败，则返回错误。
     pub fn add_bar(&mut self, bar: Bar) -> anyhow::Result<()> {
         log::debug!("Adding `Bar` {}", bar.bar_type);
 
@@ -1542,11 +1541,11 @@ impl Cache {
         Ok(())
     }
 
-    /// Adds the `bars` to the cache.
+    /// 向缓存中添加 `bars`。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if persisting the bars to the backing database fails.
+    /// 如果将 Bar 持久化到后端数据库失败，则返回错误。
     pub fn add_bars(&mut self, bars: &[Bar]) -> anyhow::Result<()> {
         check_slice_not_empty(bars, stringify!(bars))?;
 
@@ -1572,11 +1571,11 @@ impl Cache {
         Ok(())
     }
 
-    /// Adds the `greeks` data to the cache.
+    /// 向缓存添加 `greeks` 数据。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if persisting the greeks data to the backing database fails.
+    /// 如果将希腊字母数据持久化到后端数据库失败，则返回错误。
     pub fn add_greeks(&mut self, greeks: GreeksData) -> anyhow::Result<()> {
         log::debug!("Adding `GreeksData` {}", greeks.instrument_id);
 
@@ -1590,7 +1589,7 @@ impl Cache {
         Ok(())
     }
 
-    /// Gets the greeks data for the `instrument_id`.
+    /// 获取 `instrument_id` 的希腊字母数据。
     pub fn greeks(&self, instrument_id: &InstrumentId) -> Option<GreeksData> {
         self.greeks.get(instrument_id).cloned()
     }
@@ -1599,7 +1598,7 @@ impl Cache {
     ///
     /// # Errors
     ///
-    /// Returns an error if persisting the yield curve data to the backing database fails.
+    /// 如果将收益率曲线数据持久化到后端数据库失败，则返回错误。
     pub fn add_yield_curve(&mut self, yield_curve: YieldCurveData) -> anyhow::Result<()> {
         log::debug!("Adding `YieldCurveData` {}", yield_curve.curve_name);
 
@@ -1614,7 +1613,7 @@ impl Cache {
         Ok(())
     }
 
-    /// Gets the yield curve for the `key`.
+    /// 获取 `key` 对应的收益率曲线。
     pub fn yield_curve(&self, key: &str) -> Option<Box<dyn Fn(f64) -> f64>> {
         self.yield_curves.get(key).map(|curve| {
             let curve_clone = curve.clone();
@@ -1623,11 +1622,11 @@ impl Cache {
         })
     }
 
-    /// Adds the `currency` to the cache.
+    /// 向缓存添加 `currency`。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if persisting the currency to the backing database fails.
+    /// 如果将货币持久化到后端数据库失败，则返回错误。
     pub fn add_currency(&mut self, currency: Currency) -> anyhow::Result<()> {
         if self.currencies.contains_key(&currency.code) {
             return Ok(());
@@ -1642,15 +1641,15 @@ impl Cache {
         Ok(())
     }
 
-    /// Adds the `instrument` to the cache.
+    /// 向缓存添加 `instrument`。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if persisting the instrument to the backing database fails.
+    /// 如果将金融工具持久化到后端数据库失败，则返回错误。
     pub fn add_instrument(&mut self, instrument: InstrumentAny) -> anyhow::Result<()> {
         log::debug!("Adding `Instrument` {}", instrument.id());
 
-        // Ensure currencies exist in cache - safe to call repeatedly as add_currency is idempotent
+        // 确保缓存中存在货币 - 重复调用系统 add_currency 是安全的，因为它是幂等的 (idempotent)
         if let Some(base_currency) = instrument.base_currency() {
             self.add_currency(base_currency)?;
         }
@@ -1665,11 +1664,11 @@ impl Cache {
         Ok(())
     }
 
-    /// Adds the `synthetic` instrument to the cache.
+    /// 向缓存添加 `synthetic` 金融工具。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if persisting the synthetic instrument to the backing database fails.
+    /// 如果将合成金融工具持久化到后端数据库失败，则返回错误。
     pub fn add_synthetic(&mut self, synthetic: SyntheticInstrument) -> anyhow::Result<()> {
         log::debug!("Adding `SyntheticInstrument` {}", synthetic.id);
 
@@ -1681,11 +1680,11 @@ impl Cache {
         Ok(())
     }
 
-    /// Adds the `account` to the cache.
+    /// 向缓存添加 `account`。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if persisting the account to the backing database fails.
+    /// 如果将账户持久化到后端数据库失败，则返回错误。
     pub fn add_account(&mut self, account: AccountAny) -> anyhow::Result<()> {
         log::debug!("Adding `Account` {}", account.id());
 
@@ -1701,13 +1700,13 @@ impl Cache {
         Ok(())
     }
 
-    /// Indexes the `client_order_id` with the `venue_order_id`.
+    /// 使用 `venue_order_id` 索引 `client_order_id`。
     ///
-    /// The `overwrite` parameter determines whether to overwrite any existing cached identifier.
+    /// `overwrite` 参数决定是否覆盖任何现有的缓存标识符。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if the existing venue order ID conflicts and overwrite is false.
+    /// 如果现有的交易所订单 ID 冲突且 overwrite 为 false，则返回错误。
     pub fn add_venue_order_id(
         &mut self,
         client_order_id: &ClientOrderId,
@@ -1736,17 +1735,16 @@ impl Cache {
         Ok(())
     }
 
-    /// Adds the `order` to the cache indexed with any given identifiers.
+    /// 将 `order` 添加到使用给定标识符索引的缓存中。
     ///
-    /// # Parameters
+    /// # 参数
     ///
-    /// `override_existing`: If the added order should 'override' any existing order and replace
-    /// it in the cache. This is currently used for emulated orders which are
-    /// being released and transformed into another type.
+    /// `override_existing`: 添加的订单是否应“覆盖”现有的任何订单并替换。
+    /// 目前用于将正在释放并转换为另一种类型的模拟订单。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if not `replace_existing` and the `order.client_order_id` is already contained in the cache.
+    /// 如果不是 `replace_existing` 且 `order.client_order_id` 已存在于缓存中，则返回错误。
     pub fn add_order(
         &mut self,
         order: OrderAny,
@@ -1778,28 +1776,28 @@ impl Cache {
             .insert(client_order_id, strategy_id);
         self.index.strategies.insert(strategy_id);
 
-        // Update venue -> orders index
+        // 更新交易所 (venue) -> 订单索引
         self.index
             .venue_orders
             .entry(venue)
             .or_default()
             .insert(client_order_id);
 
-        // Update instrument -> orders index
+        // 更新金融工具 -> 订单索引
         self.index
             .instrument_orders
             .entry(instrument_id)
             .or_default()
             .insert(client_order_id);
 
-        // Update strategy -> orders index
+        // 更新策略 -> 订单索引
         self.index
             .strategy_orders
             .entry(strategy_id)
             .or_default()
             .insert(client_order_id);
 
-        // Update account -> orders index (if account_id known at creation)
+        // 更新账户 -> 订单索引（如果创建时已知 account_id）
         if let Some(account_id) = order.account_id() {
             self.index
                 .account_orders
@@ -1808,7 +1806,7 @@ impl Cache {
                 .insert(client_order_id);
         }
 
-        // Update exec_algorithm -> orders index
+        // 更新执行算法 -> 订单索引
         if let Some(exec_algorithm_id) = exec_algorithm_id {
             self.index.exec_algorithms.insert(exec_algorithm_id);
 
@@ -1819,7 +1817,7 @@ impl Cache {
                 .insert(client_order_id);
         }
 
-        // Update exec_spawn -> orders index
+        // 更新执行生成 (exec_spawn) -> 订单索引
         if let Some(exec_spawn_id) = exec_spawn_id {
             self.index
                 .exec_spawn_orders
@@ -1835,7 +1833,7 @@ impl Cache {
             self.index.orders_emulated.insert(client_order_id);
         }
 
-        // Index position ID if provided
+        // 如果提供了持仓 ID，则建立索引
         if let Some(position_id) = position_id {
             self.add_position_id(
                 &position_id,
@@ -1845,7 +1843,7 @@ impl Cache {
             )?;
         }
 
-        // Index client ID if provided
+        // 如果提供了客户端 ID，则建立索引
         if let Some(client_id) = client_id {
             self.index.order_client.insert(client_order_id, client_id);
             log::debug!("Indexed {client_id:?}");
@@ -1864,11 +1862,11 @@ impl Cache {
         Ok(())
     }
 
-    /// Adds the `order_list` to the cache.
+    /// 向缓存添加 `order_list`。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if the order list ID is already contained in the cache.
+    /// 如果订单列表 ID 已存在于缓存中，则返回错误。
     pub fn add_order_list(&mut self, order_list: OrderList) -> anyhow::Result<()> {
         let order_list_id = order_list.id;
         check_key_not_in_map(
@@ -1883,11 +1881,11 @@ impl Cache {
         Ok(())
     }
 
-    /// Indexes the `position_id` with the other given IDs.
+    /// 使用其它给定 ID 索引 `position_id`。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if indexing position ID in the backing database fails.
+    /// 如果在后端数据库中索引持仓 ID 失败，则返回错误。
     pub fn add_position_id(
         &mut self,
         position_id: &PositionId,
@@ -1933,11 +1931,11 @@ impl Cache {
         Ok(())
     }
 
-    /// Adds the `position` to the cache.
+    /// 向缓存添加 `position`。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if persisting the position to the backing database fails.
+    /// 如果将持仓持久化到后端数据库失败，则返回错误。
     pub fn add_position(&mut self, position: Position, _oms_type: OmsType) -> anyhow::Result<()> {
         self.positions.insert(position.id, position.clone());
         self.index.positions.insert(position.id);
@@ -1957,7 +1955,7 @@ impl Cache {
         let venue_positions = self.index.venue_positions.entry(venue).or_default();
         venue_positions.insert(position.id);
 
-        // Index: InstrumentId -> AHashSet
+        // 索引: InstrumentId -> AHashSet
         let instrument_id = position.instrument_id;
         let instrument_positions = self
             .index
@@ -1966,7 +1964,7 @@ impl Cache {
             .or_default();
         instrument_positions.insert(position.id);
 
-        // Index: AccountId -> AHashSet<PositionId>
+        // 索引: AccountId -> AHashSet<PositionId>
         self.index
             .account_positions
             .entry(position.account_id)
@@ -1988,11 +1986,11 @@ impl Cache {
         Ok(())
     }
 
-    /// Updates the `account` in the cache.
+    /// 在缓存中更新 `account`。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if updating the account in the database fails.
+    /// 如果在数据库中更新账户失败，则返回错误。
     pub fn update_account(&mut self, account: AccountAny) -> anyhow::Result<()> {
         let account_id = account.id();
         self.accounts.insert(account_id, account.clone());
@@ -2003,11 +2001,11 @@ impl Cache {
         Ok(())
     }
 
-    /// Updates the `order` in the cache.
+    /// 在缓存中更新 `order`。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if updating the order in the database fails.
+    /// 如果在数据库中更新订单失败，则返回错误。
     pub fn update_order(&mut self, order: &OrderAny) -> anyhow::Result<()> {
         let client_order_id = order.client_order_id();
 
@@ -2078,20 +2076,20 @@ impl Cache {
         Ok(())
     }
 
-    /// Updates the `order` as pending cancel locally.
+    /// 在本地将订单更新为待取消 (pending cancel) 状态。
     pub fn update_order_pending_cancel_local(&mut self, order: &OrderAny) {
         self.index
             .orders_pending_cancel
             .insert(order.client_order_id());
     }
 
-    /// Updates the `position` in the cache.
+    /// 在缓存中更新持仓。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if updating the position in the database fails.
+    /// 如果在数据库中更新持仓失败，则返回错误。
     pub fn update_position(&mut self, position: &Position) -> anyhow::Result<()> {
-        // Update open/closed state
+        // 更新开启/关闭状态
 
         if position.is_open() {
             self.index.positions_open.insert(position.id);
@@ -2114,12 +2112,11 @@ impl Cache {
         Ok(())
     }
 
-    /// Creates a snapshot of the `position` by cloning it, assigning a new ID,
-    /// serializing it, and storing it in the position snapshots.
+    /// 通过克隆持仓、分配新 ID、序列化并存储在持仓快照中，以此创建持仓快照。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if serializing or storing the position snapshot fails.
+    /// 如果序列化或存储持仓快照失败，则返回错误。
     pub fn snapshot_position(&mut self, position: &Position) -> anyhow::Result<()> {
         let position_id = position.id;
 
@@ -2127,7 +2124,7 @@ impl Cache {
         let new_id = format!("{}-{}", position_id.as_str(), UUID4::new());
         copied_position.id = PositionId::new(new_id);
 
-        // Serialize the position (TODO: temporarily just to JSON to remove a dependency)
+        // 序列化持仓 (TODO: 暂时使用 JSON 以移除一个依赖)
         let position_serialized = serde_json::to_vec(&copied_position)?;
 
         let snapshots: Option<&Bytes> = self.position_snapshots.get(&position_id);
@@ -2145,11 +2142,11 @@ impl Cache {
         Ok(())
     }
 
-    /// Creates a snapshot of the `position` state in the database.
+    /// 在数据库中创建持仓状态快照。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if snapshotting the position state fails.
+    /// 如果持仓状态快照失败，则返回错误。
     pub fn snapshot_position_state(
         &mut self,
         position: &Position,
@@ -2182,32 +2179,32 @@ impl Cache {
         todo!()
     }
 
-    /// Gets the OMS type for the `position_id`.
+    /// 获取持仓 ID 对应的 OMS 类型。
     #[must_use]
     pub fn oms_type(&self, position_id: &PositionId) -> Option<OmsType> {
-        // Get OMS type from the index
+        // 从索引中获取 OMS 类型
         if self.index.position_strategy.contains_key(position_id) {
-            // For now, we'll default to NETTING
-            // TODO: Store and retrieve actual OMS type per position
+            // 目前，我们将默认为 NETTING 
+            // TODO: 按持仓存储和检索实际的 OMS 类型
             Some(OmsType::Netting)
         } else {
             None
         }
     }
 
-    /// Gets position snapshot bytes for the `position_id`.
+    /// 获取持仓 ID 对应的快照字节。
     #[must_use]
     pub fn position_snapshot_bytes(&self, position_id: &PositionId) -> Option<Vec<u8>> {
         self.position_snapshots.get(position_id).map(|b| b.to_vec())
     }
 
-    /// Gets position snapshot IDs for the `instrument_id`.
+    /// 获取金融工具 ID 对应的持仓快照 ID。
     #[must_use]
     pub fn position_snapshot_ids(&self, instrument_id: &InstrumentId) -> AHashSet<PositionId> {
-        // Get snapshot position IDs that match the instrument
+        // 获取与工具匹配的快照持仓 ID
         let mut result = AHashSet::new();
         for (position_id, _) in &self.position_snapshots {
-            // Check if this position is for the requested instrument
+            // 检查持仓是否属于请求的工具
             if let Some(position) = self.positions.get(position_id)
                 && position.instrument_id == *instrument_id
             {
@@ -2217,11 +2214,11 @@ impl Cache {
         result
     }
 
-    /// Snapshots the `order` state in the database.
+    /// 在数据库中记录订单状态快照。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if snapshotting the order state fails.
+    /// 如果订单状态快照失败，则返回错误。
     pub fn snapshot_order_state(&self, order: &OrderAny) -> anyhow::Result<()> {
         let database = if let Some(database) = &self.database {
             database
@@ -2396,7 +2393,7 @@ impl Cache {
         query
     }
 
-    /// Retrieves orders corresponding to the `client_order_ids`, optionally filtering by `side`.
+    /// 检索与 `client_order_ids` 对应的订单，可选择按 `side` 进行过滤。
     ///
     /// # Panics
     ///
@@ -2422,11 +2419,11 @@ impl Cache {
         orders
     }
 
-    /// Retrieves positions corresponding to the `position_ids`, optionally filtering by `side`.
+    /// 检索与 `position_ids` 对应的持仓，可选择按 `side` 进行过滤。
     ///
     /// # Panics
     ///
-    /// Panics if any `position_id` in the set is not found in the cache.
+    /// 如果集合中任何 `position_id` 在缓存中未找到，则触发 Panic。
     fn get_positions_for_ids(
         &self,
         position_ids: &AHashSet<PositionId>,
@@ -2448,7 +2445,7 @@ impl Cache {
         positions
     }
 
-    /// Returns the `ClientOrderId`s of all orders.
+    /// 返回所有订单的 `ClientOrderId`。
     #[must_use]
     pub fn client_order_ids(
         &self,
@@ -2465,7 +2462,7 @@ impl Cache {
         }
     }
 
-    /// Returns the `ClientOrderId`s of all open orders.
+    /// 返回所有未结订单 (open orders) 的 `ClientOrderId`。
     #[must_use]
     pub fn client_order_ids_open(
         &self,
@@ -2487,7 +2484,7 @@ impl Cache {
         }
     }
 
-    /// Returns the `ClientOrderId`s of all closed orders.
+    /// 返回所有已关闭订单 (closed orders) 的 `ClientOrderId`。
     #[must_use]
     pub fn client_order_ids_closed(
         &self,
@@ -2509,7 +2506,7 @@ impl Cache {
         }
     }
 
-    /// Returns the `ClientOrderId`s of all emulated orders.
+    /// 返回所有模拟订单 (emulated orders) 的 `ClientOrderId`。
     #[must_use]
     pub fn client_order_ids_emulated(
         &self,
@@ -2531,7 +2528,7 @@ impl Cache {
         }
     }
 
-    /// Returns the `ClientOrderId`s of all in-flight orders.
+    /// 返回所有在途订单 (in-flight orders) 的 `ClientOrderId`。
     #[must_use]
     pub fn client_order_ids_inflight(
         &self,
@@ -2553,7 +2550,7 @@ impl Cache {
         }
     }
 
-    /// Returns `PositionId`s of all positions.
+    /// 返回所有持仓的 `PositionId`。
     #[must_use]
     pub fn position_ids(
         &self,
@@ -2570,7 +2567,7 @@ impl Cache {
         }
     }
 
-    /// Returns the `PositionId`s of all open positions.
+    /// 返回所有未平仓持仓 (open positions) 的 `PositionId`。
     #[must_use]
     pub fn position_open_ids(
         &self,
@@ -2592,7 +2589,7 @@ impl Cache {
         }
     }
 
-    /// Returns the `PositionId`s of all closed positions.
+    /// 返回所有已平仓持仓 (closed positions) 的 `PositionId`。
     #[must_use]
     pub fn position_closed_ids(
         &self,
@@ -2614,19 +2611,19 @@ impl Cache {
         }
     }
 
-    /// Returns the `ComponentId`s of all actors.
+    /// 返回所有 Actor 的 `ComponentId`。
     #[must_use]
     pub fn actor_ids(&self) -> AHashSet<ComponentId> {
         self.index.actors.clone()
     }
 
-    /// Returns the `StrategyId`s of all strategies.
+    /// 返回所有策略的 `StrategyId`。
     #[must_use]
     pub fn strategy_ids(&self) -> AHashSet<StrategyId> {
         self.index.strategies.clone()
     }
 
-    /// Returns the `ExecAlgorithmId`s of all execution algorithms.
+    /// 返回所有执行算法的 `ExecAlgorithmId`。
     #[must_use]
     pub fn exec_algorithm_ids(&self) -> AHashSet<ExecAlgorithmId> {
         self.index.exec_algorithms.clone()
@@ -2634,13 +2631,13 @@ impl Cache {
 
     // -- ORDER QUERIES ---------------------------------------------------------------------------
 
-    /// Gets a reference to the order with the `client_order_id` (if found).
+    /// 获取具有 `client_order_id` 的订单引用（如果找到）。
     #[must_use]
     pub fn order(&self, client_order_id: &ClientOrderId) -> Option<&OrderAny> {
         self.orders.get(client_order_id)
     }
 
-    /// Gets cloned orders for the given `client_order_ids`, logging an error for any missing.
+    /// 获取给定 `client_order_ids` 的克隆订单，对缺失的订单记录错误。
     #[must_use]
     pub fn orders_for_ids(
         &self,
@@ -2657,31 +2654,31 @@ impl Cache {
         orders
     }
 
-    /// Gets a reference to the order with the `client_order_id` (if found).
+    /// 获取具有 `client_order_id` 的可变订单引用（如果找到）。
     #[must_use]
     pub fn mut_order(&mut self, client_order_id: &ClientOrderId) -> Option<&mut OrderAny> {
         self.orders.get_mut(client_order_id)
     }
 
-    /// Gets a reference to the client order ID for the `venue_order_id` (if found).
+    /// 获取 `venue_order_id` 对应的客户订单 ID 引用（如果找到）。
     #[must_use]
     pub fn client_order_id(&self, venue_order_id: &VenueOrderId) -> Option<&ClientOrderId> {
         self.index.venue_order_ids.get(venue_order_id)
     }
 
-    /// Gets a reference to the venue order ID for the `client_order_id` (if found).
+    /// 获取 `client_order_id` 对应的交易所订单 ID 引用（如果找到）。
     #[must_use]
     pub fn venue_order_id(&self, client_order_id: &ClientOrderId) -> Option<&VenueOrderId> {
         self.index.client_order_ids.get(client_order_id)
     }
 
-    /// Gets a reference to the client ID indexed for then `client_order_id` (if found).
+    /// 获取为 `client_order_id` 索引的客户端 ID 引用（如果找到）。
     #[must_use]
     pub fn client_id(&self, client_order_id: &ClientOrderId) -> Option<&ClientId> {
         self.index.order_client.get(client_order_id)
     }
 
-    /// Returns references to all orders matching the optional filter parameters.
+    /// 返回匹配可选过滤参数的所有订单引用。
     #[must_use]
     pub fn orders(
         &self,
@@ -2695,7 +2692,7 @@ impl Cache {
         self.get_orders_for_ids(&client_order_ids, side)
     }
 
-    /// Returns references to all open orders matching the optional filter parameters.
+    /// 返回匹配可选过滤参数的所有未结订单引用。
     #[must_use]
     pub fn orders_open(
         &self,
@@ -2710,7 +2707,7 @@ impl Cache {
         self.get_orders_for_ids(&client_order_ids, side)
     }
 
-    /// Returns references to all closed orders matching the optional filter parameters.
+    /// 返回匹配可选过滤参数的所有已关闭订单引用。
     #[must_use]
     pub fn orders_closed(
         &self,
@@ -2725,7 +2722,7 @@ impl Cache {
         self.get_orders_for_ids(&client_order_ids, side)
     }
 
-    /// Returns references to all emulated orders matching the optional filter parameters.
+    /// 返回匹配可选过滤参数的所有模拟订单引用。
     #[must_use]
     pub fn orders_emulated(
         &self,
@@ -2740,7 +2737,7 @@ impl Cache {
         self.get_orders_for_ids(&client_order_ids, side)
     }
 
-    /// Returns references to all in-flight orders matching the optional filter parameters.
+    /// 返回匹配可选过滤参数的所有在途订单引用。
     #[must_use]
     pub fn orders_inflight(
         &self,
@@ -2755,7 +2752,7 @@ impl Cache {
         self.get_orders_for_ids(&client_order_ids, side)
     }
 
-    /// Returns references to all orders for the `position_id`.
+    /// 返回 `position_id` 对应的所有订单引用。
     #[must_use]
     pub fn orders_for_position(&self, position_id: &PositionId) -> Vec<&OrderAny> {
         let client_order_ids = self.index.position_orders.get(position_id);
@@ -2767,43 +2764,43 @@ impl Cache {
         }
     }
 
-    /// Returns whether an order with the `client_order_id` exists.
+    /// 返回具有 `client_order_id` 的订单是否存在。
     #[must_use]
     pub fn order_exists(&self, client_order_id: &ClientOrderId) -> bool {
         self.index.orders.contains(client_order_id)
     }
 
-    /// Returns whether an order with the `client_order_id` is open.
+    /// 返回具有 `client_order_id` 的订单是否处于开启状态。
     #[must_use]
     pub fn is_order_open(&self, client_order_id: &ClientOrderId) -> bool {
         self.index.orders_open.contains(client_order_id)
     }
 
-    /// Returns whether an order with the `client_order_id` is closed.
+    /// 返回具有 `client_order_id` 的订单是否已关闭。
     #[must_use]
     pub fn is_order_closed(&self, client_order_id: &ClientOrderId) -> bool {
         self.index.orders_closed.contains(client_order_id)
     }
 
-    /// Returns whether an order with the `client_order_id` is emulated.
+    /// 返回具有 `client_order_id` 的订单是否为模拟订单。
     #[must_use]
     pub fn is_order_emulated(&self, client_order_id: &ClientOrderId) -> bool {
         self.index.orders_emulated.contains(client_order_id)
     }
 
-    /// Returns whether an order with the `client_order_id` is in-flight.
+    /// 返回具有 `client_order_id` 的订单是否在途。
     #[must_use]
     pub fn is_order_inflight(&self, client_order_id: &ClientOrderId) -> bool {
         self.index.orders_inflight.contains(client_order_id)
     }
 
-    /// Returns whether an order with the `client_order_id` is `PENDING_CANCEL` locally.
+    /// 返回具有 `client_order_id` 的订单在本地是否处于 `PENDING_CANCEL` 状态。
     #[must_use]
     pub fn is_order_pending_cancel_local(&self, client_order_id: &ClientOrderId) -> bool {
         self.index.orders_pending_cancel.contains(client_order_id)
     }
 
-    /// Returns the count of all open orders.
+    /// 返回所有未结订单的计数。
     #[must_use]
     pub fn orders_open_count(
         &self,
@@ -2817,7 +2814,7 @@ impl Cache {
             .len()
     }
 
-    /// Returns the count of all closed orders.
+    /// 返回所有已关闭订单的计数。
     #[must_use]
     pub fn orders_closed_count(
         &self,
@@ -2831,7 +2828,7 @@ impl Cache {
             .len()
     }
 
-    /// Returns the count of all emulated orders.
+    /// 返回所有模拟订单的计数。
     #[must_use]
     pub fn orders_emulated_count(
         &self,
@@ -2845,7 +2842,7 @@ impl Cache {
             .len()
     }
 
-    /// Returns the count of all in-flight orders.
+    /// 返回所有在途订单的计数。
     #[must_use]
     pub fn orders_inflight_count(
         &self,
@@ -2859,7 +2856,7 @@ impl Cache {
             .len()
     }
 
-    /// Returns the count of all orders.
+    /// 返回所有订单的总计数。
     #[must_use]
     pub fn orders_total_count(
         &self,
@@ -2873,13 +2870,13 @@ impl Cache {
             .len()
     }
 
-    /// Returns the order list for the `order_list_id`.
+    /// 返回 `order_list_id` 对应的订单列表。
     #[must_use]
     pub fn order_list(&self, order_list_id: &OrderListId) -> Option<&OrderList> {
         self.order_lists.get(order_list_id)
     }
 
-    /// Returns all order lists matching the optional filter parameters.
+    /// 返回匹配可选过滤参数的所有订单列表。
     #[must_use]
     pub fn order_lists(
         &self,
@@ -2915,7 +2912,7 @@ impl Cache {
         order_lists
     }
 
-    /// Returns whether an order list with the `order_list_id` exists.
+    /// 返回具有 `order_list_id` 的订单列表是否存在。
     #[must_use]
     pub fn order_list_exists(&self, order_list_id: &OrderListId) -> bool {
         self.order_lists.contains_key(order_list_id)
@@ -2923,8 +2920,7 @@ impl Cache {
 
     // -- EXEC ALGORITHM QUERIES ------------------------------------------------------------------
 
-    /// Returns references to all orders associated with the `exec_algorithm_id` matching the
-    /// optional filter parameters.
+    /// 返回与 `exec_algorithm_id` 关联并匹配可选过滤参数的所有订单引用。
     #[must_use]
     pub fn orders_for_exec_algorithm(
         &self,
@@ -2952,7 +2948,7 @@ impl Cache {
         }
     }
 
-    /// Returns references to all orders with the `exec_spawn_id`.
+    /// 返回具有 `exec_spawn_id` 的所有订单引用。
     #[must_use]
     pub fn orders_for_exec_spawn(&self, exec_spawn_id: &ClientOrderId) -> Vec<&OrderAny> {
         self.get_orders_for_ids(
@@ -2964,7 +2960,7 @@ impl Cache {
         )
     }
 
-    /// Returns the total order quantity for the `exec_spawn_id`.
+    /// 返回 `exec_spawn_id` 对应的总订单数量。
     #[must_use]
     pub fn exec_spawn_total_quantity(
         &self,
@@ -2989,7 +2985,7 @@ impl Cache {
         total_quantity
     }
 
-    /// Returns the total filled quantity for all orders with the `exec_spawn_id`.
+    /// 返回具有 `exec_spawn_id` 的所有订单的总成交数量。
     #[must_use]
     pub fn exec_spawn_total_filled_qty(
         &self,
@@ -3014,7 +3010,7 @@ impl Cache {
         total_quantity
     }
 
-    /// Returns the total leaves quantity for all orders with the `exec_spawn_id`.
+    /// 返回具有 `exec_spawn_id` 的所有订单的总剩余成交数量。
     #[must_use]
     pub fn exec_spawn_total_leaves_qty(
         &self,
@@ -3041,13 +3037,13 @@ impl Cache {
 
     // -- POSITION QUERIES ------------------------------------------------------------------------
 
-    /// Returns a reference to the position with the `position_id` (if found).
+    /// 返回具有 `position_id` 的持仓引用（如果找到）。
     #[must_use]
     pub fn position(&self, position_id: &PositionId) -> Option<&Position> {
         self.positions.get(position_id)
     }
 
-    /// Returns a reference to the position for the `client_order_id` (if found).
+    /// 返回具有 `client_order_id` 对应的持仓引用（如果找到）。
     #[must_use]
     pub fn position_for_order(&self, client_order_id: &ClientOrderId) -> Option<&Position> {
         self.index
@@ -3056,13 +3052,13 @@ impl Cache {
             .and_then(|position_id| self.positions.get(position_id))
     }
 
-    /// Returns a reference to the position ID for the `client_order_id` (if found).
+    /// 返回 `client_order_id` 对应的持仓 ID 引用（如果找到）。
     #[must_use]
     pub fn position_id(&self, client_order_id: &ClientOrderId) -> Option<&PositionId> {
         self.index.order_position.get(client_order_id)
     }
 
-    /// Returns a reference to all positions matching the optional filter parameters.
+    /// 返回匹配可选过滤参数的所有持仓引用。
     #[must_use]
     pub fn positions(
         &self,
@@ -3076,7 +3072,7 @@ impl Cache {
         self.get_positions_for_ids(&position_ids, side)
     }
 
-    /// Returns a reference to all open positions matching the optional filter parameters.
+    /// 返回匹配可选过滤参数的所有未平仓持仓引用。
     #[must_use]
     pub fn positions_open(
         &self,
@@ -3090,7 +3086,7 @@ impl Cache {
         self.get_positions_for_ids(&position_ids, side)
     }
 
-    /// Returns a reference to all closed positions matching the optional filter parameters.
+    /// 返回匹配可选过滤参数的所有已平仓持仓引用。
     #[must_use]
     pub fn positions_closed(
         &self,
@@ -3104,25 +3100,25 @@ impl Cache {
         self.get_positions_for_ids(&position_ids, side)
     }
 
-    /// Returns whether a position with the `position_id` exists.
+    /// 返回具有 `position_id` 的持仓是否存在。
     #[must_use]
     pub fn position_exists(&self, position_id: &PositionId) -> bool {
         self.index.positions.contains(position_id)
     }
 
-    /// Returns whether a position with the `position_id` is open.
+    /// 返回具有 `position_id` 的持仓是否处于未平仓状态。
     #[must_use]
     pub fn is_position_open(&self, position_id: &PositionId) -> bool {
         self.index.positions_open.contains(position_id)
     }
 
-    /// Returns whether a position with the `position_id` is closed.
+    /// 返回具有 `position_id` 的持仓是否已平仓。
     #[must_use]
     pub fn is_position_closed(&self, position_id: &PositionId) -> bool {
         self.index.positions_closed.contains(position_id)
     }
 
-    /// Returns the count of all open positions.
+    /// 返回所有未平仓持仓的计数。
     #[must_use]
     pub fn positions_open_count(
         &self,
@@ -3136,7 +3132,7 @@ impl Cache {
             .len()
     }
 
-    /// Returns the count of all closed positions.
+    /// 返回所有已平仓持仓的计数。
     #[must_use]
     pub fn positions_closed_count(
         &self,
@@ -3150,7 +3146,7 @@ impl Cache {
             .len()
     }
 
-    /// Returns the count of all positions.
+    /// 返回所有持仓的计数。
     #[must_use]
     pub fn positions_total_count(
         &self,
@@ -3166,13 +3162,13 @@ impl Cache {
 
     // -- STRATEGY QUERIES ------------------------------------------------------------------------
 
-    /// Gets a reference to the strategy ID for the `client_order_id` (if found).
+    /// 获取 `client_order_id` 对应的策略 ID 引用（如果找到）。
     #[must_use]
     pub fn strategy_id_for_order(&self, client_order_id: &ClientOrderId) -> Option<&StrategyId> {
         self.index.order_strategy.get(client_order_id)
     }
 
-    /// Gets a reference to the strategy ID for the `position_id` (if found).
+    /// 获取 `position_id` 对应的策略 ID 引用（如果找到）。
     #[must_use]
     pub fn strategy_id_for_position(&self, position_id: &PositionId) -> Option<&StrategyId> {
         self.index.position_strategy.get(position_id)
@@ -3180,11 +3176,11 @@ impl Cache {
 
     // -- GENERAL ---------------------------------------------------------------------------------
 
-    /// Gets a reference to the general value for the `key` (if found).
+    /// 获取 `key` 对应的通用值引用（如果找到）。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if the `key` is invalid.
+    /// 如果 `key` 无效，则返回错误。
     pub fn get(&self, key: &str) -> anyhow::Result<Option<&Bytes>> {
         check_valid_string_ascii(key, stringify!(key))?;
 
@@ -3193,7 +3189,7 @@ impl Cache {
 
     // -- DATA QUERIES ----------------------------------------------------------------------------
 
-    /// Returns the price for the `instrument_id` and `price_type` (if found).
+    /// 返回 `instrument_id` 和 `price_type` 对应的价格（如果找到）。
     #[must_use]
     pub fn price(&self, instrument_id: &InstrumentId, price_type: PriceType) -> Option<Price> {
         match price_type {
@@ -3224,7 +3220,7 @@ impl Cache {
         }
     }
 
-    /// Gets all quotes for the `instrument_id`.
+    /// 获取 `instrument_id` 对应的所有报价。
     #[must_use]
     pub fn quotes(&self, instrument_id: &InstrumentId) -> Option<Vec<QuoteTick>> {
         self.quotes
@@ -3232,7 +3228,7 @@ impl Cache {
             .map(|quotes| quotes.iter().copied().collect())
     }
 
-    /// Gets all trades for the `instrument_id`.
+    /// 获取 `instrument_id` 对应的所有成交。
     #[must_use]
     pub fn trades(&self, instrument_id: &InstrumentId) -> Option<Vec<TradeTick>> {
         self.trades
@@ -3240,7 +3236,7 @@ impl Cache {
             .map(|trades| trades.iter().copied().collect())
     }
 
-    /// Gets all mark price updates for the `instrument_id`.
+    /// 获取 `instrument_id` 对应的所有标记价格更新。
     #[must_use]
     pub fn mark_prices(&self, instrument_id: &InstrumentId) -> Option<Vec<MarkPriceUpdate>> {
         self.mark_prices
@@ -3248,7 +3244,7 @@ impl Cache {
             .map(|mark_prices| mark_prices.iter().copied().collect())
     }
 
-    /// Gets all index price updates for the `instrument_id`.
+    /// 获取 `instrument_id` 对应的所有指数价格更新。
     #[must_use]
     pub fn index_prices(&self, instrument_id: &InstrumentId) -> Option<Vec<IndexPriceUpdate>> {
         self.index_prices
@@ -3256,7 +3252,7 @@ impl Cache {
             .map(|index_prices| index_prices.iter().copied().collect())
     }
 
-    /// Gets all funding rate updates for the `instrument_id`.
+    /// 获取 `instrument_id` 对应的所有资金费率更新。
     #[must_use]
     pub fn funding_rates(&self, instrument_id: &InstrumentId) -> Option<Vec<FundingRateUpdate>> {
         self.funding_rates
@@ -3264,7 +3260,7 @@ impl Cache {
             .map(|funding_rates| funding_rates.iter().copied().collect())
     }
 
-    /// Gets all bars for the `bar_type`.
+    /// 获取 `bar_type` 对应的所有 Bar。
     #[must_use]
     pub fn bars(&self, bar_type: &BarType) -> Option<Vec<Bar>> {
         self.bars
@@ -3272,25 +3268,25 @@ impl Cache {
             .map(|bars| bars.iter().copied().collect())
     }
 
-    /// Gets a reference to the order book for the `instrument_id`.
+    /// 获取 `instrument_id` 对应的订单簿引用。
     #[must_use]
     pub fn order_book(&self, instrument_id: &InstrumentId) -> Option<&OrderBook> {
         self.books.get(instrument_id)
     }
 
-    /// Gets a reference to the order book for the `instrument_id`.
+    /// 获取 `instrument_id` 对应的可变订单簿引用。
     #[must_use]
     pub fn order_book_mut(&mut self, instrument_id: &InstrumentId) -> Option<&mut OrderBook> {
         self.books.get_mut(instrument_id)
     }
 
-    /// Gets a reference to the own order book for the `instrument_id`.
+    /// 获取 `instrument_id` 对应的自有订单簿 (own order book) 引用。
     #[must_use]
     pub fn own_order_book(&self, instrument_id: &InstrumentId) -> Option<&OwnOrderBook> {
         self.own_books.get(instrument_id)
     }
 
-    /// Gets a reference to the own order book for the `instrument_id`.
+    /// 获取 `instrument_id` 对应的可变自有订单簿引用。
     #[must_use]
     pub fn own_order_book_mut(
         &mut self,
@@ -3299,7 +3295,7 @@ impl Cache {
         self.own_books.get_mut(instrument_id)
     }
 
-    /// Gets a reference to the latest quote for the `instrument_id`.
+    /// 获取 `instrument_id` 对应的最新报价引用。
     #[must_use]
     pub fn quote(&self, instrument_id: &InstrumentId) -> Option<&QuoteTick> {
         self.quotes
@@ -3307,7 +3303,7 @@ impl Cache {
             .and_then(|quotes| quotes.front())
     }
 
-    /// Gets a reference to the latest trade for the `instrument_id`.
+    /// 获取 `instrument_id` 对应的最新成交引用。
     #[must_use]
     pub fn trade(&self, instrument_id: &InstrumentId) -> Option<&TradeTick> {
         self.trades
@@ -3315,7 +3311,7 @@ impl Cache {
             .and_then(|trades| trades.front())
     }
 
-    /// Gets a reference to the latest mark price update for the `instrument_id`.
+    /// 获取 `instrument_id` 对应的最新标记价格更新引用。
     #[must_use]
     pub fn mark_price(&self, instrument_id: &InstrumentId) -> Option<&MarkPriceUpdate> {
         self.mark_prices
@@ -3323,7 +3319,7 @@ impl Cache {
             .and_then(|mark_prices| mark_prices.front())
     }
 
-    /// Gets a reference to the latest index price update for the `instrument_id`.
+    /// 获取 `instrument_id` 对应的最新指数价格更新引用。
     #[must_use]
     pub fn index_price(&self, instrument_id: &InstrumentId) -> Option<&IndexPriceUpdate> {
         self.index_prices
@@ -3331,7 +3327,7 @@ impl Cache {
             .and_then(|index_prices| index_prices.front())
     }
 
-    /// Gets a reference to the latest funding rate update for the `instrument_id`.
+    /// 获取 `instrument_id` 对应的最新资金费率更新引用。
     #[must_use]
     pub fn funding_rate(&self, instrument_id: &InstrumentId) -> Option<&FundingRateUpdate> {
         self.funding_rates
@@ -3339,13 +3335,13 @@ impl Cache {
             .and_then(|funding_rates| funding_rates.front())
     }
 
-    /// Gets a reference to the latest bar for the `bar_type`.
+    /// 获取 `bar_type` 对应的最新 Bar 引用。
     #[must_use]
     pub fn bar(&self, bar_type: &BarType) -> Option<&Bar> {
         self.bars.get(bar_type).and_then(|bars| bars.front())
     }
 
-    /// Gets the order book update count for the `instrument_id`.
+    /// 获取 `instrument_id` 对应的订单簿更新计数。
     #[must_use]
     pub fn book_update_count(&self, instrument_id: &InstrumentId) -> usize {
         self.books
@@ -3353,7 +3349,7 @@ impl Cache {
             .map_or(0, |book| book.update_count) as usize
     }
 
-    /// Gets the quote tick count for the `instrument_id`.
+    /// 获取 `instrument_id` 对应的报价 Tick 计数。
     #[must_use]
     pub fn quote_count(&self, instrument_id: &InstrumentId) -> usize {
         self.quotes
@@ -3361,7 +3357,7 @@ impl Cache {
             .map_or(0, std::collections::VecDeque::len)
     }
 
-    /// Gets the trade tick count for the `instrument_id`.
+    /// 获取 `instrument_id` 对应的成交 Tick 计数。
     #[must_use]
     pub fn trade_count(&self, instrument_id: &InstrumentId) -> usize {
         self.trades
@@ -3369,7 +3365,7 @@ impl Cache {
             .map_or(0, std::collections::VecDeque::len)
     }
 
-    /// Gets the bar count for the `instrument_id`.
+    /// 获取 `instrument_id` 对应的 Bar 计数。
     #[must_use]
     pub fn bar_count(&self, bar_type: &BarType) -> usize {
         self.bars
@@ -3377,25 +3373,25 @@ impl Cache {
             .map_or(0, std::collections::VecDeque::len)
     }
 
-    /// Returns whether the cache contains an order book for the `instrument_id`.
+    /// 返回缓存是否包含 `instrument_id` 对应的订单簿。
     #[must_use]
     pub fn has_order_book(&self, instrument_id: &InstrumentId) -> bool {
         self.books.contains_key(instrument_id)
     }
 
-    /// Returns whether the cache contains quotes for the `instrument_id`.
+    /// 返回缓存是否包含 `instrument_id` 对应的报价 Tick。
     #[must_use]
     pub fn has_quote_ticks(&self, instrument_id: &InstrumentId) -> bool {
         self.quote_count(instrument_id) > 0
     }
 
-    /// Returns whether the cache contains trades for the `instrument_id`.
+    /// 返回缓存是否包含 `instrument_id` 对应的成交 Tick。
     #[must_use]
     pub fn has_trade_ticks(&self, instrument_id: &InstrumentId) -> bool {
         self.trade_count(instrument_id) > 0
     }
 
-    /// Returns whether the cache contains bars for the `bar_type`.
+    /// 返回缓存是否包含 `bar_type` 对应的 Bar。
     #[must_use]
     pub fn has_bars(&self, bar_type: &BarType) -> bool {
         self.bar_count(bar_type) > 0
@@ -3410,8 +3406,7 @@ impl Cache {
         price_type: PriceType,
     ) -> Option<f64> {
         if from_currency == to_currency {
-            // When the source and target currencies are identical,
-            // no conversion is needed; return an exchange rate of 1.0.
+            // 当源货币和目标货币相同时，不需要转换；直接返回 1.0 的汇率。
             return Some(1.0);
         }
 
@@ -3445,7 +3440,7 @@ impl Cache {
                 if let Some(tick) = ticks.front() {
                     (tick.bid_price, tick.ask_price)
                 } else {
-                    continue; // Empty ticks vector
+                    continue; // 报价 Tick 集合为空
                 }
             } else {
                 let bid_bar = self
@@ -3471,7 +3466,7 @@ impl Cache {
                         match (bid.front(), ask.front()) {
                             (Some(bid_bar), Some(ask_bar)) => (bid_bar.close, ask_bar.close),
                             _ => {
-                                // Empty bar VecDeques
+                                // 空的 Bar 队列
                                 continue;
                             }
                         }
@@ -3487,43 +3482,43 @@ impl Cache {
         (bid_quotes, ask_quotes)
     }
 
-    /// Returns the mark exchange rate for the given currency pair, or `None` if not set.
+    /// 返回给定货币对的标记汇率，如果未设置则返回 `None`。
     #[must_use]
     pub fn get_mark_xrate(&self, from_currency: Currency, to_currency: Currency) -> Option<f64> {
         self.mark_xrates.get(&(from_currency, to_currency)).copied()
     }
 
-    /// Sets the mark exchange rate for the given currency pair and automatically sets the inverse rate.
+    /// 设置给定货币对的标记汇率，并自动设置其反向汇率。
     ///
     /// # Panics
     ///
-    /// Panics if `xrate` is not positive.
+    /// 如果 `xrate` 不是正数，则触发 Panic。
     pub fn set_mark_xrate(&mut self, from_currency: Currency, to_currency: Currency, xrate: f64) {
-        assert!(xrate > 0.0, "xrate was zero");
+        assert!(xrate > 0.0, "汇率必须大于零");
         self.mark_xrates.insert((from_currency, to_currency), xrate);
         self.mark_xrates
             .insert((to_currency, from_currency), 1.0 / xrate);
     }
 
-    /// Clears the mark exchange rate for the given currency pair.
+    /// 清除给定货币对的标记汇率。
     pub fn clear_mark_xrate(&mut self, from_currency: Currency, to_currency: Currency) {
         let _ = self.mark_xrates.remove(&(from_currency, to_currency));
     }
 
-    /// Clears all mark exchange rates.
+    /// 清除所有标记汇率。
     pub fn clear_mark_xrates(&mut self) {
         self.mark_xrates.clear();
     }
 
     // -- INSTRUMENT QUERIES ----------------------------------------------------------------------
 
-    /// Returns a reference to the instrument for the `instrument_id` (if found).
+    /// 返回具有 `instrument_id` 对应的金融工具引用（如果找到）。
     #[must_use]
     pub fn instrument(&self, instrument_id: &InstrumentId) -> Option<&InstrumentAny> {
         self.instruments.get(instrument_id)
     }
 
-    /// Returns references to all instrument IDs for the `venue`.
+    /// 返回 `venue` 对应的所有金融工具 ID 引用。
     #[must_use]
     pub fn instrument_ids(&self, venue: Option<&Venue>) -> Vec<&InstrumentId> {
         match venue {
@@ -3532,7 +3527,7 @@ impl Cache {
         }
     }
 
-    /// Returns references to all instruments for the `venue`.
+    /// 返回 `venue` 对应的所有金融工具引用。
     #[must_use]
     pub fn instruments(&self, venue: &Venue, underlying: Option<&Ustr>) -> Vec<&InstrumentAny> {
         self.instruments
@@ -3542,7 +3537,7 @@ impl Cache {
             .collect()
     }
 
-    /// Returns references to all bar types contained in the cache.
+    /// 返回缓存中包含的所有 Bar 类型引用。
     #[must_use]
     pub fn bar_types(
         &self,
@@ -3569,19 +3564,19 @@ impl Cache {
 
     // -- SYNTHETIC QUERIES -----------------------------------------------------------------------
 
-    /// Returns a reference to the synthetic instrument for the `instrument_id` (if found).
+    /// 返回 `instrument_id` 对应的合成金融工具引用（如果找到）。
     #[must_use]
     pub fn synthetic(&self, instrument_id: &InstrumentId) -> Option<&SyntheticInstrument> {
         self.synthetics.get(instrument_id)
     }
 
-    /// Returns references to instrument IDs for all synthetic instruments contained in the cache.
+    /// 返回缓存中包含的所有合成金融工具 ID 引用。
     #[must_use]
     pub fn synthetic_ids(&self) -> Vec<&InstrumentId> {
         self.synthetics.keys().collect()
     }
 
-    /// Returns references to all synthetic instruments contained in the cache.
+    /// 返回缓存中包含的所有合成金融工具引用。
     #[must_use]
     pub fn synthetics(&self) -> Vec<&SyntheticInstrument> {
         self.synthetics.values().collect()
@@ -3589,13 +3584,13 @@ impl Cache {
 
     // -- ACCOUNT QUERIES -----------------------------------------------------------------------
 
-    /// Returns a reference to the account for the `account_id` (if found).
+    /// 返回具有 `account_id` 对应的账户引用（如果找到）。
     #[must_use]
     pub fn account(&self, account_id: &AccountId) -> Option<&AccountAny> {
         self.accounts.get(account_id)
     }
 
-    /// Returns a reference to the account for the `venue` (if found).
+    /// 返回具有 `venue` 对应的账户引用（如果找到）。
     #[must_use]
     pub fn account_for_venue(&self, venue: &Venue) -> Option<&AccountAny> {
         self.index
@@ -3604,13 +3599,13 @@ impl Cache {
             .and_then(|account_id| self.accounts.get(account_id))
     }
 
-    /// Returns a reference to the account ID for the `venue` (if found).
+    /// 返回具有 `venue` 对应的账户 ID 引用（如果找到）。
     #[must_use]
     pub fn account_id(&self, venue: &Venue) -> Option<&AccountId> {
         self.index.venue_account.get(venue)
     }
 
-    /// Returns references to all accounts for the `account_id`.
+    /// 返回 `account_id` 对应的所有账户引用。
     #[must_use]
     pub fn accounts(&self, account_id: &AccountId) -> Vec<&AccountAny> {
         self.accounts
@@ -3619,13 +3614,11 @@ impl Cache {
             .collect()
     }
 
-    /// Updates the own order book with an order.
+    /// 根据订单更新自有订单簿。
     ///
-    /// This method adds, updates, or removes an order from the own order book
-    /// based on the order's current state.
+    /// 此方法根据订单的当前状态向自有订单簿添加、更新或从中移除条目。
     ///
-    /// Orders without prices (MARKET, etc.) are skipped as they cannot be
-    /// represented in own books.
+    /// 没有价格的订单 (MARKET 等) 将被跳过，因为它们无法在自有订单簿中展示。
     pub fn update_own_order_book(&mut self, order: &OrderAny) {
         if !order.has_price() {
             return;
@@ -3650,10 +3643,10 @@ impl Cache {
                 log::debug!("Deleted order {} from own book", order.client_order_id());
             }
         } else {
-            // Add or update the order in the own book
+            // 向自有订单簿添加或更新订单
             if let Err(e) = own_book.update(own_book_order) {
                 log::debug!(
-                    "Failed to update order {} in own book: {e}; inserting instead",
+                    "在自有订单簿中更新订单 {} 失败: {e}；改为插入",
                     order.client_order_id(),
                 );
                 own_book.add(own_book_order);
@@ -3662,11 +3655,10 @@ impl Cache {
         }
     }
 
-    /// Force removal of an order from own order books and clean up all indexes.
+    /// 强制从自有订单簿中移除订单并清理所有索引。
     ///
-    /// This method is used when order event application fails and we need to ensure
-    /// terminal orders are properly cleaned up from own books and all relevant indexes.
-    /// Replicates the index cleanup that update_order performs for closed orders.
+    /// 当订单事件应用失败时使用此方法，以确保终端订单能够从自有订单簿和所有相关索引中正确清理。
+    /// 此操作复制了 update_order 为已关闭订单执行的索引清理过程。
     pub fn force_remove_from_own_order_book(&mut self, client_order_id: &ClientOrderId) {
         let order = match self.orders.get(client_order_id) {
             Some(order) => order,
@@ -3692,18 +3684,17 @@ impl Cache {
         self.index.orders_closed.insert(*client_order_id);
     }
 
-    /// Audit all own order books against open and inflight order indexes.
+    /// 根据未成交和在途订单索引，审计所有自有订单簿。
     ///
-    /// Ensures closed orders are removed from own order books. This includes both
-    /// orders tracked in `orders_open` (ACCEPTED, TRIGGERED, PENDING_*, PARTIALLY_FILLED)
-    /// and `orders_inflight` (INITIALIZED, SUBMITTED) to prevent false positives
-    /// during venue latency windows.
+    /// 确保已关闭的订单从自有订单簿中被移除。这包括在 `orders_open` (ACCEPTED, TRIGGERED, 
+    /// PENDING_*, PARTIALLY_FILLED) 和 `orders_inflight` (INITIALIZED, SUBMITTED) 
+    /// 中追踪的订单，以防止在交易所延迟窗口期间出现误报。
     pub fn audit_own_order_books(&mut self) {
         log::debug!("Starting own books audit");
         let start = std::time::Instant::now();
 
-        // Build union of open and inflight orders for audit,
-        // this prevents false positives for SUBMITTED orders during venue latency.
+        // 构建未成交和在途订单的并集进行审计，
+        // 这可以防止在交易所延迟期间对 SUBMITTED 状态的订单产生误报。
         let valid_order_ids: AHashSet<ClientOrderId> = self
             .index
             .orders_open

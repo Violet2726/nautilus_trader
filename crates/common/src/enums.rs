@@ -13,13 +13,13 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! Enumerations for common components.
+//! 通用组件的枚举类型。
 
 use log::Level;
 use serde::{Deserialize, Serialize};
 use strum::{Display, EnumIter, EnumString, FromRepr};
 
-/// The state of a component within the system.
+/// 系统中组件的状态。
 #[repr(C)]
 #[derive(
     Copy,
@@ -52,34 +52,34 @@ use strum::{Display, EnumIter, EnumString, FromRepr};
     )
 )]
 pub enum ComponentState {
-    /// When a component is instantiated, but not yet ready to fulfill its specification.
+    /// 当组件被实例化，但尚未准备好履行其规范时。
     #[default]
     PreInitialized = 0,
-    /// When a component is able to be started.
+    /// 当组件能够启动时。
     Ready = 1,
-    /// When a component is executing its actions on `start`.
+    /// 当组件在 `start` 时执行其操作。
     Starting = 2,
-    /// When a component is operating normally and can fulfill its specification.
+    /// 当组件正正常运行并能履行其规范时。
     Running = 3,
-    /// When a component is executing its actions on `stop`.
+    /// 当组件在 `stop` 时执行其操作。
     Stopping = 4,
-    /// When a component has successfully stopped.
+    /// 当组件已成功停止。
     Stopped = 5,
-    /// When a component is started again after its initial start.
+    /// 当组件在初始启动后再次启动。
     Resuming = 6,
-    /// When a component is executing its actions on `reset`.
+    /// 当组件在 `reset` 时执行其操作。
     Resetting = 7,
-    /// When a component is executing its actions on `dispose`.
+    /// 当组件在 `dispose` 时执行其操作。
     Disposing = 8,
-    /// When a component has successfully shut down and released all of its resources.
+    /// 当组件已成功关闭并释放了所有资源。
     Disposed = 9,
-    /// When a component is executing its actions on `degrade`.
+    /// 当组件在 `degrade` 时执行其操作。
     Degrading = 10,
-    /// When a component has successfully degraded and may not meet its full specification.
+    /// 当组件已成功降级，可能无法完全履行其规范。
     Degraded = 11,
-    /// When a component is executing its actions on `fault`.
+    /// 当组件在 `fault` 时执行其操作。
     Faulting = 12,
-    /// When a component has successfully shut down due to a detected fault.
+    /// 当组件因检测到故障而成功关闭。
     Faulted = 13,
 }
 
@@ -90,7 +90,7 @@ impl ComponentState {
     }
 }
 
-/// A trigger condition for a component within the system.
+/// 系统中组件的触发条件。
 #[repr(C)]
 #[derive(
     Copy,
@@ -122,39 +122,39 @@ impl ComponentState {
     )
 )]
 pub enum ComponentTrigger {
-    /// A trigger for the component to initialize.
+    /// 组件初始化的触发器。
     Initialize = 1,
-    /// A trigger for the component to start.
+    /// 组件启动的触发器。
     Start = 2,
-    /// A trigger when the component has successfully started.
+    /// 组件成功启动时的触发器。
     StartCompleted = 3,
-    /// A trigger for the component to stop.
+    /// 组件停止的触发器。
     Stop = 4,
-    /// A trigger when the component has successfully stopped.
+    /// 组件成功停止时的触发器。
     StopCompleted = 5,
-    /// A trigger for the component to resume (after being stopped).
+    /// 组件恢复（停止后）的触发器。
     Resume = 6,
-    /// A trigger when the component has successfully resumed.
+    /// 组件成功恢复时的触发器。
     ResumeCompleted = 7,
-    /// A trigger for the component to reset.
+    /// 组件重置的触发器。
     Reset = 8,
-    /// A trigger when the component has successfully reset.
+    /// 组件成功重置时的触发器。
     ResetCompleted = 9,
-    /// A trigger for the component to dispose and release resources.
+    /// 组件销毁并释放资源的触发器。
     Dispose = 10,
-    /// A trigger when the component has successfully disposed.
+    /// 组件成功销毁时的触发器。
     DisposeCompleted = 11,
-    /// A trigger for the component to degrade.
+    /// 组件降级的触发器。
     Degrade = 12,
-    /// A trigger when the component has successfully degraded.
+    /// 组件成功降级时的触发器。
     DegradeCompleted = 13,
-    /// A trigger for the component to fault.
+    /// 组件故障的触发器。
     Fault = 14,
-    /// A trigger when the component has successfully faulted.
+    /// 组件成功进入故障状态时的触发器。
     FaultCompleted = 15,
 }
 
-/// Represents the environment context for a Nautilus system.
+/// 代表 Nautilus 系统的环境上下文。
 #[repr(C)]
 #[derive(
     Copy,
@@ -191,7 +191,7 @@ pub enum Environment {
     Live,
 }
 
-/// The log level for log messages.
+/// 日志消息的日志级别。
 #[repr(C)]
 #[derive(
     Copy,
@@ -223,33 +223,33 @@ pub enum Environment {
     )
 )]
 pub enum LogLevel {
-    /// The **OFF** log level. A level lower than all other log levels (off).
+    /// **OFF** 日志级别。低于所有其他日志级别（关闭）。
     #[strum(serialize = "OFF")]
     #[serde(rename = "OFF")]
     Off = 0,
-    /// The **TRACE** log level. Only available in Rust for debug/development builds.
+    /// **TRACE** 日志级别。仅在 Rust 的调试/开发构建中可用。
     #[strum(serialize = "TRACE")]
     #[serde(rename = "TRACE")]
     Trace = 1,
-    /// The **DEBUG** log level.
+    /// **DEBUG** 日志级别。
     #[strum(serialize = "DEBUG")]
     #[serde(rename = "DEBUG")]
     Debug = 2,
-    /// The **INFO** log level.
+    /// **INFO** 日志级别。
     #[strum(serialize = "INFO")]
     #[serde(rename = "INFO")]
     Info = 3,
-    /// The **WARNING** log level.
+    /// **WARNING** 日志级别。
     #[strum(serialize = "WARN", serialize = "WARNING")]
     #[serde(rename = "WARNING")]
     Warning = 4,
-    /// The **ERROR** log level.
+    /// **ERROR** 日志级别。
     #[strum(serialize = "ERROR")]
     #[serde(rename = "ERROR")]
     Error = 5,
 }
 
-/// The log color for log messages.
+/// 日志消息的日志颜色。
 #[repr(C)]
 #[derive(
     Copy,
@@ -281,25 +281,25 @@ pub enum LogLevel {
     )
 )]
 pub enum LogColor {
-    /// The default/normal log color.
+    /// 默认/常规的日志颜色。
     #[strum(serialize = "NORMAL")]
     Normal = 0,
-    /// The green log color, typically used with [`LogLevel::Info`] log levels and associated with success events.
+    /// 绿色日志颜色，通常用于 [`LogLevel::Info`] 日志级别，并与成功事件相关联。
     #[strum(serialize = "GREEN")]
     Green = 1,
-    /// The blue log color, typically used with [`LogLevel::Info`] log levels and associated with user actions.
+    /// 蓝色日志颜色，通常用于 [`LogLevel::Info`] 日志级别，并与用户操作相关联。
     #[strum(serialize = "BLUE")]
     Blue = 2,
-    /// The magenta log color, typically used with [`LogLevel::Info`] log levels.
+    /// 品红色日志颜色，通常用于 [`LogLevel::Info`] 日志级别。
     #[strum(serialize = "MAGENTA")]
     Magenta = 3,
-    /// The cyan log color, typically used with [`LogLevel::Info`] log levels.
+    /// 青色日志颜色，通常用于 [`LogLevel::Info`] 日志级别。
     #[strum(serialize = "CYAN")]
     Cyan = 4,
-    /// The yellow log color, typically used with [`LogLevel::Warning`] log levels.
+    /// 黄色日志颜色，通常用于 [`LogLevel::Warning`] 日志级别。
     #[strum(serialize = "YELLOW")]
     Yellow = 5,
-    /// The red log color, typically used with [`LogLevel::Error`] level.
+    /// 红色日志颜色，通常用于 [`LogLevel::Error`] 级别。
     #[strum(serialize = "RED")]
     Red = 6,
 }
@@ -345,8 +345,8 @@ impl From<Level> for LogColor {
     }
 }
 
-/// An ANSI log line format specifier.
-/// This is used for formatting log messages with ANSI escape codes.
+/// ANSI 日志行格式说明符。
+/// 用于使用 ANSI 转义码格式化日志消息。
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, FromRepr, EnumString, Display)]
 #[strum(ascii_case_insensitive)]
@@ -363,26 +363,24 @@ impl From<Level> for LogColor {
     )
 )]
 pub enum LogFormat {
-    /// Header log format. This ANSI escape code is used for magenta text color,
-    /// often used for headers or titles in the log output.
+    /// 标题日志格式。此 ANSI 转义码用于品红色文本，通常用于日志输出中的标题。
     #[strum(serialize = "\x1b[95m")]
     Header,
 
-    /// Endc log format. This ANSI escape code is used to reset all format attributes
-    /// to their defaults. It should be used after applying other formats.
+    /// Endc 日志格式。此 ANSI 转义码用于将所有格式属性重置为默认值。应在应用其他格式后使用。
     #[strum(serialize = "\x1b[0m")]
     Endc,
 
-    /// Bold log format. This ANSI escape code is used to make the text bold in the log output.
+    /// 粗体日志格式。此 ANSI 转义码用于使日志输出中的文本变粗。
     #[strum(serialize = "\x1b[1m")]
     Bold,
 
-    /// Underline log format. This ANSI escape code is used to underline the text in the log output.
+    /// 下划线日志格式。此 ANSI 转义码用于在日志输出中为文本加下划线。
     #[strum(serialize = "\x1b[4m")]
     Underline,
 }
 
-/// The serialization encoding.
+/// 序列化编码。
 #[repr(C)]
 #[derive(
     Copy,
@@ -414,10 +412,10 @@ pub enum LogFormat {
     )
 )]
 pub enum SerializationEncoding {
-    /// The MessagePack encoding.
+    /// MessagePack 编码。
     #[serde(rename = "msgpack")]
     MsgPack = 0,
-    /// The JavaScript Object Notation (JSON) encoding.
+    /// JavaScript 对象符号 (JSON) 编码。
     #[serde(rename = "json")]
     Json = 1,
 }

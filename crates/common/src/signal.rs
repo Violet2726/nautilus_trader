@@ -13,13 +13,13 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! A user signal type.
+//! 用户信号类型。
 
 use nautilus_core::UnixNanos;
 use serde::{Deserialize, Serialize};
 use ustr::Ustr;
 
-/// Represents a generic signal.
+/// 代表一个通用信号。
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(
@@ -34,7 +34,7 @@ pub struct Signal {
 }
 
 impl Signal {
-    /// Creates a new [`Signal`] instance.
+    /// 创建一个新的 [`Signal`] 实例。
     #[must_use]
     pub const fn new(name: Ustr, value: String, ts_event: UnixNanos, ts_init: UnixNanos) -> Self {
         Self {

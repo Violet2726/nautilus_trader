@@ -13,12 +13,10 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! Generic quote cache for maintaining the last known quote per instrument.
+//! 通用报价缓存，用于维护每个交易工具的最后已知报价。
 //!
-//! This cache is commonly used by WebSocket adapters to handle partial quote updates
-//! where the exchange may send incomplete bid or ask information. By caching the last
-//! complete quote, adapters can merge partial updates with cached values to reconstruct
-//! a complete `QuoteTick`.
+//! 该缓存通常由 WebSocket 适配器使用，以处理交易所可能发送不完整买入或卖出信息的增量（部分）报价更新。
+//! 通过缓存最后一次完整的报价，适配器可以将部分更新与缓存值合并，以重建完整的 `QuoteTick`。
 
 use ahash::AHashMap;
 use nautilus_core::UnixNanos;
@@ -28,24 +26,22 @@ use nautilus_model::{
     types::{Price, Quantity},
 };
 
-/// A cache for storing the last known quote per instrument.
+/// 存储每个交易工具最后已知报价的缓存。
 ///
-/// This is particularly useful for handling partial quote updates from exchange WebSocket feeds,
-/// where updates may only include one side of the market (bid or ask). The cache maintains
-/// the most recent complete quote for each instrument, allowing adapters to fill in missing
-/// information when processing partial updates.
+/// 这对于处理来自交易所 WebSocket 推送的部分报价更新特别有用，因为这些更新可能只包含市场的一侧（买价或卖价）。
+/// 该缓存为每个交易工具维持最近的完整报价，允许适配器在处理部分更新时填补缺失的信息。
 ///
-/// # Thread Safety
+/// # 线程安全
 ///
-/// This cache is not thread-safe. If shared across threads, wrap it in an appropriate
-/// synchronization primitive such as `Arc<RwLock<QuoteCache>>` or `Arc<Mutex<QuoteCache>>`.
+/// 此缓存不是线程安全的。如果跨线程共享，请将其包装在适当的同步原语中，
+/// 例如 `Arc<RwLock<QuoteCache>>` 或 `Arc<Mutex<QuoteCache>>`。
 #[derive(Debug, Clone)]
 pub struct QuoteCache {
     quotes: AHashMap<InstrumentId, QuoteTick>,
 }
 
 impl QuoteCache {
-    /// Creates a new empty [`QuoteCache`].
+    /// 创建一个新的空 [`QuoteCache`]。
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -53,63 +49,62 @@ impl QuoteCache {
         }
     }
 
-    /// Returns the cached quote for the given instrument, if available.
+    /// 返回给定工具的缓存报价（如果可用）。
     #[must_use]
     pub fn get(&self, instrument_id: &InstrumentId) -> Option<&QuoteTick> {
         self.quotes.get(instrument_id)
     }
 
-    /// Inserts or updates a quote in the cache for the given instrument.
+    /// 为给定工具在缓存中插入或更新报价。
     ///
-    /// Returns the previously cached quote if one existed.
+    /// 如果之前已存在缓存报价，则将其返回。
     pub fn insert(&mut self, instrument_id: InstrumentId, quote: QuoteTick) -> Option<QuoteTick> {
         self.quotes.insert(instrument_id, quote)
     }
 
-    /// Removes the cached quote for the given instrument.
+    /// 移除给定工具的缓存报价。
     ///
-    /// Returns the removed quote if one existed.
+    /// 如果之前已存在缓存报价，则将其返回。
     pub fn remove(&mut self, instrument_id: &InstrumentId) -> Option<QuoteTick> {
         self.quotes.remove(instrument_id)
     }
 
-    /// Returns `true` if the cache contains a quote for the given instrument.
+    /// 如果缓存中包含给定工具的报价，则返回 `true`。
     #[must_use]
     pub fn contains(&self, instrument_id: &InstrumentId) -> bool {
         self.quotes.contains_key(instrument_id)
     }
 
-    /// Returns the number of cached quotes.
+    /// 返回缓存报价的数量。
     #[must_use]
     pub fn len(&self) -> usize {
         self.quotes.len()
     }
 
-    /// Returns `true` if the cache is empty.
+    /// 如果缓存为空，则返回 `true`。
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.quotes.is_empty()
     }
 
-    /// Clears all cached quotes.
+    /// 清除所有缓存报价。
     ///
-    /// This is typically called after a reconnection to ensure stale quotes
-    /// from before the disconnect are not used.
+    /// 通常在重新连接后调用，以确保不使用断开连接前的陈旧报价。
     pub fn clear(&mut self) {
         self.quotes.clear();
     }
 
-    /// Processes a partial quote update, merging with cached values when needed.
+    /// 处理部分报价更新，必要时与缓存值合并。
     ///
-    /// This method handles partial quote updates where some fields may be missing.
-    /// If any field is `None`, it will use the corresponding field from the cached quote.
-    /// If there is no cached quote and any field is missing, an error is returned.
+    /// 此方法处理可能缺失某些字段的部分报价更新。
+    /// 如果任何字段为 `None`，它将使用缓存报价中对应的字段。
+    /// 如果没有缓存报价且缺失任何必需字段，则返回错误。
     ///
     /// # Errors
     ///
-    /// Returns an error if:
-    /// - Any required field is `None` and there is no cached quote.
-    /// - The first quote received is incomplete (no cached values to merge with).
+    /// 在以下情况下返回错误：
+    /// - 任何必需字段为 `None` 且没有缓存报价。
+    /// - 接收到的第一个报价不完整（没有可合并的缓存值）。
     #[allow(clippy::too_many_arguments)]
     pub fn process(
         &mut self,
@@ -123,13 +118,13 @@ impl QuoteCache {
     ) -> anyhow::Result<QuoteTick> {
         let cached = self.quotes.get(&instrument_id);
 
-        // Resolve each field: use provided value or fall back to cache
+        // 解析每个字段：使用提供的值或回流到缓存值
         let bid_price = match (bid_price, cached) {
             (Some(p), _) => p,
             (None, Some(q)) => q.bid_price,
             (None, None) => {
                 anyhow::bail!(
-                    "Cannot process partial quote for {instrument_id}: missing bid_price and no cached value"
+                    "无法处理 {instrument_id} 的部分报价：缺失 bid_price 且没有缓存值"
                 )
             }
         };
@@ -139,7 +134,7 @@ impl QuoteCache {
             (None, Some(q)) => q.ask_price,
             (None, None) => {
                 anyhow::bail!(
-                    "Cannot process partial quote for {instrument_id}: missing ask_price and no cached value"
+                    "无法处理 {instrument_id} 的部分报价：缺失 ask_price 且没有缓存值"
                 )
             }
         };
@@ -149,7 +144,7 @@ impl QuoteCache {
             (None, Some(q)) => q.bid_size,
             (None, None) => {
                 anyhow::bail!(
-                    "Cannot process partial quote for {instrument_id}: missing bid_size and no cached value"
+                    "无法处理 {instrument_id} 的部分报价：缺失 bid_size 且没有缓存值"
                 )
             }
         };
@@ -159,7 +154,7 @@ impl QuoteCache {
             (None, Some(q)) => q.ask_size,
             (None, None) => {
                 anyhow::bail!(
-                    "Cannot process partial quote for {instrument_id}: missing ask_size and no cached value"
+                    "无法处理 {instrument_id} 的部分报价：缺失 ask_size 且没有缓存值"
                 )
             }
         };
@@ -343,7 +338,7 @@ mod tests {
         assert_eq!(quote.bid_size, Quantity::from("10.0"));
         assert_eq!(quote.ask_size, Quantity::from("20.0"));
 
-        // Should be cached
+        // 应该已被缓存
         assert_eq!(cache.len(), 1);
         assert_eq!(cache.get(&instrument_id), Some(&quote));
     }
@@ -353,7 +348,7 @@ mod tests {
         let mut cache = QuoteCache::new();
         let instrument_id = InstrumentId::from("BTCUSDT.BINANCE");
 
-        // Missing bid_price on first update should fail
+        // 第一次更新时缺失 bid_price 应该失败
         let result = cache.process(
             instrument_id,
             None,
@@ -378,7 +373,7 @@ mod tests {
         let mut cache = QuoteCache::new();
         let instrument_id = InstrumentId::from("BTCUSDT.BINANCE");
 
-        // First, process a complete quote
+        // 首先，处理一个完整的报价
         let first_quote = cache
             .process(
                 instrument_id,
@@ -391,13 +386,13 @@ mod tests {
             )
             .unwrap();
 
-        // Now process partial update with only bid side
+        // 现在处理仅包含买方（bid side）的部分更新
         let result = cache.process(
             instrument_id,
             Some(Price::from("100.5")),
-            None, // Use cached ask_price
+            None, // 使用缓存的 ask_price
             Some(Quantity::from("15.0")),
-            None, // Use cached ask_size
+            None, // 使用缓存的 ask_size
             UnixNanos::default(),
             UnixNanos::default(),
         );
@@ -405,15 +400,15 @@ mod tests {
         assert!(result.is_ok());
         let quote = result.unwrap();
 
-        // Bid side should be updated
+        // 买方（bid side）应该被更新
         assert_eq!(quote.bid_price, Price::from("100.5"));
         assert_eq!(quote.bid_size, Quantity::from("15.0"));
 
-        // Ask side should be from cache
+        // 卖方（ask side）应该来自缓存
         assert_eq!(quote.ask_price, first_quote.ask_price);
         assert_eq!(quote.ask_size, first_quote.ask_size);
 
-        // Cache should be updated with new quote
+        // 缓存应该用新报价更新
         assert_eq!(cache.get(&instrument_id), Some(&quote));
     }
 
@@ -422,7 +417,7 @@ mod tests {
         let mut cache = QuoteCache::new();
         let instrument_id = InstrumentId::from("BTCUSDT.BINANCE");
 
-        // First quote
+        // 第一次报价
         cache
             .process(
                 instrument_id,
@@ -435,7 +430,7 @@ mod tests {
             )
             .unwrap();
 
-        // Second complete quote should replace cached values
+        // 第二个完整的报价应该替换缓存值
         let quote2 = cache
             .process(
                 instrument_id,
@@ -492,7 +487,7 @@ mod tests {
         let mut cache = QuoteCache::new();
         let instrument_id = InstrumentId::from("BTCUSDT.BINANCE");
 
-        // Add a quote
+        // 添加一个报价
         cache
             .process(
                 instrument_id,
@@ -507,10 +502,10 @@ mod tests {
 
         assert_eq!(cache.len(), 1);
 
-        // Clear cache
+        // 清除缓存
         cache.clear();
 
-        // Partial update should now fail (no cached values)
+        // 部分更新现在应该失败（没有缓存值）
         let result = cache.process(
             instrument_id,
             Some(Price::from("100.5")),

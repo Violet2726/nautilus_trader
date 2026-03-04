@@ -13,28 +13,26 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! Thread-local actor registry with lifetime-safe access guards.
+//! 具有生命周期安全访问守卫 (access guards) 的线程本地 Actor 注册表。
 //!
-//! # Design
+//! # 设计
 //!
-//! The actor registry stores actors in thread-local storage and provides access via
-//! [`ActorRef<T>`] guards. This design addresses several constraints:
+//! Actor 注册表将 Actor 存储在线程本地存储中，并通过 [`ActorRef<T>`] 守卫提供访问。
+//! 此设计解决了几个约束：
 //!
-//! - **Use-after-free prevention**: `ActorRef` holds an `Rc` clone, keeping the actor
-//!   alive even if removed from the registry while the guard exists.
-//! - **Re-entrant callbacks**: Message handlers frequently call back into the registry
-//!   to access other actors. Unlike `RefCell`-style borrow tracking, multiple `ActorRef`
-//!   guards can exist simultaneously without panicking.
-//! - **No `'static` lifetime lie**: Previous designs returned `&'static mut T`, which
-//!   didn't reflect actual validity. The guard-based approach ties the borrow to the
-//!   guard's lifetime.
+//! - **防止使用后释放 (Use-after-free prevention)**：`ActorRef` 持有一个 `Rc` 克隆，
+//!   即使在守卫存在时从注册表中删除了 Actor，也能保持其存活。
+//! - **可重入回调 (Re-entrant callbacks)**：消息处理程序经常回调到注册表以访问其他 Actor。
+//!   与 `RefCell` 风格的借用跟踪不同，多个 `ActorRef` 守卫可以同时存在而不会导致 panic。
+//! - **没有 `'static` 生命周期谎言**：之前的设计返回 `&'static mut T`，
+//!   这并不能反映实际的有效性。基于守卫的方法将借用与守卫的生命周期绑定在一起。
 //!
-//! # Limitations
+//! # 局限性
 //!
-//! - **Aliasing not prevented**: Two guards can exist for the same actor simultaneously,
-//!   allowing aliased mutable access. This is technically undefined behavior but is
-//!   required by the re-entrant callback pattern. Higher-level discipline is required.
-//! - **Thread-local only**: Guards must not be sent across threads.
+//! - **无法防止别名 (Aliasing not prevented)**：同一个 Actor 可以同时存在两个守卫，
+//!   从而允许别名的可变访问。这在技术上是未定义行为，但可重入回调模式需要它。
+//!   需要更高层级的纪律。
+//! - **仅限线程本地**：守卫不得跨线程发送。
 
 use std::{
     any::TypeId,
@@ -50,18 +48,16 @@ use ustr::Ustr;
 
 use super::Actor;
 
-/// A guard providing mutable access to an actor.
+/// 提供对 Actor 的可变访问的守卫。
 ///
-/// This guard holds an `Rc` reference to keep the actor alive, preventing
-/// use-after-free if the actor is removed from the registry while the guard
-/// exists. The guard implements `Deref` and `DerefMut` for ergonomic access.
+/// 此守卫持有一个 `Rc` 引用以保持 Actor 存活，从而防止在守卫存在时从注册表中删除 Actor 导致的使用后释放。
+/// 该守卫实现了 `Deref` 和 `DerefMut` 以便符合人体工程学的访问。
 ///
-/// # Safety
+/// # 安全性 (Safety)
 ///
-/// While this guard prevents use-after-free from registry removal, it does not
-/// prevent aliasing. Multiple `ActorRef` instances can exist for the same actor
-/// simultaneously, which is technically undefined behavior but is required by
-/// the re-entrant callback pattern in this codebase.
+/// 虽然此守卫可以防止由于从注册表中删除导致的使用后释放，但它并不能防止别名。
+/// 同一个 Actor 可以同时存在多个 `ActorRef` 实例，这在技术上是未定义行为，
+/// 但本代码库中的可重入回调模式需要这种行为。
 pub struct ActorRef<T: Actor> {
     actor_rc: Rc<UnsafeCell<dyn Actor>>,
     _marker: PhantomData<T>,
@@ -95,7 +91,7 @@ thread_local! {
     static ACTOR_REGISTRY: ActorRegistry = ActorRegistry::new();
 }
 
-/// Registry for storing actors.
+/// 用于存储 Actor 的注册表。
 pub struct ActorRegistry {
     actors: RefCell<AHashMap<Ustr, Rc<UnsafeCell<dyn Actor>>>>,
 }
@@ -126,7 +122,7 @@ impl ActorRegistry {
     pub fn insert(&self, id: Ustr, actor: Rc<UnsafeCell<dyn Actor>>) {
         let mut actors = self.actors.borrow_mut();
         if actors.contains_key(&id) {
-            log::warn!("Replacing existing actor with id: {id}");
+            log::warn!("正在替换 ID 为 {id} 的现有 Actor");
         }
         actors.insert(id, actor);
     }
@@ -135,22 +131,22 @@ impl ActorRegistry {
         self.actors.borrow().get(id).cloned()
     }
 
-    /// Returns the number of registered actors.
+    /// 返回注册的 Actor 数量。
     pub fn len(&self) -> usize {
         self.actors.borrow().len()
     }
 
-    /// Checks if the registry is empty.
+    /// 检查注册表是否为空。
     pub fn is_empty(&self) -> bool {
         self.actors.borrow().is_empty()
     }
 
-    /// Removes an actor from the registry.
+    /// 从注册表中移除一个 Actor。
     pub fn remove(&self, id: &Ustr) -> Option<Rc<UnsafeCell<dyn Actor>>> {
         self.actors.borrow_mut().remove(id)
     }
 
-    /// Checks if an actor with the `id` exists.
+    /// 检查是否存在具有该 `id` 的 Actor。
     pub fn contains(&self, id: &Ustr) -> bool {
         self.actors.borrow().contains_key(id)
     }
@@ -166,7 +162,7 @@ pub fn get_actor_registry() -> &'static ActorRegistry {
     })
 }
 
-/// Registers an actor.
+/// 注册一个 Actor。
 pub fn register_actor<T>(actor: T) -> Rc<UnsafeCell<T>>
 where
     T: Actor + 'static,
@@ -174,7 +170,7 @@ where
     let actor_id = actor.id();
     let actor_ref = Rc::new(UnsafeCell::new(actor));
 
-    // Register as Actor (message handling only)
+    // 注册为 Actor（仅限消息处理）
     let actor_trait_ref: Rc<UnsafeCell<dyn Actor>> = actor_ref.clone();
     get_actor_registry().insert(actor_id, actor_trait_ref);
 
@@ -185,31 +181,28 @@ pub fn get_actor(id: &Ustr) -> Option<Rc<UnsafeCell<dyn Actor>>> {
     get_actor_registry().get(id)
 }
 
-/// Returns a guard providing mutable access to the registered actor of type `T`.
+/// 返回一个守卫，该守卫提供对类型为 `T` 的已注册 Actor 的可变访问。
 ///
-/// The returned [`ActorRef`] holds an `Rc` to keep the actor alive, preventing
-/// use-after-free if the actor is removed from the registry.
+/// 返回的 [`ActorRef`] 持有一个 `Rc` 以保持 Actor 存活，防止在从注册表中删除 Actor 时出现使用后释放。
 ///
 /// # Panics
 ///
-/// - Panics if no actor with the specified `id` is found in the registry.
-/// - Panics if the stored actor is not of type `T`.
+/// - 如果在注册表中未找到具有指定 `id` 的 Actor，则会 panic。
+/// - 如果存储的 Actor 不是类型 `T`，则会 panic。
 ///
-/// # Safety
+/// # 安全性 (Safety)
 ///
-/// While this function is not marked `unsafe`, aliasing constraints apply:
+/// 虽然此函数未标记为 `unsafe`，但别名约束仍然适用：
 ///
-/// - **Aliasing**: The caller should ensure no other mutable references to the same
-///   actor exist simultaneously. The callback-based message handling pattern in this
-///   codebase requires re-entrant access, which technically violates this invariant.
-/// - **Thread safety**: The registry is thread-local; do not send guards across
-///   threads.
+/// - **别名 (Aliasing)**：调用者应确保不存在对同一 Actor 的其他并发可变引用。
+///   本代码库中的基于回调的消息处理模式需要可重入访问，这在技术上违反了这一不变量。
+/// - **线程安全**：注册表是线程本地的；请勿跨线程发送守卫。
 #[must_use]
 pub fn get_actor_unchecked<T: Actor>(id: &Ustr) -> ActorRef<T> {
     let registry = get_actor_registry();
     let actor_rc = registry
         .get(id)
-        .unwrap_or_else(|| panic!("Actor for {id} not found"));
+        .unwrap_or_else(|| panic!("未找到 ID 为 {id} 的 Actor"));
 
     // SAFETY: Get a reference to check the type before casting
     let actor_ref = unsafe { &*actor_rc.get() };
@@ -218,7 +211,7 @@ pub fn get_actor_unchecked<T: Actor>(id: &Ustr) -> ActorRef<T> {
 
     assert!(
         actual_type == expected_type,
-        "Actor type mismatch for '{id}': expected {expected_type:?}, found {actual_type:?}"
+        "Actor 类型不匹配 '{id}': 期望 {expected_type:?}, 实际为 {actual_type:?}"
     );
 
     ActorRef {
@@ -227,14 +220,13 @@ pub fn get_actor_unchecked<T: Actor>(id: &Ustr) -> ActorRef<T> {
     }
 }
 
-/// Attempts to get a guard providing mutable access to the registered actor.
+/// 尝试获取提供对已注册 Actor 的可变访问的守卫。
 ///
-/// Returns `None` if the actor is not found or the type doesn't match.
+/// 如果未找到 Actor 或类型不匹配，则返回 `None`。
 ///
-/// # Safety
+/// # 安全性 (Safety)
 ///
-/// See [`get_actor_unchecked`] for safety requirements. The same aliasing
-/// and thread-safety constraints apply.
+/// 有关安全性要求，请参见 [`get_actor_unchecked`]。同样的别名和线程安全约束也适用。
 #[must_use]
 pub fn try_get_actor_unchecked<T: Actor>(id: &Ustr) -> Option<ActorRef<T>> {
     let registry = get_actor_registry();
@@ -255,18 +247,18 @@ pub fn try_get_actor_unchecked<T: Actor>(id: &Ustr) -> Option<ActorRef<T>> {
     })
 }
 
-/// Checks if an actor with the `id` exists in the registry.
+/// 检查注册表中是否存在具有该 `id` 的 Actor。
 pub fn actor_exists(id: &Ustr) -> bool {
     get_actor_registry().contains(id)
 }
 
-/// Returns the number of registered actors.
+/// 返回注册的 Actor 数量。
 pub fn actor_count() -> usize {
     get_actor_registry().len()
 }
 
 #[cfg(test)]
-/// Clears the actor registry (for test isolation).
+/// 清除 Actor 注册表（用于测试隔离）。
 pub fn clear_actor_registry() {
     let registry = get_actor_registry();
     registry.actors.borrow_mut().clear();
