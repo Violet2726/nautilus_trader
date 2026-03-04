@@ -55,6 +55,7 @@
 #![deny(rustdoc::broken_intra_doc_links)]
 
 pub mod engine;
+pub mod price_cage;
 pub mod sizing;
 
 // Re-exports

@@ -123,6 +123,7 @@ pub struct OrderMatchingEngine {
     instrument_close: Option<InstrumentClose>,
     settlement_price: Option<Price>,
     expiration_processed: bool,
+    pub accept_orders: bool,
 }
 
 impl Debug for OrderMatchingEngine {
@@ -199,6 +200,7 @@ impl OrderMatchingEngine {
             instrument_close: None,
             settlement_price: None,
             expiration_processed: false,
+            accept_orders: true,
         }
     }
 
@@ -1436,6 +1438,17 @@ impl OrderMatchingEngine {
         {
             self.market_status = MarketStatus::Closed;
         }
+
+        // ---- 新增：接受订单标记的更新 ----
+        match action {
+            MarketStatusAction::Trading | MarketStatusAction::PreOpen => {
+                self.accept_orders = true;
+            }
+            MarketStatusAction::Halt | MarketStatusAction::Close => {
+                self.accept_orders = false;
+            }
+            _ => {}
+        }
     }
 
     /// Processes an instrument close event.
@@ -1575,6 +1588,16 @@ impl OrderMatchingEngine {
 
             // Index identifiers
             self.account_ids.insert(order.trader_id(), account_id);
+
+            if !self.accept_orders {
+                break 'validate Some(
+                    format!(
+                        "Trading is HALTED/CLOSED, cannot accept order {}",
+                        order.client_order_id()
+                    )
+                    .into(),
+                );
+            }
 
             // Check for instrument expiration or activation
             if self.instrument.has_expiration() {

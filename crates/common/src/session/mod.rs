@@ -9,7 +9,10 @@ use nautilus_model::identifiers::Venue;
 #[cfg_attr(
     feature = "python",
     pyo3::pyclass(
-        frozen, eq, eq_int,
+        frozen,
+        eq,
+        eq_int,
+        from_py_object,
         module = "nautilus_trader.core.nautilus_pyo3.common",
         rename_all = "SCREAMING_SNAKE_CASE",
     )

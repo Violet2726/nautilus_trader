@@ -34,20 +34,22 @@ use nautilus_core::{UUID4, WeakCell};
 use nautilus_execution::trailing::{
     trailing_stop_calculate_with_bid_ask, trailing_stop_calculate_with_last,
 };
+use nautilus_common::messages::execution::{CancelAllOrders, CancelOrder};
 use nautilus_model::{
     accounts::{Account, AccountAny},
     enums::{
         InstrumentClass, OrderSide, OrderStatus, PositionSide, TimeInForce, TradingState,
         TrailingOffsetType, TriggerType,
     },
-    events::{OrderDenied, OrderEventAny, OrderModifyRejected},
-    identifiers::InstrumentId,
+    events::{OrderCancelRejected, OrderDenied, OrderEventAny, OrderModifyRejected},
+    identifiers::{AccountId, InstrumentId},
     instruments::{Instrument, InstrumentAny},
     orders::{Order, OrderAny},
     types::{Currency, Money, Price, Quantity, quantity::QuantityRaw},
 };
-use nautilus_portfolio::Portfolio;
+use nautilus_portfolio::{Portfolio, t1_ledger::T1Ledger};
 use rust_decimal::{Decimal, prelude::ToPrimitive};
+use std::sync::Arc;
 use ustr::Ustr;
 
 type SubmitOrderFn = Box<dyn Fn(SubmitOrder)>;
@@ -69,6 +71,12 @@ pub struct RiskEngine {
     max_notional_per_order: AHashMap<InstrumentId, Decimal>,
     trading_state: TradingState,
     config: RiskEngineConfig,
+
+    // ---- A 股扩展 ----
+    pub session_provider: Option<Arc<dyn nautilus_common::session::SessionProvider>>,
+    pub t1_ledger: Option<T1Ledger>,
+    pub account_throttlers: AHashMap<AccountId, Throttler<SubmitOrder, SubmitOrderFn>>,
+    pub symbol_throttlers: AHashMap<InstrumentId, Throttler<SubmitOrder, SubmitOrderFn>>,
 }
 
 impl Debug for RiskEngine {
@@ -91,6 +99,13 @@ impl RiskEngine {
         let throttled_modify_order =
             Self::create_modify_order_throttler(&config, clock.clone(), cache.clone());
 
+        let session_provider = config.session_provider.clone();
+        let t1_ledger = if config.t1_enabled {
+            Some(T1Ledger::new())
+        } else {
+            None
+        };
+
         Self {
             clock,
             cache,
@@ -100,6 +115,10 @@ impl RiskEngine {
             max_notional_per_order: AHashMap::new(),
             trading_state: TradingState::Active,
             config,
+            session_provider,
+            t1_ledger,
+            account_throttlers: AHashMap::new(),
+            symbol_throttlers: AHashMap::new(),
         }
     }
 
@@ -307,6 +326,38 @@ impl RiskEngine {
         log::info!("Set MAX_NOTIONAL_PER_ORDER: {instrument_id} {new_value_str}");
     }
 
+    /// A 股扩展：加载 T+1 账本初始持仓，供早盘启动或盘中恢复时调用。
+    pub fn t1_load_position(
+        &mut self,
+        account_id: AccountId,
+        instrument_id: InstrumentId,
+        total_qty: f64,
+        today_buy_qty: f64,
+    ) {
+        if let Some(ref mut ledger) = self.t1_ledger {
+            ledger.load_position(account_id, instrument_id, total_qty, today_buy_qty);
+            log::info!(
+                "T1_LEDGER Loaded: account={}, symbol={}, total={}, today_buy={}",
+                account_id,
+                instrument_id,
+                total_qty,
+                today_buy_qty
+            );
+        } else {
+            log::warn!("t1_load_position called but T1 ledger is not enabled.");
+        }
+    }
+
+    /// A 股扩展：执行 T+1 账本日切结算，将今日买入仓位解冻为可卖仓位（通常在盘后发信号调用）。
+    pub fn t1_on_settlement(&mut self) {
+        if let Some(ref mut ledger) = self.t1_ledger {
+            ledger.on_settlement();
+            log::info!("T1_LEDGER settled for all accounts to unlock sellable balance.");
+        } else {
+            log::warn!("t1_on_settlement called but T1 ledger is not enabled.");
+        }
+    }
+
     /// Starts the risk engine.
     pub fn start(&mut self) {
         log::info!("Started");
@@ -373,6 +424,12 @@ impl RiskEngine {
                 self.handle_submit_order_list(submit_order_list);
             }
             TradingCommand::ModifyOrder(modify_order) => self.handle_modify_order(modify_order),
+            TradingCommand::CancelOrder(cancel_order) => self.handle_cancel_order(cancel_order),
+            TradingCommand::CancelAllOrders(cancel_all) => self.handle_cancel_all_orders(cancel_all),
+            TradingCommand::BatchCancelOrders(batch) => {
+                // A 股：BatchCancelOrders 直接转发（批量撤单阶段检查由各 CancelOrder 分别处理）
+                self.send_to_execution(TradingCommand::BatchCancelOrders(batch));
+            }
             TradingCommand::QueryAccount(query_account) => {
                 self.send_to_execution(TradingCommand::QueryAccount(query_account));
             }
@@ -380,6 +437,106 @@ impl RiskEngine {
                 log::error!("Cannot handle command: {command}");
             }
         }
+    }
+
+    /// A 股扩展：撤单命令处理（含交易时段检查）。
+    fn handle_cancel_order(&mut self, command: CancelOrder) {
+        if self.config.bypass {
+            self.send_to_execution(TradingCommand::CancelOrder(command));
+            return;
+        }
+
+        // ---- A 股：交易时段检查 ----
+        if let Some(ref session) = self.session_provider {
+            let phase = session.phase_at(
+                &command.instrument_id.venue,
+                self.clock.borrow().timestamp_ns(),
+            );
+            if !phase.can_cancel_order() {
+                let reason = format!("CANCEL_DENIED: phase={phase:?} does not allow cancellation");
+                log::warn!(
+                    "CancelOrder for {} DENIED: {reason}",
+                    command.client_order_id
+                );
+                // 从缓存中查找已有订单获取 venue_order_id / account_id
+                let (venue_order_id, account_id) = {
+                    let cache = self.cache.borrow();
+                    if let Some(order) = cache.order(&command.client_order_id) {
+                        (order.venue_order_id(), order.account_id())
+                    } else {
+                        (command.venue_order_id, None)
+                    }
+                };
+                let event = self.create_cancel_rejected(
+                    command.trader_id,
+                    command.strategy_id,
+                    command.instrument_id,
+                    command.client_order_id,
+                    venue_order_id,
+                    account_id,
+                    &reason,
+                );
+                let endpoint = MessagingSwitchboard::exec_engine_process();
+                msgbus::send_order_event(endpoint, event);
+                return;
+            }
+        }
+
+        self.send_to_execution(TradingCommand::CancelOrder(command));
+    }
+
+    /// A 股扩展：全部撤单命令处理（含交易时段检查）。
+    /// `CancelAllOrders` 无对应的单笔 `OrderCancelRejected`，仅打日志拦截。
+    fn handle_cancel_all_orders(&mut self, command: CancelAllOrders) {
+        if self.config.bypass {
+            self.send_to_execution(TradingCommand::CancelAllOrders(command));
+            return;
+        }
+
+        // ---- A 股：交易时段检查 ----
+        if let Some(ref session) = self.session_provider {
+            let phase = session.phase_at(
+                &command.instrument_id.venue,
+                self.clock.borrow().timestamp_ns(),
+            );
+            if !phase.can_cancel_order() {
+                log::warn!(
+                    "CancelAllOrders for {} DENIED: phase={phase:?} does not allow cancellation",
+                    command.instrument_id
+                );
+                return;
+            }
+        }
+
+        self.send_to_execution(TradingCommand::CancelAllOrders(command));
+    }
+
+    /// 构建 `OrderCancelRejected` 事件（A 股撤单被阶段规则拒绝时使用）。
+    #[allow(clippy::too_many_arguments)]
+    fn create_cancel_rejected(
+        &self,
+        trader_id: nautilus_model::identifiers::TraderId,
+        strategy_id: nautilus_model::identifiers::StrategyId,
+        instrument_id: InstrumentId,
+        client_order_id: nautilus_model::identifiers::ClientOrderId,
+        venue_order_id: Option<nautilus_model::identifiers::VenueOrderId>,
+        account_id: Option<AccountId>,
+        reason: &str,
+    ) -> OrderEventAny {
+        let ts_now = self.clock.borrow().timestamp_ns();
+        OrderEventAny::CancelRejected(OrderCancelRejected::new(
+            trader_id,
+            strategy_id,
+            instrument_id,
+            client_order_id,
+            Ustr::from(reason),
+            UUID4::new(),
+            ts_now,
+            ts_now,
+            false,
+            venue_order_id,
+            account_id,
+        ))
     }
 
     fn handle_submit_order(&mut self, command: SubmitOrder) {
@@ -443,6 +600,21 @@ impl RiskEngine {
             );
             return; // Denied
         };
+
+        // ---- 新增：交易时段检查 ----
+        if let Some(ref session) = self.session_provider {
+            let phase = session.phase_at(
+                &command.instrument_id.venue,
+                self.clock.borrow().timestamp_ns(),
+            );
+            if !phase.can_accept_order() {
+                self.deny_command(
+                    TradingCommand::SubmitOrder(command),
+                    &format!("OUT_OF_SESSION: phase={phase:?}"),
+                );
+                return;
+            }
+        }
 
         if !self.check_order(instrument.clone(), order.clone()) {
             return; // Denied
@@ -628,11 +800,59 @@ impl RiskEngine {
     }
 
     fn check_order_price(&self, instrument: InstrumentAny, order: OrderAny) -> bool {
-        if order.price().is_some() {
-            let risk_msg = self.check_price(&instrument, order.price());
+        if let Some(order_price) = order.price() {
+            let risk_msg = self.check_price(&instrument, Some(order_price));
             if let Some(risk_msg) = risk_msg {
-                self.deny_order(order, &risk_msg);
+                self.deny_order(order.clone(), &risk_msg);
                 return false; // Denied
+            }
+
+            // ---- 新增：价格笼子检查 ----
+            if self.config.price_cage_enabled {
+                if let Some(ref session) = self.session_provider {
+                    let phase = session.phase_at(
+                        &order.instrument_id().venue,
+                        self.clock.borrow().timestamp_ns(),
+                    );
+                    // 仅在连续竞价阶段启用
+                    if phase.is_continuous() {
+                        let cache = self.cache.borrow();
+                        let instrument_id = order.instrument_id();
+                        let best_bid = cache.quote(&instrument_id).map(|q| q.bid_price);
+                        let best_ask = cache.quote(&instrument_id).map(|q| q.ask_price);
+                        let last_trade = cache.trade(&instrument_id).map(|t| t.price);
+                        let prev_close = instrument
+                            .min_price()
+                            .unwrap_or(Price::new(0.0, instrument.price_precision()));
+
+                        let cage_bound = crate::price_cage::compute_price_cage(
+                            order.order_side(),
+                            best_bid,
+                            best_ask,
+                            last_trade,
+                            prev_close,
+                            instrument.price_increment(),
+                            self.config.price_cage_pct,
+                        );
+
+                        if let Some(bound) = cage_bound {
+                            let violated = match order.order_side() {
+                                OrderSide::Buy => order_price > bound,
+                                OrderSide::Sell => order_price < bound,
+                                _ => false,
+                            };
+                            if violated {
+                                self.deny_order(
+                                    order.clone(),
+                                    &format!(
+                                        "PRICE_CAGE_VIOLATION: price={order_price}, cage={bound}"
+                                    ),
+                                );
+                                return false;
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -654,8 +874,75 @@ impl RiskEngine {
             order.is_quote_quantity(),
         );
         if let Some(risk_msg) = risk_msg {
-            self.deny_order(order, &risk_msg);
+            self.deny_order(order.clone(), &risk_msg);
             return false; // Denied
+        }
+
+        // ---- 新增：lot_size 整数倍及 T+1 检查 ----
+        if self.config.t1_enabled {
+            if let Some(lot_size) = instrument.lot_size() {
+                let qty_raw = order.quantity().raw;
+                let lot_raw = lot_size.raw;
+
+                if lot_raw > 0 {
+                    match order.order_side() {
+                        OrderSide::Buy => {
+                            if qty_raw % lot_raw != 0 {
+                                self.deny_order(
+                                    order.clone(),
+                                    &format!(
+                                        "LOT_SIZE_VIOLATION: buy_qty={} not multiple of lot_size={}",
+                                        order.quantity(),
+                                        lot_size
+                                    ),
+                                );
+                                return false;
+                            }
+                        }
+                        OrderSide::Sell => {
+                            // T+1 可卖检查
+                            if let Some(ref ledger) = self.t1_ledger {
+                                let account_id_opt = order.account_id().or_else(|| {
+                                    self.cache
+                                        .borrow()
+                                        .account_for_venue(&order.instrument_id().venue)
+                                        .map(|a| a.id())
+                                });
+                                if let Some(account_id) = account_id_opt {
+                                    let sellable =
+                                        ledger.sellable(&account_id, &order.instrument_id());
+                                    let order_qty = order.quantity().as_f64();
+
+                                    if order_qty > sellable {
+                                        self.deny_order(
+                                            order.clone(),
+                                            &format!(
+                                                "EXCEEDS_SELLABLE: qty={order_qty}, sellable={sellable}"
+                                            ),
+                                        );
+                                        return false;
+                                    }
+
+                                    // 零头卖出：不足一手但等于全部可卖，允许
+                                    if qty_raw % lot_raw != 0
+                                        && (order_qty - sellable).abs() > f64::EPSILON
+                                    {
+                                        self.deny_order(
+                                            order.clone(),
+                                            &format!(
+                                                "ODD_LOT_VIOLATION: sell_qty={} not full sellable={sellable}",
+                                                order.quantity()
+                                            ),
+                                        );
+                                        return false;
+                                    }
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
         }
 
         true
@@ -1152,6 +1439,32 @@ impl RiskEngine {
             return Some(format!("price {price_val} invalid (<= 0)"));
         }
 
+        // ---- 新增：tick 对齐检查 ----
+        if self.config.t1_enabled {
+            if !price_val.is_on_tick(instrument.price_increment()) {
+                return Some(format!(
+                    "PRICE_NOT_ON_TICK: price={price_val}, tick={}",
+                    instrument.price_increment()
+                ));
+            }
+
+            // ---- 新增：涨跌停价检查 ----
+            if let Some(max_price) = instrument.max_price() {
+                if price_val > max_price {
+                    return Some(format!(
+                        "PRICE_ABOVE_UP_LIMIT: price={price_val}, up_limit={max_price}"
+                    ));
+                }
+            }
+            if let Some(min_price) = instrument.min_price() {
+                if price_val < min_price {
+                    return Some(format!(
+                        "PRICE_BELOW_DOWN_LIMIT: price={price_val}, down_limit={min_price}"
+                    ));
+                }
+            }
+        }
+
         None
     }
 
@@ -1296,6 +1609,20 @@ impl RiskEngine {
     }
 
     fn execution_gateway(&mut self, instrument: InstrumentAny, command: TradingCommand) {
+        // ---- 新增：撤单时段检查 ----
+        if let TradingCommand::CancelOrder(ref cancel) = command {
+            if let Some(ref session) = self.session_provider {
+                let phase = session.phase_at(
+                    &cancel.instrument_id.venue,
+                    self.clock.borrow().timestamp_ns(),
+                );
+                if !phase.can_cancel_order() {
+                    log::warn!("CancelOrder DENIED: phase={phase:?} does not allow cancellation");
+                    return;
+                }
+            }
+        }
+
         match self.trading_state {
             TradingState::Halted => match command {
                 TradingCommand::SubmitOrder(submit_order) => {
@@ -1373,6 +1700,59 @@ impl RiskEngine {
             },
             TradingState::Active => match command {
                 TradingCommand::SubmitOrder(submit_order) => {
+                    // ---- 新增：符号级限流 ----
+                    if let Some(rate_limit) = &self.config.max_order_submit_per_symbol {
+                        let throttler = self
+                            .symbol_throttlers
+                            .entry(submit_order.instrument_id)
+                            .or_insert_with(|| {
+                                Self::create_submit_order_throttler_with_rate(
+                                    rate_limit.clone(),
+                                    self.clock.clone(),
+                                    format!("SYMBOL_THROTTLER_{}", submit_order.instrument_id),
+                                )
+                            });
+                        if throttler.used() >= 1.0 {
+                            self.deny_command(
+                                TradingCommand::SubmitOrder(submit_order.clone()),
+                                "SYMBOL_RATE_LIMIT_EXCEEDED",
+                            );
+                            return;
+                        } else {
+                            throttler.send_msg(submit_order.clone());
+                        }
+                    }
+
+                    // ---- 新增：账户级限流 ----
+                    if let Some(rate_limit) = &self.config.max_order_submit_per_account {
+                        let account_id_opt = self
+                            .cache
+                            .borrow()
+                            .order(&submit_order.client_order_id)
+                            .and_then(|o| o.account_id());
+                        if let Some(account_id) = account_id_opt {
+                            let throttler = self
+                                .account_throttlers
+                                .entry(account_id)
+                                .or_insert_with(|| {
+                                    Self::create_submit_order_throttler_with_rate(
+                                        rate_limit.clone(),
+                                        self.clock.clone(),
+                                        format!("ACCOUNT_THROTTLER_{account_id}"),
+                                    )
+                                });
+                            if throttler.used() >= 1.0 {
+                                self.deny_command(
+                                    TradingCommand::SubmitOrder(submit_order.clone()),
+                                    "ACCOUNT_RATE_LIMIT_EXCEEDED",
+                                );
+                                return;
+                            } else {
+                                throttler.send_msg(submit_order.clone());
+                            }
+                        }
+                    }
+
                     self.throttled_submit_order.send(submit_order);
                 }
                 TradingCommand::SubmitOrderList(submit_order_list) => {
@@ -1395,5 +1775,34 @@ impl RiskEngine {
         if self.config.debug {
             log::debug!("{RECV}{EVT} {event:?}");
         }
+
+        // ---- 新增：T1Ledger 更新 ----
+        if let Some(ref mut ledger) = self.t1_ledger {
+            if let OrderEventAny::Filled(fill) = &event {
+                ledger.on_fill(
+                    fill.account_id,
+                    fill.instrument_id,
+                    fill.order_side,
+                    fill.last_qty.as_f64(),
+                );
+            }
+        }
+    }
+
+    fn create_submit_order_throttler_with_rate(
+        rate_limit: nautilus_common::throttler::RateLimit,
+        clock: Rc<RefCell<dyn Clock>>,
+        name: String,
+    ) -> Throttler<SubmitOrder, SubmitOrderFn> {
+        let success_handler = { Box::new(move |_| {}) as Box<dyn Fn(SubmitOrder)> };
+        Throttler::new(
+            rate_limit.limit,
+            rate_limit.interval_ns,
+            clock,
+            name,
+            success_handler,
+            None,
+            Ustr::from(UUID4::new().as_str()),
+        )
     }
 }

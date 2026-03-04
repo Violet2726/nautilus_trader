@@ -376,9 +376,12 @@ def _copy_build_dir_to_project(cmd: build_ext) -> None:
                 relative_extension.unlink()
             except PermissionError:
                 # 文件可能被锁定（例如被 IDE 中的 Python 进程加载）。
-                # 我们无法覆写它，但 Windows 允许重命名打开的文件。
+                # 我们无法在原位置删除或覆写它，但 Windows 允许重命名移动打开的文件。
+                # 为了不污染 Git 工作区，我们将它们移动到已被 Git 忽略的 build 目录中
                 import uuid
-                tmp_dst = relative_extension.with_name(f"{relative_extension.name}.{uuid.uuid4().hex}.old")
+                old_dir = Path(BUILD_DIR or "build") / "old_pyds"
+                old_dir.mkdir(parents=True, exist_ok=True)
+                tmp_dst = old_dir / f"{relative_extension.name}.{uuid.uuid4().hex}.old"
                 try:
                     relative_extension.rename(tmp_dst)
                 except Exception as e:
@@ -409,9 +412,11 @@ def _copy_rust_dylibs_to_project() -> None:
             dst.unlink()
         except PermissionError:
             # 文件可能被锁定（例如被 IDE 中的 Python 进程加载）。
-            # 我们无法覆写它，但 Windows 允许移动/重命名打开的文件。
+            # 同样为了不污染工作区，移动到忽略的 build 目录中
             import uuid
-            tmp_dst = dst.with_name(f"{dst.name}.{uuid.uuid4().hex}.old")
+            old_dir = Path(BUILD_DIR or "build") / "old_pyds"
+            old_dir.mkdir(parents=True, exist_ok=True)
+            tmp_dst = old_dir / f"{dst.name}.{uuid.uuid4().hex}.old"
             try:
                 dst.rename(tmp_dst)
             except Exception as e:

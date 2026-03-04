@@ -310,6 +310,32 @@ impl Price {
         }
     }
 
+    /// 将价格向下取整到 tick 网格
+    #[must_use]
+    pub fn round_down_to_tick(self, tick: Self) -> Self {
+        if tick.raw == 0 {
+            return self;
+        }
+        let rounded_raw = (self.raw / tick.raw) * tick.raw;
+        Self::from_raw(rounded_raw, self.precision)
+    }
+
+    /// 将价格向上取整到 tick 网格
+    #[must_use]
+    pub fn round_up_to_tick(self, tick: Self) -> Self {
+        if tick.raw == 0 {
+            return self;
+        }
+        let rounded_raw = ((self.raw + tick.raw - 1) / tick.raw) * tick.raw;
+        Self::from_raw(rounded_raw, self.precision)
+    }
+
+    /// 检查价格是否在 tick 网格上
+    #[must_use]
+    pub fn is_on_tick(self, tick: Self) -> bool {
+        tick.raw != 0 && self.raw % tick.raw == 0
+    }
+
     /// Returns `true` if the value of this instance is undefined.
     #[must_use]
     pub fn is_undefined(&self) -> bool {
@@ -1514,5 +1540,22 @@ mod property_tests {
             prop_assert_eq!(price.raw, raw);
             prop_assert_eq!(price.precision, precision);
         }
+    }
+
+    #[test]
+    fn test_tick_rounding_methods() {
+        let price1 = Price::new(10.05, 2);
+        let tick1 = Price::new(0.1, 2);
+
+        assert_eq!(price1.round_down_to_tick(tick1), Price::new(10.0, 2));
+        assert_eq!(price1.round_up_to_tick(tick1), Price::new(10.1, 2));
+        assert!(!price1.is_on_tick(tick1));
+        assert!(Price::new(10.0, 2).is_on_tick(tick1));
+
+        let price2 = Price::new(7.33, 2);
+        let tick2 = Price::new(0.01, 2);
+        assert_eq!(price2.round_down_to_tick(tick2), price2);
+        assert_eq!(price2.round_up_to_tick(tick2), price2);
+        assert!(price2.is_on_tick(tick2));
     }
 }
