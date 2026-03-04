@@ -21,44 +21,43 @@ from setuptools import Distribution
 from setuptools import Extension
 
 
-# Platform constants
+# 平台常量
 IS_LINUX = platform.system() == "Linux"
 IS_MACOS = platform.system() == "Darwin"
 IS_WINDOWS = platform.system() == "Windows"
 IS_ARM64 = platform.machine() in ("arm64", "aarch64")
 
 
-# The Rust toolchain to use for builds
+# 用于构建的 Rust 工具链
 RUSTUP_TOOLCHAIN = os.getenv("RUSTUP_TOOLCHAIN", "stable")
-# The Cargo build mode
+# Cargo 构建模式
 BUILD_MODE = os.getenv("BUILD_MODE", "release")
-# If PROFILE_MODE mode is enabled, include traces necessary for coverage and profiling
+# 如果启用了 PROFILE_MODE 模式，则包含覆盖率和分析所需的追踪
 PROFILE_MODE = bool(os.getenv("PROFILE_MODE", ""))
-# If ANNOTATION mode is enabled, generate an annotated HTML version of the input source files
+# 如果启用了 ANNOTATION 模式，则生成输入源文件的带注释 HTML 版本
 ANNOTATION_MODE = bool(os.getenv("ANNOTATION_MODE", ""))
-# If PARALLEL build is enabled, uses all CPUs for compile stage of build
+# 如果启用了 PARALLEL 构建，则在构建的编译阶段使用所有 CPU
 PARALLEL_BUILD = os.getenv("PARALLEL_BUILD", "true").lower() == "true"
-# If COPY_TO_SOURCE is enabled, copy built *.so files back into the source tree
+# 如果启用了 COPY_TO_SOURCE，则将构建好的 *.so/*.pyd 文件复制回源代码树
 COPY_TO_SOURCE = os.getenv("COPY_TO_SOURCE", "true").lower() == "true"
-# Force stripping of debug symbols even in non-release builds
+# 即使在非 release 构建中也强制去除调试符号
 FORCE_STRIP = os.getenv("FORCE_STRIP", "false").lower() == "true"
-# If PyO3 only then don't build C extensions to reduce compilation time
+# 如果仅 PyO3，则不构建 C 扩展以减少编译时间
 PYO3_ONLY = os.getenv("PYO3_ONLY", "").lower() != ""
-# If dry run only print the commands that would be executed
+# 如果是干跑（dry run），仅打印将要执行的命令
 DRY_RUN = bool(os.getenv("DRY_RUN", ""))
 
-# Precision mode configuration
+# 精度模式配置
 # https://nautilustrader.io/docs/nightly/getting_started/installation#precision-mode
 HIGH_PRECISION = os.getenv("HIGH_PRECISION", "true").lower() == "true"
 if IS_WINDOWS and HIGH_PRECISION:
     print(
-        "Warning: high-precision mode not supported on Windows (128-bit integers unavailable)\nForcing standard-precision (64-bit) mode",
+        "警告：Windows 不支持高精度模式（128 位整数不可用）\n正在强制切换为标准精度（64 位）模式",
     )
     HIGH_PRECISION = False
 
 if PROFILE_MODE:
-    # For subsequent debugging, the C source needs to be in the same tree as
-    # the Cython code (not in a separate build directory).
+    # 为了后续调试，C 源码需要与 Cython 代码位于同一目录中（而不是在单独的构建目录中）。
     BUILD_DIR = None
 elif ANNOTATION_MODE:
     BUILD_DIR = "build/annotated"
@@ -75,7 +74,7 @@ if USE_SCCACHE:
     os.environ["CARGO_INCREMENTAL"] = "0"
 
 if IS_LINUX:
-    # Use clang as the default compiler, but allow overrides
+    # 默认使用 clang，但允许覆盖
     if "CC" not in os.environ:
         os.environ["CC"] = "sccache clang" if USE_SCCACHE else "clang"
     if "CXX" not in os.environ:
@@ -100,7 +99,7 @@ if IS_LINUX and IS_ARM64:
         os.environ["RUSTFLAGS"] = rustflags
 
 if IS_WINDOWS:
-    # Linker error 1181
+    # 链接器错误 1181
     # https://docs.microsoft.com/en-US/cpp/error-messages/tool-errors/linker-tools-error-lnk1181?view=msvc-170&viewFallbackFrom=vs-2019
     RUST_LIB_PFX = ""
     RUST_STATIC_LIB_EXT = "lib"
@@ -117,7 +116,7 @@ else:  # Linux
 CARGO_TARGET_DIR = os.environ.get("CARGO_TARGET_DIR", Path.cwd() / "target")
 CARGO_BUILD_TARGET = os.environ.get("CARGO_BUILD_TARGET", "")
 
-# Determine the profile directory name
+# 确定 profile 目录名称
 if BUILD_MODE == "release":
     profile_dir = "release"
 elif BUILD_MODE == "debug-pyo3":
@@ -127,7 +126,7 @@ else:
 
 CARGO_TARGET_DIR = Path(CARGO_TARGET_DIR) / CARGO_BUILD_TARGET / profile_dir
 
-# Directories with headers to include
+# 包含头文件的目录
 RUST_INCLUDES = ["nautilus_trader/core/includes"]
 RUST_LIB_PATHS: list[Path] = [
     CARGO_TARGET_DIR / f"{RUST_LIB_PFX}nautilus_backtest.{RUST_STATIC_LIB_EXT}",
@@ -163,9 +162,9 @@ def _build_rust_libs() -> None:
     print("Compiling Rust libraries...")
 
     try:
-        # Build the Rust libraries using Cargo
+        # 使用 Cargo 构建 Rust 库
         if RUSTUP_TOOLCHAIN not in ("stable", "nightly"):
-            raise ValueError(f"Invalid `RUSTUP_TOOLCHAIN` '{RUSTUP_TOOLCHAIN}'")
+            raise ValueError(f"无效的 `RUSTUP_TOOLCHAIN` '{RUSTUP_TOOLCHAIN}'")
 
         needed_crates = [
             "nautilus-backtest",
@@ -179,9 +178,9 @@ def _build_rust_libs() -> None:
 
         if BUILD_MODE == "release":
             build_options = ["--release"]
-            # Only pass '-s' at link time on Linux. On macOS this flag is obsolete
-            # and may cause failures with recent toolchains. Cargo already performs
-            # symbol stripping per profile, and we post-strip where applicable.
+            # 仅在 Linux 链接时传递 '-s'。在 macOS 上此标志已过时，
+            # 并可能导致较新工具链失败。Cargo 已针对每个 profile 执行符号去除，
+            # 我们在适用的地方进行后期去除。
             if IS_LINUX:
                 existing_rustflags = os.environ.get("RUSTFLAGS", "")
                 os.environ["RUSTFLAGS"] = f"{existing_rustflags} -C link-arg=-s"
@@ -192,24 +191,45 @@ def _build_rust_libs() -> None:
 
         features = _set_feature_flags()
 
-        cmd_args = [
-            "cargo",
-            "build",
-            "--lib",
-            *itertools.chain.from_iterable(("-p", p) for p in needed_crates),
-            *build_options,
-            *features,
-        ]
+        # 定义哪些 crate 支持哪些 feature，以避免 cargo 错误
+        crate_features = {
+            "nautilus-pyo3": ["cython-compat", "extension-module", "ffi", "postgres", "tracing-bridge"],
+            "nautilus-common": ["extension-module", "ffi", "python", "tracing-bridge"],
+            "nautilus-core": ["extension-module", "ffi", "python"],
+            "nautilus-model": ["extension-module", "ffi", "python"],
+            "nautilus-persistence": ["extension-module", "ffi", "python"],
+            "nautilus-backtest": ["extension-module", "ffi", "python"],
+            "nautilus-infrastructure": ["extension-module", "python", "postgres"],
+        }
 
+        shared_features = set(features)
+        if "--features" in shared_features:
+            shared_features.remove("--features")
+        if "--no-default-features" in shared_features:
+            shared_features.remove("--no-default-features")
+        
+        # 将 shared_features 展平（如果它包含逗号分隔的字符串）
+        actual_features = []
+        for f in shared_features:
+            actual_features.extend(f.split(","))
+
+        # 在单次 cargo 调用中构建所有需要的 crate，大大提高编译速度
+        cmd = ["cargo", "build", "--lib", *build_options, "--no-default-features"]
         if RUSTUP_TOOLCHAIN == "nightly":
-            cmd_args.insert(1, "+nightly")
+            cmd.insert(1, "+nightly")
 
-        print(" ".join(cmd_args))
+        combined_features = []
+        for crate in needed_crates:
+            cmd.extend(["-p", crate])
+            supported = crate_features.get(crate, [])
+            to_enable = [f"{crate}/{f}" for f in actual_features if f in supported]
+            combined_features.extend(to_enable)
 
-        subprocess.run(
-            cmd_args,
-            check=True,
-        )
+        if combined_features:
+            cmd.extend(["--features", ",".join(combined_features)])
+
+        print(" ".join(cmd))
+        subprocess.run(cmd, check=True)
     except subprocess.CalledProcessError as e:
         raise RuntimeError(
             f"Error running cargo: {e}",
@@ -217,50 +237,50 @@ def _build_rust_libs() -> None:
 
 
 ################################################################################
-#  CYTHON BUILD
+# CYTHON 构建
 ################################################################################
 # https://cython.readthedocs.io/en/latest/src/userguide/source_files_and_compilation.html
 
-Options.docstrings = True  # Include docstrings in modules
-Options.fast_fail = True  # Abort the compilation on the first error occurred
-Options.annotate = ANNOTATION_MODE  # Create annotated HTML files for each .pyx
+Options.docstrings = True  # 在模块中包含 docstrings
+Options.fast_fail = True  # 在发生第一个错误时中止编译
+Options.annotate = ANNOTATION_MODE  # 为每个 .pyx 创建带注释的 HTML 文件
 if ANNOTATION_MODE:
     Options.annotate_coverage_xml = "coverage.xml"
 
 CYTHON_COMPILER_DIRECTIVES = {
     "language_level": "3",
-    "cdivision": True,  # If division is as per C with no check for zero (35% speed up)
-    "nonecheck": True,  # Insert extra check for field access on C extensions
-    "embedsignature": True,  # If docstrings should be embedded into C signatures
-    "profile": PROFILE_MODE,  # If we're debugging or profiling
-    "linetrace": PROFILE_MODE,  # If we're debugging or profiling
+    "cdivision": True,  # 如果除法按照 C 方式进行且不检查零（提速 35%）
+    "nonecheck": True,  # 在 C 扩展上插入额外的字段访问检查
+    "embedsignature": True,  # 是否将签名嵌入到 docstrings 中
+    "profile": PROFILE_MODE,  # 是否进行调试或分析
+    "linetrace": PROFILE_MODE,  # 是否进行调试或分析
     "warn.maybe_uninitialized": True,
 }
 
-# TODO: Temporarily separate Cython configuration while we require v3.0.11 for coverage
+# TODO: 在我们需要 v3.0.11 进行覆盖率测试期间，暂时分离 Cython 配置
 if Version(cython_compiler_version) >= Version("3.1.2"):
-    Options.warning_errors = True  # Treat compiler warnings as errors
+    Options.warning_errors = True  # 将编译器警告视为错误
     Options.extra_warnings = True
     CYTHON_COMPILER_DIRECTIVES["warn.deprecated.IF"] = False
 
 
 def _build_extensions() -> list[Extension]:
-    # Regarding the compiler warning: #warning "Using deprecated NumPy API,
+    # 关于编译器警告：#warning "Using deprecated NumPy API,
     # disable it with " "#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION"
     # https://stackoverflow.com/questions/52749662/using-deprecated-numpy-api
-    # From the Cython docs: "For the time being, it is just a warning that you can ignore."
+    # 源自 Cython 文档："目前这只是一个你可以忽略的警告。"
     define_macros: list[tuple[str, str | None]] = [
         ("NPY_NO_DEPRECATED_API", "NPY_1_7_API_VERSION"),
     ]
     if PROFILE_MODE or ANNOTATION_MODE:
-        # Profiling requires special macro directives
+        # 分析（Profiling）需要特殊的宏指令
         define_macros.append(("CYTHON_TRACE", "1"))
 
     extra_compile_args = []
     extra_link_args = RUST_LIBS
 
     if not IS_WINDOWS:
-        # Suppress warnings produced by Cython boilerplate
+        # 抑制由 Cython 样板代码生成的警告
         extra_compile_args.append("-Wno-unreachable-code")
         if BUILD_MODE == "release":
             extra_compile_args.append("-O2")
@@ -271,14 +291,14 @@ def _build_extensions() -> list[Extension]:
                 extra_compile_args.append("-fdata-sections")
                 extra_link_args.append("-Wl,--gc-sections")
                 extra_link_args.append("-Wl,--as-needed")
-                # Ensure non-executable stack on Linux to avoid loader errors
-                # when any input object accidentally requests an execstack.
+                # 在 Linux 上确保非可执行堆栈，以避免当任何输入对象由于意外
+                # 请求 execstack 时引发的加载程序错误。
                 extra_link_args.append("-Wl,-z,noexecstack")
 
     if IS_WINDOWS:
-        # Standard Windows system libraries required when linking Cython extensions.
-        # Keep this list lowercase and alphabetically sorted for easy maintenance
-        # and to avoid duplicates sneaking in.
+        # 链接 Cython 扩展时所需的标准 Windows 系统库。
+        # 请保持此列表小写并按字母顺序排序，以便于维护并避免重复。
+        extra_compile_args.extend(["/MP", "/FS"])
         extra_link_args += [
             "advapi32.lib",
             "bcrypt.lib",
@@ -344,19 +364,37 @@ def _build_distribution(extensions: list[Extension]) -> Distribution:
 
 
 def _copy_build_dir_to_project(cmd: build_ext) -> None:
-    # Copy built extensions back to the project tree
+    # 将构建好的扩展复制回项目树
     for output in cmd.get_outputs():
         relative_extension = Path(output).relative_to(cmd.build_lib)
         if not Path(output).exists():
             continue
 
-        # Copy the file and set permissions
+        # 在 Windows 上针对内存映射锁定的 .pyd 文件应用安全覆写变通方案
+        if relative_extension.exists():
+            try:
+                relative_extension.unlink()
+            except PermissionError:
+                # 文件可能被锁定（例如被 IDE 中的 Python 进程加载）。
+                # 我们无法覆写它，但 Windows 允许重命名打开的文件。
+                import uuid
+                tmp_dst = relative_extension.with_name(f"{relative_extension.name}.{uuid.uuid4().hex}.old")
+                try:
+                    relative_extension.rename(tmp_dst)
+                except Exception as e:
+                    print(f"警告：重命名锁定文件 {relative_extension} 失败：{e}")
+
+        # 复制文件并设置权限
         shutil.copyfile(output, relative_extension)
         mode = relative_extension.stat().st_mode
         mode |= (mode & 0o444) >> 2
-        relative_extension.chmod(mode)
+        try:
+            relative_extension.chmod(mode)
+        except PermissionError:
+            print(f"警告：chmod {relative_extension} 失败")
 
-    print("Copied all compiled dynamic library files into source")
+
+    print("已将所有编译好的动态库文件复制到源目录")
 
 
 def _copy_rust_dylibs_to_project() -> None:
@@ -364,9 +402,24 @@ def _copy_rust_dylibs_to_project() -> None:
     ext_suffix = sysconfig.get_config_var("EXT_SUFFIX")
     src = Path(CARGO_TARGET_DIR) / f"{RUST_LIB_PFX}nautilus_pyo3.{RUST_DYLIB_EXT}"
     dst = Path("nautilus_trader/core") / f"nautilus_pyo3{ext_suffix}"
+
+    if dst.exists():
+        try:
+            # 在 Windows 上，如果文件是只读的，或者我们想要清空覆写
+            dst.unlink()
+        except PermissionError:
+            # 文件可能被锁定（例如被 IDE 中的 Python 进程加载）。
+            # 我们无法覆写它，但 Windows 允许移动/重命名打开的文件。
+            import uuid
+            tmp_dst = dst.with_name(f"{dst.name}.{uuid.uuid4().hex}.old")
+            try:
+                dst.rename(tmp_dst)
+            except Exception as e:
+                print(f"警告：重命名锁定文件 {dst} 失败：{e}")
+
     shutil.copyfile(src=src, dst=dst)
 
-    print(f"Copied {src} to {dst}")
+    print(f"已将 {src} 复制到 {dst}")
 
 
 def _get_nautilus_version() -> str:
@@ -416,27 +469,25 @@ def _get_rustc_version() -> str:
     except (subprocess.CalledProcessError, FileNotFoundError) as e:
         err_msg = str(e) if isinstance(e, FileNotFoundError) else e.stderr.decode()
         raise RuntimeError(
-            "You are installing from source which requires the Rust compiler to be installed.\n"
-            "Find more information at https://www.rust-lang.org/tools/install\n"
-            f"Error running rustc: {err_msg}",
+            "您正在从源码安装，这需要安装 Rust 编译器。\n"
+            "更多信息请访问 https://www.rust-lang.org/tools/install\n"
+            f"运行 rustc 出错：{err_msg}",
         ) from e
 
 
 def _ensure_windows_python_import_lib() -> None:
     """
-    Ensure that the *t* suffixed Python import library exists on Windows.
+    确保 Windows 上存在以 *t* 结尾的 Python 导入库。
 
-    On some official CPython Windows builds the import library is named
-    ``pythonXY.lib`` (for example ``python313.lib``). However, when building
-    C-extensions ``distutils``/``setuptools`` may ask the MSVC linker for the
-    file ``pythonXYt.lib`` - note the additional *t* suffix. The *t* variant
-    historically referred to a *thread-safe* build but is no longer shipped.
+    在某些官方 CPython Windows 构建中，导入库命名为 ``pythonXY.lib``（例如 ``python313.lib``）。
+    但在构建 C 扩展时，``distutils``/``setuptools`` 可能会向 MSVC 链接器请求
+    ``pythonXYt.lib`` 文件——注意多出的 *t* 后缀。
+    *t* 变体历史上指的是线程安全（thread-safe）构建，但现在已不再分发。
 
-    When the file is missing the linker exits with
-    ``LINK : fatal error LNK1104: cannot open file 'pythonXYt.lib'`` which
-    breaks the CI build on Windows. To work around this we simply create a
-    copy of the existing import library with the expected name **before** the
-    extension build starts.
+    当该文件缺失时，链接器退出并报错：
+    ``LINK : fatal error LNK1104: cannot open file 'pythonXYt.lib'``
+    这会导致 Windows 上的 CI 构建中断。为了变通解决此问题，我们只需在
+    扩展构建开始**之前**，创建一份现有导入库的副本并命以期望的名字。
 
     """
     if not IS_WINDOWS:
@@ -462,17 +513,17 @@ def _ensure_windows_python_import_lib() -> None:
 
             if src.exists() and not dst.exists():
                 print(
-                    f"Creating missing Windows import lib {dst} (copying from {src})",
+                    f"正在创建缺失的 Windows 导入库 {dst}（从 {src} 复制）",
                 )
                 shutil.copyfile(src, dst)
-    except Exception as e:  # pragma: no cover - defensive
-        # Never fail the build because of this helper, just show the warning
-        print(f"Warning: failed to create *t* suffixed Python import library: {e}")
+    except Exception as e:  # pragma: no cover - 防御性处理
+        # 永远不要因为这个辅助函数而导致构建失败，只需显示警告即可
+        print(f"警告：创建以 *t* 结尾的 Python 导入库失败：{e}")
 
 
 def _strip_unneeded_symbols() -> None:
     try:
-        print("Stripping unneeded symbols from binaries...")
+        print("正在从二进制文件中去除无用符号...")
         total_before = 0
         total_after = 0
 
@@ -485,7 +536,7 @@ def _strip_unneeded_symbols() -> None:
             elif IS_MACOS:
                 strip_cmd = ["strip", "-x", so]
             else:
-                raise RuntimeError(f"Cannot strip symbols for platform {platform.system()}")
+                raise RuntimeError(f"无法为平台 {platform.system()} 去除符号")
             subprocess.run(
                 strip_cmd,  # type: ignore [arg-type]
                 check=True,
@@ -498,10 +549,10 @@ def _strip_unneeded_symbols() -> None:
         if total_before > 0:
             reduction = (1 - total_after / total_before) * 100
             print(
-                f"Stripped binaries: {total_before / 1024 / 1024:.1f}MB -> {total_after / 1024 / 1024:.1f}MB ({reduction:.1f}% reduction)",
+                f"已去除符号的二进制文件：{total_before / 1024 / 1024:.1f}MB -> {total_after / 1024 / 1024:.1f}MB (减小了 {reduction:.1f}%)",
             )
     except subprocess.CalledProcessError as e:
-        raise RuntimeError(f"Error when stripping symbols.\n{e}") from e
+        raise RuntimeError(f"去除符号时出错。\n{e}") from e
 
 
 def show_rustanalyzer_settings() -> None:
@@ -532,39 +583,57 @@ def show_rustanalyzer_settings() -> None:
         settings["rust-analyzer.cargo.features"] = features[1].split(",")
         settings["rust-analyzer.check.features"] = features[1].split(",")
 
-    print("Set these rust analyzer settings in .vscode/settings.json")
+    print("请在 .vscode/settings.json 中设置以下 rust analyzer 配置")
     print(json.dumps(settings, indent=2))
 
 
 def build() -> None:
     """
-    Construct the extensions and distribution.
+    构造扩展模块和分发。
     """
     _ensure_windows_python_import_lib()
     _build_rust_libs()
-    # Allow skipping Rust dylib copy in constrained environments
+    # 允许在受限环境中跳过 Rust 动态库的复制
     if not os.getenv("SKIP_RUST_DYLIB_COPY"):
         _copy_rust_dylibs_to_project()
 
     if not PYO3_ONLY:
-        # Create C Extensions to feed into cythonize()
+        # 创建 C 扩展对象以便提供给 cythonize()
         extensions = _build_extensions()
         distribution = _build_distribution(extensions)
 
-        # Build and run the command
-        print("Compiling C extension modules...")
+        # 构建并运行命令
+        print("正在编译 C 扩展模块...")
         cmd: build_ext = build_ext(distribution)
         if PARALLEL_BUILD:
             cmd.parallel = os.cpu_count()
+            
+            import concurrent.futures
+            
+            _original_build_extensions = cmd.build_extensions
+            
+            def build_extensions_parallel():
+                nthreads = cmd.parallel if cmd.parallel else (os.cpu_count() or 1)
+                if IS_WINDOWS:
+                    nthreads = min(nthreads, 60)
+                
+                print(f"正在使用 {nthreads} 个线程并行化 MSVC 扩展编译...")
+                with concurrent.futures.ThreadPoolExecutor(max_workers=nthreads) as executor:
+                    futures = [executor.submit(cmd.build_extension, ext) for ext in cmd.extensions]
+                    for future in concurrent.futures.as_completed(futures):
+                        future.result()
+
+            cmd.build_extensions = build_extensions_parallel
+
         cmd.ensure_finalized()
         cmd.run()
 
         if COPY_TO_SOURCE:
-            # Copy the build back into the source tree for development and wheel packaging
+            # 将构建成果复制回源码树，以便开发和 wheel 打包
             _copy_build_dir_to_project(cmd)
 
     if (BUILD_MODE == "release" or FORCE_STRIP) and (IS_LINUX or IS_MACOS):
-        # Strip symbols for release builds or when forced
+        # 针对 release 构建或强制要求时去除符号
         _strip_unneeded_symbols()
 
 
@@ -612,9 +681,9 @@ if __name__ == "__main__":
     if DRY_RUN:
         show_rustanalyzer_settings()
     else:
-        print("\nStarting build...")
+        print("\n正在启动构建...")
         ts_start = dt.datetime.now(dt.UTC)
         build()
-        print(f"Build time: {dt.datetime.now(dt.UTC) - ts_start}")
+        print(f"构建耗时: {dt.datetime.now(dt.UTC) - ts_start}")
 
-        print("\033[32m" + "Build completed" + "\033[0m")
+        print("\033[32m" + "构建已完成" + "\033[0m")
