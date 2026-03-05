@@ -910,6 +910,7 @@ impl BacktestEngine {
                 Data::Trade(trade) => ex.process_trade_tick(trade),
                 Data::Bar(bar) => ex.process_bar(*bar),
                 Data::InstrumentClose(close) => ex.process_instrument_close(*close),
+                Data::InstrumentStatus(status) => ex.process_instrument_status(*status),
                 Data::Depth10(depth) => ex.process_order_book_depth10(depth),
                 Data::MarkPriceUpdate(_) | Data::IndexPriceUpdate(_) => {
                     // Not routed to exchange — processed by data engine only

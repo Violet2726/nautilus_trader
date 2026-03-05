@@ -550,7 +550,7 @@ impl ExecutionAlgorithm for VwapAlgorithm {
             state.executed_raw,
             state.total_raw,
             state.elapsed_intervals - 1,
-            (state.total_raw / state.precision.max(1) as QuantityRaw).max(1),
+            (state.total_raw / state.precision.max(1) as QuantityRaw).max(1) as u64,
         );
 
         if deviation < -0.1 {

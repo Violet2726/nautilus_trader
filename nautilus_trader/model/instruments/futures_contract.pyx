@@ -123,6 +123,8 @@ cdef class FuturesContract(Instrument):
         str exchange = None,
         str tick_scheme_name = None,
         dict info = None,
+        Price max_price = None,
+        Price min_price = None,
     ) -> None:
         if exchange is not None:
             Condition.valid_string(exchange, "exchange")
@@ -143,8 +145,8 @@ cdef class FuturesContract(Instrument):
             min_quantity=Quantity.from_int_c(1),
             max_notional=None,
             min_notional=None,
-            max_price=None,
-            min_price=None,
+            max_price=max_price,
+            min_price=min_price,
             margin_init=margin_init or Decimal(0),
             margin_maint=margin_maint or Decimal(0),
             maker_fee=maker_fee or Decimal(0),
@@ -233,6 +235,8 @@ cdef class FuturesContract(Instrument):
             exchange=values["exchange"],
             tick_scheme_name=values.get("tick_scheme_name"),
             info=values.get("info"),
+            max_price=Price.from_str(values["max_price"]) if values.get("max_price") is not None else None,
+            min_price=Price.from_str(values["min_price"]) if values.get("min_price") is not None else None,
         )
 
     @staticmethod
@@ -290,6 +294,8 @@ cdef class FuturesContract(Instrument):
             ts_event=pyo3_instrument.ts_event,
             ts_init=pyo3_instrument.ts_init,
             info=pyo3_instrument.info,
+            max_price=Price.from_raw_c(pyo3_instrument.max_price.raw, pyo3_instrument.price_precision) if pyo3_instrument.max_price is not None else None,
+            min_price=Price.from_raw_c(pyo3_instrument.min_price.raw, pyo3_instrument.price_precision) if pyo3_instrument.min_price is not None else None,
         )
 
     @staticmethod

@@ -35,6 +35,7 @@ from nautilus_trader.model.objects cimport Price
 from nautilus_trader.model.objects cimport Quantity
 from nautilus_trader.model.orders.base cimport Order
 from nautilus_trader.model.orders.list cimport OrderList
+from nautilus_trader.model.data cimport InstrumentStatus
 from nautilus_trader.portfolio.base cimport PortfolioFacade
 
 
@@ -114,4 +115,5 @@ cdef class RiskEngine(Component):
 # -- 事件处理器 -----------------------------------------------------------------------------------
 
     cpdef void _handle_event(self, Event event)
+    cpdef void _handle_instrument_status(self, InstrumentStatus status)
     cpdef void _update_t1_ledger(self, OrderFilled fill)

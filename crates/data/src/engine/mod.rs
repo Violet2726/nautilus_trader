@@ -79,7 +79,7 @@ use nautilus_model::defi::DefiData;
 use nautilus_model::{
     data::{
         Bar, BarType, Data, DataType, FundingRateUpdate, IndexPriceUpdate, InstrumentClose,
-        MarkPriceUpdate, OrderBookDelta, OrderBookDeltas, OrderBookDepth10, QuoteTick, TradeTick,
+        MarkPriceUpdate, OrderBookDelta, OrderBookDeltas, OrderBookDepth10, QuoteTick, TradeTick, InstrumentStatus,
     },
     enums::{AggregationSource, BarAggregation, BookType, PriceType, RecordFlag},
     identifiers::{ClientId, InstrumentId, Venue},
@@ -861,6 +861,7 @@ impl DataEngine {
             Data::MarkPriceUpdate(mark_price) => self.handle_mark_price(mark_price),
             Data::IndexPriceUpdate(index_price) => self.handle_index_price(index_price),
             Data::InstrumentClose(close) => self.handle_instrument_close(close),
+            Data::InstrumentStatus(status) => self.handle_instrument_status(status),
         }
     }
 
@@ -1082,6 +1083,11 @@ impl DataEngine {
     fn handle_instrument_close(&mut self, close: InstrumentClose) {
         let topic = switchboard::get_instrument_close_topic(close.instrument_id);
         msgbus::publish_any(topic, &close);
+    }
+
+    fn handle_instrument_status(&mut self, status: InstrumentStatus) {
+        let topic = switchboard::get_instrument_status_topic(status.instrument_id);
+        msgbus::publish_any(topic, &status);
     }
 
     // -- SUBSCRIPTION HANDLERS -------------------------------------------------------------------

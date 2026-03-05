@@ -86,7 +86,7 @@ use nautilus_model::{
     data::{
         Bar, Data, HasTsInit, IndexPriceUpdate, MarkPriceUpdate, OrderBookDelta, OrderBookDepth10,
         QuoteTick, TradeTick, close::InstrumentClose, is_monotonically_increasing_by_init,
-        to_variant,
+        to_variant, InstrumentStatus,
     },
     instruments::InstrumentAny,
 };

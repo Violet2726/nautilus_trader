@@ -81,6 +81,7 @@ pub enum Data {
     MarkPriceUpdate(MarkPriceUpdate), // TODO: Rename to MarkPrice once Cython gone
     IndexPriceUpdate(IndexPriceUpdate), // TODO: Rename to IndexPrice once Cython gone
     InstrumentClose(InstrumentClose),
+    InstrumentStatus(InstrumentStatus),
 }
 
 macro_rules! impl_try_from_data {
@@ -117,6 +118,7 @@ impl_try_from_data!(Bar, Bar);
 impl_try_from_data!(MarkPriceUpdate, MarkPriceUpdate);
 impl_try_from_data!(IndexPriceUpdate, IndexPriceUpdate);
 impl_try_from_data!(InstrumentClose, InstrumentClose);
+impl_try_from_data!(InstrumentStatus, InstrumentStatus);
 
 /// Converts a vector of `Data` items to a specific variant type.
 ///
@@ -141,6 +143,7 @@ impl Data {
             Self::MarkPriceUpdate(mark_price) => mark_price.instrument_id,
             Self::IndexPriceUpdate(index_price) => index_price.instrument_id,
             Self::InstrumentClose(close) => close.instrument_id,
+            Self::InstrumentStatus(status) => status.instrument_id,
         }
     }
 
@@ -172,6 +175,7 @@ impl HasTsInit for Data {
             Self::MarkPriceUpdate(p) => p.ts_init,
             Self::IndexPriceUpdate(p) => p.ts_init,
             Self::InstrumentClose(c) => c.ts_init,
+            Self::InstrumentStatus(s) => s.ts_init,
         }
     }
 }
@@ -235,6 +239,12 @@ impl From<IndexPriceUpdate> for Data {
 impl From<InstrumentClose> for Data {
     fn from(value: InstrumentClose) -> Self {
         Self::InstrumentClose(value)
+    }
+}
+
+impl From<InstrumentStatus> for Data {
+    fn from(value: InstrumentStatus) -> Self {
+        Self::InstrumentStatus(value)
     }
 }
 
