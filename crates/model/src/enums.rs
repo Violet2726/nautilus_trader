@@ -13,7 +13,7 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! Enumerations for the trading domain model.
+//! 交易领域模型的枚举。
 
 use std::{str::FromStr, sync::OnceLock};
 
@@ -23,27 +23,27 @@ use strum::{AsRefStr, Display, EnumIter, EnumString, FromRepr};
 
 use crate::enum_strum_serde;
 
-/// Provides conversion from a `u8` value to an enum type.
+/// 提供 `u8` 值到枚举类型的转换。
 pub trait FromU8 {
-    /// Converts a `u8` value to the implementing type.
+    /// 将 `u8` 值转换为实现类型。
     ///
-    /// Returns `None` if the value is not a valid representation.
+    /// 如果值不是有效表示，则返回 `None`。
     fn from_u8(value: u8) -> Option<Self>
     where
         Self: Sized;
 }
 
-/// Provides conversion from a `u16` value to an enum type.
+/// 提供 `u16` 值到枚举类型的转换。
 pub trait FromU16 {
-    /// Converts a `u16` value to the implementing type.
+    /// 将 `u16` 值转换为实现类型。
     ///
-    /// Returns `None` if the value is not a valid representation.
+    /// 如果值不是有效表示，则返回 `None`。
     fn from_u16(value: u16) -> Option<Self>
     where
         Self: Sized;
 }
 
-/// An account type provided by a trading venue or broker.
+/// 交易场所或经纪人提供的账户类型。
 #[repr(C)]
 #[derive(
     Copy,
@@ -74,17 +74,17 @@ pub trait FromU16 {
     )
 )]
 pub enum AccountType {
-    /// An account with unleveraged cash assets only.
+    /// 仅包含无杠杆现金资产的账户。
     Cash = 1,
-    /// An account which facilitates trading on margin, using account assets as collateral.
+    /// 使用账户资产作为抵押品进行保证金交易的账户。
     Margin = 2,
-    /// An account specific to betting markets.
+    /// 特定于博彩市场的账户。
     Betting = 3,
-    /// An account which represents a blockchain wallet,
+    /// 表示区块链钱包的账户。
     Wallet = 4,
 }
 
-/// An aggregation source for derived data.
+/// 派生数据的聚合源。
 #[repr(C)]
 #[derive(
     Copy,
@@ -115,13 +115,13 @@ pub enum AccountType {
     )
 )]
 pub enum AggregationSource {
-    /// The data is externally aggregated (outside the Nautilus system boundary).
+    /// 数据在外部聚合（在 Nautilus 系统边界之外）。
     External = 1,
-    /// The data is internally aggregated (inside the Nautilus system boundary).
+    /// 数据在内部聚合（在 Nautilus 系统边界之内）。
     Internal = 2,
 }
 
-/// The side for the aggressing order of a trade in a market.
+/// 市场中交易的主动订单方。
 #[repr(C)]
 #[derive(
     Copy,
@@ -153,12 +153,12 @@ pub enum AggregationSource {
     )
 )]
 pub enum AggressorSide {
-    /// There was no specific aggressor for the trade.
+    /// 该交易没有特定的主动方。
     #[default]
     NoAggressor = 0,
-    /// The BUY order was the aggressor for the trade.
+    /// 买单是该交易的主动方。
     Buyer = 1,
-    /// The SELL order was the aggressor for the trade.
+    /// 卖单是该交易的主动方。
     Seller = 2,
 }
 
@@ -173,7 +173,7 @@ impl FromU8 for AggressorSide {
     }
 }
 
-/// A broad financial market asset class.
+/// 广泛的金融市场资产类别。
 #[repr(C)]
 #[derive(
     Copy,
@@ -205,19 +205,19 @@ impl FromU8 for AggressorSide {
 )]
 #[allow(non_camel_case_types)]
 pub enum AssetClass {
-    /// Foreign exchange (FOREX) assets.
+    /// 外汇（FOREX）资产。
     FX = 1,
-    /// Equity / stock assets.
+    /// 股票/权益资产。
     Equity = 2,
-    /// Commodity assets.
+    /// 大宗商品资产。
     Commodity = 3,
-    /// Debt based assets.
+    /// 基于债务的资产。
     Debt = 4,
-    /// Index based assets (baskets).
+    /// 基于指数的资产（篮子）。
     Index = 5,
-    /// Cryptocurrency or crypto token assets.
+    /// 加密货币或加密代币资产。
     Cryptocurrency = 6,
-    /// Alternative assets.
+    /// 另类资产。
     Alternative = 7,
 }
 
@@ -236,7 +236,7 @@ impl FromU8 for AssetClass {
     }
 }
 
-/// The aggregation method through which a bar is generated and closed.
+/// 生成和关闭 K 线的聚合方法。
 #[repr(C)]
 #[derive(
     Copy,
@@ -267,45 +267,45 @@ impl FromU8 for AssetClass {
     )
 )]
 pub enum BarAggregation {
-    /// Based on a number of ticks.
+    /// 基于一定数量的 tick。
     Tick = 1,
-    /// Based on the buy/sell imbalance of ticks.
+    /// 基于 tick 的买卖失衡。
     TickImbalance = 2,
-    /// Based on sequential buy/sell runs of ticks.
+    /// 基于连续的买卖 tick 序列。
     TickRuns = 3,
-    /// Based on traded volume.
+    /// 基于交易量。
     Volume = 4,
-    /// Based on the buy/sell imbalance of traded volume.
+    /// 基于交易量的买卖失衡。
     VolumeImbalance = 5,
-    /// Based on sequential runs of buy/sell traded volume.
+    /// 基于连续的买卖交易量序列。
     VolumeRuns = 6,
-    /// Based on the 'notional' value of the instrument.
+    /// 基于合约的"名义"价值。
     Value = 7,
-    /// Based on the buy/sell imbalance of trading by notional value.
+    /// 基于名义价值的交易买卖失衡。
     ValueImbalance = 8,
-    /// Based on sequential buy/sell runs of trading by notional value.
+    /// 基于连续的买卖名义价值序列。
     ValueRuns = 9,
-    /// Based on time intervals with millisecond granularity.
+    /// 基于毫秒级的时间间隔。
     Millisecond = 10,
-    /// Based on time intervals with second granularity.
+    /// 基于秒级的时间间隔。
     Second = 11,
-    /// Based on time intervals with minute granularity.
+    /// 基于分钟级的时间间隔。
     Minute = 12,
-    /// Based on time intervals with hour granularity.
+    /// 基于小时级的时间间隔。
     Hour = 13,
-    /// Based on time intervals with day granularity.
+    /// 基于天级的时间间隔。
     Day = 14,
-    /// Based on time intervals with week granularity.
+    /// 基于周级的时间间隔。
     Week = 15,
-    /// Based on time intervals with month granularity.
+    /// 基于月级的时间间隔。
     Month = 16,
-    /// Based on time intervals with year granularity.
+    /// 基于年级的时间间隔。
     Year = 17,
-    /// Based on fixed price movements (brick size).
+    /// 基于固定的价格变动（砖块大小）。
     Renko = 18,
 }
 
-/// The interval type for bar aggregation.
+/// K 线聚合的间隔类型。
 #[repr(C)]
 #[derive(
     Copy,
@@ -337,14 +337,14 @@ pub enum BarAggregation {
     )
 )]
 pub enum BarIntervalType {
-    /// Left-open interval `(start, end]`: start is exclusive, end is inclusive (default).
+    /// 左开区间 `(start, end]`：起始是排他的，结束是包含的（默认）。
     #[default]
     LeftOpen = 1,
-    /// Right-open interval `[start, end)`: start is inclusive, end is exclusive.
+    /// 右开区间 `[start, end)`：起始是包含的，结束是排他的。
     RightOpen = 2,
 }
 
-/// Represents the side of a bet in a betting market.
+/// 表示博彩市场中注的一方。
 #[repr(C)]
 #[derive(
     Copy,
@@ -375,14 +375,14 @@ pub enum BarIntervalType {
     )
 )]
 pub enum BetSide {
-    /// A "Back" bet signifies support for a specific outcome.
+    /// "支持"注表示对特定结果的支持。
     Back = 1,
-    /// A "Lay" bet signifies opposition to a specific outcome.
+    /// "反对"注表示对特定结果的反对。
     Lay = 2,
 }
 
 impl BetSide {
-    /// Returns the opposite betting side.
+    /// 返回相反的注方。
     #[must_use]
     pub fn opposite(&self) -> Self {
         match self {
@@ -393,11 +393,11 @@ impl BetSide {
 }
 
 impl From<OrderSide> for BetSide {
-    /// Returns the equivalent [`BetSide`] for a given [`OrderSide`].
+    /// 返回给定 [`OrderSide`] 的等效 [`BetSide`]。
     ///
     /// # Panics
     ///
-    /// Panics if `side` is [`OrderSide::NoOrderSide`].
+    /// 如果 `side` 是 [`OrderSide::NoOrderSide`] 则会 panic。
     fn from(side: OrderSide) -> Self {
         match side {
             OrderSide::Buy => Self::Back,
@@ -407,7 +407,7 @@ impl From<OrderSide> for BetSide {
     }
 }
 
-/// The type of order book action for an order book event.
+/// 订单簿事件的订单操作类型。
 #[repr(C)]
 #[derive(
     Copy,
@@ -438,13 +438,13 @@ impl From<OrderSide> for BetSide {
     )
 )]
 pub enum BookAction {
-    /// An order is added to the book.
+    /// 订单被添加到订单簿。
     Add = 1,
-    /// An existing order in the book is updated/modified.
+    /// 订单簿中的现有订单被更新/修改。
     Update = 2,
-    /// An existing order in the book is deleted/canceled.
+    /// 订单簿中的现有订单被删除/取消。
     Delete = 3,
-    /// The state of the order book is cleared.
+    /// 订单簿的状态被清除。
     Clear = 4,
 }
 
@@ -460,7 +460,7 @@ impl FromU8 for BookAction {
     }
 }
 
-/// The order book type, representing the type of levels granularity and delta updating heuristics.
+/// 订单簿类型，表示级别粒度和增量更新启发式方法的类型。
 #[repr(C)]
 #[derive(
     Copy,
@@ -492,11 +492,11 @@ impl FromU8 for BookAction {
 )]
 #[allow(non_camel_case_types)]
 pub enum BookType {
-    /// Top-of-book best bid/ask, one level per side.
+    /// 订单簿顶部的最佳买价/卖价，每方一个级别。
     L1_MBP = 1,
-    /// Market by price, one order per level (aggregated).
+    /// 按价格的市场，每个级别一个订单（聚合）。
     L2_MBP = 2,
-    /// Market by order, multiple orders per level (full granularity).
+    /// 按订单的市场，每个级别多个订单（完整粒度）。
     L3_MBO = 3,
 }
 
@@ -511,9 +511,9 @@ impl FromU8 for BookType {
     }
 }
 
-/// The order contingency type which specifies the behavior of linked orders.
+/// 订单条件类型，指定关联订单的行为。
 ///
-/// [FIX 5.0 SP2 : ContingencyType <1385> field](https://www.onixs.biz/fix-dictionary/5.0.sp2/tagnum_1385.html).
+/// [FIX 5.0 SP2 : ContingencyType <1385> 字段](https://www.onixs.biz/fix-dictionary/5.0.sp2/tagnum_1385.html)。
 #[repr(C)]
 #[derive(
     Copy,
@@ -545,18 +545,18 @@ impl FromU8 for BookType {
     )
 )]
 pub enum ContingencyType {
-    /// Not a contingent order.
+    /// 不是条件订单。
     #[default]
     NoContingency = 0,
-    /// One-Cancels-the-Other.
+    /// 一方取消另一方。
     Oco = 1,
-    /// One-Triggers-the-Other.
+    /// 一方触发另一方。
     Oto = 2,
-    /// One-Updates-the-Other (by proportional quantity).
+    /// 一方更新另一方（按比例数量）。
     Ouo = 3,
 }
 
-/// The broad currency type.
+/// 广泛的货币类型。
 #[repr(C)]
 #[derive(
     Copy,
@@ -587,15 +587,15 @@ pub enum ContingencyType {
     )
 )]
 pub enum CurrencyType {
-    /// A type of cryptocurrency or crypto token.
+    /// 加密货币或加密代币的类型。
     Crypto = 1,
-    /// A type of currency issued by governments which is not backed by a commodity.
+    /// 政府发行且不以商品为支持的货币类型。
     Fiat = 2,
-    /// A type of currency that is based on the value of an underlying commodity.
+    /// 基于基础商品价值的货币类型。
     CommodityBacked = 3,
 }
 
-/// The instrument class.
+/// 合约类别。
 #[repr(C)]
 #[derive(
     Copy,
@@ -626,34 +626,34 @@ pub enum CurrencyType {
     )
 )]
 pub enum InstrumentClass {
-    /// A spot market instrument class. The current market price of an instrument that is bought or sold for immediate delivery and payment.
+    /// 现货市场合约类别。立即交割和支付的合约的当前市场价格。
     Spot = 1,
-    /// A swap instrument class. A derivative contract through which two parties exchange the cash flows or liabilities from two different financial instruments.
+    /// 互换合约类别。一种衍生合约，双方通过该合约交换两种不同金融工具的现金流或负债。
     Swap = 2,
-    /// A futures contract instrument class. A legal agreement to buy or sell an asset at a predetermined price at a specified time in the future.
+    /// 期货合约类别。一种法律协议，在未来的特定时间以预定价格购买或出售资产。
     Future = 3,
-    /// A futures spread instrument class. A strategy involving the use of futures contracts to take advantage of price differentials between different contract months, underlying assets, or marketplaces.
+    /// 期货价差合约类别。一种使用期货合约的策略，利用不同合约月份、基础资产或市场之间的价格差异。
     FuturesSpread = 4,
-    /// A forward derivative instrument class. A customized contract between two parties to buy or sell an asset at a specified price on a future date.
+    /// 远期衍生合约类别。双方之间的定制合约，在未来的特定日期以指定价格购买或出售资产。
     Forward = 5,
-    /// A contract-for-difference (CFD) instrument class. A contract between an investor and a CFD broker to exchange the difference in the value of a financial product between the time the contract opens and closes.
+    /// 差价合约（CFD）类别。投资者与 CFD 经纪人之间的合约，交换合约开仓和平仓之间金融产品价值的差异。
     Cfd = 6,
-    /// A bond instrument class. A type of debt investment where an investor loans money to an entity (typically corporate or governmental) which borrows the funds for a defined period of time at a variable or fixed interest rate.
+    /// 债券合约类别。一种债务投资，投资者向实体（通常是公司或政府）出借资金，实体在定义的时间段内以可变或固定利率借入资金。
     Bond = 7,
-    /// An option contract instrument class. A type of derivative that gives the holder the right, but not the obligation, to buy or sell an underlying asset at a predetermined price before or at a certain future date.
+    /// 期权合约类别。一种衍生品，赋予持有人在特定未来日期之前或之时以预定价格购买或出售基础资产的权利，而非义务。
     Option = 8,
-    /// An option spread instrument class. A strategy involving the purchase and/or sale of multiple option contracts on the same underlying asset with different strike prices or expiration dates to hedge risk or speculate on price movements.
+    /// 期权价差合约类别。一种策略，涉及购买和/或出售同一基础资产上具有不同行权价或到期日的多个期权合约，以对冲风险或投机价格变动。
     OptionSpread = 9,
-    /// A warrant instrument class. A derivative that gives the holder the right, but not the obligation, to buy or sell a security—most commonly an equity—at a certain price before expiration.
+    /// 认股权证合约类别。一种衍生品，赋予持有人在到期前以特定价格购买或出售证券的权利，而非义务。
     Warrant = 10,
-    /// A sports betting instrument class. A financialized derivative that allows wagering on the outcome of sports events using structured contracts or prediction markets.
+    /// 体育博彩合约类别。一种金融化衍生品，允许使用结构化合约或预测市场对体育事件的结果进行投注。
     SportsBetting = 11,
-    /// A binary option instrument class. A type of derivative where the payoff is either a fixed monetary amount or nothing, depending on whether the price of an underlying asset is above or below a predetermined level at expiration.
+    /// 二元期权合约类别。一种衍生品，其收益要么是固定金额，要么是什么都没有，具体取决于基础资产在到期时的价格是否高于或低于预定水平。
     BinaryOption = 12,
 }
 
 impl InstrumentClass {
-    /// Returns whether this instrument class has an expiration.
+    /// 返回此合约类别是否有到期日。
     #[must_use]
     pub const fn has_expiration(&self) -> bool {
         matches!(
@@ -663,7 +663,7 @@ impl InstrumentClass {
     }
 }
 
-/// The type of event for an instrument close.
+/// 合约关闭的事件类型。
 #[repr(C)]
 #[derive(
     Copy,
@@ -694,13 +694,13 @@ impl InstrumentClass {
     )
 )]
 pub enum InstrumentCloseType {
-    /// When the market session ended.
+    /// 当市场会话结束时。
     EndOfSession = 1,
-    /// When the instrument expiration was reached.
+    /// 当合约到期时。
     ContractExpired = 2,
 }
 
-/// Convert the given `value` to an [`InstrumentCloseType`].
+/// 将给定的 `value` 转换为 [`InstrumentCloseType`]。
 impl FromU8 for InstrumentCloseType {
     fn from_u8(value: u8) -> Option<Self> {
         match value {
@@ -711,7 +711,7 @@ impl FromU8 for InstrumentCloseType {
     }
 }
 
-/// The liquidity side for a trade.
+/// 交易的流动性方。
 #[repr(C)]
 #[derive(
     Copy,
@@ -743,15 +743,15 @@ impl FromU8 for InstrumentCloseType {
 )]
 #[allow(clippy::enum_variant_names)]
 pub enum LiquiditySide {
-    /// No liquidity side specified.
+    /// 未指定流动性方。
     NoLiquiditySide = 0,
-    /// The order passively provided liquidity to the market to complete the trade (made a market).
+    /// 订单被动地为市场提供流动性以完成交易（做市）。
     Maker = 1,
-    /// The order aggressively took liquidity from the market to complete the trade.
+    /// 订单主动地从市场获取流动性以完成交易。
     Taker = 2,
 }
 
-/// The status of an individual market on a trading venue.
+/// 交易场所上单个市场的状态。
 #[repr(C)]
 #[derive(
     Copy,
@@ -782,21 +782,21 @@ pub enum LiquiditySide {
     )
 )]
 pub enum MarketStatus {
-    /// The instrument is trading.
+    /// 合约正在交易。
     Open = 1,
-    /// The instrument is in a pre-open period.
+    /// 合约处于开盘前时段。
     Closed = 2,
-    /// Trading in the instrument has been paused.
+    /// 合约的交易已暂停。
     Paused = 3,
-    /// Trading in the instrument has been halted.
-    // Halted = 4,  # TODO: Unfortunately can't use this yet due to Cython (C enum namespacing)
-    /// Trading in the instrument has been suspended.
+    /// 合约的交易已停止。
+    // Halted = 4,  # TODO: 由于 Cython（C 枚举命名空间）的原因，暂时无法使用
+    /// 合约的交易已中止。
     Suspended = 5,
-    /// Trading in the instrument is not available.
+    /// 合约的交易不可用。
     NotAvailable = 6,
 }
 
-/// An action affecting the status of an individual market on a trading venue.
+/// 影响交易场所上单个市场状态的操作。
 #[repr(C)]
 #[derive(
     Copy,
@@ -827,41 +827,43 @@ pub enum MarketStatus {
     )
 )]
 pub enum MarketStatusAction {
-    /// No change.
+    /// 无变化。
     None = 0,
-    /// The instrument is in a pre-open period.
+    /// 合约处于开盘前时段。
     PreOpen = 1,
-    /// The instrument is in a pre-cross period.
+    /// 合约处于预交叉时段。
     PreCross = 2,
-    /// The instrument is quoting but not trading.
+    /// 合约正在报价但未交易。
     Quoting = 3,
-    /// The instrument is in a cross/auction.
+    /// 合约处于交叉/拍卖时段。
     Cross = 4,
-    /// The instrument is being opened through a trading rotation.
+    /// 合约正在通过交易轮换开盘。
     Rotation = 5,
-    /// A new price indication is available for the instrument.
+    /// 合约有新的价格指示可用。
     NewPriceIndication = 6,
-    /// The instrument is trading.
+    /// 合约正在交易。
     Trading = 7,
-    /// Trading in the instrument has been halted.
+    /// 合约的交易已停止。
     Halt = 8,
-    /// Trading in the instrument has been paused.
+    /// 合约的交易已暂停。
     Pause = 9,
-    /// Trading in the instrument has been suspended.
+    /// 合约的交易已中止。
     Suspend = 10,
-    /// The instrument is in a pre-close period.
+    /// 合约处于收盘前时段。
     PreClose = 11,
-    /// Trading in the instrument has closed.
+    /// 合约的交易已收盘。
     Close = 12,
-    /// The instrument is in a post-close period.
+    /// 合约处于收盘后时段。
     PostClose = 13,
-    /// A change in short-selling restrictions.
+    /// 卖空限制的变化。
     ShortSellRestrictionChange = 14,
-    /// The instrument is not available for trading, either trading has closed or been halted.
+    /// 合约不可用于交易，交易已收盘或停止。
     NotAvailableForTrading = 15,
+    /// 合约已复牌。
+    Resume = 16,
 }
 
-/// Convert the given `value` to an [`OrderSide`].
+/// 将给定的 `value` 转换为 [`OrderSide`]。
 impl FromU16 for MarketStatusAction {
     fn from_u16(value: u16) -> Option<Self> {
         match value {
@@ -881,12 +883,13 @@ impl FromU16 for MarketStatusAction {
             13 => Some(Self::PostClose),
             14 => Some(Self::ShortSellRestrictionChange),
             15 => Some(Self::NotAvailableForTrading),
+            16 => Some(Self::Resume),
             _ => None,
         }
     }
 }
 
-/// The order management system (OMS) type for a trading venue or trading strategy.
+/// 交易场所或交易策略的订单管理系统（OMS）类型。
 #[repr(C)]
 #[derive(
     Copy,
@@ -918,18 +921,17 @@ impl FromU16 for MarketStatusAction {
     )
 )]
 pub enum OmsType {
-    /// There is no specific type of order management specified (will defer to the venue OMS).
+    /// 未指定特定的订单管理类型（将委托给交易所 OMS）。
     #[default]
     Unspecified = 0,
-    /// The netting type where there is one position per instrument.
+    /// 每个合约一个持仓的净额类型。
     Netting = 1,
-    /// The hedging type where there can be multiple positions per instrument.
-    /// This can be in LONG/SHORT directions, by position/ticket ID, or tracked virtually by
-    /// Nautilus.
+    /// 每个合约可以有多个持仓的对冲类型。
+    /// 这可以是多头/空头方向，按持仓/票据 ID，或由 Nautilus 虚拟跟踪。
     Hedging = 2,
 }
 
-/// The kind of option contract.
+/// 期权合约的种类。
 #[repr(C)]
 #[derive(
     Copy,
@@ -960,13 +962,13 @@ pub enum OmsType {
     )
 )]
 pub enum OptionKind {
-    /// A Call option gives the holder the right, but not the obligation, to buy an underlying asset at a specified strike price within a specified period of time.
+    /// 看涨期权赋予持有人在指定时期内以指定行权价购买基础资产的权利，而非义务。
     Call = 1,
-    /// A Put option gives the holder the right, but not the obligation, to sell an underlying asset at a specified strike price within a specified period of time.
+    /// 看跌期权赋予持有人在指定时期内以指定行权价出售基础资产的权利，而非义务。
     Put = 2,
 }
 
-/// Defines when OTO (One-Triggers-Other) child orders are released.
+/// 定义 OTO（一方触发另一方）子订单何时释放。
 #[repr(C)]
 #[derive(
     Copy,
@@ -998,14 +1000,14 @@ pub enum OptionKind {
     )
 )]
 pub enum OtoTriggerMode {
-    /// Release child order(s) pro-rata to each partial fill (default).
+    /// 按比例释放子订单以响应每个部分成交（默认）。
     #[default]
     Partial = 0,
-    /// Release child order(s) only once the parent is fully filled.
+    /// 仅在父订单完全成交后释放子订单。
     Full = 1,
 }
 
-/// The order side for a specific order, or action related to orders.
+/// 特定订单或与订单相关的操作的订单方。
 #[repr(C)]
 #[derive(
     Copy,
@@ -1038,21 +1040,21 @@ pub enum OtoTriggerMode {
     )
 )]
 pub enum OrderSide {
-    /// No order side is specified.
+    /// 未指定订单方。
     #[default]
     NoOrderSide = 0,
-    /// The order is a BUY.
+    /// 订单是买单。
     Buy = 1,
-    /// The order is a SELL.
+    /// 订单是卖单。
     Sell = 2,
 }
 
 impl OrderSide {
-    /// Returns the specified [`OrderSideSpecified`] (BUY or SELL) for this side.
+    /// 返回此方的指定 [`OrderSideSpecified`]（买入或卖出）。
     ///
     /// # Panics
     ///
-    /// Panics if `self` is [`OrderSide::NoOrderSide`].
+    /// 如果 `self` 是 [`OrderSide::NoOrderSide`] 则会 panic。
     #[must_use]
     pub fn as_specified(&self) -> OrderSideSpecified {
         match &self {
@@ -1063,7 +1065,7 @@ impl OrderSide {
     }
 }
 
-/// Convert the given `value` to an [`OrderSide`].
+/// 将给定的 `value` 转换为 [`OrderSide`]。
 impl FromU8 for OrderSide {
     fn from_u8(value: u8) -> Option<Self> {
         match value {
@@ -1075,7 +1077,7 @@ impl FromU8 for OrderSide {
     }
 }
 
-/// The specified order side (BUY or SELL).
+/// 指定的订单方（买入或卖出）。
 #[repr(C)]
 #[derive(
     Copy,
@@ -1096,14 +1098,14 @@ impl FromU8 for OrderSide {
 #[strum(serialize_all = "SCREAMING_SNAKE_CASE")]
 #[allow(clippy::enum_variant_names)]
 pub enum OrderSideSpecified {
-    /// The order is a BUY.
+    /// 订单是买单。
     Buy = 1,
-    /// The order is a SELL.
+    /// 订单是卖单。
     Sell = 2,
 }
 
 impl OrderSideSpecified {
-    /// Returns the opposite order side.
+    /// 返回相反的订单方。
     #[must_use]
     pub fn opposite(&self) -> Self {
         match &self {
@@ -1112,7 +1114,7 @@ impl OrderSideSpecified {
         }
     }
 
-    /// Converts this specified side into an [`OrderSide`].
+    /// 将此指定方转换为 [`OrderSide`]。
     #[must_use]
     pub fn as_order_side(&self) -> OrderSide {
         match &self {
@@ -1122,21 +1124,21 @@ impl OrderSideSpecified {
     }
 }
 
-/// The status for a specific order.
+/// 特定订单的状态。
 ///
-/// An order is considered _open_ for the following status:
+/// 以下状态下的订单被视为_开放_：
 ///  - `ACCEPTED`
 ///  - `TRIGGERED`
 ///  - `PENDING_UPDATE`
 ///  - `PENDING_CANCEL`
 ///  - `PARTIALLY_FILLED`
 ///
-/// An order is considered _in-flight_ for the following status:
+/// 以下状态下的订单被视为_在途_：
 ///  - `SUBMITTED`
 ///  - `PENDING_UPDATE`
 ///  - `PENDING_CANCEL`
 ///
-/// An order is considered _closed_ for the following status:
+/// 以下状态下的订单被视为_已关闭_：
 ///  - `DENIED`
 ///  - `REJECTED`
 ///  - `CANCELED`
@@ -1172,51 +1174,50 @@ impl OrderSideSpecified {
     )
 )]
 pub enum OrderStatus {
-    /// The order is initialized (instantiated) within the Nautilus system.
+    /// 订单在 Nautilus 系统中已初始化（实例化）。
     Initialized = 1,
-    /// The order was denied by the Nautilus system, either for being invalid, unprocessable or exceeding a risk limit.
+    /// 订单被 Nautilus 系统拒绝，因为无效、无法处理或超出风险限制。
     Denied = 2,
-    /// The order became emulated by the Nautilus system in the `OrderEmulator` component.
+    /// 订单在 Nautilus 系统的 `OrderEmulator` 组件中被模拟。
     Emulated = 3,
-    /// The order was released by the Nautilus system from the `OrderEmulator` component.
+    /// 订单从 Nautilus 系统的 `OrderEmulator` 组件中释放。
     Released = 4,
-    /// The order was submitted by the Nautilus system to the external service or trading venue (awaiting acknowledgement).
+    /// 订单由 Nautilus 系统提交到外部服务或交易场所（等待确认）。
     Submitted = 5,
-    /// The order was acknowledged by the trading venue as being received and valid (may now be working).
+    /// 订单被交易场所确认为已接收且有效（现在可能正在工作）。
     Accepted = 6,
-    /// The order was rejected by the trading venue.
+    /// 订单被交易场所拒绝。
     Rejected = 7,
-    /// The order was canceled (closed/done).
+    /// 订单被取消（关闭/完成）。
     Canceled = 8,
-    /// The order reached a GTD expiration (closed/done).
+    /// 订单达到 GTD 到期（关闭/完成）。
     Expired = 9,
-    /// The order STOP price was triggered on a trading venue.
+    /// 订单的 STOP 价格在交易场所被触发。
     Triggered = 10,
-    /// The order is currently pending a request to modify on a trading venue.
+    /// 订单当前在交易场所上等待修改请求。
     PendingUpdate = 11,
-    /// The order is currently pending a request to cancel on a trading venue.
+    /// 订单当前在交易场所上等待取消请求。
     PendingCancel = 12,
-    /// The order has been partially filled on a trading venue.
+    /// 订单在交易场所上已部分成交。
     PartiallyFilled = 13,
-    /// The order has been completely filled on a trading venue (closed/done).
+    /// 订单在交易场所上已完全成交（关闭/完成）。
     Filled = 14,
 }
 
 impl OrderStatus {
-    /// Returns a cached `AHashSet` of order statuses safe for cancellation queries.
+    /// 返回一个缓存的 `AHashSet`，包含适合取消查询的订单状态。
     ///
-    /// These are statuses where an order is working on the venue but not already
-    /// in the process of being cancelled or updated. Including `PENDING_CANCEL`
-    /// in cancellation filters can cause duplicate cancel attempts or incorrect open order counts.
+    /// 这些是订单在交易所工作但尚未处于取消或更新过程中的状态。
+    /// 在取消过滤器中包含 `PENDING_CANCEL` 可能会导致重复的取消尝试或错误的开放订单计数。
     ///
-    /// Returns:
-    /// - `ACCEPTED`: Order is working on the venue.
-    /// - `TRIGGERED`: Stop order has been triggered.
-    /// - `PENDING_UPDATE`: Order being updated.
-    /// - `PARTIALLY_FILLED`: Order is partially filled but still working.
+    /// 返回：
+    /// - `ACCEPTED`：订单在交易所工作。
+    /// - `TRIGGERED`：止损订单已被触发。
+    /// - `PENDING_UPDATE`：订单正在更新。
+    /// - `PARTIALLY_FILLED`：订单已部分成交但仍工作。
     ///
-    /// Excludes:
-    /// - `PENDING_CANCEL`: Already being cancelled.
+    /// 排除：
+    /// - `PENDING_CANCEL`：正在被取消。
     #[must_use]
     pub fn cancellable_statuses_set() -> &'static AHashSet<Self> {
         static CANCELLABLE_SET: OnceLock<AHashSet<OrderStatus>> = OnceLock::new();
@@ -1230,7 +1231,7 @@ impl OrderStatus {
         })
     }
 
-    /// Returns whether the order status represents an open/working order.
+    /// 返回订单状态是否表示开放/工作订单。
     #[must_use]
     pub const fn is_open(self) -> bool {
         matches!(
@@ -1245,7 +1246,7 @@ impl OrderStatus {
     }
 }
 
-/// The type of order.
+/// 订单类型。
 #[repr(C)]
 #[derive(
     Copy,
@@ -1276,27 +1277,27 @@ impl OrderStatus {
     )
 )]
 pub enum OrderType {
-    /// A market order to buy or sell at the best available price in the current market.
+    /// 以当前市场最佳可用价格买入或卖出的市价订单。
     Market = 1,
-    /// A limit order to buy or sell at a specific price or better.
+    /// 以特定价格或更好价格买入或卖出的限价订单。
     Limit = 2,
-    /// A stop market order to buy or sell once the price reaches the specified stop/trigger price. When the stop price is reached, the order effectively becomes a market order.
+    /// 当价格达到指定止损/触发价格时买入或卖出的止损市价订单。当止损价格达到时，订单实际上成为市价订单。
     StopMarket = 3,
-    /// A stop limit order to buy or sell which combines the features of a stop order and a limit order. Once the stop/trigger price is reached, a stop-limit order effectively becomes a limit order.
+    /// 结合止损订单和限价订单特征的止损限价买入或卖出订单。一旦止损/触发价格达到，止损限价订单实际上成为限价订单。
     StopLimit = 4,
-    /// A market-to-limit order is a market order that is to be executed as a limit order at the current best market price after reaching the market.
+    /// 市价转限价订单是市价订单，在到达市场后以当前最佳市场价格作为限价订单执行。
     MarketToLimit = 5,
-    /// A market-if-touched order effectively becomes a market order when the specified trigger price is reached.
+    /// 当达到指定触发价格时，市价触及订单实际上成为市价订单。
     MarketIfTouched = 6,
-    /// A limit-if-touched order effectively becomes a limit order when the specified trigger price is reached.
+    /// 当达到指定触发价格时，限价触及订单实际上成为限价订单。
     LimitIfTouched = 7,
-    /// A trailing stop market order sets the stop/trigger price at a fixed "trailing offset" amount from the market.
+    /// 跟踪止损市价订单将止损/触发价格设置为距离市场的固定"跟踪偏移"量。
     TrailingStopMarket = 8,
-    /// A trailing stop limit order combines the features of a trailing stop order with those of a limit order.
+    /// 跟踪止损限价订单结合了跟踪止损订单和限价订单的特征。
     TrailingStopLimit = 9,
 }
 
-/// The type of position adjustment.
+/// 持仓调整类型。
 #[repr(C)]
 #[derive(
     Copy,
@@ -1327,9 +1328,9 @@ pub enum OrderType {
     )
 )]
 pub enum PositionAdjustmentType {
-    /// Commission adjustment affecting position quantity.
+    /// 影响持仓数量的佣金调整。
     Commission = 1,
-    /// Funding payment affecting position realized PnL.
+    /// 影响持仓已实现盈亏的资金支付。
     Funding = 2,
 }
 
@@ -1343,7 +1344,7 @@ impl FromU8 for PositionAdjustmentType {
     }
 }
 
-/// The market side for a specific position, or action related to positions.
+/// 特定持仓的市场方，或与持仓相关的操作。
 #[repr(C)]
 #[derive(
     Copy,
@@ -1376,23 +1377,23 @@ impl FromU8 for PositionAdjustmentType {
     )
 )]
 pub enum PositionSide {
-    /// No position side is specified (only valid in the context of a filter for actions involving positions).
+    /// 未指定持仓方（仅在涉及持仓的操作的过滤器上下文中有效）。
     #[default]
     NoPositionSide = 0,
-    /// A neural/flat position, where no position is currently held in the market.
+    /// 中性/平仓持仓，当前市场中未持有任何持仓。
     Flat = 1,
-    /// A long position in the market, typically acquired through one or many BUY orders.
+    /// 市场中的多头持仓，通常通过一个或多个买单获得。
     Long = 2,
-    /// A short position in the market, typically acquired through one or many SELL orders.
+    /// 市场中的空头持仓，通常通过一个或多个卖单获得。
     Short = 3,
 }
 
 impl PositionSide {
-    /// Returns the specified [`PositionSideSpecified`] (`Long`, `Short`, or `Flat`) for this side.
+    /// 返回此方的指定 [`PositionSideSpecified`]（`Long`、`Short` 或 `Flat`）。
     ///
     /// # Panics
     ///
-    /// Panics if `self` is [`PositionSide::NoPositionSide`].
+    /// 如果 `self` 是 [`PositionSide::NoPositionSide`] 则会 panic。
     #[must_use]
     pub fn as_specified(&self) -> PositionSideSpecified {
         match &self {

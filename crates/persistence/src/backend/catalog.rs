@@ -360,6 +360,7 @@ impl ParquetDataCatalog {
         let mut mark_prices: Vec<MarkPriceUpdate> = Vec::new();
         let mut index_prices: Vec<IndexPriceUpdate> = Vec::new();
         let mut closes: Vec<InstrumentClose> = Vec::new();
+        let mut instrument_statuses: Vec<InstrumentStatus> = Vec::new();
 
         for d in data.iter().cloned() {
             match d {
@@ -388,6 +389,9 @@ impl ParquetDataCatalog {
                 Data::InstrumentClose(c) => {
                     closes.push(c);
                 }
+                Data::InstrumentStatus(s) => {
+                    instrument_statuses.push(s);
+                }
             }
         }
 
@@ -401,6 +405,7 @@ impl ParquetDataCatalog {
         self.write_to_parquet(mark_prices, start, end, skip_disjoint_check)?;
         self.write_to_parquet(index_prices, start, end, skip_disjoint_check)?;
         self.write_to_parquet(closes, start, end, skip_disjoint_check)?;
+        self.write_to_parquet(instrument_statuses, start, end, skip_disjoint_check)?;
 
         Ok(())
     }
@@ -3249,6 +3254,7 @@ impl_catalog_path_prefix!(TradeTick, "trades");
 impl_catalog_path_prefix!(OrderBookDelta, "order_book_deltas");
 impl_catalog_path_prefix!(OrderBookDepth10, "order_book_depths");
 impl_catalog_path_prefix!(Bar, "bars");
+impl_catalog_path_prefix!(InstrumentStatus, "instrument_statuses");
 impl_catalog_path_prefix!(IndexPriceUpdate, "index_prices");
 impl_catalog_path_prefix!(MarkPriceUpdate, "mark_prices");
 impl_catalog_path_prefix!(InstrumentClose, "instrument_closes");

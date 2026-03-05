@@ -23,6 +23,7 @@ pub mod index_price;
 pub mod instrument;
 pub mod mark_price;
 pub mod quote;
+pub mod status;
 pub mod trade;
 
 use std::{

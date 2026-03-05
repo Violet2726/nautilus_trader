@@ -27,6 +27,7 @@ from nautilus_trader.execution.messages cimport ModifyOrder
 from nautilus_trader.execution.messages cimport SubmitOrder
 from nautilus_trader.execution.messages cimport SubmitOrderList
 from nautilus_trader.execution.messages cimport TradingCommand
+from nautilus_trader.model.events.order cimport OrderFilled
 from nautilus_trader.model.identifiers cimport AccountId
 from nautilus_trader.model.identifiers cimport InstrumentId
 from nautilus_trader.model.instruments.base cimport Instrument
@@ -43,6 +44,8 @@ cdef class RiskEngine(Component):
     cdef readonly dict _max_notional_per_order
     cdef readonly Throttler _order_submit_throttler
     cdef readonly Throttler _order_modify_throttler
+    cdef object _ashare_session_provider  # A 股：AShareSessionProvider 实例
+    cdef readonly dict _t1_ledger         # A 股：T+1 可卖账本
 
     cdef readonly TradingState trading_state
     """引擎当前交易状态。\n\n:returns: `TradingState`"""
@@ -81,6 +84,7 @@ cdef class RiskEngine(Component):
     cpdef void _handle_submit_order(self, SubmitOrder command)
     cpdef void _handle_submit_order_list(self, SubmitOrderList command)
     cpdef void _handle_modify_order(self, ModifyOrder command)
+    cpdef void _handle_cancel_command(self, TradingCommand command)
 
 # -- 盘前检查 --------------------------------------------------------------------------------------
 
@@ -100,6 +104,7 @@ cdef class RiskEngine(Component):
     cpdef void _deny_order(self, Order order, str reason)
     cpdef void _deny_order_list(self, OrderList order_list, str reason)
     cpdef void _reject_modify_order(self, Order order, str reason)
+    cpdef void _reject_cancel_command(self, TradingCommand command, str reason)
 
 # -- 出口 -----------------------------------------------------------------------------------------
 
@@ -109,3 +114,4 @@ cdef class RiskEngine(Component):
 # -- 事件处理器 -----------------------------------------------------------------------------------
 
     cpdef void _handle_event(self, Event event)
+    cpdef void _update_t1_ledger(self, OrderFilled fill)

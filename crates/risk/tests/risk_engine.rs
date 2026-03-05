@@ -3772,9 +3772,9 @@ fn test_ashare_cancel_order_denied_in_locked_phase(
 
     let process_handler = register_process_handler();
     let execute_handler: TypedIntoMessageSavingHandler<TradingCommand> = {
-        let (h, sh) = get_typed_into_message_saving_handler::<TradingCommand>(Some(
-            Ustr::from("ExecEngine.queue_execute"),
-        ));
+        let (h, sh) = get_typed_into_message_saving_handler::<TradingCommand>(Some(Ustr::from(
+            "ExecEngine.queue_execute",
+        )));
         msgbus::register_trading_command_endpoint(
             MessagingSwitchboard::exec_engine_queue_execute(),
             h,
@@ -3794,7 +3794,7 @@ fn test_ashare_cancel_order_denied_in_locked_phase(
         .unwrap();
 
     let session_provider: Arc<dyn nautilus_common::session::SessionProvider> =
-        Arc::new(AShareSessionProvider);
+        Arc::new(AShareSessionProvider::default());
     let config = nautilus_risk::engine::config::RiskEngineConfig {
         session_provider: Some(session_provider),
         ..Default::default()
@@ -3818,7 +3818,11 @@ fn test_ashare_cancel_order_denied_in_locked_phase(
 
     // 应有 OrderCancelRejected 事件
     let process_msgs = get_process_order_event_handler_messages(&process_handler);
-    assert_eq!(process_msgs.len(), 1, "Expected exactly one OrderCancelRejected");
+    assert_eq!(
+        process_msgs.len(),
+        1,
+        "Expected exactly one OrderCancelRejected"
+    );
     assert_eq!(process_msgs[0].event_type(), OrderEventType::CancelRejected);
     let reason = process_msgs[0].message().unwrap_or_default();
     assert!(
@@ -3828,7 +3832,11 @@ fn test_ashare_cancel_order_denied_in_locked_phase(
 
     // 不应转发给执行引擎
     let execute_msgs = get_execute_order_event_handler_messages(&execute_handler);
-    assert_eq!(execute_msgs.len(), 0, "Cancel must NOT be forwarded to execution");
+    assert_eq!(
+        execute_msgs.len(),
+        0,
+        "Cancel must NOT be forwarded to execution"
+    );
 }
 
 /// 在可撤阶段（ContinuousAm = 10:00）发出 CancelOrder，
@@ -3846,9 +3854,9 @@ fn test_ashare_cancel_order_accepted_in_continuous_am(
 
     let process_handler = register_process_handler();
     let execute_handler: TypedIntoMessageSavingHandler<TradingCommand> = {
-        let (h, sh) = get_typed_into_message_saving_handler::<TradingCommand>(Some(
-            Ustr::from("ExecEngine.queue_execute"),
-        ));
+        let (h, sh) = get_typed_into_message_saving_handler::<TradingCommand>(Some(Ustr::from(
+            "ExecEngine.queue_execute",
+        )));
         msgbus::register_trading_command_endpoint(
             MessagingSwitchboard::exec_engine_queue_execute(),
             h,
@@ -3868,7 +3876,7 @@ fn test_ashare_cancel_order_accepted_in_continuous_am(
         .unwrap();
 
     let session_provider: Arc<dyn nautilus_common::session::SessionProvider> =
-        Arc::new(AShareSessionProvider);
+        Arc::new(AShareSessionProvider::default());
     let config = nautilus_risk::engine::config::RiskEngineConfig {
         session_provider: Some(session_provider),
         ..Default::default()
@@ -3892,11 +3900,19 @@ fn test_ashare_cancel_order_accepted_in_continuous_am(
 
     // 不应有 OrderCancelRejected
     let process_msgs = get_process_order_event_handler_messages(&process_handler);
-    assert_eq!(process_msgs.len(), 0, "No rejection expected in ContinuousAm");
+    assert_eq!(
+        process_msgs.len(),
+        0,
+        "No rejection expected in ContinuousAm"
+    );
 
     // 应转发给执行引擎
     let execute_msgs = get_execute_order_event_handler_messages(&execute_handler);
-    assert_eq!(execute_msgs.len(), 1, "Cancel should be forwarded to execution in ContinuousAm");
+    assert_eq!(
+        execute_msgs.len(),
+        1,
+        "Cancel should be forwarded to execution in ContinuousAm"
+    );
 }
 
 // ============================================================
@@ -3912,23 +3928,23 @@ fn get_ashare_instrument() -> InstrumentAny {
         Currency::from("CNY"),
         Currency::from("CNY"),
         false, // is_inverse
-        2, // price_precision
-        0, // size_precision
+        2,     // price_precision
+        0,     // size_precision
         Price::from("0.01"),
         Quantity::from("100"),
         Some(Quantity::from("100")), // lot_size (Crucial for T+1 check activation)
-        None, // multiplier
+        None,                        // multiplier
         Some(Quantity::from("1000000")), // max_quantity
         Some(Quantity::from("100")), // min_quantity
-        None, // max_notional
-        None, // min_notional
-        None, // max_price
-        None, // min_price
-        None, // margin_init
-        None, // margin_maint
-        None, // maker_fee
-        None, // taker_fee
-        None, // info
+        None,                        // max_notional
+        None,                        // min_notional
+        None,                        // max_price
+        None,                        // min_price
+        None,                        // margin_init
+        None,                        // margin_maint
+        None,                        // maker_fee
+        None,                        // taker_fee
+        None,                        // info
         UnixNanos::default(),
         UnixNanos::default(),
     ))
@@ -3936,19 +3952,16 @@ fn get_ashare_instrument() -> InstrumentAny {
 
 /// T+1 余额不足时，卖单被拒
 #[rstest]
-fn test_ashare_t1_sell_exceeds_sellable(
-    strategy_id_ema_cross: StrategyId,
-    trader_id: TraderId,
-) {
+fn test_ashare_t1_sell_exceeds_sellable(strategy_id_ema_cross: StrategyId, trader_id: TraderId) {
     use nautilus_model::events::OrderEventType;
     use std::cell::RefCell;
     use std::rc::Rc;
-    
+
     let process_handler = register_process_handler();
     let execute_handler = {
-        let (h, sh) = get_typed_into_message_saving_handler::<TradingCommand>(Some(
-            Ustr::from("ExecEngine.queue_execute"),
-        ));
+        let (h, sh) = get_typed_into_message_saving_handler::<TradingCommand>(Some(Ustr::from(
+            "ExecEngine.queue_execute",
+        )));
         msgbus::register_trading_command_endpoint(
             MessagingSwitchboard::exec_engine_queue_execute(),
             h,
@@ -3975,13 +3988,15 @@ fn test_ashare_t1_sell_exceeds_sellable(
     ));
     let mut cache = Cache::default();
     cache.add_instrument(instrument.clone()).unwrap();
-    cache.add_account(AccountAny::Cash(account.clone())).unwrap();
+    cache
+        .add_account(AccountAny::Cash(account.clone()))
+        .unwrap();
 
     let risk_config = nautilus_risk::engine::config::RiskEngineConfig {
         t1_enabled: true,
         ..Default::default()
     };
-    
+
     let mut risk_engine = get_risk_engine(
         Some(Rc::new(RefCell::new(cache))),
         Some(risk_config),
@@ -4011,7 +4026,11 @@ fn test_ashare_t1_sell_exceeds_sellable(
         risk_engine.clock().borrow().timestamp_ns(),
     );
 
-    risk_engine.cache().borrow_mut().add_order(order_sell, None, None, false).unwrap();
+    risk_engine
+        .cache()
+        .borrow_mut()
+        .add_order(order_sell, None, None, false)
+        .unwrap();
 
     risk_engine.execute(TradingCommand::SubmitOrder(submit_sell));
 
@@ -4020,29 +4039,33 @@ fn test_ashare_t1_sell_exceeds_sellable(
     assert_eq!(process_msgs.len(), 1, "Expected order rejection");
     assert_eq!(process_msgs[0].event_type(), OrderEventType::Denied);
     assert!(
-        process_msgs[0].message().unwrap_or_default().contains("EXCEEDS_SELLABLE"),
+        process_msgs[0]
+            .message()
+            .unwrap_or_default()
+            .contains("EXCEEDS_SELLABLE"),
         "Expected EXCEEDS_SELLABLE, got: {:?}",
         process_msgs[0].message().unwrap_or_default()
     );
 
     let execute_msgs = get_execute_order_event_handler_messages(&execute_handler);
-    assert_eq!(execute_msgs.len(), 0, "Denied order must NOT be forwarded to execution");
+    assert_eq!(
+        execute_msgs.len(),
+        0,
+        "Denied order must NOT be forwarded to execution"
+    );
 }
 
 /// T+1 日切后，余额可用
 #[rstest]
-fn test_ashare_t1_sell_after_settlement(
-    strategy_id_ema_cross: StrategyId,
-    trader_id: TraderId,
-) {
+fn test_ashare_t1_sell_after_settlement(strategy_id_ema_cross: StrategyId, trader_id: TraderId) {
     use std::cell::RefCell;
     use std::rc::Rc;
-    
+
     let process_handler = register_process_handler();
     let execute_handler = {
-        let (h, sh) = get_typed_into_message_saving_handler::<TradingCommand>(Some(
-            Ustr::from("ExecEngine.queue_execute"),
-        ));
+        let (h, sh) = get_typed_into_message_saving_handler::<TradingCommand>(Some(Ustr::from(
+            "ExecEngine.queue_execute",
+        )));
         msgbus::register_trading_command_endpoint(
             MessagingSwitchboard::exec_engine_queue_execute(),
             h,
@@ -4069,13 +4092,15 @@ fn test_ashare_t1_sell_after_settlement(
     ));
     let mut cache = Cache::default();
     cache.add_instrument(instrument.clone()).unwrap();
-    cache.add_account(AccountAny::Cash(account.clone())).unwrap();
+    cache
+        .add_account(AccountAny::Cash(account.clone()))
+        .unwrap();
 
     let risk_config = nautilus_risk::engine::config::RiskEngineConfig {
         t1_enabled: true,
         ..Default::default()
     };
-    
+
     let mut risk_engine = get_risk_engine(
         Some(Rc::new(RefCell::new(cache))),
         Some(risk_config),
@@ -4108,7 +4133,11 @@ fn test_ashare_t1_sell_after_settlement(
         risk_engine.clock().borrow().timestamp_ns(),
     );
 
-    risk_engine.cache().borrow_mut().add_order(order_sell, None, None, false).unwrap();
+    risk_engine
+        .cache()
+        .borrow_mut()
+        .add_order(order_sell, None, None, false)
+        .unwrap();
 
     risk_engine.execute(TradingCommand::SubmitOrder(submit_sell));
 
@@ -4117,5 +4146,9 @@ fn test_ashare_t1_sell_after_settlement(
     assert_eq!(process_msgs.len(), 0, "Order should not be denied");
 
     let execute_msgs = get_execute_order_event_handler_messages(&execute_handler);
-    assert_eq!(execute_msgs.len(), 1, "Valid order must be forwarded to execution");
+    assert_eq!(
+        execute_msgs.len(),
+        1,
+        "Valid order must be forwarded to execution"
+    );
 }

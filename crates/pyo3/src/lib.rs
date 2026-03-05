@@ -193,86 +193,7 @@ fn _libnautilus(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     #[cfg(feature = "cython-compat")]
     re_export_module_attributes(m, n)?;
 
-    ////////////////////////////////////////////////////////////////////////////////
-    // Adapters
-    ////////////////////////////////////////////////////////////////////////////////
 
-    let n = "architect";
-    let submodule = pyo3::wrap_pymodule!(nautilus_architect_ax::python::architect);
-    m.add_wrapped(submodule)?;
-    sys_modules.set_item(format!("{module_name}.{n}"), m.getattr(n)?)?;
-    #[cfg(feature = "cython-compat")]
-    re_export_module_attributes(m, n)?;
-
-    let n = "binance";
-    let submodule = pyo3::wrap_pymodule!(nautilus_binance::python::binance);
-    m.add_wrapped(submodule)?;
-    sys_modules.set_item(format!("{module_name}.{n}"), m.getattr(n)?)?;
-    #[cfg(feature = "cython-compat")]
-    re_export_module_attributes(m, n)?;
-
-    let n = "bitmex";
-    let submodule = pyo3::wrap_pymodule!(nautilus_bitmex::python::bitmex);
-    m.add_wrapped(submodule)?;
-    sys_modules.set_item(format!("{module_name}.{n}"), m.getattr(n)?)?;
-    #[cfg(feature = "cython-compat")]
-    re_export_module_attributes(m, n)?;
-
-    let n = "bybit";
-    let submodule = pyo3::wrap_pymodule!(nautilus_bybit::python::bybit);
-    m.add_wrapped(submodule)?;
-    sys_modules.set_item(format!("{module_name}.{n}"), m.getattr(n)?)?;
-    #[cfg(feature = "cython-compat")]
-    re_export_module_attributes(m, n)?;
-
-    let n = "databento";
-    let submodule = pyo3::wrap_pymodule!(nautilus_databento::python::databento);
-    m.add_wrapped(submodule)?;
-    sys_modules.set_item(format!("{module_name}.{n}"), m.getattr(n)?)?;
-    #[cfg(feature = "cython-compat")]
-    re_export_module_attributes(m, n)?;
-
-    let n = "deribit";
-    let submodule = pyo3::wrap_pymodule!(nautilus_deribit::python::deribit);
-    m.add_wrapped(submodule)?;
-    sys_modules.set_item(format!("{module_name}.{n}"), m.getattr(n)?)?;
-    #[cfg(feature = "cython-compat")]
-    re_export_module_attributes(m, n)?;
-
-    let n = "dydx";
-    let submodule = pyo3::wrap_pymodule!(nautilus_dydx::python::dydx);
-    m.add_wrapped(submodule)?;
-    sys_modules.set_item(format!("{module_name}.{n}"), m.getattr(n)?)?;
-    #[cfg(feature = "cython-compat")]
-    re_export_module_attributes(m, n)?;
-
-    let n = "hyperliquid";
-    let submodule = pyo3::wrap_pymodule!(nautilus_hyperliquid::python::hyperliquid);
-    m.add_wrapped(submodule)?;
-    sys_modules.set_item(format!("{module_name}.{n}"), m.getattr(n)?)?;
-    #[cfg(feature = "cython-compat")]
-    re_export_module_attributes(m, n)?;
-
-    let n = "kraken";
-    let submodule = pyo3::wrap_pymodule!(nautilus_kraken::python::kraken);
-    m.add_wrapped(submodule)?;
-    sys_modules.set_item(format!("{module_name}.{n}"), m.getattr(n)?)?;
-    #[cfg(feature = "cython-compat")]
-    re_export_module_attributes(m, n)?;
-
-    let n = "okx";
-    let submodule = pyo3::wrap_pymodule!(nautilus_okx::python::okx);
-    m.add_wrapped(submodule)?;
-    sys_modules.set_item(format!("{module_name}.{n}"), m.getattr(n)?)?;
-    #[cfg(feature = "cython-compat")]
-    re_export_module_attributes(m, n)?;
-
-    let n = "polymarket";
-    let submodule = pyo3::wrap_pymodule!(nautilus_polymarket::python::polymarket);
-    m.add_wrapped(submodule)?;
-    sys_modules.set_item(format!("{module_name}.{n}"), m.getattr(n)?)?;
-    #[cfg(feature = "cython-compat")]
-    re_export_module_attributes(m, n)?;
 
     let n = "sandbox";
     let submodule = pyo3::wrap_pymodule!(nautilus_sandbox::python::sandbox);
@@ -281,23 +202,7 @@ fn _libnautilus(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     #[cfg(feature = "cython-compat")]
     re_export_module_attributes(m, n)?;
 
-    let n = "tardis";
-    let submodule = pyo3::wrap_pymodule!(nautilus_tardis::python::tardis);
-    m.add_wrapped(submodule)?;
-    sys_modules.set_item(format!("{module_name}.{n}"), m.getattr(n)?)?;
-    #[cfg(feature = "cython-compat")]
-    re_export_module_attributes(m, n)?;
 
-    #[cfg(feature = "defi")]
-    {
-        // nautilus-import-ok: wrap_pymodule! requires fully qualified paths
-        let n = "blockchain";
-        let submodule = pyo3::wrap_pymodule!(nautilus_blockchain::python::blockchain);
-        m.add_wrapped(submodule)?;
-        sys_modules.set_item(format!("{module_name}.{n}"), m.getattr(n)?)?;
-        #[cfg(feature = "cython-compat")]
-        re_export_module_attributes(m, n)?;
-    }
 
     // Register a lightweight shutdown hook so the interpreter waits for the Tokio
     // runtime to yield once before `Py_Finalize` tears it down.

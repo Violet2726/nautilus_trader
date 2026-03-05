@@ -568,6 +568,7 @@ impl FeatherWriter {
             Data::IndexPriceUpdate(price) => self.write(price).await,
             Data::MarkPriceUpdate(price) => self.write(price).await,
             Data::InstrumentClose(close) => self.write(close).await,
+            Data::InstrumentStatus(status) => self.write(status).await,
             Data::Deltas(deltas_api) => {
                 // OrderBookDeltas_API contains multiple deltas - write each one individually
                 for delta in &deltas_api.deltas {

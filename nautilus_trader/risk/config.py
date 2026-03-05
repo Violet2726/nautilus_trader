@@ -35,6 +35,12 @@ class RiskEngineConfig(NautilusConfig, frozen=True):
         该值应为有效的 Decimal 格式。
     debug : bool, 默认 False
         调试模式是否激活（将提供额外的调试日志记录）。
+    t1_enabled : bool, 默认 False
+        是否启用 T+1 交易限制检查。
+    price_cage_enabled : bool, 默认 False
+        是否启用价格笼子（Price Cage）检查。
+    price_cage_pct : float, 默认 0.02
+        价格笼子的偏离比例（如 0.02 代表 2%）。
 
     """
 
@@ -43,3 +49,6 @@ class RiskEngineConfig(NautilusConfig, frozen=True):
     max_order_modify_rate: str = "100/00:00:01"
     max_notional_per_order: dict[str, int] = {}
     debug: bool = False
+    t1_enabled: bool = False
+    price_cage_enabled: bool = False
+    price_cage_pct: float = 0.02

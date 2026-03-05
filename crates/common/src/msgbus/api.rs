@@ -44,8 +44,8 @@ use smallvec::SmallVec;
 use ustr::Ustr;
 
 use super::{
-    ACCOUNT_STATE_HANDLERS, ANY_HANDLERS, BAR_HANDLERS, BOOK_HANDLERS, DELTAS_HANDLERS,
-    DEPTH10_HANDLERS, FUNDING_RATE_HANDLERS, GREEKS_HANDLERS, HANDLER_BUFFER_CAP,
+    ACCOUNT_STATE_HANDLERS, ANY_HANDLERS, BAR_HANDLERS, BOOK_HANDLERS, DATA_HANDLERS,
+    DELTAS_HANDLERS, DEPTH10_HANDLERS, FUNDING_RATE_HANDLERS, GREEKS_HANDLERS, HANDLER_BUFFER_CAP,
     INDEX_PRICE_HANDLERS, MARK_PRICE_HANDLERS, MESSAGE_BUS, ORDER_EVENT_HANDLERS,
     POSITION_EVENT_HANDLERS, QUOTE_HANDLERS, TRADE_HANDLERS,
     core::{MessageBus, Subscription},
@@ -319,6 +319,14 @@ pub fn subscribe_trades(
     get_message_bus()
         .borrow_mut()
         .router_trades
+        .subscribe(pattern, handler, priority.unwrap_or(0));
+}
+
+/// Subscribes a handler to data matching a pattern.
+pub fn subscribe_data(pattern: MStr<Pattern>, handler: TypedHandler<Data>, priority: Option<u8>) {
+    get_message_bus()
+        .borrow_mut()
+        .router_data
         .subscribe(pattern, handler, priority.unwrap_or(0));
 }
 
@@ -802,6 +810,22 @@ pub fn publish_any(topic: MStr<Topic>, message: &dyn Any) {
 
     handlers.clear(); // Release refs before restore
     ANY_HANDLERS.with_borrow_mut(|buf| *buf = handlers);
+}
+
+/// Publishes a data message to matching subscribers.
+pub fn publish_data(topic: MStr<Topic>, data: Data) {
+    let mut handlers = DATA_HANDLERS.with_borrow_mut(std::mem::take);
+
+    get_message_bus()
+        .borrow_mut()
+        .router_data
+        .fill_matching_handlers(topic, &mut handlers);
+
+    for handler in &handlers {
+        handler.handle(&data);
+    }
+
+    DATA_HANDLERS.with_borrow_mut(|buf| *buf = handlers);
 }
 
 /// Publishes order book deltas to subscribers on a topic.

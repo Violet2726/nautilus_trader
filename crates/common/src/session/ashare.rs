@@ -1,6 +1,8 @@
 use super::{SessionProvider, TradingPhase};
+use chrono::{Datelike, TimeZone, Utc, Weekday};
 use nautilus_core::UnixNanos;
 use nautilus_model::identifiers::Venue;
+use std::collections::HashSet;
 
 /// A 股交易时段查表
 /// 所有时间边界以 HH*3600 + MM*60 + SS 编码为秒级偏移
@@ -14,19 +16,32 @@ const PHASES: &[(u32, u32, TradingPhase)] = &[
     (14 * 3600 + 57 * 60, 15 * 3600, TradingPhase::ClosingAuction),
 ];
 
-#[derive(Debug)]
+#[derive(Debug, Default, Clone)]
 #[cfg_attr(
     feature = "python",
-    pyo3::pyclass(module = "nautilus_trader.core.nautilus_pyo3.common")
+    pyo3::pyclass(module = "nautilus_trader.core.nautilus_pyo3.common", from_py_object)
 )]
-pub struct AShareSessionProvider;
+pub struct AShareSessionProvider {
+    /// 休市日集合，格式为 YYYYMMDD 的整数（例如 20240501）
+    holidays: HashSet<u32>,
+}
 
 #[cfg_attr(feature = "python", pyo3::pymethods)]
 impl AShareSessionProvider {
     #[cfg(feature = "python")]
     #[new]
-    pub fn new() -> Self {
-        Self
+    #[pyo3(signature = (holidays=None))]
+    pub fn new(holidays: Option<Vec<u32>>) -> Self {
+        Self {
+            holidays: holidays.unwrap_or_default().into_iter().collect(),
+        }
+    }
+
+    #[cfg(not(feature = "python"))]
+    pub fn new(holidays: Option<Vec<u32>>) -> Self {
+        Self {
+            holidays: holidays.unwrap_or_default().into_iter().collect(),
+        }
     }
 
     #[cfg(feature = "python")]
@@ -41,7 +56,27 @@ impl AShareSessionProvider {
 impl SessionProvider for AShareSessionProvider {
     fn phase_at(&self, _venue: &Venue, ts_ns: UnixNanos) -> TradingPhase {
         let secs = ts_ns.as_u64() / 1_000_000_000;
-        // UTC+8 偏移，然后对一天的秒数取模
+
+        // 1. 获取北京时间对应的日期和星期
+        // 我们需要 +8 小时的偏移量
+        if let Some(dt) = Utc.timestamp_opt(secs as i64 + 8 * 3600, 0).single() {
+            // 周六和周日一律闭市
+            let weekday = dt.weekday();
+            if weekday == Weekday::Sat || weekday == Weekday::Sun {
+                return TradingPhase::Closed;
+            }
+
+            // 检查是否在节假日表中
+            let yyyymmdd =
+                (dt.year() as u32) * 10000 + (dt.month() as u32) * 100 + (dt.day() as u32);
+            if self.holidays.contains(&yyyymmdd) {
+                return TradingPhase::Closed;
+            }
+        } else {
+            return TradingPhase::Closed;
+        }
+
+        // 2. 正常交易日的按秒偏移段判断
         let seconds_of_day = ((secs + 8 * 3600) % 86400) as u32;
 
         for &(start, end, phase) in PHASES {
@@ -72,7 +107,7 @@ mod tests {
 
     #[test]
     fn test_ashare_phases() {
-        let provider = AShareSessionProvider;
+        let provider = AShareSessionProvider::default();
         let venue = Venue::new(ustr("XSHG"));
 
         // 09:14 -> Closed

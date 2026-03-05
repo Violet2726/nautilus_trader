@@ -1072,6 +1072,7 @@ impl ParquetDataCatalogV2 {
                     Data::IndexPriceUpdate(price) => Py::new(py, price)?.into(),
                     Data::MarkPriceUpdate(price) => Py::new(py, price)?.into(),
                     Data::InstrumentClose(close) => Py::new(py, close)?.into(),
+                    Data::InstrumentStatus(status) => Py::new(py, status)?.into(),
                 };
                 python_objects.push(py_obj);
             }
@@ -1110,6 +1111,7 @@ impl ParquetDataCatalogV2 {
                     Data::IndexPriceUpdate(price) => Py::new(py, price)?.into(),
                     Data::MarkPriceUpdate(price) => Py::new(py, price)?.into(),
                     Data::InstrumentClose(close) => Py::new(py, close)?.into(),
+                    Data::InstrumentStatus(status) => Py::new(py, status)?.into(),
                 };
                 python_objects.push(py_obj);
             }

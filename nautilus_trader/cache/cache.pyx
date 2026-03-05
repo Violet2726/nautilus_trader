@@ -49,6 +49,7 @@ from nautilus_trader.model.data cimport BarSpecification
 from nautilus_trader.model.data cimport BarType
 from nautilus_trader.model.data cimport FundingRateUpdate
 from nautilus_trader.model.data cimport IndexPriceUpdate
+from nautilus_trader.model.data cimport InstrumentStatus
 from nautilus_trader.model.data cimport MarkPriceUpdate
 from nautilus_trader.model.data cimport QuoteTick
 from nautilus_trader.model.data cimport TradeTick
@@ -130,6 +131,7 @@ cdef class Cache(CacheFacade):
         self._mark_prices: dict[InstrumentId, deque[MarkPriceUpdate]] = {}
         self._index_prices: dict[InstrumentId, deque[IndexPriceUpdate]] = {}
         self._funding_rates: dict[InstrumentId, deque[FundingRateUpdate]] = {}
+        self._instrument_statuses: dict[InstrumentId, InstrumentStatus] = {}
         self._bars: dict[BarType, deque[Bar]] = {}
         self._bars_bid: dict[InstrumentId, Bar] = {}
         self._bars_ask: dict[InstrumentId, Bar] = {}
@@ -1178,6 +1180,7 @@ cdef class Cache(CacheFacade):
         self._mark_prices.clear()
         self._index_prices.clear()
         self._funding_rates.clear()
+        self._instrument_statuses.clear()
         self._bars.clear()
         self._bars_bid.clear()
         self._bars_ask.clear()
@@ -1712,6 +1715,18 @@ cdef class Cache(CacheFacade):
             self._funding_rates[funding_rate.instrument_id] = funding_rates
 
         funding_rates.appendleft(funding_rate)
+
+    cpdef void add_instrument_status(self, InstrumentStatus status):
+        """
+        Add the given instrument status to the cache.
+
+        Parameters
+        ----------
+        status : InstrumentStatus
+            The instrument status to add.
+        """
+        Condition.not_none(status, "status")
+        self._instrument_statuses[status.instrument_id] = status
 
     cpdef void add_bar(self, Bar bar):
         """
@@ -3204,6 +3219,25 @@ cdef class Cache(CacheFacade):
             return funding_rates[index]
         except IndexError:
             return None
+
+    cpdef InstrumentStatus instrument_status(self, InstrumentId instrument_id):
+        """
+        Return the instrument status for the given instrument ID.
+
+        Returns ``None`` if no status found.
+
+        Parameters
+        ----------
+        instrument_id : InstrumentId
+            The instrument ID.
+
+        Returns
+        -------
+        InstrumentStatus | None
+
+        """
+        Condition.not_none(instrument_id, "instrument_id")
+        return self._instrument_statuses.get(instrument_id)
 
     cpdef Bar bar(self, BarType bar_type, int index = 0):
         """

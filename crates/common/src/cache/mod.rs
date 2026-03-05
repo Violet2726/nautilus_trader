@@ -49,8 +49,8 @@ use nautilus_core::{
 use nautilus_model::{
     accounts::{Account, AccountAny},
     data::{
-        Bar, BarType, FundingRateUpdate, GreeksData, IndexPriceUpdate, MarkPriceUpdate, QuoteTick,
-        TradeTick, YieldCurveData,
+        Bar, BarType, FundingRateUpdate, GreeksData, IndexPriceUpdate, InstrumentStatus,
+        MarkPriceUpdate, QuoteTick, TradeTick, YieldCurveData,
     },
     enums::{AggregationSource, OmsType, OrderSide, PositionSide, PriceType, TriggerType},
     identifiers::{
@@ -99,6 +99,7 @@ pub struct Cache {
     order_lists: AHashMap<OrderListId, OrderList>,
     positions: AHashMap<PositionId, Position>,
     position_snapshots: AHashMap<PositionId, Bytes>,
+    instrument_statuses: AHashMap<InstrumentId, InstrumentStatus>,
     #[cfg(feature = "defi")]
     pub(crate) defi: crate::defi::cache::DefiCache,
 }
@@ -128,6 +129,7 @@ impl Debug for Cache {
             .field("order_lists", &self.order_lists)
             .field("positions", &self.positions)
             .field("position_snapshots", &self.position_snapshots)
+            .field("instrument_statuses", &self.instrument_statuses)
             .finish()
     }
 }
@@ -173,6 +175,7 @@ impl Cache {
             order_lists: AHashMap::new(),
             positions: AHashMap::new(),
             position_snapshots: AHashMap::new(),
+            instrument_statuses: AHashMap::new(),
             #[cfg(feature = "defi")]
             defi: crate::defi::cache::DefiCache::default(),
         }
@@ -1230,6 +1233,7 @@ impl Cache {
         self.order_lists.clear();
         self.positions.clear();
         self.position_snapshots.clear();
+        self.instrument_statuses.clear();
         self.greeks.clear();
         self.yield_curves.clear();
 
@@ -1678,6 +1682,27 @@ impl Cache {
 
         self.synthetics.insert(synthetic.id, synthetic);
         Ok(())
+    }
+
+    /// 向缓存添加 `instrument_status`。
+    ///
+    /// # 错误
+    ///
+    /// 如果缓存失败，则返回错误。
+    pub fn add_instrument_status(&mut self, status: InstrumentStatus) -> anyhow::Result<()> {
+        log::debug!("Adding `InstrumentStatus` {}", status.instrument_id);
+        if let Some(_database) = &mut self.database {
+            // Placeholder: database.add_instrument_status(&status)?;
+        }
+        self.instrument_statuses
+            .insert(status.instrument_id, status);
+        Ok(())
+    }
+
+    /// 返回 `instrument_id` 对应的仪器状态引用（如果找到）。
+    #[must_use]
+    pub fn instrument_status(&self, instrument_id: &InstrumentId) -> Option<&InstrumentStatus> {
+        self.instrument_statuses.get(instrument_id)
     }
 
     /// 向缓存添加 `account`。
@@ -2184,7 +2209,7 @@ impl Cache {
     pub fn oms_type(&self, position_id: &PositionId) -> Option<OmsType> {
         // 从索引中获取 OMS 类型
         if self.index.position_strategy.contains_key(position_id) {
-            // 目前，我们将默认为 NETTING 
+            // 目前，我们将默认为 NETTING
             // TODO: 按持仓存储和检索实际的 OMS 类型
             Some(OmsType::Netting)
         } else {
@@ -3686,8 +3711,8 @@ impl Cache {
 
     /// 根据未成交和在途订单索引，审计所有自有订单簿。
     ///
-    /// 确保已关闭的订单从自有订单簿中被移除。这包括在 `orders_open` (ACCEPTED, TRIGGERED, 
-    /// PENDING_*, PARTIALLY_FILLED) 和 `orders_inflight` (INITIALIZED, SUBMITTED) 
+    /// 确保已关闭的订单从自有订单簿中被移除。这包括在 `orders_open` (ACCEPTED, TRIGGERED,
+    /// PENDING_*, PARTIALLY_FILLED) 和 `orders_inflight` (INITIALIZED, SUBMITTED)
     /// 中追踪的订单，以防止在交易所延迟窗口期间出现误报。
     pub fn audit_own_order_books(&mut self) {
         log::debug!("Starting own books audit");

@@ -21,22 +21,23 @@ use std::{cell::RefCell, fmt::Debug, rc::Rc};
 
 use ahash::AHashMap;
 use config::RiskEngineConfig;
+use nautilus_common::messages::execution::{CancelAllOrders, CancelOrder};
 use nautilus_common::{
     cache::Cache,
     clock::Clock,
     logging::{CMD, EVT, RECV},
     messages::execution::{ModifyOrder, SubmitOrder, SubmitOrderList, TradingCommand},
     msgbus,
-    msgbus::{MessagingSwitchboard, TypedIntoHandler},
+    msgbus::{MessagingSwitchboard, TypedHandler, TypedIntoHandler},
     throttler::Throttler,
 };
 use nautilus_core::{UUID4, WeakCell};
 use nautilus_execution::trailing::{
     trailing_stop_calculate_with_bid_ask, trailing_stop_calculate_with_last,
 };
-use nautilus_common::messages::execution::{CancelAllOrders, CancelOrder};
 use nautilus_model::{
     accounts::{Account, AccountAny},
+    data::{Data, InstrumentStatus},
     enums::{
         InstrumentClass, OrderSide, OrderStatus, PositionSide, TimeInForce, TradingState,
         TrailingOffsetType, TriggerType,
@@ -126,13 +127,38 @@ impl RiskEngine {
     pub fn register_msgbus_handlers(engine: Rc<RefCell<Self>>) {
         let weak = WeakCell::from(Rc::downgrade(&engine));
 
+        let weak_cmd = weak.clone();
         msgbus::register_trading_command_endpoint(
             MessagingSwitchboard::risk_engine_execute(),
             TypedIntoHandler::from(move |cmd: TradingCommand| {
-                if let Some(rc) = weak.upgrade() {
+                if let Some(rc) = weak_cmd.upgrade() {
                     rc.borrow_mut().execute(cmd);
                 }
             }),
+        );
+
+        let weak2 = weak.clone();
+        msgbus::subscribe_data(
+            "data.status.*".into(),
+            TypedHandler::from(move |data: &Data| {
+                if let Data::InstrumentStatus(status) = data {
+                    if let Some(rc) = weak2.upgrade() {
+                        rc.borrow_mut().handle_instrument_status(status);
+                    }
+                }
+            }),
+            None,
+        );
+
+        let weak_order = weak;
+        msgbus::subscribe_order_events(
+            "events.order.*".into(),
+            TypedHandler::from(move |event: &OrderEventAny| {
+                if let Some(rc) = weak_order.upgrade() {
+                    rc.borrow_mut().handle_event(event);
+                }
+            }),
+            None,
         );
     }
 
@@ -294,7 +320,7 @@ impl RiskEngine {
     }
 
     /// Processes an order event for risk monitoring and state updates.
-    pub fn process(&mut self, event: OrderEventAny) {
+    pub fn process(&mut self, event: &OrderEventAny) {
         // This will extend to other events such as `RiskEvent`
         self.handle_event(event);
     }
@@ -425,7 +451,9 @@ impl RiskEngine {
             }
             TradingCommand::ModifyOrder(modify_order) => self.handle_modify_order(modify_order),
             TradingCommand::CancelOrder(cancel_order) => self.handle_cancel_order(cancel_order),
-            TradingCommand::CancelAllOrders(cancel_all) => self.handle_cancel_all_orders(cancel_all),
+            TradingCommand::CancelAllOrders(cancel_all) => {
+                self.handle_cancel_all_orders(cancel_all)
+            }
             TradingCommand::BatchCancelOrders(batch) => {
                 // A 股：BatchCancelOrders 直接转发（批量撤单阶段检查由各 CancelOrder 分别处理）
                 self.send_to_execution(TradingCommand::BatchCancelOrders(batch));
@@ -620,6 +648,26 @@ impl RiskEngine {
             return; // Denied
         }
 
+        // ---- 新增：停牌/临停检查 ----
+        {
+            let cache = self.cache.borrow();
+            if let Some(status) = cache.instrument_status(&command.instrument_id) {
+                use nautilus_model::enums::MarketStatusAction;
+                if matches!(
+                    status.action,
+                    MarketStatusAction::Halt
+                        | MarketStatusAction::Suspend
+                        | MarketStatusAction::NotAvailableForTrading
+                ) {
+                    self.deny_command(
+                        TradingCommand::SubmitOrder(command),
+                        &format!("INSTRUMENT_SUSPENDED: status={:?}", status.action),
+                    );
+                    return;
+                }
+            }
+        }
+
         if !self.check_orders_risk(instrument.clone(), &[order]) {
             return; // Denied
         }
@@ -665,6 +713,26 @@ impl RiskEngine {
         for order in orders.clone() {
             if !self.check_order(instrument.clone(), order) {
                 return; // Denied
+            }
+        }
+
+        // ---- 新增：停牌/临停检查 ----
+        {
+            let cache = self.cache.borrow();
+            if let Some(status) = cache.instrument_status(&command.instrument_id) {
+                use nautilus_model::enums::MarketStatusAction;
+                if matches!(
+                    status.action,
+                    MarketStatusAction::Halt
+                        | MarketStatusAction::Suspend
+                        | MarketStatusAction::NotAvailableForTrading
+                ) {
+                    self.deny_order_list(
+                        &orders,
+                        &format!("INSTRUMENT_SUSPENDED: status={:?}", status.action),
+                    );
+                    return;
+                }
             }
         }
 
@@ -749,6 +817,26 @@ impl RiskEngine {
         if let Some(risk_msg) = risk_msg {
             self.reject_modify_order(order, &risk_msg);
             return; // Denied
+        }
+
+        // Check InstrumentStatus
+        {
+            let cache = self.cache.borrow();
+            if let Some(status) = cache.instrument_status(&command.instrument_id) {
+                use nautilus_model::enums::MarketStatusAction;
+                if matches!(
+                    status.action,
+                    MarketStatusAction::Halt
+                        | MarketStatusAction::Suspend
+                        | MarketStatusAction::NotAvailableForTrading
+                ) {
+                    self.reject_modify_order(
+                        order,
+                        &format!("INSTRUMENT_SUSPENDED: status={:?}", status.action),
+                    );
+                    return;
+                }
+            }
         }
 
         // Check TradingState
@@ -1769,7 +1857,7 @@ impl RiskEngine {
         msgbus::send_trading_command(endpoint, command);
     }
 
-    fn handle_event(&mut self, event: OrderEventAny) {
+    fn handle_event(&mut self, event: &OrderEventAny) {
         // We intend to extend the risk engine to be able to handle additional events.
         // For now we just log.
         if self.config.debug {
@@ -1778,7 +1866,7 @@ impl RiskEngine {
 
         // ---- 新增：T1Ledger 更新 ----
         if let Some(ref mut ledger) = self.t1_ledger {
-            if let OrderEventAny::Filled(fill) = &event {
+            if let OrderEventAny::Filled(fill) = event {
                 ledger.on_fill(
                     fill.account_id,
                     fill.instrument_id,
@@ -1786,6 +1874,32 @@ impl RiskEngine {
                     fill.last_qty.as_f64(),
                 );
             }
+        }
+    }
+
+    fn handle_instrument_status(&mut self, status: &InstrumentStatus) {
+        log::debug!("Handling instrument status: {:?}", status);
+
+        use nautilus_model::enums::MarketStatusAction;
+        match status.action {
+            MarketStatusAction::Halt
+            | MarketStatusAction::Suspend
+            | MarketStatusAction::NotAvailableForTrading => {
+                log::warn!(
+                    "标的 {} 已停牌/临停: action={:?}, reason={:?}",
+                    status.instrument_id,
+                    status.action,
+                    status.reason
+                );
+            }
+            MarketStatusAction::Resume => {
+                log::info!(
+                    "标的 {} 已复牌: action={:?}",
+                    status.instrument_id,
+                    status.action
+                );
+            }
+            _ => {}
         }
     }
 

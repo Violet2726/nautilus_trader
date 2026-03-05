@@ -22,7 +22,7 @@ use nautilus_core::python::to_pyvalue_err;
 use nautilus_model::defi::{Pool, PoolProfiler};
 use nautilus_model::{
     data::{
-        Bar, BarType, FundingRateUpdate, QuoteTick, TradeTick,
+        Bar, BarType, FundingRateUpdate, InstrumentStatus, QuoteTick, TradeTick,
         prices::{IndexPriceUpdate, MarkPriceUpdate},
     },
     enums::{OmsType, OrderSide, PositionSide},
@@ -496,6 +496,11 @@ impl Cache {
         self.add_trade(trade).map_err(to_pyvalue_err)
     }
 
+    #[pyo3(name = "add_instrument_status")]
+    fn py_add_instrument_status(&mut self, status: InstrumentStatus) -> PyResult<()> {
+        self.add_instrument_status(status).map_err(to_pyvalue_err)
+    }
+
     #[pyo3(name = "add_bar")]
     fn py_add_bar(&mut self, bar: Bar) -> PyResult<()> {
         self.add_bar(bar).map_err(to_pyvalue_err)
@@ -584,6 +589,11 @@ impl Cache {
     #[pyo3(name = "funding_rate")]
     fn py_funding_rate(&self, instrument_id: InstrumentId) -> Option<FundingRateUpdate> {
         self.funding_rate(&instrument_id).copied()
+    }
+
+    #[pyo3(name = "instrument_status")]
+    fn py_instrument_status(&self, instrument_id: InstrumentId) -> Option<InstrumentStatus> {
+        self.instrument_status(&instrument_id).copied()
     }
 
     #[pyo3(name = "order_book")]
