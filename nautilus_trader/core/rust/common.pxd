@@ -7,100 +7,100 @@ from nautilus_trader.core.rust.model cimport TraderId_t
 
 cdef extern from "../includes/common.h":
 
-    # The state of a component within the system.
+    # 系统中组件的状态。
     cpdef enum ComponentState:
-        # When a component is instantiated, but not yet ready to fulfill its specification.
+        # 当组件被实例化，但尚未准备好履行其规范时。
         PRE_INITIALIZED # = 0,
-        # When a component is able to be started.
+        # 当组件能够启动时。
         READY # = 1,
-        # When a component is executing its actions on `start`.
+        # 当组件在 `start` 时执行其操作。
         STARTING # = 2,
-        # When a component is operating normally and can fulfill its specification.
+        # 当组件正正常运行并能履行其规范时。
         RUNNING # = 3,
-        # When a component is executing its actions on `stop`.
+        # 当组件在 `stop` 时执行其操作。
         STOPPING # = 4,
-        # When a component has successfully stopped.
+        # 当组件已成功停止。
         STOPPED # = 5,
-        # When a component is started again after its initial start.
+        # 当组件在初始启动后再次启动。
         RESUMING # = 6,
-        # When a component is executing its actions on `reset`.
+        # 当组件在 `reset` 时执行其操作。
         RESETTING # = 7,
-        # When a component is executing its actions on `dispose`.
+        # 当组件在 `dispose` 时执行其操作。
         DISPOSING # = 8,
-        # When a component has successfully shut down and released all of its resources.
+        # 当组件已成功关闭并释放了所有资源。
         DISPOSED # = 9,
-        # When a component is executing its actions on `degrade`.
+        # 当组件在 `degrade` 时执行其操作。
         DEGRADING # = 10,
-        # When a component has successfully degraded and may not meet its full specification.
+        # 当组件已成功降级，可能无法完全履行其规范。
         DEGRADED # = 11,
-        # When a component is executing its actions on `fault`.
+        # 当组件在 `fault` 时执行其操作。
         FAULTING # = 12,
-        # When a component has successfully shut down due to a detected fault.
+        # 当组件因检测到故障而成功关闭。
         FAULTED # = 13,
 
-    # A trigger condition for a component within the system.
+    # 系统中组件的触发条件。
     cpdef enum ComponentTrigger:
-        # A trigger for the component to initialize.
+        # 组件初始化的触发器。
         INITIALIZE # = 1,
-        # A trigger for the component to start.
+        # 组件启动的触发器。
         START # = 2,
-        # A trigger when the component has successfully started.
+        # 组件成功启动时的触发器。
         START_COMPLETED # = 3,
-        # A trigger for the component to stop.
+        # 组件停止的触发器。
         STOP # = 4,
-        # A trigger when the component has successfully stopped.
+        # 组件成功停止时的触发器。
         STOP_COMPLETED # = 5,
-        # A trigger for the component to resume (after being stopped).
+        # 组件恢复（停止后）的触发器。
         RESUME # = 6,
-        # A trigger when the component has successfully resumed.
+        # 组件成功恢复时的触发器。
         RESUME_COMPLETED # = 7,
-        # A trigger for the component to reset.
+        # 组件重置的触发器。
         RESET # = 8,
-        # A trigger when the component has successfully reset.
+        # 组件成功重置时的触发器。
         RESET_COMPLETED # = 9,
-        # A trigger for the component to dispose and release resources.
+        # 组件销毁并释放资源的触发器。
         DISPOSE # = 10,
-        # A trigger when the component has successfully disposed.
+        # 组件成功销毁时的触发器。
         DISPOSE_COMPLETED # = 11,
-        # A trigger for the component to degrade.
+        # 组件降级的触发器。
         DEGRADE # = 12,
-        # A trigger when the component has successfully degraded.
+        # 组件成功降级时的触发器。
         DEGRADE_COMPLETED # = 13,
-        # A trigger for the component to fault.
+        # 组件故障的触发器。
         FAULT # = 14,
-        # A trigger when the component has successfully faulted.
+        # 组件成功进入故障状态时的触发器。
         FAULT_COMPLETED # = 15,
 
-    # The log level for log messages.
+    # 日志消息的日志级别。
     cpdef enum LogLevel:
-        # The **OFF** log level. A level lower than all other log levels (off).
+        # **OFF** 日志级别。低于所有其他日志级别（关闭）。
         OFF # = 0,
-        # The **TRACE** log level. Only available in Rust for debug/development builds.
+        # **TRACE** 日志级别。仅在 Rust 的调试/开发构建中可用。
         TRACE # = 1,
-        # The **DEBUG** log level.
+        # **DEBUG** 日志级别。
         DEBUG # = 2,
-        # The **INFO** log level.
+        # **INFO** 日志级别。
         INFO # = 3,
-        # The **WARNING** log level.
+        # **WARNING** 日志级别。
         WARNING # = 4,
-        # The **ERROR** log level.
+        # **ERROR** 日志级别。
         ERROR # = 5,
 
-    # The log color for log messages.
+    # 日志消息的日志颜色。
     cpdef enum LogColor:
-        # The default/normal log color.
+        # 默认/常规的日志颜色。
         NORMAL # = 0,
-        # The green log color, typically used with [`LogLevel::Info`] log levels and associated with success events.
+        # 绿色日志颜色，通常用于 [`LogLevel::Info`] 日志级别，并与成功事件相关联。
         GREEN # = 1,
-        # The blue log color, typically used with [`LogLevel::Info`] log levels and associated with user actions.
+        # 蓝色日志颜色，通常用于 [`LogLevel::Info`] 日志级别，并与用户操作相关联。
         BLUE # = 2,
-        # The magenta log color, typically used with [`LogLevel::Info`] log levels.
+        # 品红色日志颜色，通常用于 [`LogLevel::Info`] 日志级别。
         MAGENTA # = 3,
-        # The cyan log color, typically used with [`LogLevel::Info`] log levels.
+        # 青色日志颜色，通常用于 [`LogLevel::Info`] 日志级别。
         CYAN # = 4,
-        # The yellow log color, typically used with [`LogLevel::Warning`] log levels.
+        # 黄色日志颜色，通常用于 [`LogLevel::Warning`] 日志级别。
         YELLOW # = 5,
-        # The red log color, typically used with [`LogLevel::Error`] level.
+        # 红色日志颜色，通常用于 [`LogLevel::Error`] 级别。
         RED # = 6,
 
     # A real-time clock which uses system time.
@@ -142,13 +142,13 @@ cdef extern from "../includes/common.h":
     cdef struct LogGuard:
         pass
 
-    # A static test clock.
+    # 一个静态测试时钟。
     #
-    # Stores the current timestamp internally which can be advanced.
+    # 在内部存储当前时间戳，并且可以推进该时间。
     #
-    # # Threading
+    # # 线程安全 (Threading)
     #
-    # This clock is thread-affine; use it only from the thread that created it.
+    # 此时钟是线程相关的 (thread-affine)；仅在创建它的线程中使用。
     cdef struct TestClock:
         pass
 
@@ -186,18 +186,18 @@ cdef extern from "../includes/common.h":
     cdef struct LogGuard_API:
         LogGuard *_0;
 
-    # Represents a time event occurring at the event timestamp.
+    # 表示在事件时间戳处发生的一个时间事件 (Time Event)。
     #
-    # A `TimeEvent` carries metadata such as the event's name, a unique event ID,
-    # and timestamps indicating when the event was scheduled to occur and when it was initialized.
+    # 一个 `TimeEvent` 携带元数据，如事件名称、唯一的事件 ID，
+    # 以及指明事件计划发生时间和初始化时间的时间戳。
     cdef struct TimeEvent_t:
-        # The event name, identifying the nature or purpose of the event.
+        # 事件名称，标识事件的性质或目的。
         char* name;
-        # The unique identifier for the event.
+        # 事件的唯一标识符。
         UUID4_t event_id;
-        # UNIX timestamp (nanoseconds) when the event occurred.
+        # 事件发生时的 UNIX 时间戳（纳秒）。
         uint64_t ts_event;
-        # UNIX timestamp (nanoseconds) when the instance was created.
+        # 实例创建时的 UNIX 时间戳（纳秒）。
         uint64_t ts_init;
 
     # FFI time event handler for Cython interoperability.

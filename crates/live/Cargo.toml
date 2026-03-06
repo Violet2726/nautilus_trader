@@ -42,7 +42,14 @@ python = [
   "pyo3",
   "streaming",
 ]
-defi = ["nautilus-common/defi", "nautilus-data/defi"]
+defi = [
+  "nautilus-common/defi",
+  "nautilus-data/defi",
+  "nautilus-model/defi",
+  "nautilus-system/defi",
+  "nautilus-trading/defi",
+]
+
 
 [package.metadata.docs.rs]
 all-features = true

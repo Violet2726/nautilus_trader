@@ -6,221 +6,217 @@
 #include <Python.h>
 
 /**
- * Number of milliseconds in one second.
+ * 一秒包含的毫秒数。
  */
 #define MILLISECONDS_IN_SECOND 1000
 
 /**
- * Number of nanoseconds in one second.
+ * 一秒包含的纳秒数。
  */
 #define NANOSECONDS_IN_SECOND 1000000000
 
 /**
- * Number of nanoseconds in one millisecond.
+ * 一毫秒包含的纳秒数。
  */
 #define NANOSECONDS_IN_MILLISECOND 1000000
 
 /**
- * Number of nanoseconds in one microsecond.
+ * 一微秒包含的纳秒数。
  */
 #define NANOSECONDS_IN_MICROSECOND 1000
 
 /**
- * Maximum capacity in characters for a [`StackStr`].
+ * [`StackStr`] 的最大字符容量。
  */
 #define STACKSTR_CAPACITY 36
 
 /**
- * `CVec` is a C compatible struct that stores an opaque pointer to a block of
- * memory, its length and the capacity of the vector it was allocated from.
+ * `CVec` 是一个 C 兼容的结构体，存储指向内存块的一个不透明指针，
+ * 及其长度和分配该向量时的容量。
  *
- * # Safety
+ * # 安全性 (Safety)
  *
- * Changing the values here may lead to undefined behavior when the memory is dropped.
+ * 更改此处的数值可能会导致在销毁内存时产生未定义行为。
  */
 typedef struct CVec {
     /**
-     * Opaque pointer to block of memory storing elements to access the
-     * elements cast it to the underlying type.
+     * 指向存放元素内存块的不透明指针。若要访问元素，需将其转换为底层类型。
      */
     void *ptr;
     /**
-     * The number of elements in the block.
+     * 块中元素的数量。
      */
     uintptr_t len;
     /**
-     * The capacity of vector from which it was allocated.
-     * Used when deallocating the memory
+     * 分配该向量时的容量。
+     * 在解除内存分配时使用。
      */
     uintptr_t cap;
 } CVec;
 
 /**
- * Represents a Universally Unique Identifier (UUID)
- * version 4 based on a 128-bit label as specified in RFC 4122.
+ * 表示根据 RFC 4122 规范基于 128 位标签生成的
+ * 版本 4 通用唯一识别码 (UUID)。
  */
 typedef struct UUID4_t {
     /**
-     * The UUID v4 value as a fixed-length C string byte array (includes null terminator).
+     * 作为固定长度 C 字符串字节数组存储的 UUID v4 值（包含 null 终止符）。
      */
     uint8_t value[37];
 } UUID4_t;
 
 /**
- * A stack-allocated ASCII string with a maximum capacity of 36 characters.
+ * 一种栈分配的 ASCII 字符串，最大容量为 36 个字符。
  *
- * Optimized for short identifier strings with:
- * - Stack allocation (no heap).
- * - `Copy` semantics.
- * - O(1) length access.
- * - C FFI compatibility (null-terminated).
+ * 针对短标识符字符串进行了以下优化：
+ * - 栈分配（无堆分配）。
+ * - `Copy` 语义。
+ * - O(1) 时间复杂度的长度访问。
+ * - C FFI 兼容性（以 null 结尾）。
  *
- * ASCII is required to guarantee 1 character == 1 byte, ensuring the buffer
- * always holds exactly the capacity in characters. This aligns with identifier
- * conventions which are inherently ASCII.
+ * 要求 ASCII 是为了保证 1 个字符等于 1 个字节，确保缓冲区始终能够容纳刚好其容量大小的字符数。
+ * 这与标识符通常本质上是 ASCII 的惯例相吻合。
  *
- * # Memory Layout
+ * # 内存布局
  *
- * The `value` field is placed first so the struct pointer equals the string
- * pointer, making C FFI more natural: `(char*)&stack_str` works directly.
+ * `value` 字段被放置在最前面，因此结构体指针等于字符串指针，
+ * 使得 C FFI 更加自然：`(char*)&stack_str` 可以直接工作。
  */
 typedef struct StackStr {
     /**
-     * ASCII data with null terminator for C FFI.
+     * 带有 null 终止符的 ASCII 数据，用于 C FFI。
      */
     uint8_t value[37];
     /**
-     * Length of the string in bytes (0-36).
+     * 字符串的字节长度 (0-36)。
      */
     uint8_t len;
 } StackStr;
 /**
- * Maximum length in characters.
+ * 最大字符长度。
  */
 #define StackStr_MAX_LEN STACKSTR_CAPACITY
 
 /**
- * Construct a new *empty* [`CVec`] value for use as initialiser/sentinel in foreign code.
+ * 构造一个新的*空* [`CVec`] 值，用作外部代码中的初始化程序或哨兵。
  */
 struct CVec cvec_new(void);
 
 /**
- * Converts a UNIX nanoseconds timestamp to an ISO 8601 (RFC 3339) format C string pointer.
+ * 将 UNIX 纳秒时间戳转换为 ISO 8601 (RFC 3339) 格式的 C 字符串指针。
  */
 const char *unix_nanos_to_iso8601_cstr(uint64_t timestamp_ns);
 
 /**
- * Converts a UNIX nanoseconds timestamp to an ISO 8601 (RFC 3339) format C string pointer
- * with millisecond precision.
+ * 将 UNIX 纳秒时间戳转换为带毫秒精度的 ISO 8601 (RFC 3339) 格式的 C 字符串指针。
  */
 const char *unix_nanos_to_iso8601_millis_cstr(uint64_t timestamp_ns);
 
 /**
- * Converts seconds to nanoseconds (ns).
+ * 将秒 (s) 转换为纳秒 (ns)。
  */
 uint64_t secs_to_nanos(double secs);
 
 /**
- * Converts seconds to milliseconds (ms).
+ * 将秒 (s) 转换为毫秒 (ms)。
  */
 uint64_t secs_to_millis(double secs);
 
 /**
- * Converts milliseconds (ms) to nanoseconds (ns).
+ * 将毫秒 (ms) 转换为纳秒 (ns)。
  */
 uint64_t millis_to_nanos(double millis);
 
 /**
- * Converts microseconds (μs) to nanoseconds (ns).
+ * 将微秒 (μs) 转换为纳秒 (ns)。
  */
 uint64_t micros_to_nanos(double micros);
 
 /**
- * Converts nanoseconds (ns) to seconds.
+ * 将纳秒 (ns) 转换为秒 (s)。
  */
 double nanos_to_secs(uint64_t nanos);
 
 /**
- * Converts nanoseconds (ns) to milliseconds (ms).
+ * 将纳秒 (ns) 转换为毫秒 (ms)。
  */
 uint64_t nanos_to_millis(uint64_t nanos);
 
 /**
- * Converts nanoseconds (ns) to microseconds (μs).
+ * 将纳秒 (ns) 转换为微秒 (μs)。
  */
 uint64_t nanos_to_micros(uint64_t nanos);
 
 /**
- * Return the decimal precision inferred from the given C string.
+ * 返回从给定 C 字符串推断出的十进制精度。
  *
- * # Safety
+ * # 安全性 (Safety)
  *
- * Assumes `ptr` is a valid C string pointer.
+ * 假定 `ptr` 是一个有效的 C 字符串指针。
  *
  * # Panics
  *
- * Panics if `ptr` is null.
+ * 如果 `ptr` 为空，则触发 panic。
  */
 uint8_t precision_from_cstr(const char *ptr);
 
 /**
- * Return the minimum price increment decimal precision inferred from the given C string.
+ * 返回从给定 C 字符串推断出的最小价格增量的十进制精度。
  *
- * # Safety
+ * # 安全性 (Safety)
  *
- * Assumes `ptr` is a valid C string pointer.
+ * 假定 `ptr` 是一个有效的 C 字符串指针。
  *
  * # Panics
  *
- * Panics if `ptr` is null.
+ * 如果 `ptr` 为空，则触发 panic。
  */
 uint8_t min_increment_precision_from_cstr(const char *ptr);
 
 /**
- * Drops the C string memory at the pointer.
+ * 释放指针指向的 C 字符串内存。
  *
- * # Safety
+ * # 安全性 (Safety)
  *
- * Assumes `ptr` is a valid C string pointer.
+ * 假定 `ptr` 是一个有效的 C 字符串指针。
  *
  * # Panics
  *
- * Panics if `ptr` is null.
+ * 如果 `ptr` 为空，则触发 panic。
  */
 void cstr_drop(const char *ptr);
 
 /**
- * Generate a new random (version-4) UUID and return it by value.
+ * 生成一个新的随机（版本 4）UUID 并在返回值中返回。
  */
 struct UUID4_t uuid4_new(void);
 
 /**
- * Returns a [`UUID4`] from C string pointer.
+ * 从 C 字符串指针返回一个 [`UUID4`]。
  *
- * # Safety
+ * # 安全性 (Safety)
  *
- * Assumes `ptr` is a valid C string pointer.
+ * 假定 `ptr` 是一个有效的 C 字符串指针。
  *
  * # Panics
  *
- * Panics if `ptr` cannot be cast to a valid C string.
+ * 如果 `ptr` 无法被转换为有效的 C 字符串，则触发 panic。
  */
 struct UUID4_t uuid4_from_cstr(const char *ptr);
 
 /**
- * Return a borrowed *null-terminated* UTF-8 C string representing `uuid`.
+ * 返回一个借用的、*以 null 结尾的* 表示 `uuid` 的 UTF-8 C 字符串。
  *
- * The pointer remains valid for as long as the input `UUID4` reference lives – callers **must
- * not** attempt to free it.
+ * 该指针的有效性与输入的 `UUID4` 引用所具有的生命周期相同 —— 调用方**不得**尝试释放它。
  */
 const char *uuid4_to_cstr(const struct UUID4_t *uuid);
 
 /**
- * Compare two UUID values, returning `1` when they are equal and `0` otherwise.
+ * 比较两个 UUID 值。相等时返回 `1`，否则返回 `0`。
  */
 uint8_t uuid4_eq(const struct UUID4_t *lhs, const struct UUID4_t *rhs);
 
 /**
- * Compute the stable [`u64`] hash of `uuid` using Rust’s default hasher.
+ * 使用 Rust 的默认哈希器计算 `uuid` 稳定的 [`u64`] 哈希值。
  */
 uint64_t uuid4_hash(const struct UUID4_t *uuid);

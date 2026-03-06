@@ -2,21 +2,7 @@
 resolver = "2"
 members = [
   "crates",
-  "crates/adapters/architect_ax",
-  "crates/adapters/betfair",
-  "crates/adapters/binance",
-  "crates/adapters/bitmex",
-  "crates/adapters/blockchain",
-  "crates/adapters/bybit",
-  "crates/adapters/databento",
-  "crates/adapters/deribit",
-  "crates/adapters/dydx",
-  "crates/adapters/hyperliquid",
-  "crates/adapters/kraken",
-  "crates/adapters/polymarket",
-  "crates/adapters/okx",
   "crates/adapters/sandbox",
-  "crates/adapters/tardis",
   "crates/analysis",
   "crates/backtest",
   "crates/cli",
@@ -88,20 +74,7 @@ nautilus-trading = { path = "crates/trading", version = "0.54.0" }
 #
 # Note: default-features = false to control high-precision separately (not supported on Windows)
 # -----------------------------------------------------------------------------
-nautilus-architect-ax = { path = "crates/adapters/architect_ax", version = "0.54.0" }
-nautilus-binance = { path = "crates/adapters/binance", version = "0.54.0", default-features = false }
-nautilus-bitmex = { path = "crates/adapters/bitmex", version = "0.54.0", default-features = false }
-nautilus-blockchain = { path = "crates/adapters/blockchain", version = "0.54.0" }
-nautilus-bybit = { path = "crates/adapters/bybit", version = "0.54.0", default-features = false }
-nautilus-databento = { path = "crates/adapters/databento", version = "0.54.0", default-features = false }
-nautilus-deribit = { path = "crates/adapters/deribit", version = "0.54.0", default-features = false }
-nautilus-dydx = { path = "crates/adapters/dydx", version = "0.54.0", default-features = false }
-nautilus-hyperliquid = { path = "crates/adapters/hyperliquid", version = "0.54.0", default-features = false }
-nautilus-kraken = { path = "crates/adapters/kraken", version = "0.54.0", default-features = false }
-nautilus-okx = { path = "crates/adapters/okx", version = "0.54.0", default-features = false }
-nautilus-polymarket = { path = "crates/adapters/polymarket", version = "0.54.0", default-features = false }
 nautilus-sandbox = { path = "crates/adapters/sandbox", version = "0.54.0", default-features = false }
-nautilus-tardis = { path = "crates/adapters/tardis", version = "0.54.0", default-features = false }
 
 # -----------------------------------------------------------------------------
 # Core dependencies

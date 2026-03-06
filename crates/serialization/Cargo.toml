@@ -40,6 +40,8 @@ extension-module = [
 ]
 python = ["nautilus-core/python", "nautilus-model/python", "pyo3"]
 high-precision = ["nautilus-model/high-precision"]
+defi = ["nautilus-model/defi"]
+
 
 [package.metadata.docs.rs]
 all-features = true

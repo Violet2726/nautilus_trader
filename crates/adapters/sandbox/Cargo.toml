@@ -38,11 +38,8 @@ python = [
   "pyo3",
 ]
 high-precision = ["nautilus-model/high-precision"]
-example-databento = [
-  "dep:nautilus-databento",
-  "dep:nautilus-live",
-  "dep:dotenvy",
-]
+defi = ["nautilus-common/defi", "nautilus-model/defi", "nautilus-system/defi", "nautilus-live/defi"]
+
 
 [package.metadata.docs.rs]
 all-features = true
@@ -65,10 +62,8 @@ serde = { workspace = true }
 thiserror = { workspace = true }
 ustr = { workspace = true }
 
-nautilus-databento = { workspace = true, features = ["live"], optional = true }
 nautilus-live = { workspace = true, optional = true }
 
-dotenvy = { workspace = true, optional = true }
 pyo3 = { workspace = true, optional = true }
 
 [dev-dependencies]
@@ -77,8 +72,3 @@ nautilus-testkit = { workspace = true }
 rstest = { workspace = true }
 tokio = { workspace = true }
 
-[[example]]
-name = "databento-cme-sandbox"
-path = "examples/databento_cme.rs"
-required-features = ["example-databento"]
-doc = false

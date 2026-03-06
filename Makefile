@@ -75,9 +75,9 @@ ifeq ($(HYPERSYNC),true)
 EXTRA_FEATURES += hypersync
 endif
 
-# DEFI controls whether defi feature is included (default: true).
+# DEFI controls whether defi feature is included (default: false).
 # Can be disabled: make cargo-test-core DEFI=false
-DEFI ?= true
+DEFI ?= false
 ifeq ($(DEFI),true)
 BASE_FEATURES := ffi,python,high-precision,streaming,defi,examples
 else
