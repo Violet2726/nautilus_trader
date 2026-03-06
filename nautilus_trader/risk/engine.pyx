@@ -182,6 +182,26 @@ cdef class RiskEngine(Component):
             color=LogColor.BLUE,
         )
 
+        if config.max_trade_command_rate:
+            pieces = config.max_trade_command_rate.split("/")
+            global_trade_rate_limit = int(pieces[0])
+            global_trade_rate_interval = pd.to_timedelta(pieces[1])
+            self._global_trade_throttler = Throttler(
+                name="GLOBAL_TRADE_THROTTLER",
+                limit=global_trade_rate_limit,
+                interval=global_trade_rate_interval,
+                output_send=self._direct_send_to_execution,
+                output_drop=self._deny_global_trade_command,
+                clock=clock,
+            )
+            self._log.info(
+                f"已设置最大全局交易指令速率: "
+                f"{global_trade_rate_limit}/{str(global_trade_rate_interval).replace('0 days ', '')}",
+                color=LogColor.BLUE,
+            )
+        else:
+            self._global_trade_throttler = None
+
         # 风险设置
         self._max_notional_per_order: dict[InstrumentId, Decimal] = {}
 
@@ -401,6 +421,8 @@ cdef class RiskEngine(Component):
         self.event_count = 0
         self._order_submit_throttler.reset()
         self._order_modify_throttler.reset()
+        if self._global_trade_throttler is not None:
+            self._global_trade_throttler.reset()
 
     cpdef void _dispose(self):
         pass
@@ -1227,6 +1249,21 @@ cdef class RiskEngine(Component):
         elif isinstance(command, SubmitOrderList):
             self._deny_order_list(command.order_list, reason="超出最大订单提交速率 (MAX_ORDER_SUBMIT_RATE)")
 
+    cpdef void _deny_global_trade_command(self, TradingCommand command):
+        cdef str reason = "超出最大全局交易指令速率 (MAX_TRADE_COMMAND_RATE)"
+        cdef Order order
+
+        if isinstance(command, SubmitOrder):
+            self._deny_order(command.order, reason=reason)
+        elif isinstance(command, SubmitOrderList):
+            self._deny_order_list(command.order_list, reason=reason)
+        elif isinstance(command, ModifyOrder):
+            order = self._cache.order(command.client_order_id)
+            if order is not None:
+                self._reject_modify_order(order, reason=reason)
+        elif isinstance(command, CancelOrder) or isinstance(command, CancelAllOrders):
+            self._reject_cancel_command(command, reason=reason)
+
     # Needs to be `cpdef` due being called from throttler
     cpdef void _deny_modify_order(self, ModifyOrder command):
         cdef Order order = self._cache.order(command.client_order_id)
@@ -1325,6 +1362,13 @@ cdef class RiskEngine(Component):
 
     # Needs to be `cpdef` due being called from throttler
     cpdef void _send_to_execution(self, TradingCommand command):
+        if self._global_trade_throttler is not None:
+            if isinstance(command, (SubmitOrder, SubmitOrderList, ModifyOrder, CancelOrder)):
+                self._global_trade_throttler.send(command)
+                return
+        self._direct_send_to_execution(command)
+
+    cpdef void _direct_send_to_execution(self, TradingCommand command):
         self._msgbus.send(endpoint="ExecEngine.execute", msg=command)
 
     cpdef void _reject_modify_order(self, Order order, str reason):

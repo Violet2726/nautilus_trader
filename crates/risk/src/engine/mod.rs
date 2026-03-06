@@ -78,6 +78,7 @@ pub struct RiskEngine {
     pub t1_ledger: Option<T1Ledger>,
     pub account_throttlers: AHashMap<AccountId, Throttler<SubmitOrder, SubmitOrderFn>>,
     pub symbol_throttlers: AHashMap<InstrumentId, Throttler<SubmitOrder, SubmitOrderFn>>,
+    pub global_trade_throttler: Option<Rc<RefCell<Throttler<TradingCommand, Box<dyn Fn(TradingCommand)>>>>>,
 }
 
 impl Debug for RiskEngine {
@@ -94,11 +95,27 @@ impl RiskEngine {
         clock: Rc<RefCell<dyn Clock>>,
         cache: Rc<RefCell<Cache>>,
     ) -> Self {
-        let throttled_submit_order =
-            Self::create_submit_order_throttler(&config, clock.clone(), cache.clone());
+        let global_trade_throttler = config.max_trade_command.as_ref().map(|rate_limit| {
+            Rc::new(RefCell::new(Self::create_global_trade_throttler(
+                rate_limit.clone(),
+                clock.clone(),
+                cache.clone(),
+            )))
+        });
 
-        let throttled_modify_order =
-            Self::create_modify_order_throttler(&config, clock.clone(), cache.clone());
+        let throttled_submit_order = Self::create_submit_order_throttler(
+            &config,
+            clock.clone(),
+            cache.clone(),
+            global_trade_throttler.clone(),
+        );
+
+        let throttled_modify_order = Self::create_modify_order_throttler(
+            &config,
+            clock.clone(),
+            cache.clone(),
+            global_trade_throttler.clone(),
+        );
 
         let session_provider = config.session_provider.clone();
         let t1_ledger = if config.t1_enabled {
@@ -120,6 +137,7 @@ impl RiskEngine {
             t1_ledger,
             account_throttlers: AHashMap::new(),
             symbol_throttlers: AHashMap::new(),
+            global_trade_throttler,
         }
     }
 
@@ -150,7 +168,7 @@ impl RiskEngine {
             None,
         );
 
-        let weak_order = weak;
+        let weak_order = weak.clone();
         msgbus::subscribe_order_events(
             "events.order.*".into(),
             TypedHandler::from(move |event: &OrderEventAny| {
@@ -166,11 +184,17 @@ impl RiskEngine {
         config: &RiskEngineConfig,
         clock: Rc<RefCell<dyn Clock>>,
         cache: Rc<RefCell<Cache>>,
+        global_throttler: Option<Rc<RefCell<Throttler<TradingCommand, Box<dyn Fn(TradingCommand)>>>>>,
     ) -> Throttler<SubmitOrder, SubmitOrderFn> {
         let success_handler = {
+            let global_throttler = global_throttler;
             Box::new(move |submit_order: SubmitOrder| {
-                let endpoint = MessagingSwitchboard::exec_engine_queue_execute();
-                msgbus::send_trading_command(endpoint, TradingCommand::SubmitOrder(submit_order));
+                if let Some(gt) = &global_throttler {
+                    gt.borrow_mut().send(TradingCommand::SubmitOrder(submit_order));
+                } else {
+                    let endpoint = MessagingSwitchboard::exec_engine_queue_execute();
+                    msgbus::send_trading_command(endpoint, TradingCommand::SubmitOrder(submit_order));
+                }
             }) as Box<dyn Fn(SubmitOrder)>
         };
 
@@ -209,11 +233,17 @@ impl RiskEngine {
         config: &RiskEngineConfig,
         clock: Rc<RefCell<dyn Clock>>,
         cache: Rc<RefCell<Cache>>,
+        global_throttler: Option<Rc<RefCell<Throttler<TradingCommand, Box<dyn Fn(TradingCommand)>>>>>,
     ) -> Throttler<ModifyOrder, ModifyOrderFn> {
         let success_handler = {
+            let global_throttler = global_throttler;
             Box::new(move |order: ModifyOrder| {
-                let endpoint = MessagingSwitchboard::exec_engine_queue_execute();
-                msgbus::send_trading_command(endpoint, TradingCommand::ModifyOrder(order));
+                if let Some(gt) = &global_throttler {
+                    gt.borrow_mut().send(TradingCommand::ModifyOrder(order));
+                } else {
+                    let endpoint = MessagingSwitchboard::exec_engine_queue_execute();
+                    msgbus::send_trading_command(endpoint, TradingCommand::ModifyOrder(order));
+                }
             }) as Box<dyn Fn(ModifyOrder)>
         };
 
@@ -313,6 +343,98 @@ impl RiskEngine {
         ))
     }
 
+    fn create_global_trade_throttler(
+        rate_limit: nautilus_common::throttler::RateLimit,
+        clock: Rc<RefCell<dyn Clock>>,
+        cache: Rc<RefCell<Cache>>,
+    ) -> Throttler<TradingCommand, Box<dyn Fn(TradingCommand)>> {
+        let success_handler = {
+            Box::new(move |command: TradingCommand| {
+                let endpoint = MessagingSwitchboard::exec_engine_queue_execute();
+                msgbus::send_trading_command(endpoint, command);
+            }) as Box<dyn Fn(TradingCommand)>
+        };
+
+        let failure_handler = {
+            let cache = cache;
+            let clock = clock.clone();
+            Box::new(move |command: TradingCommand| {
+                let reason = "EXCEEDED MAX GLOBAL TRADE RATE LIMIT";
+                match &command {
+                    TradingCommand::SubmitOrder(submit_order) => {
+                        log::warn!(
+                            "SubmitOrder for {} DENIED: {}",
+                            submit_order.client_order_id,
+                            reason
+                        );
+                        Self::handle_submit_order_cache(&cache, submit_order);
+                        let denied = Self::create_order_denied(submit_order, reason, &clock);
+                        let endpoint = MessagingSwitchboard::exec_engine_process();
+                        msgbus::send_order_event(endpoint, denied);
+                    }
+                    TradingCommand::CancelOrder(cancel_order) => {
+                        log::warn!(
+                            "CancelOrder for {} DENIED: {}",
+                            cancel_order.client_order_id,
+                            reason
+                        );
+                        let (venue_order_id, account_id) = {
+                            let cache_borrow = cache.borrow();
+                            if let Some(order) = cache_borrow.order(&cancel_order.client_order_id) {
+                                (order.venue_order_id(), order.account_id())
+                            } else {
+                                (cancel_order.venue_order_id.clone(), None)
+                            }
+                        };
+                        let timestamp = clock.borrow().timestamp_ns();
+                        let rejected = OrderEventAny::CancelRejected(OrderCancelRejected::new(
+                            cancel_order.trader_id,
+                            cancel_order.strategy_id,
+                            cancel_order.instrument_id,
+                            cancel_order.client_order_id.clone(),
+                            Ustr::from(reason),
+                            UUID4::new(),
+                            timestamp,
+                            timestamp,
+                            false,
+                            venue_order_id,
+                            account_id,
+                        ));
+                        let endpoint = MessagingSwitchboard::exec_engine_process();
+                        msgbus::send_order_event(endpoint, rejected);
+                    }
+                    TradingCommand::ModifyOrder(modify_order) => {
+                        log::warn!(
+                            "ModifyOrder for {} DENIED: {}",
+                            modify_order.client_order_id,
+                            reason
+                        );
+                        let order = match Self::get_existing_order(&cache, modify_order) {
+                            Some(order) => order,
+                            None => return,
+                        };
+                        let rejected = Self::create_modify_rejected(&order, reason, &clock);
+                        let endpoint = MessagingSwitchboard::exec_engine_process();
+                        msgbus::send_order_event(endpoint, rejected);
+                    }
+                    _ => {
+                        log::warn!("Command dropped by global throttler: {:?}", command);
+                    }
+                }
+            }) as Box<dyn Fn(TradingCommand)>
+        };
+
+        Throttler::new(
+            rate_limit.limit,
+            rate_limit.interval_ns,
+            clock,
+            "GLOBAL_TRADE_THROTTLER".to_string(),
+            success_handler,
+            Some(failure_handler),
+            Ustr::from(UUID4::new().as_str()),
+        )
+    }
+
     /// Executes a trading command through the risk management pipeline.
     pub fn execute(&mut self, command: TradingCommand) {
         // This will extend to other commands such as `RiskCommand`
@@ -398,6 +520,9 @@ impl RiskEngine {
     pub fn reset(&mut self) {
         self.throttled_submit_order.reset();
         self.throttled_modify_order.reset();
+        if let Some(t) = self.global_trade_throttler.as_ref() {
+            t.borrow_mut().reset();
+        }
         self.max_notional_per_order.clear();
         self.trading_state = TradingState::Active;
 
@@ -509,7 +634,6 @@ impl RiskEngine {
                 return;
             }
         }
-
         self.send_to_execution(TradingCommand::CancelOrder(command));
     }
 
@@ -968,68 +1092,118 @@ impl RiskEngine {
 
         // ---- 新增：lot_size 整数倍及 T+1 检查 ----
         if self.config.t1_enabled {
-            if let Some(lot_size) = instrument.lot_size() {
-                let qty_raw = order.quantity().raw;
-                let lot_raw = lot_size.raw;
+            let symbol = instrument.symbol();
+            let symbol_str = symbol.as_str();
 
-                if lot_raw > 0 {
-                    match order.order_side() {
-                        OrderSide::Buy => {
-                            if qty_raw % lot_raw != 0 {
+            // A 股板块判定
+            let is_star_market = symbol_str.starts_with("688");
+            let is_chinext = symbol_str.starts_with("30");
+            let is_main_board = symbol_str.starts_with("60")
+                || symbol_str.starts_with("00")
+                || symbol_str.starts_with("00");
+
+            let lot_size = instrument.lot_size().unwrap_or(Quantity::from("100"));
+            let qty_raw = order.quantity().raw;
+            let lot_raw = lot_size.raw;
+
+            match order.order_side() {
+                OrderSide::Buy => {
+                    if is_star_market {
+                        // 科创板：200 股起，1 股递增
+                        if qty_raw < 200 {
+                            self.deny_order(
+                                order.clone(),
+                                &format!(
+                                    "STAR_MARKET_BUY_VIOLATION: buy_qty={qty_raw} less than min_qty=200"
+                                ),
+                            );
+                            return false;
+                        }
+                        // 1 股递增由 size_increment/precision 保证（对于 A 股 size_precision=0 即为 1 股）
+                    } else if is_chinext {
+                        // 创业板：100 股起，1 股递增
+                        if qty_raw < 100 {
+                            self.deny_order(
+                                order.clone(),
+                                &format!(
+                                    "CHINEXT_BUY_VIOLATION: buy_qty={qty_raw} less than min_qty=100"
+                                ),
+                            );
+                            return false;
+                        }
+                    } else if is_main_board {
+                        // 主板：100 股整数倍
+                        if qty_raw < 100 || qty_raw % 100 != 0 {
+                            self.deny_order(
+                                order.clone(),
+                                &format!(
+                                    "MAIN_BOARD_BUY_VIOLATION: buy_qty={qty_raw} not multiple of 100"
+                                ),
+                            );
+                            return false;
+                        }
+                    } else {
+                        // 其他（默认 100 股整数倍）
+                        if lot_raw > 0 && qty_raw % lot_raw != 0 {
+                            self.deny_order(
+                                order.clone(),
+                                &format!(
+                                    "LOT_SIZE_VIOLATION: buy_qty={} not multiple of lot_size={}",
+                                    order.quantity(),
+                                    lot_size
+                                ),
+                            );
+                            return false;
+                        }
+                    }
+                }
+                OrderSide::Sell => {
+                    // T+1 可卖检查
+                    if let Some(ref ledger) = self.t1_ledger {
+                        let account_id_opt = order.account_id().or_else(|| {
+                            self.cache
+                                .borrow()
+                                .account_for_venue(&order.instrument_id().venue)
+                                .map(|a| a.id())
+                        });
+                        if let Some(account_id) = account_id_opt {
+                            let sellable = ledger.sellable(&account_id, &order.instrument_id());
+                            let order_qty = order.quantity().as_f64();
+
+                            if order_qty > sellable {
                                 self.deny_order(
                                     order.clone(),
                                     &format!(
-                                        "LOT_SIZE_VIOLATION: buy_qty={} not multiple of lot_size={}",
-                                        order.quantity(),
-                                        lot_size
+                                        "EXCEEDS_SELLABLE: qty={order_qty}, sellable={sellable}"
+                                    ),
+                                );
+                                return false;
+                            }
+
+                            // 零头卖出检查：
+                            // 卖出时，如果数量不是一手（100股）的整数倍，则必须是该标的在该账户下的全部可卖余额。
+                            // 但科创板和创业板（注册制后）：申报必须 >= 100 (或 200)，若不足此数则必须全额卖出。
+                            let min_sell = if is_star_market { 200 } else { 100 };
+                            let is_odd_lot = if is_star_market || is_chinext {
+                                qty_raw < min_sell // 板块不足最低申报
+                            } else {
+                                qty_raw % 100 != 0 // 主板不足 100 整数倍
+                            };
+
+                            if is_odd_lot && (order_qty - sellable).abs() > f64::EPSILON {
+                                self.deny_order(
+                                    order.clone(),
+                                    &format!(
+                                        "ODD_LOT_VIOLATION: sell_qty={} must be full sellable={sellable} for odd lots",
+                                        order.quantity()
                                     ),
                                 );
                                 return false;
                             }
                         }
-                        OrderSide::Sell => {
-                            // T+1 可卖检查
-                            if let Some(ref ledger) = self.t1_ledger {
-                                let account_id_opt = order.account_id().or_else(|| {
-                                    self.cache
-                                        .borrow()
-                                        .account_for_venue(&order.instrument_id().venue)
-                                        .map(|a| a.id())
-                                });
-                                if let Some(account_id) = account_id_opt {
-                                    let sellable =
-                                        ledger.sellable(&account_id, &order.instrument_id());
-                                    let order_qty = order.quantity().as_f64();
-
-                                    if order_qty > sellable {
-                                        self.deny_order(
-                                            order.clone(),
-                                            &format!(
-                                                "EXCEEDS_SELLABLE: qty={order_qty}, sellable={sellable}"
-                                            ),
-                                        );
-                                        return false;
-                                    }
-
-                                    // 零头卖出：不足一手但等于全部可卖，允许
-                                    if qty_raw % lot_raw != 0
-                                        && (order_qty - sellable).abs() > f64::EPSILON
-                                    {
-                                        self.deny_order(
-                                            order.clone(),
-                                            &format!(
-                                                "ODD_LOT_VIOLATION: sell_qty={} not full sellable={sellable}",
-                                                order.quantity()
-                                            ),
-                                        );
-                                        return false;
-                                    }
-                                }
-                            }
-                        }
-                        _ => {}
                     }
                 }
+                _ => {}
             }
         }
 
@@ -1853,6 +2027,18 @@ impl RiskEngine {
     }
 
     fn send_to_execution(&self, command: TradingCommand) {
+        if let Some(gt) = &self.global_trade_throttler {
+            if matches!(
+                command,
+                TradingCommand::SubmitOrder(_)
+                    | TradingCommand::CancelOrder(_)
+                    | TradingCommand::ModifyOrder(_)
+            ) {
+                gt.borrow_mut().send(command);
+                return;
+            }
+        }
+
         let endpoint = MessagingSwitchboard::exec_engine_queue_execute();
         msgbus::send_trading_command(endpoint, command);
     }

@@ -4152,3 +4152,89 @@ fn test_ashare_t1_sell_after_settlement(strategy_id_ema_cross: StrategyId, trade
         "Valid order must be forwarded to execution"
     );
 }
+
+/// 测试全局交易指令限流（包含发单、撤单、改单的统一计数）。
+#[rstest]
+fn test_global_trade_throttle(
+    strategy_id_ema_cross: StrategyId,
+    trader_id: TraderId,
+    instrument_audusd: InstrumentAny,
+    cash_account_state_million_usd: AccountState,
+    quote_audusd: QuoteTick,
+) {
+    use nautilus_common::messages::execution::CancelOrder;
+    use nautilus_model::events::OrderEventType;
+
+    let process_handler = register_process_handler();
+    let execute_handler = {
+        let (h, sh) = get_typed_into_message_saving_handler::<TradingCommand>(Some(Ustr::from(
+            "ExecEngine.queue_execute",
+        )));
+        msgbus::register_trading_command_endpoint(
+            MessagingSwitchboard::exec_engine_queue_execute(),
+            h,
+        );
+        sh
+    };
+
+    let mut cache = Cache::default();
+    cache.add_instrument(instrument_audusd.clone()).unwrap();
+    cache
+        .add_account(AccountAny::Cash(cash_account(
+            cash_account_state_million_usd,
+        )))
+        .unwrap();
+    cache.add_quote(quote_audusd).unwrap();
+
+    // 设置全局限流案：每 1000ms 最多允许 2 个指令 (汇总计入所有发单、撤单)
+    let risk_config = RiskEngineConfig {
+        max_trade_command: Some(RateLimit::new(2, 1000)),
+        ..Default::default()
+    };
+
+    let cache_rc = Rc::new(RefCell::new(cache));
+    let mut risk_engine = get_risk_engine(Some(cache_rc.clone()), Some(risk_config), None, false);
+
+    let order_template = OrderTestBuilder::new(OrderType::Market)
+        .instrument_id(instrument_audusd.id())
+        .side(OrderSide::Buy)
+        .quantity(Quantity::from("1000"))
+        .build();
+
+    // 1. 发送第 1 个 SubmitOrder 指令
+    let submit1 = SubmitOrder::from_order(&order_template, trader_id, None, None, UUID4::new(), 0.into());
+    cache_rc.borrow_mut().add_order(order_template.clone(), None, None, false).unwrap();
+    risk_engine.execute(TradingCommand::SubmitOrder(submit1));
+
+    // 2. 发送第 2 个 SubmitOrder 指令
+    let submit2 = SubmitOrder::from_order(&order_template, trader_id, None, None, UUID4::new(), 0.into());
+    risk_engine.execute(TradingCommand::SubmitOrder(submit2));
+
+    // 验证前两个指令已正常转发
+    let execute_msgs = get_execute_order_event_handler_messages(&execute_handler);
+    assert_eq!(execute_msgs.len(), 2, "First two commands should be passed");
+
+    // 3. 发送第 3 个指令（可以是撤单），预期被全局限流拦截
+    let cancel = CancelOrder::new(
+        trader_id,
+        None,
+        strategy_id_ema_cross,
+        instrument_audusd.id(),
+        ClientOrderId::from("O-TEST-CANCEL"),
+        None,
+        UUID4::new(),
+        0.into(),
+        None,
+    );
+    risk_engine.execute(TradingCommand::CancelOrder(cancel));
+
+    // 验证第 3 个指令被拒绝
+    let process_msgs = get_process_order_event_handler_messages(&process_handler);
+    assert_eq!(process_msgs.len(), 1, "The third command should be throttled");
+    assert_eq!(process_msgs[0].event_type(), OrderEventType::CancelRejected);
+    assert!(process_msgs[0].message().unwrap_or_default().contains("EXCEEDED MAX GLOBAL TRADE RATE LIMIT"));
+
+    // 验证执行引擎未收到第 3 个指令
+    let execute_msgs_final = get_execute_order_event_handler_messages(&execute_handler);
+    assert_eq!(execute_msgs_final.len(), 2, "Throttled command must NOT reach execution");
+}

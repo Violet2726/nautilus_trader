@@ -45,6 +45,7 @@ cdef class RiskEngine(Component):
     cdef readonly dict _max_notional_per_order
     cdef readonly Throttler _order_submit_throttler
     cdef readonly Throttler _order_modify_throttler
+    cdef readonly Throttler _global_trade_throttler
     cdef object _ashare_session_provider  # A 股：AShareSessionProvider 实例
     cdef readonly dict _t1_ledger         # A 股：T+1 可卖账本
 
@@ -111,6 +112,8 @@ cdef class RiskEngine(Component):
 
     cpdef void _execution_gateway(self, Instrument instrument, TradingCommand command)
     cpdef void _send_to_execution(self, TradingCommand command)
+    cpdef void _direct_send_to_execution(self, TradingCommand command)
+    cpdef void _deny_global_trade_command(self, TradingCommand command)
 
 # -- 事件处理器 -----------------------------------------------------------------------------------
 

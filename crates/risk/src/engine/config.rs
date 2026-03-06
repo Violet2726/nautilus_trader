@@ -38,6 +38,7 @@ pub struct RiskEngineConfig {
     pub t1_enabled: bool,
     pub max_order_submit_per_account: Option<RateLimit>,
     pub max_order_submit_per_symbol: Option<RateLimit>,
+    pub max_trade_command: Option<RateLimit>,
 }
 
 impl std::fmt::Debug for RiskEngineConfig {
@@ -54,6 +55,7 @@ impl std::fmt::Debug for RiskEngineConfig {
             .field("t1_enabled", &self.t1_enabled)
             .field("max_order_submit_per_account", &self.max_order_submit_per_account)
             .field("max_order_submit_per_symbol", &self.max_order_submit_per_symbol)
+            .field("max_trade_command", &self.max_trade_command)
             .finish()
     }
 }
@@ -73,6 +75,7 @@ impl Default for RiskEngineConfig {
             t1_enabled: false,
             max_order_submit_per_account: None,
             max_order_submit_per_symbol: None,
+            max_trade_command: None,
         }
     }
 }

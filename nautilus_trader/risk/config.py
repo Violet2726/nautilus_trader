@@ -41,6 +41,9 @@ class RiskEngineConfig(NautilusConfig, frozen=True):
         是否启用价格笼子（Price Cage）检查。
     price_cage_pct : float, 默认 0.02
         价格笼子的偏离比例（如 0.02 代表 2%）。
+    max_trade_command_rate : str | None, 默认 None
+        包含申报(Submit)、撤单(Cancel)、改单(Modify)等所有交易请求的全局发送频率。
+        格式例如 "500/00:00:01" 代表每秒最多处理500个操作指令。
 
     """
 
@@ -52,3 +55,5 @@ class RiskEngineConfig(NautilusConfig, frozen=True):
     t1_enabled: bool = False
     price_cage_enabled: bool = False
     price_cage_pct: float = 0.02
+    max_trade_command_rate: str | None = None
+
