@@ -22,6 +22,7 @@ crate-type = ["rlib", "cdylib"]
 
 [features]
 default = []
+ashare = []
 
 [package.metadata.docs.rs]
 all-features = true
@@ -33,6 +34,7 @@ nautilus-core = { workspace = true }
 nautilus-execution = { workspace = true }
 nautilus-model = { workspace = true, features = ["stubs"] }
 nautilus-portfolio = { workspace = true }
+nautilus-rules = { path = "../rules" }
 
 ahash = { workspace = true }
 log = { workspace = true }

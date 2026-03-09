@@ -19,9 +19,11 @@
 
 pub mod config;
 pub mod engine;
+pub mod provider;
 pub mod rules;
 
 // 重新导出
 pub use config::*;
 pub use engine::*;
+pub use provider::*;
 pub use rules::*;

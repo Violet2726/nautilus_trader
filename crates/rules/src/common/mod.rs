@@ -13,11 +13,8 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! Risk rule system for pre-trade validation.
-//!
-//! The rule system provides a flexible, extensible framework for implementing
-//! market-specific trading rules and risk controls. Rules can be chained together
-//! to create comprehensive validation pipelines.
+pub mod rule_chain;
+pub mod rule_trait;
 
-// Re-exports from `nautilus-rules` (kept for backwards compatibility)
-pub use nautilus_rules::common::{Rule, RuleChain, RuleCheckResult, RuleContext, RuleMetadata};
+pub use rule_chain::RuleChain;
+pub use rule_trait::{AsAny, Rule, RuleCheckResult, RuleContext, RuleMetadata};

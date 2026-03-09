@@ -23,6 +23,10 @@ pub mod price_limit;
 pub mod session;
 pub mod t1;
 pub mod throttler;
+pub mod instrument_status;
+pub mod price_tick;
+pub mod price_band;
+pub mod cancel_session;
 
 // 重新导出
 pub use lot_size::*;
@@ -31,3 +35,7 @@ pub use price_limit::*;
 pub use session::*;
 pub use t1::*;
 pub use throttler::*;
+pub use instrument_status::*;
+pub use price_tick::*;
+pub use price_band::*;
+pub use cancel_session::*;

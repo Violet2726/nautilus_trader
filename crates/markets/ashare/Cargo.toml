@@ -14,7 +14,7 @@ categories = ["finance", "algorithms"]
 [dependencies]
 nautilus-common = { workspace = true }
 nautilus-model = { workspace = true }
-nautilus-risk = { path = "../../risk" }
+nautilus-rules = { path = "../../rules" }
 nautilus-portfolio = { path = "../../portfolio" }
 nautilus-core = { workspace = true }
 chrono = { workspace = true }
@@ -37,6 +37,7 @@ optional = true
 
 [dev-dependencies]
 nautilus-testkit = { path = "../../testkit" }
+nautilus-risk = { path = "../../risk" }
 
 [package.metadata.docs.rs]
 all-features = true

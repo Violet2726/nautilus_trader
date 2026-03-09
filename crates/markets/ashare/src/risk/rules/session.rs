@@ -18,7 +18,7 @@
 //! 提供A股市场的交易时段验证功能。
 
 use crate::market::session::SessionProvider;
-use nautilus_risk::rule::common::{Rule, RuleCheckResult, RuleContext};
+use nautilus_rules::common::{Rule, RuleCheckResult, RuleContext};
 use nautilus_core::UnixNanos;
 use nautilus_model::identifiers::Venue;
 use std::sync::Arc;
@@ -85,7 +85,7 @@ impl Rule for SessionRule {
 mod tests {
     use super::*;
     use crate::market::session::TradingPhase;
-    use nautilus_risk::{Rule, RuleContext};
+    use nautilus_rules::{Rule, RuleContext};
     use nautilus_core::UnixNanos;
     use nautilus_model::enums::{OrderSide, OrderType};
     use nautilus_model::identifiers::{ClientOrderId, InstrumentId, StrategyId, TraderId};

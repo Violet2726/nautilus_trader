@@ -22,7 +22,7 @@ use nautilus_model::orders::Order;
 use nautilus_model::types::Price;
 use std::sync::Arc;
 
-use nautilus_risk::rule::common::{Rule, RuleCheckResult, RuleContext};
+use nautilus_rules::common::{Rule, RuleCheckResult, RuleContext};
 
 /// 获取市场数据的回调函数，用于计算涨跌停价格
 pub type MarketDataCallback = dyn Fn(&RuleContext) -> PriceLimitMarketData + Send + Sync;

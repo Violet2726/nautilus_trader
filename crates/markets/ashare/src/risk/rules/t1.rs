@@ -18,7 +18,7 @@
 //! 提供A股市场的T+1交收验证功能。
 
 use crate::portfolio::T1Ledger;
-use nautilus_risk::rule::common::{Rule, RuleCheckResult, RuleContext};
+use nautilus_rules::common::{Rule, RuleCheckResult, RuleContext};
 use nautilus_model::enums::OrderSide;
 use nautilus_model::orders::Order;
 use std::sync::Arc;

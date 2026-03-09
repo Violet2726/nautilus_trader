@@ -26,7 +26,7 @@
 use nautilus_common::throttler::RateLimit;
 use crate::market::session::SessionProvider;
 use crate::portfolio::T1Ledger;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 /// A股交易规则配置。
 #[derive(Clone)]
@@ -47,7 +47,7 @@ pub struct AShareRuleConfig {
     /// 启用 T+1 交收规则。
     pub t1_enabled: bool,
     /// T+1 账本，用于跟踪可卖出持仓。
-    pub t1_ledger: Option<Arc<T1Ledger>>,
+    pub t1_ledger: Option<Arc<RwLock<T1Ledger>>>,
 
     /// 启用手数验证。
     pub lot_size_enabled: bool,
@@ -112,7 +112,7 @@ impl AShareRuleConfig {
         self
     }
 
-    pub fn with_t1(mut self, enabled: bool, ledger: Option<Arc<T1Ledger>>) -> Self {
+    pub fn with_t1(mut self, enabled: bool, ledger: Option<Arc<RwLock<T1Ledger>>>) -> Self {
         self.t1_enabled = enabled;
         self.t1_ledger = ledger;
         self

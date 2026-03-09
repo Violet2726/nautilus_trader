@@ -17,7 +17,7 @@
 //!
 //! 提供A股市场的订单提交速率限制功能。
 
-use nautilus_risk::rule::common::{Rule, RuleCheckResult, RuleContext};
+use nautilus_rules::common::{Rule, RuleCheckResult, RuleContext};
 use nautilus_common::throttler::RateLimit;
 use nautilus_core::UnixNanos;
 use nautilus_model::identifiers::{AccountId, InstrumentId};

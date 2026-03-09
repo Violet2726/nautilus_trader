@@ -17,7 +17,7 @@
 //!
 //! 提供A股市场的价格笼子验证功能。
 
-use nautilus_risk::rule::common::{Rule, RuleCheckResult, RuleContext};
+use nautilus_rules::common::{Rule, RuleCheckResult, RuleContext};
 use nautilus_model::enums::{OrderSide, OrderType};
 use nautilus_model::types::Price;
 use nautilus_model::orders::Order;

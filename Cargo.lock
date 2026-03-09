@@ -3992,6 +3992,7 @@ dependencies = [
  "nautilus-model",
  "nautilus-portfolio",
  "nautilus-risk",
+ "nautilus-rules",
  "nautilus-testkit",
  "pyo3",
  "ustr",
@@ -4162,10 +4163,19 @@ dependencies = [
  "nautilus-execution",
  "nautilus-model",
  "nautilus-portfolio",
+ "nautilus-rules",
  "rstest",
  "rust_decimal",
  "rust_decimal_macros",
  "ustr",
+]
+
+[[package]]
+name = "nautilus-rules"
+version = "0.54.0"
+dependencies = [
+ "nautilus-common",
+ "nautilus-model",
 ]
 
 [[package]]

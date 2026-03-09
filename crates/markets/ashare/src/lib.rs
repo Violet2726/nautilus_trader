@@ -42,5 +42,6 @@ pub mod portfolio;
 
 // 重新导出常用类型
 pub use market::{AShareSessionProvider, TradingPhase, PriceLimits};
-pub use risk::{AShareRuleConfig, create_ashare_rule_chain, create_throttler_rule};
+pub use risk::{AShareRuleConfig, MarketDataProvider, create_ashare_rule_chain, create_ashare_rule_chain_with_provider, create_throttler_rule};
+pub use risk::CancelSessionRule;
 pub use portfolio::T1Ledger;

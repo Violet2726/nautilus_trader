@@ -30,9 +30,6 @@ pub struct RiskEngineConfig {
     pub max_notional_per_order: AHashMap<InstrumentId, Decimal>,
     pub debug: bool,
     pub max_trade_command: Option<RateLimit>,
-    // ---- 符号级和账户级限流配置 ----
-    pub max_order_submit_per_symbol: Option<RateLimit>,
-    pub max_order_submit_per_account: Option<RateLimit>,
 }
 
 impl std::fmt::Debug for RiskEngineConfig {
@@ -44,8 +41,6 @@ impl std::fmt::Debug for RiskEngineConfig {
             .field("max_notional_per_order", &self.max_notional_per_order)
             .field("debug", &self.debug)
             .field("max_trade_command", &self.max_trade_command)
-            .field("max_order_submit_per_symbol", &self.max_order_submit_per_symbol)
-            .field("max_order_submit_per_account", &self.max_order_submit_per_account)
             .finish()
     }
 }
@@ -60,8 +55,6 @@ impl Default for RiskEngineConfig {
             max_notional_per_order: AHashMap::new(),
             debug: false,
             max_trade_command: None,
-            max_order_submit_per_symbol: None,
-            max_order_submit_per_account: None,
         }
     }
 }
