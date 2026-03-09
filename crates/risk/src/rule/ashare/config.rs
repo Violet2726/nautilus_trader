@@ -31,6 +31,9 @@ pub struct AShareRuleConfig {
     /// 价格笼子百分比（例如 0.02 表示 2%）。
     pub price_cage_pct: f64,
 
+    /// 启用涨跌停价格限制验证。
+    pub price_limit_enabled: bool,
+
     /// 启用 T+1 交收规则。
     pub t1_enabled: bool,
     /// T+1 账本，用于跟踪可卖出持仓。
@@ -51,6 +54,7 @@ impl std::fmt::Debug for AShareRuleConfig {
             .field("session_enabled", &self.session_enabled)
             .field("price_cage_enabled", &self.price_cage_enabled)
             .field("price_cage_pct", &self.price_cage_pct)
+            .field("price_limit_enabled", &self.price_limit_enabled)
             .field("t1_enabled", &self.t1_enabled)
             .field("lot_size_enabled", &self.lot_size_enabled)
             .field("max_order_submit_per_account", &self.max_order_submit_per_account)
@@ -66,6 +70,7 @@ impl Default for AShareRuleConfig {
             session_provider: None,
             price_cage_enabled: false,
             price_cage_pct: 0.02,
+            price_limit_enabled: false,
             t1_enabled: false,
             t1_ledger: None,
             lot_size_enabled: false,
@@ -89,6 +94,11 @@ impl AShareRuleConfig {
     pub fn with_price_cage(mut self, enabled: bool, pct: f64) -> Self {
         self.price_cage_enabled = enabled;
         self.price_cage_pct = pct;
+        self
+    }
+
+    pub fn with_price_limit(mut self, enabled: bool) -> Self {
+        self.price_limit_enabled = enabled;
         self
     }
 
