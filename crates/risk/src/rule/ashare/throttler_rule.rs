@@ -20,9 +20,9 @@ use nautilus_model::identifiers::{AccountId, InstrumentId};
 use std::sync::RwLock;
 use std::time::{Duration, Instant};
 
-/// Rule for throttling order submissions.
+/// 用于限制订单提交的规则。
 ///
-/// This rule enforces rate limits on order submissions at both account and symbol levels.
+/// 此规则在账户和标的级别强制执行订单提交速率限制。
 #[derive(Debug)]
 pub struct ThrottlerRule {
     account_limits: RwLock<AHashMap<AccountId, (u64, Instant)>>,

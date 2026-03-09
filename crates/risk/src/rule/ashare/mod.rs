@@ -13,11 +13,14 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! A-share (Chinese stock market) specific trading rules.
+//! A 股（中国股市）特定的交易规则。
 //!
-//! This module provides rules for validating orders in the Chinese A-share market,
-//! including session restrictions, price cage limits, T+1 settlement rules,
-//! lot size requirements, and throttling controls.
+//! 本模块提供中国 A 股市场订单验证规则，包括：
+//! - 交易时段限制
+//! - 价格笼子限制
+//! - T+1 交收规则
+//! - 手数要求
+//! - 限流控制
 
 pub mod config;
 pub mod lot_size_rule;
@@ -26,24 +29,49 @@ pub mod session_rule;
 pub mod t1_rule;
 pub mod throttler_rule;
 
-use super::common::{Rule, RuleChain};
+use super::common::{Rule, RuleChain, RuleContext};
 use config::AShareRuleConfig;
 use lot_size_rule::LotSizeRule;
 use nautilus_portfolio::T1Ledger;
+use price_cage_rule::{MarketData, PriceCageRule};
 use session_rule::SessionRule;
 use std::sync::Arc;
 use t1_rule::T1Rule;
 use throttler_rule::ThrottlerRule;
 
-/// Creates a rule chain with all A-share rules based on the given configuration.
+/// 根据给定配置创建包含所有 A 股规则的策略链。
+///
+/// # 参数
+///
+/// * `config` - A 股规则配置，指定要启用的规则。
+/// * `market_data_callback` - 可选的回调函数，用于获取价格笼子验证所需的市场数据。
+///
+/// # 返回值
+///
+/// 包含所有已启用的 A 股规则的 `RuleChain`，顺序如下：
+/// 1. 交易时段规则（如果启用）
+/// 2. 价格笼子规则（如果启用且提供了市场数据回调）
+/// 3. 手数规则（如果启用）
+/// 4. T+1 规则（如果启用）
 pub fn create_ashare_rule_chain(
     config: &AShareRuleConfig,
+    market_data_callback: Option<Arc<dyn Fn(&RuleContext) -> MarketData + Send + Sync>>,
 ) -> RuleChain {
     let mut chain = RuleChain::new();
 
     if config.session_enabled {
         if let Some(session_provider) = &config.session_provider {
             chain.add_rule(Arc::new(SessionRule::new(session_provider.clone())));
+        }
+    }
+
+    if config.price_cage_enabled {
+        if let (Some(session_provider), Some(callback)) = (&config.session_provider, &market_data_callback) {
+            chain.add_rule(Arc::new(PriceCageRule::new(
+                session_provider.clone(),
+                config.price_cage_pct,
+                callback.clone(),
+            )));
         }
     }
 
@@ -61,16 +89,41 @@ pub fn create_ashare_rule_chain(
     chain
 }
 
-/// Creates a rule chain with all A-share rules based on the given configuration and shared ledger.
+/// 根据给定配置和共享账本创建包含所有 A 股规则的策略链。
+///
+/// # 参数
+///
+/// * `config` - A 股规则配置，指定要启用的规则。
+/// * `t1_ledger` - 可选的共享 T+1 账本，用于跟踪可卖出持仓。
+/// * `market_data_callback` - 可选的回调函数，用于获取价格笼子验证所需的市场数据。
+///
+/// # 返回值
+///
+/// 包含所有已启用的 A 股规则的 `RuleChain`，顺序如下：
+/// 1. 交易时段规则（如果启用）
+/// 2. 价格笼子规则（如果启用且提供了市场数据回调）
+/// 3. 手数规则（如果启用）
+/// 4. T+1 规则（如果启用且提供了账本）
 pub fn create_ashare_rule_chain_with_ledger(
     config: &AShareRuleConfig,
     t1_ledger: Option<Arc<std::sync::RwLock<T1Ledger>>>,
+    market_data_callback: Option<Arc<dyn Fn(&RuleContext) -> MarketData + Send + Sync>>,
 ) -> RuleChain {
     let mut chain = RuleChain::new();
 
     if config.session_enabled {
         if let Some(session_provider) = &config.session_provider {
             chain.add_rule(Arc::new(SessionRule::new(session_provider.clone())));
+        }
+    }
+
+    if config.price_cage_enabled {
+        if let (Some(session_provider), Some(callback)) = (&config.session_provider, &market_data_callback) {
+            chain.add_rule(Arc::new(PriceCageRule::new(
+                session_provider.clone(),
+                config.price_cage_pct,
+                callback.clone(),
+            )));
         }
     }
 
@@ -87,7 +140,18 @@ pub fn create_ashare_rule_chain_with_ledger(
     chain
 }
 
-/// Creates a throttler rule for A-share trading.
+/// 为 A 股交易创建限流规则。
+///
+/// # 参数
+///
+/// * `max_order_submit_per_account` - 可选的每个账户订单提交速率限制。
+/// * `max_order_submit_per_symbol` - 可选的每个标的订单提交速率限制。
+///
+/// # 返回值
+///
+/// 如果提供了至少一个速率限制，则返回 `Some(Arc<dyn Rule>)`，
+/// 否则返回 `None`。
+///
 pub fn create_throttler_rule(
     max_order_submit_per_account: Option<nautilus_common::throttler::RateLimit>,
     max_order_submit_per_symbol: Option<nautilus_common::throttler::RateLimit>,

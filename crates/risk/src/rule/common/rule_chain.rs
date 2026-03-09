@@ -16,11 +16,11 @@
 use super::rule_trait::{Rule, RuleCheckResult, RuleContext};
 use std::sync::Arc;
 
-/// A chain of rules that are applied in sequence.
+/// 规则链，按顺序应用多个规则。
 ///
-/// Rules are checked in the order they were added. If any rule fails,
-/// the chain stops and returns the failure reason. If all rules pass,
-/// the chain returns `RuleCheckResult::Pass`.
+/// 规则按添加的顺序进行检查。如果任何规则失败，
+/// 链将停止并返回失败原因。如果所有规则都通过，
+/// 链返回 `RuleCheckResult::Pass`。
 #[derive(Debug, Default)]
 pub struct RuleChain {
     rules: Vec<Arc<dyn Rule>>,
@@ -31,20 +31,20 @@ impl RuleChain {
         Self::default()
     }
 
-    /// Adds a rule to the chain.
+    /// 向链添加规则。
     pub fn add_rule(&mut self, rule: Arc<dyn Rule>) {
         self.rules.push(rule);
     }
 
-    /// Adds multiple rules to the chain.
+    /// 向链添加多个规则。
     pub fn add_rules(&mut self, rules: Vec<Arc<dyn Rule>>) {
         self.rules.extend(rules);
     }
 
-    /// Checks all rules in the chain against the given context.
+    /// 根据给定上下文检查链中的所有规则。
     ///
-    /// Rules are checked in order. If any rule fails, the chain stops
-    /// and returns the failure. If all rules pass, returns `Pass`.
+    /// 规则按顺序检查。如果任何规则失败，链将停止
+    /// 并返回失败。如果所有规则都通过，返回 `Pass`。
     pub fn check(&self, context: &RuleContext) -> RuleCheckResult {
         for rule in &self.rules {
             if !rule.is_enabled() {
@@ -59,17 +59,17 @@ impl RuleChain {
         RuleCheckResult::Pass
     }
 
-    /// Returns the number of rules in the chain.
+    /// 返回链中的规则数量。
     pub fn len(&self) -> usize {
         self.rules.len()
     }
 
-    /// Returns true if the chain has no rules.
+    /// 如果链中没有规则则返回 true。
     pub fn is_empty(&self) -> bool {
         self.rules.is_empty()
     }
 
-    /// Returns an iterator over the rules in the chain.
+    /// 返回链中规则的迭代器。
     pub fn iter(&self) -> impl Iterator<Item = &Arc<dyn Rule>> {
         self.rules.iter()
     }

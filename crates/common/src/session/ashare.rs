@@ -1,11 +1,113 @@
-use super::{SessionProvider, TradingPhase};
+// -------------------------------------------------------------------------------------------------
+//  Copyright (C) 2015-2026 Nautech Systems Pty Ltd. All rights reserved.
+//  https://nautechsystems.io
+//
+//  Licensed under the GNU Lesser General Public License Version 3.0 (the "License");
+//  You may not use this file except in compliance with the License.
+//  You may obtain a copy of the License at https://www.gnu.org/licenses/lgpl-3.0.en.html
+//
+//  Unless required by applicable law or agreed to in writing, software
+//  distributed under the License is distributed on an "AS IS" BASIS,
+//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//  See the License for the specific language governing permissions and
+//  limitations under the License.
+// -------------------------------------------------------------------------------------------------
+
+//! A 股市场交易时段提供者实现。
+//!
+//! 本模块提供 A 股特定的交易时段逻辑：
+//!
+//! - **TradingPhase**：A 股交易阶段枚举
+//! - **AShareSessionProvider**：A 股市场的 SessionProvider 实现
+
+
+use super::SessionProvider;
 use chrono::{Datelike, TimeZone, Utc, Weekday};
 use nautilus_core::UnixNanos;
 use nautilus_model::identifiers::Venue;
 use std::collections::HashSet;
 
-/// A 股交易时段查表
-/// 所有时间边界以 HH*3600 + MM*60 + SS 编码为秒级偏移
+/// A 股交易阶段枚举。
+///
+/// 表示中国 A 股市场交易日的不同阶段：
+///
+/// - **集合竞价阶段**（09:15-09:30）：具有不同限制的集合竞价
+/// - **连续竞价阶段**（09:30-11:30, 13:00-14:57）：正常交易
+/// - **收盘集合竞价**（14:57-15:00）：收盘集合竞价
+/// - **闭市**：非交易时段（周末、节假日、非交易时间）
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(
+    feature = "python",
+    pyo3::pyclass(
+        frozen,
+        eq,
+        eq_int,
+        from_py_object,
+        module = "nautilus_trader.core.nautilus_pyo3.common",
+        rename_all = "SCREAMING_SNAKE_CASE",
+    )
+)]
+pub enum TradingPhase {
+    /// 09:15-09:20 开盘集合竞价（可撤）
+    PreAuctionOpen = 1,
+    /// 09:20-09:25 开盘集合竞价（不可撤）
+    PreAuctionLocked = 2,
+    /// 09:25-09:30 静默期
+    PreAuctionSilent = 3,
+    /// 09:30-11:30 上午连续竞价
+    ContinuousAm = 4,
+    /// 11:30-13:00 午间休市
+    MiddayBreak = 5,
+    /// 13:00-14:57 下午连续竞价
+    ContinuousPm = 6,
+    /// 14:57-15:00 收盘集合竞价
+    ClosingAuction = 7,
+    /// 非交易时段
+    Closed = 8,
+}
+
+impl TradingPhase {
+    /// 该阶段是否接受新订单。
+    #[must_use]
+    pub const fn can_accept_order(&self) -> bool {
+        matches!(
+            self,
+            Self::PreAuctionOpen
+                | Self::PreAuctionLocked
+                | Self::ContinuousAm
+                | Self::ContinuousPm
+                | Self::ClosingAuction
+        )
+    }
+
+    /// 该阶段是否接受撤单。
+    #[must_use]
+    pub const fn can_cancel_order(&self) -> bool {
+        matches!(
+            self,
+            Self::PreAuctionOpen | Self::ContinuousAm | Self::ContinuousPm
+        )
+    }
+
+    /// 该阶段是否为连续竞价。
+    #[must_use]
+    pub const fn is_continuous(&self) -> bool {
+        matches!(self, Self::ContinuousAm | Self::ContinuousPm)
+    }
+
+    /// 该阶段是否为集合竞价。
+    #[must_use]
+    pub const fn is_auction(&self) -> bool {
+        matches!(
+            self,
+            Self::PreAuctionOpen | Self::PreAuctionLocked | Self::ClosingAuction
+        )
+    }
+}
+
+/// A 股交易时段表。
+/// 所有时间边界编码为秒级偏移：HH*3600 + MM*60 + SS
 const PHASES: &[(u32, u32, TradingPhase)] = &[
     (9 * 3600 + 15 * 60, 9 * 3600 + 20 * 60, TradingPhase::PreAuctionOpen),
     (9 * 3600 + 20 * 60, 9 * 3600 + 25 * 60, TradingPhase::PreAuctionLocked),
@@ -96,10 +198,6 @@ mod tests {
     use ustr::ustr;
 
     fn get_ts(hour: u32, minute: u32) -> UnixNanos {
-        // 基础时间戳格式：我们只需要确保“当天的秒数”具有正确的偏移量。
-        // let seconds_of_day = ((secs + 8 * 3600) % 86400) as u32;
-        // 因此 secs = hour_utc * 3600 + minute * 60
-        // hour_utc = hour - 8 (UTC)
         let hour_utc = if hour >= 8 { hour - 8 } else { hour + 24 - 8 };
         let secs = hour_utc * 3600 + minute * 60;
         UnixNanos::from(secs as u64 * 1_000_000_000)

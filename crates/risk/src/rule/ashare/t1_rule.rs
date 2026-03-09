@@ -19,10 +19,9 @@ use nautilus_model::orders::Order;
 use nautilus_portfolio::t1_ledger::T1Ledger;
 use std::sync::Arc;
 
-/// Rule for validating T+1 settlement constraints.
+/// 用于验证 T+1 交收限制的规则。
 ///
-/// This rule ensures that sell orders do not exceed the available sellable
-/// quantity based on T+1 settlement rules.
+/// 此规则确保卖出订单不超过 T+1 交收规则下的可卖出数量。
 #[derive(Debug)]
 pub struct T1Rule {
     t1_ledger: Arc<std::sync::RwLock<T1Ledger>>,

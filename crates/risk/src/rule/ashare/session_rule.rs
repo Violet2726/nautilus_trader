@@ -19,10 +19,10 @@ use nautilus_core::UnixNanos;
 use nautilus_model::identifiers::Venue;
 use std::sync::Arc;
 
-/// Rule for validating trading session phases.
+/// 用于验证交易时段阶段的规则。
 ///
-/// This rule ensures that orders are only submitted during allowed trading phases
-/// based on the session provider's phase information.
+/// 此规则确保仅在允许的交易时段内提交订单，
+/// 基于时段提供者提供的阶段信息。
 pub struct SessionRule {
     session_provider: Arc<dyn SessionProvider>,
     enabled: bool,
@@ -82,7 +82,7 @@ impl Rule for SessionRule {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nautilus_common::session::TradingPhase;
+    use nautilus_common::session::ashare::TradingPhase;
     use nautilus_core::UnixNanos;
     use nautilus_model::enums::{OrderSide, OrderType};
     use nautilus_model::identifiers::{ClientOrderId, InstrumentId, StrategyId, TraderId};

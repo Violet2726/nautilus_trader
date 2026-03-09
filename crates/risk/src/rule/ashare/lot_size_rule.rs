@@ -18,13 +18,13 @@ use nautilus_model::enums::OrderSide;
 use nautilus_model::orders::Order;
 use nautilus_portfolio::t1_ledger::T1Ledger;
 
-/// Rule for validating A-share lot size requirements.
+/// 用于验证 A 股手数要求的规则。
 ///
-/// This rule ensures that orders comply with A-share lot size rules:
-/// - Main board: 100 shares minimum, multiples of 100
-/// - STAR market (688): 200 shares minimum, 1 share increments
-/// - ChiNext (30): 100 shares minimum, 1 share increments
-/// - Odd lot sales: Must sell entire sellable balance
+/// 此规则确保订单符合 A 股手数规则：
+/// - 主板：100 股起，100 的整数倍
+/// - 科创板（688）：200 股起，1 股递增
+/// - 创业板（30）：100 股起，1 股递增
+/// - 零股卖出：必须卖出全部可卖余额
 #[derive(Debug)]
 pub struct LotSizeRule {
     t1_ledger: Option<T1Ledger>,

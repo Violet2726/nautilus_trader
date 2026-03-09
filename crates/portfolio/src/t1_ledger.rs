@@ -4,7 +4,10 @@ use nautilus_model::{
     identifiers::{AccountId, InstrumentId},
 };
 
-/// 单个标的的 T+1 持仓条目
+/// 单个标的 T+1 持仓条目。
+///
+/// 跟踪标的的总数量和今日买入数量。
+/// 可卖数量计算为 `total_qty - today_buy_qty`。
 #[derive(Debug, Clone)]
 pub struct T1Entry {
     pub total_qty: f64,
@@ -98,14 +101,13 @@ impl T1Ledger {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nautilus_model::identifiers::{AccountId, InstrumentId, Venue};
-    use ustr::ustr;
+    use nautilus_model::identifiers::{AccountId, InstrumentId};
 
     #[test]
     fn test_t1_ledger() {
         let mut ledger = T1Ledger::new();
-        let account_id = AccountId::new(ustr("ACCOUNT_1"));
-        let instrument_id = InstrumentId::new(ustr("600000"), Venue::new(ustr("XSHG")));
+        let account_id = AccountId::from("ACCOUNT-1");
+        let instrument_id = InstrumentId::from("600000.XSHG");
 
         // 加载 1000 股
         ledger.load_position(account_id, instrument_id, 1000.0, 0.0);

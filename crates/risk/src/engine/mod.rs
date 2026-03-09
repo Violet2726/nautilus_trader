@@ -128,7 +128,7 @@ impl RiskEngine {
             } else {
                 None
             };
-            let chain = crate::rule::ashare::create_ashare_rule_chain_with_ledger(ashare_config, ledger.clone());
+            let chain = crate::rule::ashare::create_ashare_rule_chain_with_ledger(ashare_config, ledger.clone(), None);
             let session = ashare_config.session_provider.clone();
             (Some(chain), ledger, session)
         } else {

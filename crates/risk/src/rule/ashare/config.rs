@@ -18,30 +18,30 @@ use nautilus_common::session::SessionProvider;
 use nautilus_portfolio::t1_ledger::T1Ledger;
 use std::sync::Arc;
 
-/// Configuration for A-share trading rules.
+/// A 股交易规则配置。
 #[derive(Clone)]
 pub struct AShareRuleConfig {
-    /// Enable session-based trading phase checks.
+    /// 启用基于交易时段的阶段检查。
     pub session_enabled: bool,
-    /// Session provider for trading phase information.
+    /// 交易阶段信息的时段提供者。
     pub session_provider: Option<Arc<dyn SessionProvider>>,
 
-    /// Enable price cage validation.
+    /// 启用价格笼子验证。
     pub price_cage_enabled: bool,
-    /// Price cage percentage (e.g., 0.02 for 2%).
+    /// 价格笼子百分比（例如 0.02 表示 2%）。
     pub price_cage_pct: f64,
 
-    /// Enable T+1 settlement rule.
+    /// 启用 T+1 交收规则。
     pub t1_enabled: bool,
-    /// T+1 ledger for tracking sellable positions.
+    /// T+1 账本，用于跟踪可卖出持仓。
     pub t1_ledger: Option<Arc<T1Ledger>>,
 
-    /// Enable lot size validation.
+    /// 启用手数验证。
     pub lot_size_enabled: bool,
 
-    /// Maximum order submissions per account.
+    /// 每个账户的最大订单提交次数限制。
     pub max_order_submit_per_account: Option<RateLimit>,
-    /// Maximum order submissions per symbol.
+    /// 每个标的的最大订单提交次数限制。
     pub max_order_submit_per_symbol: Option<RateLimit>,
 }
 

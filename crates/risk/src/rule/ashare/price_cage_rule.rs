@@ -14,19 +14,18 @@
 // -------------------------------------------------------------------------------------------------
 
 use super::super::common::{Rule, RuleCheckResult, RuleContext};
-use crate::price_cage;
 use nautilus_common::session::SessionProvider;
 use nautilus_core::UnixNanos;
 use nautilus_model::enums::OrderSide;
 use nautilus_model::identifiers::Venue;
 use nautilus_model::orders::Order;
-use nautilus_model::types::Price;
+use nautilus_model::types::{Price, price::PriceRaw};
 use std::sync::Arc;
 
-/// Callback function to get market data for price cage calculation.
+/// 获取市场数据的回调函数，用于计算价格笼子。
 pub type MarketDataCallback = dyn Fn(&RuleContext) -> MarketData + Send + Sync;
 
-/// Market data needed for price cage calculation.
+/// 计算价格笼子所需的市场数据。
 #[derive(Debug, Clone, Default)]
 pub struct MarketData {
     pub best_bid: Option<Price>,
@@ -36,9 +35,60 @@ pub struct MarketData {
     pub price_increment: Price,
 }
 
-/// Rule for validating price cage limits.
+/// 计算价格笼子边界。
 ///
-/// This rule ensures that order prices stay within price cage bounds during continuous trading.
+/// # 参数
+///
+/// * `side` - 订单方向（买入或卖出）
+/// * `best_bid` - 当前最优买价
+/// * `best_ask` - 当前最优卖价
+/// * `last_trade` - 最后成交价
+/// * `prev_close` - 前一收盘价
+/// * `tick` - 最小价格变动单位
+/// * `pct` - 价格笼子百分比（例如 0.02 表示 2%）
+///
+/// # 返回值
+///
+/// 返回计算出的价格笼子边界，如果无效则返回 None。
+fn compute_price_cage(
+    side: OrderSide,
+    best_bid: Option<Price>,
+    best_ask: Option<Price>,
+    last_trade: Option<Price>,
+    prev_close: Price,
+    tick: Price,
+    pct: f64,
+) -> Option<Price> {
+    match side {
+        OrderSide::Buy => {
+            let benchmark = best_ask.or(best_bid).or(last_trade).unwrap_or(prev_close);
+
+            let cage_raw = ((benchmark.as_f64() * (1.0 + pct)) * 1e9) as PriceRaw;
+            let tick_raw = tick.raw;
+            if tick_raw == 0 {
+                return Some(benchmark);
+            }
+            let cage_aligned = (cage_raw / tick_raw) * tick_raw; // 向下取整
+            Some(Price::from_raw(cage_aligned, benchmark.precision))
+        }
+        OrderSide::Sell => {
+            let benchmark = best_bid.or(best_ask).or(last_trade).unwrap_or(prev_close);
+
+            let cage_raw = ((benchmark.as_f64() * (1.0 - pct)) * 1e9) as PriceRaw;
+            let tick_raw = tick.raw;
+            if tick_raw == 0 {
+                return Some(benchmark);
+            }
+            let cage_aligned = ((cage_raw + tick_raw - 1) / tick_raw) * tick_raw; // 向上取整
+            Some(Price::from_raw(cage_aligned, benchmark.precision))
+        }
+        _ => None,
+    }
+}
+
+/// 用于验证价格笼子限制的规则。
+///
+/// 此规则确保在连续竞价阶段订单价格保持在价格笼子边界内。
 pub struct PriceCageRule {
     session_provider: Arc<dyn SessionProvider>,
     market_data_callback: Arc<MarketDataCallback>,
@@ -105,7 +155,7 @@ impl Rule for PriceCageRule {
 
         let market_data = (self.market_data_callback)(context);
 
-        let cage_bound = price_cage::compute_price_cage(
+        let cage_bound = compute_price_cage(
             context.order.order_side(),
             market_data.best_bid,
             market_data.best_ask,
@@ -141,7 +191,7 @@ impl Rule for PriceCageRule {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nautilus_common::session::TradingPhase;
+    use nautilus_common::session::ashare::TradingPhase;
     use nautilus_model::enums::{OrderSide, OrderType};
     use nautilus_model::identifiers::{ClientOrderId, InstrumentId, StrategyId, TraderId};
     use nautilus_model::orders::OrderTestBuilder;
@@ -174,6 +224,41 @@ mod tests {
             None,
             0,
         )
+    }
+
+    #[test]
+    fn test_compute_price_cage() {
+        let best_bid = Some(Price::new(10.0, 2));
+        let best_ask = Some(Price::new(10.1, 2));
+        let last_trade = Some(Price::new(10.05, 2));
+        let prev_close = Price::new(9.9, 2);
+        let tick = Price::new(0.01, 2);
+
+        // 买入侧：基准价 = 卖一价 (10.1)
+        // 价格笼子上限 = 10.1 * 1.02 = 10.302 -> 10.30
+        let buy_bound = compute_price_cage(
+            OrderSide::Buy,
+            best_bid,
+            best_ask,
+            last_trade,
+            prev_close,
+            tick,
+            0.02,
+        );
+        assert_eq!(buy_bound.unwrap().as_f64(), 10.30);
+
+        // 卖出侧：基准价 = 买一价 (10.0)
+        // 价格笼子下限 = 10.0 * 0.98 = 9.8 -> 9.80
+        let sell_bound = compute_price_cage(
+            OrderSide::Sell,
+            best_bid,
+            best_ask,
+            last_trade,
+            prev_close,
+            tick,
+            0.02,
+        );
+        assert_eq!(sell_bound.unwrap().as_f64(), 9.80);
     }
 
     #[test]

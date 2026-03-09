@@ -13,7 +13,7 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! Common rule system components.
+//! 通用规则系统组件。
 
 pub mod rule_chain;
 pub mod rule_trait;

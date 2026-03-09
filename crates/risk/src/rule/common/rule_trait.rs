@@ -20,12 +20,12 @@ use nautilus_model::{
 use std::any::Any;
 use std::fmt::Debug;
 
-/// Result of a rule check.
+/// 规则检查的结果。
 #[derive(Debug, Clone, PartialEq)]
 pub enum RuleCheckResult {
-    /// The rule check passed.
+    /// 规则检查通过。
     Pass,
-    /// The rule check failed with a reason.
+    /// 规则检查失败，附带原因。
     Fail { reason: String },
 }
 
@@ -48,33 +48,33 @@ impl std::fmt::Display for RuleCheckResult {
     }
 }
 
-/// Context provided to rules during validation.
+/// 验证期间提供给规则的上下文。
 #[derive(Debug, Clone)]
 pub struct RuleContext {
-    /// The order being validated.
+    /// 正在验证的订单。
     pub order: OrderAny,
-    /// The instrument ID.
+    /// 标的 ID。
     pub instrument_id: InstrumentId,
-    /// The account ID (if available).
+    /// 账户 ID（如果可用）。
     pub account_id: Option<AccountId>,
-    /// Current timestamp in nanoseconds.
+    /// 当前时间戳（纳秒）。
     pub timestamp_ns: u64,
-    /// Additional metadata for rule-specific use.
+    /// 用于规则特定验证的附加元数据。
     pub metadata: RuleMetadata,
 }
 
-/// Additional metadata for rule-specific validation.
+/// 用于规则特定验证的附加元数据。
 #[derive(Debug, Clone, Default)]
 pub struct RuleMetadata {
-    /// Venue identifier.
+    /// 交易场所标识符。
     pub venue: Option<String>,
-    /// Symbol identifier.
+    /// 标的标识符。
     pub symbol: Option<String>,
-    /// Order side.
+    /// 订单方向。
     pub side: Option<String>,
-    /// Order quantity.
+    /// 订单数量。
     pub quantity: Option<f64>,
-    /// Order price.
+    /// 订单价格。
     pub price: Option<f64>,
 }
 
@@ -107,46 +107,46 @@ impl RuleContext {
     }
 }
 
-/// Trait for risk rules that validate trading operations.
+/// 用于验证交易操作的风险规则 trait。
 ///
-/// Rules are applied in sequence to validate orders before submission.
-/// Each rule can check specific aspects of the order and market conditions.
+/// 规则按顺序应用，在订单提交前进行验证。
+/// 每个规则可以检查订单和市场条件的特定方面。
 pub trait Rule: Debug + Send + Sync {
-    /// Returns the name of this rule.
+    /// 返回此规则的名称。
     fn name(&self) -> &str;
 
-    /// Checks if the rule is enabled.
+    /// 检查此规则是否已启用。
     fn is_enabled(&self) -> bool {
         true
     }
 
-    /// Validates the order against this rule.
+    /// 针对此规则验证订单。
     ///
-    /// # Arguments
+    /// # 参数
     ///
-    /// * `context` - The validation context containing order and market information.
+    /// * `context` - 包含订单和市场信息的验证上下文。
     ///
-    /// # Returns
+    /// # 返回值
     ///
-    /// Returns `RuleCheckResult::Pass` if the rule check succeeds,
-    /// or `RuleCheckResult::Fail` with a reason if it fails.
+    /// 如果规则检查成功则返回 `RuleCheckResult::Pass`，
+    /// 如果失败则返回 `RuleCheckResult::Fail` 并附带原因。
     fn check(&self, context: &RuleContext) -> RuleCheckResult;
 
-    /// Optional callback when an order is accepted.
+    /// 订单被接受时的可选回调。
     ///
-    /// This can be used to update internal state after an order passes all checks.
+    /// 这可用于在订单通过所有检查后更新内部状态。
     fn on_order_accepted(&mut self, _context: &RuleContext) {}
 
-    /// Optional callback when an order is rejected.
+    /// 订单被拒绝时的可选回调。
     ///
-    /// This can be used to update internal state after an order fails validation.
+    /// 这可用于在订单验证失败后更新内部状态。
     fn on_order_rejected(&mut self, _context: &RuleContext, _reason: &str) {}
 
-    /// Resets the rule to its initial state.
+    /// 将规则重置为初始状态。
     fn reset(&mut self) {}
 }
 
-/// Helper trait for downcasting rules.
+/// 用于向下转换规则的辅助 trait。
 pub trait AsAny: Any {
     fn as_any(&self) -> &dyn Any;
 }
