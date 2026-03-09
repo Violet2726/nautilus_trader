@@ -19,7 +19,7 @@ impl T1Entry {
 }
 
 /// T+1 持仓状态机
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct T1Ledger {
     entries: AHashMap<(AccountId, InstrumentId), T1Entry>,
 }

@@ -53,6 +53,8 @@ use rust_decimal::{Decimal, prelude::ToPrimitive};
 use std::sync::Arc;
 use ustr::Ustr;
 
+use crate::rule::{RuleContext, RuleChain};
+
 type SubmitOrderFn = Box<dyn Fn(SubmitOrder)>;
 type ModifyOrderFn = Box<dyn Fn(ModifyOrder)>;
 
@@ -73,12 +75,15 @@ pub struct RiskEngine {
     trading_state: TradingState,
     config: RiskEngineConfig,
 
-    // ---- A 股扩展 ----
-    pub session_provider: Option<Arc<dyn nautilus_common::session::SessionProvider>>,
-    pub t1_ledger: Option<T1Ledger>,
-    pub account_throttlers: AHashMap<AccountId, Throttler<SubmitOrder, SubmitOrderFn>>,
-    pub symbol_throttlers: AHashMap<InstrumentId, Throttler<SubmitOrder, SubmitOrderFn>>,
+    // ---- 规则链 ----
+    ashare_rule_chain: Option<RuleChain>,
+    session_provider: Option<Arc<dyn nautilus_common::session::SessionProvider>>,
+    pub t1_ledger: Option<Arc<std::sync::RwLock<T1Ledger>>>,
     pub global_trade_throttler: Option<Rc<RefCell<Throttler<TradingCommand, Box<dyn Fn(TradingCommand)>>>>>,
+
+    // ---- 符号级和账户级限流器 ----
+    symbol_throttlers: AHashMap<InstrumentId, Throttler<SubmitOrder, SubmitOrderFn>>,
+    account_throttlers: AHashMap<AccountId, Throttler<SubmitOrder, SubmitOrderFn>>,
 }
 
 impl Debug for RiskEngine {
@@ -117,11 +122,17 @@ impl RiskEngine {
             global_trade_throttler.clone(),
         );
 
-        let session_provider = config.session_provider.clone();
-        let t1_ledger = if config.t1_enabled {
-            Some(T1Ledger::new())
+        let (ashare_rule_chain, t1_ledger, session_provider) = if let Some(ashare_config) = &config.ashare_rules {
+            let ledger = if ashare_config.t1_enabled {
+                Some(ashare_config.t1_ledger.as_ref().map(|l| Arc::new(std::sync::RwLock::new((**l).clone()))).unwrap_or_else(|| Arc::new(std::sync::RwLock::new(T1Ledger::new()))))
+            } else {
+                None
+            };
+            let chain = crate::rule::ashare::create_ashare_rule_chain_with_ledger(ashare_config, ledger.clone());
+            let session = ashare_config.session_provider.clone();
+            (Some(chain), ledger, session)
         } else {
-            None
+            (None, None, None)
         };
 
         Self {
@@ -133,11 +144,12 @@ impl RiskEngine {
             max_notional_per_order: AHashMap::new(),
             trading_state: TradingState::Active,
             config,
+            ashare_rule_chain,
             session_provider,
             t1_ledger,
-            account_throttlers: AHashMap::new(),
-            symbol_throttlers: AHashMap::new(),
             global_trade_throttler,
+            symbol_throttlers: AHashMap::new(),
+            account_throttlers: AHashMap::new(),
         }
     }
 
@@ -474,7 +486,7 @@ impl RiskEngine {
         log::info!("Set MAX_NOTIONAL_PER_ORDER: {instrument_id} {new_value_str}");
     }
 
-    /// A 股扩展：加载 T+1 账本初始持仓，供早盘启动或盘中恢复时调用。
+    /// 加载 T+1 账本初始持仓，供早盘启动或盘中恢复时调用。
     pub fn t1_load_position(
         &mut self,
         account_id: AccountId,
@@ -482,8 +494,8 @@ impl RiskEngine {
         total_qty: f64,
         today_buy_qty: f64,
     ) {
-        if let Some(ref mut ledger) = self.t1_ledger {
-            ledger.load_position(account_id, instrument_id, total_qty, today_buy_qty);
+        if let Some(ledger) = &self.t1_ledger {
+            ledger.write().expect("T1 ledger lock poisoned").load_position(account_id, instrument_id, total_qty, today_buy_qty);
             log::info!(
                 "T1_LEDGER Loaded: account={}, symbol={}, total={}, today_buy={}",
                 account_id,
@@ -496,10 +508,10 @@ impl RiskEngine {
         }
     }
 
-    /// A 股扩展：执行 T+1 账本日切结算，将今日买入仓位解冻为可卖仓位（通常在盘后发信号调用）。
+    /// 执行 T+1 账本日切结算，将今日买入仓位解冻为可卖仓位（通常在盘后发信号调用）。
     pub fn t1_on_settlement(&mut self) {
-        if let Some(ref mut ledger) = self.t1_ledger {
-            ledger.on_settlement();
+        if let Some(ledger) = &self.t1_ledger {
+            ledger.write().expect("T1 ledger lock poisoned").on_settlement();
             log::info!("T1_LEDGER settled for all accounts to unlock sellable balance.");
         } else {
             log::warn!("t1_on_settlement called but T1 ledger is not enabled.");
@@ -592,14 +604,14 @@ impl RiskEngine {
         }
     }
 
-    /// A 股扩展：撤单命令处理（含交易时段检查）。
+    /// 撤单命令处理（含交易时段检查）。
     fn handle_cancel_order(&mut self, command: CancelOrder) {
         if self.config.bypass {
             self.send_to_execution(TradingCommand::CancelOrder(command));
             return;
         }
 
-        // ---- A 股：交易时段检查 ----
+        // ---- 交易时段检查 ----
         if let Some(ref session) = self.session_provider {
             let phase = session.phase_at(
                 &command.instrument_id.venue,
@@ -637,7 +649,7 @@ impl RiskEngine {
         self.send_to_execution(TradingCommand::CancelOrder(command));
     }
 
-    /// A 股扩展：全部撤单命令处理（含交易时段检查）。
+    /// 全部撤单命令处理（含交易时段检查）。
     /// `CancelAllOrders` 无对应的单笔 `OrderCancelRejected`，仅打日志拦截。
     fn handle_cancel_all_orders(&mut self, command: CancelAllOrders) {
         if self.config.bypass {
@@ -645,7 +657,7 @@ impl RiskEngine {
             return;
         }
 
-        // ---- A 股：交易时段检查 ----
+        // ---- 交易时段检查 ----
         if let Some(ref session) = self.session_provider {
             let phase = session.phase_at(
                 &command.instrument_id.venue,
@@ -753,18 +765,31 @@ impl RiskEngine {
             return; // Denied
         };
 
-        // ---- 新增：交易时段检查 ----
-        if let Some(ref session) = self.session_provider {
-            let phase = session.phase_at(
-                &command.instrument_id.venue,
-                self.clock.borrow().timestamp_ns(),
+        // ---- 使用规则链进行 A 股相关检查 ----
+        if let Some(ref rule_chain) = self.ashare_rule_chain {
+            let account_id = order.account_id().or_else(|| {
+                self.cache
+                    .borrow()
+                    .account_for_venue(&order.instrument_id().venue)
+                    .map(|a| a.id())
+            });
+
+            let context = RuleContext::new(
+                order.clone(),
+                command.instrument_id,
+                account_id,
+                self.clock.borrow().timestamp_ns().as_u64(),
             );
-            if !phase.can_accept_order() {
-                self.deny_command(
-                    TradingCommand::SubmitOrder(command),
-                    &format!("OUT_OF_SESSION: phase={phase:?}"),
-                );
-                return;
+
+            let rule_result = rule_chain.check(&context);
+            if !rule_result.is_pass() {
+                if let crate::rule::RuleCheckResult::Fail { reason } = rule_result {
+                    self.deny_command(
+                        TradingCommand::SubmitOrder(command),
+                        &reason,
+                    );
+                    return;
+                }
             }
         }
 
@@ -772,7 +797,7 @@ impl RiskEngine {
             return; // Denied
         }
 
-        // ---- 新增：停牌/临停检查 ----
+        // ---- 停牌/临停检查 ----
         {
             let cache = self.cache.borrow();
             if let Some(status) = cache.instrument_status(&command.instrument_id) {
@@ -1018,54 +1043,6 @@ impl RiskEngine {
                 self.deny_order(order.clone(), &risk_msg);
                 return false; // Denied
             }
-
-            // ---- 新增：价格笼子检查 ----
-            if self.config.price_cage_enabled {
-                if let Some(ref session) = self.session_provider {
-                    let phase = session.phase_at(
-                        &order.instrument_id().venue,
-                        self.clock.borrow().timestamp_ns(),
-                    );
-                    // 仅在连续竞价阶段启用
-                    if phase.is_continuous() {
-                        let cache = self.cache.borrow();
-                        let instrument_id = order.instrument_id();
-                        let best_bid = cache.quote(&instrument_id).map(|q| q.bid_price);
-                        let best_ask = cache.quote(&instrument_id).map(|q| q.ask_price);
-                        let last_trade = cache.trade(&instrument_id).map(|t| t.price);
-                        let prev_close = instrument
-                            .min_price()
-                            .unwrap_or(Price::new(0.0, instrument.price_precision()));
-
-                        let cage_bound = crate::price_cage::compute_price_cage(
-                            order.order_side(),
-                            best_bid,
-                            best_ask,
-                            last_trade,
-                            prev_close,
-                            instrument.price_increment(),
-                            self.config.price_cage_pct,
-                        );
-
-                        if let Some(bound) = cage_bound {
-                            let violated = match order.order_side() {
-                                OrderSide::Buy => order_price > bound,
-                                OrderSide::Sell => order_price < bound,
-                                _ => false,
-                            };
-                            if violated {
-                                self.deny_order(
-                                    order.clone(),
-                                    &format!(
-                                        "PRICE_CAGE_VIOLATION: price={order_price}, cage={bound}"
-                                    ),
-                                );
-                                return false;
-                            }
-                        }
-                    }
-                }
-            }
         }
 
         if order.trigger_price().is_some() {
@@ -1088,123 +1065,6 @@ impl RiskEngine {
         if let Some(risk_msg) = risk_msg {
             self.deny_order(order.clone(), &risk_msg);
             return false; // Denied
-        }
-
-        // ---- 新增：lot_size 整数倍及 T+1 检查 ----
-        if self.config.t1_enabled {
-            let symbol = instrument.symbol();
-            let symbol_str = symbol.as_str();
-
-            // A 股板块判定
-            let is_star_market = symbol_str.starts_with("688");
-            let is_chinext = symbol_str.starts_with("30");
-            let is_main_board = symbol_str.starts_with("60")
-                || symbol_str.starts_with("00")
-                || symbol_str.starts_with("00");
-
-            let lot_size = instrument.lot_size().unwrap_or(Quantity::from("100"));
-            let qty_raw = order.quantity().raw;
-            let lot_raw = lot_size.raw;
-
-            match order.order_side() {
-                OrderSide::Buy => {
-                    if is_star_market {
-                        // 科创板：200 股起，1 股递增
-                        if qty_raw < 200 {
-                            self.deny_order(
-                                order.clone(),
-                                &format!(
-                                    "STAR_MARKET_BUY_VIOLATION: buy_qty={qty_raw} less than min_qty=200"
-                                ),
-                            );
-                            return false;
-                        }
-                        // 1 股递增由 size_increment/precision 保证（对于 A 股 size_precision=0 即为 1 股）
-                    } else if is_chinext {
-                        // 创业板：100 股起，1 股递增
-                        if qty_raw < 100 {
-                            self.deny_order(
-                                order.clone(),
-                                &format!(
-                                    "CHINEXT_BUY_VIOLATION: buy_qty={qty_raw} less than min_qty=100"
-                                ),
-                            );
-                            return false;
-                        }
-                    } else if is_main_board {
-                        // 主板：100 股整数倍
-                        if qty_raw < 100 || qty_raw % 100 != 0 {
-                            self.deny_order(
-                                order.clone(),
-                                &format!(
-                                    "MAIN_BOARD_BUY_VIOLATION: buy_qty={qty_raw} not multiple of 100"
-                                ),
-                            );
-                            return false;
-                        }
-                    } else {
-                        // 其他（默认 100 股整数倍）
-                        if lot_raw > 0 && qty_raw % lot_raw != 0 {
-                            self.deny_order(
-                                order.clone(),
-                                &format!(
-                                    "LOT_SIZE_VIOLATION: buy_qty={} not multiple of lot_size={}",
-                                    order.quantity(),
-                                    lot_size
-                                ),
-                            );
-                            return false;
-                        }
-                    }
-                }
-                OrderSide::Sell => {
-                    // T+1 可卖检查
-                    if let Some(ref ledger) = self.t1_ledger {
-                        let account_id_opt = order.account_id().or_else(|| {
-                            self.cache
-                                .borrow()
-                                .account_for_venue(&order.instrument_id().venue)
-                                .map(|a| a.id())
-                        });
-                        if let Some(account_id) = account_id_opt {
-                            let sellable = ledger.sellable(&account_id, &order.instrument_id());
-                            let order_qty = order.quantity().as_f64();
-
-                            if order_qty > sellable {
-                                self.deny_order(
-                                    order.clone(),
-                                    &format!(
-                                        "EXCEEDS_SELLABLE: qty={order_qty}, sellable={sellable}"
-                                    ),
-                                );
-                                return false;
-                            }
-
-                            // 零头卖出检查：
-                            // 卖出时，如果数量不是一手（100股）的整数倍，则必须是该标的在该账户下的全部可卖余额。
-                            // 但科创板和创业板（注册制后）：申报必须 >= 100 (或 200)，若不足此数则必须全额卖出。
-                            let min_sell = if is_star_market { 200 } else { 100 };
-                            let is_odd_lot = if is_star_market || is_chinext {
-                                qty_raw < min_sell // 板块不足最低申报
-                            } else {
-                                qty_raw % 100 != 0 // 主板不足 100 整数倍
-                            };
-
-                            if is_odd_lot && (order_qty - sellable).abs() > f64::EPSILON {
-                                self.deny_order(
-                                    order.clone(),
-                                    &format!(
-                                        "ODD_LOT_VIOLATION: sell_qty={} must be full sellable={sellable} for odd lots",
-                                        order.quantity()
-                                    ),
-                                );
-                                return false;
-                            }
-                        }
-                    }
-                }
-                _ => {}
-            }
         }
 
         true
@@ -1701,29 +1561,27 @@ impl RiskEngine {
             return Some(format!("price {price_val} invalid (<= 0)"));
         }
 
-        // ---- 新增：tick 对齐检查 ----
-        if self.config.t1_enabled {
-            if !price_val.is_on_tick(instrument.price_increment()) {
+        // ---- tick 对齐检查 ----
+        if !price_val.is_on_tick(instrument.price_increment()) {
+            return Some(format!(
+                "PRICE_NOT_ON_TICK: price={price_val}, tick={}",
+                instrument.price_increment()
+            ));
+        }
+
+        // ---- 涨跌停价检查 ----
+        if let Some(max_price) = instrument.max_price() {
+            if price_val > max_price {
                 return Some(format!(
-                    "PRICE_NOT_ON_TICK: price={price_val}, tick={}",
-                    instrument.price_increment()
+                    "PRICE_ABOVE_UP_LIMIT: price={price_val}, up_limit={max_price}"
                 ));
             }
-
-            // ---- 新增：涨跌停价检查 ----
-            if let Some(max_price) = instrument.max_price() {
-                if price_val > max_price {
-                    return Some(format!(
-                        "PRICE_ABOVE_UP_LIMIT: price={price_val}, up_limit={max_price}"
-                    ));
-                }
-            }
-            if let Some(min_price) = instrument.min_price() {
-                if price_val < min_price {
-                    return Some(format!(
-                        "PRICE_BELOW_DOWN_LIMIT: price={price_val}, down_limit={min_price}"
-                    ));
-                }
+        }
+        if let Some(min_price) = instrument.min_price() {
+            if price_val < min_price {
+                return Some(format!(
+                    "PRICE_BELOW_DOWN_LIMIT: price={price_val}, down_limit={min_price}"
+                ));
             }
         }
 
@@ -2050,10 +1908,10 @@ impl RiskEngine {
             log::debug!("{RECV}{EVT} {event:?}");
         }
 
-        // ---- 新增：T1Ledger 更新 ----
-        if let Some(ref mut ledger) = self.t1_ledger {
+        // ---- T1Ledger 更新 ----
+        if let Some(ledger) = &self.t1_ledger {
             if let OrderEventAny::Filled(fill) = event {
-                ledger.on_fill(
+                ledger.write().expect("T1 ledger lock poisoned").on_fill(
                     fill.account_id,
                     fill.instrument_id,
                     fill.order_side,

@@ -3796,7 +3796,11 @@ fn test_ashare_cancel_order_denied_in_locked_phase(
     let session_provider: Arc<dyn nautilus_common::session::SessionProvider> =
         Arc::new(AShareSessionProvider::default());
     let config = nautilus_risk::engine::config::RiskEngineConfig {
-        session_provider: Some(session_provider),
+        ashare_rules: Some(nautilus_risk::AShareRuleConfig {
+            session_enabled: true,
+            session_provider: Some(session_provider),
+            ..Default::default()
+        }),
         ..Default::default()
     };
     let portfolio = Portfolio::new(cache.clone(), clock.clone(), None);
@@ -3878,7 +3882,11 @@ fn test_ashare_cancel_order_accepted_in_continuous_am(
     let session_provider: Arc<dyn nautilus_common::session::SessionProvider> =
         Arc::new(AShareSessionProvider::default());
     let config = nautilus_risk::engine::config::RiskEngineConfig {
-        session_provider: Some(session_provider),
+        ashare_rules: Some(nautilus_risk::AShareRuleConfig {
+            session_enabled: true,
+            session_provider: Some(session_provider),
+            ..Default::default()
+        }),
         ..Default::default()
     };
     let portfolio = Portfolio::new(cache.clone(), clock.clone(), None);
@@ -3993,7 +4001,10 @@ fn test_ashare_t1_sell_exceeds_sellable(strategy_id_ema_cross: StrategyId, trade
         .unwrap();
 
     let risk_config = nautilus_risk::engine::config::RiskEngineConfig {
-        t1_enabled: true,
+        ashare_rules: Some(nautilus_risk::AShareRuleConfig {
+            t1_enabled: true,
+            ..Default::default()
+        }),
         ..Default::default()
     };
 
@@ -4097,7 +4108,10 @@ fn test_ashare_t1_sell_after_settlement(strategy_id_ema_cross: StrategyId, trade
         .unwrap();
 
     let risk_config = nautilus_risk::engine::config::RiskEngineConfig {
-        t1_enabled: true,
+        ashare_rules: Some(nautilus_risk::AShareRuleConfig {
+            t1_enabled: true,
+            ..Default::default()
+        }),
         ..Default::default()
     };
 
