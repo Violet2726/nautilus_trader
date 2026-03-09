@@ -14,15 +14,13 @@
 // -------------------------------------------------------------------------------------------------
 
 use nautilus_model::enums::MarketStatusAction;
-use nautilus_model::identifiers::InstrumentId;
 use nautilus_rules::common::{Rule, RuleCheckResult, RuleContext};
+use crate::risk::provider::MarketDataProvider;
 use std::sync::Arc;
-
-pub type InstrumentStatusCallback = dyn Fn(&InstrumentId) -> Option<MarketStatusAction> + Send + Sync;
 
 #[derive(Clone)]
 pub struct InstrumentStatusRule {
-    status_callback: Arc<InstrumentStatusCallback>,
+    provider: Arc<dyn MarketDataProvider>,
     enabled: bool,
 }
 
@@ -35,9 +33,9 @@ impl std::fmt::Debug for InstrumentStatusRule {
 }
 
 impl InstrumentStatusRule {
-    pub fn new(status_callback: Arc<InstrumentStatusCallback>) -> Self {
+    pub fn new(provider: Arc<dyn MarketDataProvider>) -> Self {
         Self {
-            status_callback,
+            provider,
             enabled: true,
         }
     }
@@ -70,7 +68,7 @@ impl Rule for InstrumentStatusRule {
             return RuleCheckResult::Pass;
         }
 
-        if let Some(action) = (self.status_callback)(&context.instrument_id) {
+        if let Some(action) = self.provider.instrument_status_action(&context.instrument_id) {
             if Self::is_suspended(action) {
                 return RuleCheckResult::Fail {
                     reason: format!("INSTRUMENT_SUSPENDED: action={action:?}"),
@@ -85,14 +83,26 @@ impl Rule for InstrumentStatusRule {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::risk::provider::MarketDataProvider;
     use nautilus_model::enums::OrderType;
     use nautilus_model::identifiers::{ClientOrderId, InstrumentId, StrategyId, TraderId};
     use nautilus_model::orders::OrderTestBuilder;
     use nautilus_model::types::{Price, Quantity};
 
+    struct MockProvider {
+        status: Option<MarketStatusAction>,
+    }
+
+    impl MarketDataProvider for MockProvider {
+        fn instrument_status_action(&self, _instrument_id: &InstrumentId) -> Option<MarketStatusAction> {
+            self.status
+        }
+    }
+
     #[test]
     fn test_instrument_status_rule_pass_when_no_status() {
-        let rule = InstrumentStatusRule::new(Arc::new(|_| None));
+        let provider = Arc::new(MockProvider { status: None });
+        let rule = InstrumentStatusRule::new(provider);
         let order = OrderTestBuilder::new(OrderType::Limit)
             .trader_id(TraderId::from("TRADER-001"))
             .strategy_id(StrategyId::from("STRATEGY-001"))
@@ -108,7 +118,10 @@ mod tests {
 
     #[test]
     fn test_instrument_status_rule_fail_when_suspended() {
-        let rule = InstrumentStatusRule::new(Arc::new(|_| Some(MarketStatusAction::Suspend)));
+        let provider = Arc::new(MockProvider { 
+            status: Some(MarketStatusAction::Suspend) 
+        });
+        let rule = InstrumentStatusRule::new(provider);
         let order = OrderTestBuilder::new(OrderType::Limit)
             .trader_id(TraderId::from("TRADER-001"))
             .strategy_id(StrategyId::from("STRATEGY-001"))

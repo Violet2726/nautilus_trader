@@ -13,7 +13,9 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! A股市场支持模块重新导出
+//! A股市场支持模块
+//!
+//! 重新导出 nautilus_markets_ashare crate 的所有公共类型
 
-// 重新导出 ashare 子crate 的所有公共类型
+// Re-export all public types from nautilus_markets_ashare crate
 pub use nautilus_markets_ashare::*;

@@ -22,6 +22,7 @@ use nautilus_model::enums::{OrderSide, OrderType};
 use nautilus_model::types::Price;
 use nautilus_model::orders::Order;
 use crate::market::session::SessionProvider;
+use crate::risk::provider::MarketDataProvider;
 use std::sync::Arc;
 
 /// 用于验证价格笼子限制的规则。
@@ -31,7 +32,7 @@ use std::sync::Arc;
 pub struct PriceCageRule {
     session_provider: Arc<dyn SessionProvider>,
     price_cage_pct: f64,
-    market_data_callback: Arc<dyn Fn(&RuleContext) -> MarketData + Send + Sync>,
+    provider: Arc<dyn MarketDataProvider>,
     enabled: bool,
 }
 
@@ -47,12 +48,12 @@ impl PriceCageRule {
     pub fn new(
         session_provider: Arc<dyn SessionProvider>,
         price_cage_pct: f64,
-        market_data_callback: Arc<dyn Fn(&RuleContext) -> MarketData + Send + Sync>,
+        provider: Arc<dyn MarketDataProvider>,
     ) -> Self {
         Self {
             session_provider,
             price_cage_pct,
-            market_data_callback,
+            provider,
             enabled: true,
         }
     }
@@ -87,7 +88,7 @@ impl Rule for PriceCageRule {
         };
 
         // 获取市场数据
-        let market_data = (self.market_data_callback)(context);
+        let market_data = self.provider.price_cage_market_data(context);
         let current_price = market_data.current_price;
         let tick_size = market_data.tick_size.unwrap_or_else(|| Price::new(0.01, 2));
 

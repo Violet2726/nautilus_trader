@@ -17,11 +17,9 @@
 //!
 //! 提供各个市场的特定规则和功能。
 
-#[cfg(feature = "ashare")]
 pub mod ashare;
 
 // 重新导出常用类型
-#[cfg(feature = "ashare")]
 pub use ashare::*;
 
 // 未来市场模块

@@ -192,11 +192,11 @@ pub fn compute_price_limits(
         }
 
         // 计算涨停价：向上取整到tick
-        let limit_up_raw = ((prev_close_raw as f64 * (1.0 + limit_config.limit_up_pct) / tick_raw as f64).ceil() as i64) * tick_raw;
+        let limit_up_raw = ((prev_close_raw as f64 * (1.0 + limit_config.limit_up_pct) / tick_raw as f64).ceil() as i128) * tick_raw as i128;
         let limit_up = Price::from_raw(limit_up_raw as PriceRaw, prev_close.precision);
 
         // 计算跌停价：向下取整到tick
-        let limit_down_raw = ((prev_close_raw as f64 * (1.0 - limit_config.limit_down_pct) / tick_raw as f64).floor() as i64) * tick_raw;
+        let limit_down_raw = ((prev_close_raw as f64 * (1.0 - limit_config.limit_down_pct) / tick_raw as f64).floor() as i128) * tick_raw as i128;
         let limit_down = Price::from_raw(limit_down_raw as PriceRaw, prev_close.precision);
 
         PriceLimits::new(Some(limit_up), Some(limit_down))

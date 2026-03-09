@@ -22,7 +22,6 @@ crate-type = ["rlib", "cdylib"]
 
 [features]
 default = []
-ashare = []
 
 [package.metadata.docs.rs]
 all-features = true

@@ -488,7 +488,7 @@ impl RiskEngine {
                 self.handle_cancel_all_orders(cancel_all)
             }
             TradingCommand::BatchCancelOrders(batch) => {
-                // A 股：BatchCancelOrders 直接转发（批量撤单阶段检查由各 CancelOrder 分别处理）
+                // BatchCancelOrders forwarded directly (individual cancel order checks handled by each CancelOrder)
                 self.send_to_execution(TradingCommand::BatchCancelOrders(batch));
             }
             TradingCommand::QueryAccount(query_account) => {
@@ -1505,8 +1505,6 @@ impl RiskEngine {
     }
 
     fn execution_gateway(&mut self, instrument: InstrumentAny, command: TradingCommand) {
-        // Session provider functionality has been moved to nautilus-markets-ashare
-
         match self.trading_state {
             TradingState::Halted => match command {
                 TradingCommand::SubmitOrder(submit_order) => {
@@ -1608,8 +1606,6 @@ impl RiskEngine {
         if self.config.debug {
             log::debug!("{RECV}{EVT} {event:?}");
         }
-
-        // T1 ledger functionality has been moved to nautilus-markets-ashare
     }
 
     fn handle_instrument_status(&mut self, status: &InstrumentStatus) {

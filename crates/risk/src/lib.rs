@@ -55,10 +55,7 @@
 #![deny(rustdoc::broken_intra_doc_links)]
 
 pub mod engine;
-pub mod rule;
 pub mod sizing;
 
 // Re-exports
-pub use nautilus_rules::{Rule, RuleChain, RuleCheckResult, RuleContext, RuleMetadata};
-pub use nautilus_rules::{CommandContext, CommandRule, CommandRuleChain, CommandRuleCheckResult};
 pub use engine::RiskEngine;

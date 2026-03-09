@@ -13,17 +13,15 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-use nautilus_model::identifiers::InstrumentId;
 use nautilus_model::orders::Order;
 use nautilus_model::types::Price;
 use nautilus_rules::common::{Rule, RuleCheckResult, RuleContext};
+use crate::risk::provider::MarketDataProvider;
 use std::sync::Arc;
-
-pub type TickSizeCallback = dyn Fn(&InstrumentId) -> Option<Price> + Send + Sync;
 
 #[derive(Clone)]
 pub struct PriceTickRule {
-    tick_size_callback: Arc<TickSizeCallback>,
+    provider: Arc<dyn MarketDataProvider>,
     enabled: bool,
 }
 
@@ -36,9 +34,9 @@ impl std::fmt::Debug for PriceTickRule {
 }
 
 impl PriceTickRule {
-    pub fn new(tick_size_callback: Arc<TickSizeCallback>) -> Self {
+    pub fn new(provider: Arc<dyn MarketDataProvider>) -> Self {
         Self {
-            tick_size_callback,
+            provider,
             enabled: true,
         }
     }
@@ -67,7 +65,7 @@ impl Rule for PriceTickRule {
             None => return RuleCheckResult::Pass,
         };
 
-        let tick = match (self.tick_size_callback)(&context.instrument_id) {
+        let tick = match self.provider.tick_size(&context.instrument_id) {
             Some(tick) => tick,
             None => return RuleCheckResult::Pass,
         };
@@ -86,13 +84,26 @@ impl Rule for PriceTickRule {
 mod tests {
     use super::*;
     use nautilus_model::enums::OrderType;
-    use nautilus_model::identifiers::{ClientOrderId, StrategyId, TraderId};
+    use nautilus_model::identifiers::{ClientOrderId, InstrumentId, StrategyId, TraderId};
     use nautilus_model::orders::OrderTestBuilder;
     use nautilus_model::types::Quantity;
 
     #[test]
     fn test_price_tick_rule_fail() {
-        let rule = PriceTickRule::new(Arc::new(|_| Some(Price::new(0.01, 2))));
+        struct MockProvider {
+            tick: Option<Price>,
+        }
+
+        impl MarketDataProvider for MockProvider {
+            fn tick_size(&self, _instrument_id: &InstrumentId) -> Option<Price> {
+                self.tick
+            }
+        }
+
+        let provider = Arc::new(MockProvider { 
+            tick: Some(Price::new(0.01, 2)) 
+        });
+        let rule = PriceTickRule::new(provider);
         let instrument_id = InstrumentId::from("600000.SH");
         let order = OrderTestBuilder::new(OrderType::Limit)
             .trader_id(TraderId::from("TRADER-001"))

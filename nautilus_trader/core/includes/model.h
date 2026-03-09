@@ -168,59 +168,59 @@
 
 
 /**
- * The type of order book action for an order book event.
+ * 订单簿事件的订单操作类型。
  */
 typedef enum BookAction {
     /**
-     * An order is added to the book.
+     * 订单被添加到订单簿。
      */
     ADD = 1,
     /**
-     * An existing order in the book is updated/modified.
+     * 订单簿中的现有订单被更新/修改。
      */
     UPDATE = 2,
     /**
-     * An existing order in the book is deleted/canceled.
+     * 订单簿中的现有订单被删除/取消。
      */
     DELETE = 3,
     /**
-     * The state of the order book is cleared.
+     * 订单簿的状态被清除。
      */
     CLEAR = 4,
 } BookAction;
 
 /**
- * The order side for a specific order, or action related to orders.
+ * 特定订单或与订单相关的操作的订单方。
  */
 typedef enum OrderSide {
     /**
-     * No order side is specified.
+     * 未指定订单方。
      */
     NO_ORDER_SIDE = 0,
     /**
-     * The order is a BUY.
+     * 订单是买单。
      */
     BUY = 1,
     /**
-     * The order is a SELL.
+     * 订单是卖单。
      */
     SELL = 2,
 } OrderSide;
 
 /**
- * The side for the aggressing order of a trade in a market.
+ * 市场中交易的主动订单方。
  */
 typedef enum AggressorSide {
     /**
-     * There was no specific aggressor for the trade.
+     * 该交易没有特定的主动方。
      */
     NO_AGGRESSOR = 0,
     /**
-     * The BUY order was the aggressor for the trade.
+     * 买单是该交易的主动方。
      */
     BUYER = 1,
     /**
-     * The SELL order was the aggressor for the trade.
+     * 卖单是该交易的主动方。
      */
     SELLER = 2,
 } AggressorSide;
@@ -255,382 +255,385 @@ typedef enum PriceType {
 } PriceType;
 
 /**
- * An aggregation source for derived data.
+ * 派生数据的聚合源。
  */
 typedef enum AggregationSource {
     /**
-     * The data is externally aggregated (outside the Nautilus system boundary).
+     * 数据在外部聚合（在 Nautilus 系统边界之外）。
      */
     EXTERNAL = 1,
     /**
-     * The data is internally aggregated (inside the Nautilus system boundary).
+     * 数据在内部聚合（在 Nautilus 系统边界之内）。
      */
     INTERNAL = 2,
 } AggregationSource;
 
 /**
- * The type of event for an instrument close.
+ * 合约关闭的事件类型。
  */
 typedef enum InstrumentCloseType {
     /**
-     * When the market session ended.
+     * 当市场会话结束时。
      */
     END_OF_SESSION = 1,
     /**
-     * When the instrument expiration was reached.
+     * 当合约到期时。
      */
     CONTRACT_EXPIRED = 2,
 } InstrumentCloseType;
 
 /**
- * An account type provided by a trading venue or broker.
+ * 影响交易场所上单个市场状态的操作。
+ */
+typedef enum MarketStatusAction {
+    /**
+     * 无变化。
+     */
+    NONE = 0,
+    /**
+     * 合约处于开盘前时段。
+     */
+    PRE_OPEN = 1,
+    /**
+     * 合约处于预交叉时段。
+     */
+    PRE_CROSS = 2,
+    /**
+     * 合约正在报价但未交易。
+     */
+    QUOTING = 3,
+    /**
+     * 合约处于交叉/拍卖时段。
+     */
+    CROSS = 4,
+    /**
+     * 合约正在通过交易轮换开盘。
+     */
+    ROTATION = 5,
+    /**
+     * 合约有新的价格指示可用。
+     */
+    NEW_PRICE_INDICATION = 6,
+    /**
+     * 合约正在交易。
+     */
+    TRADING = 7,
+    /**
+     * 合约的交易已停止。
+     */
+    HALT = 8,
+    /**
+     * 合约的交易已暂停。
+     */
+    PAUSE = 9,
+    /**
+     * 合约的交易已中止。
+     */
+    SUSPEND = 10,
+    /**
+     * 合约处于收盘前时段。
+     */
+    PRE_CLOSE = 11,
+    /**
+     * 合约的交易已收盘。
+     */
+    CLOSE = 12,
+    /**
+     * 合约处于收盘后时段。
+     */
+    POST_CLOSE = 13,
+    /**
+     * 卖空限制的变化。
+     */
+    SHORT_SELL_RESTRICTION_CHANGE = 14,
+    /**
+     * 合约不可用于交易，交易已收盘或停止。
+     */
+    NOT_AVAILABLE_FOR_TRADING = 15,
+    /**
+     * 合约已复牌。
+     */
+    RESUME = 16,
+} MarketStatusAction;
+
+/**
+ * 交易场所或经纪人提供的账户类型。
  */
 typedef enum AccountType {
     /**
-     * An account with unleveraged cash assets only.
+     * 仅包含无杠杆现金资产的账户。
      */
     CASH = 1,
     /**
-     * An account which facilitates trading on margin, using account assets as collateral.
+     * 使用账户资产作为抵押品进行保证金交易的账户。
      */
     MARGIN = 2,
     /**
-     * An account specific to betting markets.
+     * 特定于博彩市场的账户。
      */
     BETTING = 3,
     /**
-     * An account which represents a blockchain wallet,
+     * 表示区块链钱包的账户。
      */
     WALLET = 4,
 } AccountType;
 
 /**
- * A broad financial market asset class.
+ * 广泛的金融市场资产类别。
  */
 typedef enum AssetClass {
     /**
-     * Foreign exchange (FOREX) assets.
+     * 外汇（FOREX）资产。
      */
     FX = 1,
     /**
-     * Equity / stock assets.
+     * 股票/权益资产。
      */
     EQUITY = 2,
     /**
-     * Commodity assets.
+     * 大宗商品资产。
      */
     COMMODITY = 3,
     /**
-     * Debt based assets.
+     * 基于债务的资产。
      */
     DEBT = 4,
     /**
-     * Index based assets (baskets).
+     * 基于指数的资产（篮子）。
      */
     INDEX = 5,
     /**
-     * Cryptocurrency or crypto token assets.
+     * 加密货币或加密代币资产。
      */
     CRYPTOCURRENCY = 6,
     /**
-     * Alternative assets.
+     * 另类资产。
      */
     ALTERNATIVE = 7,
 } AssetClass;
 
 /**
- * The instrument class.
+ * 合约类别。
  */
 typedef enum InstrumentClass {
     /**
-     * A spot market instrument class. The current market price of an instrument that is bought or sold for immediate delivery and payment.
+     * 现货市场合约类别。立即交割和支付的合约的当前市场价格。
      */
     SPOT = 1,
     /**
-     * A swap instrument class. A derivative contract through which two parties exchange the cash flows or liabilities from two different financial instruments.
+     * 互换合约类别。一种衍生合约，双方通过该合约交换两种不同金融工具的现金流或负债。
      */
     SWAP = 2,
     /**
-     * A futures contract instrument class. A legal agreement to buy or sell an asset at a predetermined price at a specified time in the future.
+     * 期货合约类别。一种法律协议，在未来的特定时间以预定价格购买或出售资产。
      */
     FUTURE = 3,
     /**
-     * A futures spread instrument class. A strategy involving the use of futures contracts to take advantage of price differentials between different contract months, underlying assets, or marketplaces.
+     * 期货价差合约类别。一种使用期货合约的策略，利用不同合约月份、基础资产或市场之间的价格差异。
      */
     FUTURES_SPREAD = 4,
     /**
-     * A forward derivative instrument class. A customized contract between two parties to buy or sell an asset at a specified price on a future date.
+     * 远期衍生合约类别。双方之间的定制合约，在未来的特定日期以指定价格购买或出售资产。
      */
     FORWARD = 5,
     /**
-     * A contract-for-difference (CFD) instrument class. A contract between an investor and a CFD broker to exchange the difference in the value of a financial product between the time the contract opens and closes.
+     * 差价合约（CFD）类别。投资者与 CFD 经纪人之间的合约，交换合约开仓和平仓之间金融产品价值的差异。
      */
     CFD = 6,
     /**
-     * A bond instrument class. A type of debt investment where an investor loans money to an entity (typically corporate or governmental) which borrows the funds for a defined period of time at a variable or fixed interest rate.
+     * 债券合约类别。一种债务投资，投资者向实体（通常是公司或政府）出借资金，实体在定义的时间段内以可变或固定利率借入资金。
      */
     BOND = 7,
     /**
-     * An option contract instrument class. A type of derivative that gives the holder the right, but not the obligation, to buy or sell an underlying asset at a predetermined price before or at a certain future date.
+     * 期权合约类别。一种衍生品，赋予持有人在特定未来日期之前或之时以预定价格购买或出售基础资产的权利，而非义务。
      */
     OPTION = 8,
     /**
-     * An option spread instrument class. A strategy involving the purchase and/or sale of multiple option contracts on the same underlying asset with different strike prices or expiration dates to hedge risk or speculate on price movements.
+     * 期权价差合约类别。一种策略，涉及购买和/或出售同一基础资产上具有不同行权价或到期日的多个期权合约，以对冲风险或投机价格变动。
      */
     OPTION_SPREAD = 9,
     /**
-     * A warrant instrument class. A derivative that gives the holder the right, but not the obligation, to buy or sell a security—most commonly an equity—at a certain price before expiration.
+     * 认股权证合约类别。一种衍生品，赋予持有人在到期前以特定价格购买或出售证券的权利，而非义务。
      */
     WARRANT = 10,
     /**
-     * A sports betting instrument class. A financialized derivative that allows wagering on the outcome of sports events using structured contracts or prediction markets.
+     * 体育博彩合约类别。一种金融化衍生品，允许使用结构化合约或预测市场对体育事件的结果进行投注。
      */
     SPORTS_BETTING = 11,
     /**
-     * A binary option instrument class. A type of derivative where the payoff is either a fixed monetary amount or nothing, depending on whether the price of an underlying asset is above or below a predetermined level at expiration.
+     * 二元期权合约类别。一种衍生品，其收益要么是固定金额，要么是什么都没有，具体取决于基础资产在到期时的价格是否高于或低于预定水平。
      */
     BINARY_OPTION = 12,
 } InstrumentClass;
 
 /**
- * The order book type, representing the type of levels granularity and delta updating heuristics.
+ * 订单簿类型，表示级别粒度和增量更新启发式方法的类型。
  */
 typedef enum BookType {
     /**
-     * Top-of-book best bid/ask, one level per side.
+     * 订单簿顶部的最佳买价/卖价，每方一个级别。
      */
     L1_MBP = 1,
     /**
-     * Market by price, one order per level (aggregated).
+     * 按价格的市场，每个级别一个订单（聚合）。
      */
     L2_MBP = 2,
     /**
-     * Market by order, multiple orders per level (full granularity).
+     * 按订单的市场，每个级别多个订单（完整粒度）。
      */
     L3_MBO = 3,
 } BookType;
 
 /**
- * The order contingency type which specifies the behavior of linked orders.
+ * 订单条件类型，指定关联订单的行为。
  *
- * [FIX 5.0 SP2 : ContingencyType <1385> field](https://www.onixs.biz/fix-dictionary/5.0.sp2/tagnum_1385.html).
+ * [FIX 5.0 SP2 : ContingencyType <1385> 字段](https://www.onixs.biz/fix-dictionary/5.0.sp2/tagnum_1385.html)。
  */
 typedef enum ContingencyType {
     /**
-     * Not a contingent order.
+     * 不是条件订单。
      */
     NO_CONTINGENCY = 0,
     /**
-     * One-Cancels-the-Other.
+     * 一方取消另一方。
      */
     OCO = 1,
     /**
-     * One-Triggers-the-Other.
+     * 一方触发另一方。
      */
     OTO = 2,
     /**
-     * One-Updates-the-Other (by proportional quantity).
+     * 一方更新另一方（按比例数量）。
      */
     OUO = 3,
 } ContingencyType;
 
 /**
- * The broad currency type.
+ * 广泛的货币类型。
  */
 typedef enum CurrencyType {
     /**
-     * A type of cryptocurrency or crypto token.
+     * 加密货币或加密代币的类型。
      */
     CRYPTO = 1,
     /**
-     * A type of currency issued by governments which is not backed by a commodity.
+     * 政府发行且不以商品为支持的货币类型。
      */
     FIAT = 2,
     /**
-     * A type of currency that is based on the value of an underlying commodity.
+     * 基于基础商品价值的货币类型。
      */
     COMMODITY_BACKED = 3,
 } CurrencyType;
 
 /**
- * The liquidity side for a trade.
+ * 交易的流动性方。
  */
 typedef enum LiquiditySide {
     /**
-     * No liquidity side specified.
+     * 未指定流动性方。
      */
     NO_LIQUIDITY_SIDE = 0,
     /**
-     * The order passively provided liquidity to the market to complete the trade (made a market).
+     * 订单被动地为市场提供流动性以完成交易（做市）。
      */
     MAKER = 1,
     /**
-     * The order aggressively took liquidity from the market to complete the trade.
+     * 订单主动地从市场获取流动性以完成交易。
      */
     TAKER = 2,
 } LiquiditySide;
 
 /**
- * The status of an individual market on a trading venue.
+ * 交易场所上单个市场的状态。
  */
 typedef enum MarketStatus {
     /**
-     * The instrument is trading.
+     * 合约正在交易。
      */
     OPEN = 1,
     /**
-     * The instrument is in a pre-open period.
+     * 合约处于开盘前时段。
      */
     CLOSED = 2,
     /**
-     * Trading in the instrument has been paused.
+     * 合约的交易已暂停。
      */
     PAUSED = 3,
     /**
-     * Trading in the instrument has been halted.
-     * Trading in the instrument has been suspended.
+     * 合约的交易已停止。
+     * 合约的交易已中止。
      */
     SUSPENDED = 5,
     /**
-     * Trading in the instrument is not available.
+     * 合约的交易不可用。
      */
     NOT_AVAILABLE = 6,
 } MarketStatus;
 
 /**
- * An action affecting the status of an individual market on a trading venue.
- */
-typedef enum MarketStatusAction {
-    /**
-     * No change.
-     */
-    NONE = 0,
-    /**
-     * The instrument is in a pre-open period.
-     */
-    PRE_OPEN = 1,
-    /**
-     * The instrument is in a pre-cross period.
-     */
-    PRE_CROSS = 2,
-    /**
-     * The instrument is quoting but not trading.
-     */
-    QUOTING = 3,
-    /**
-     * The instrument is in a cross/auction.
-     */
-    CROSS = 4,
-    /**
-     * The instrument is being opened through a trading rotation.
-     */
-    ROTATION = 5,
-    /**
-     * A new price indication is available for the instrument.
-     */
-    NEW_PRICE_INDICATION = 6,
-    /**
-     * The instrument is trading.
-     */
-    TRADING = 7,
-    /**
-     * Trading in the instrument has been halted.
-     */
-    HALT = 8,
-    /**
-     * Trading in the instrument has been paused.
-     */
-    PAUSE = 9,
-    /**
-     * Trading in the instrument has been suspended.
-     */
-    SUSPEND = 10,
-    /**
-     * The instrument is in a pre-close period.
-     */
-    PRE_CLOSE = 11,
-    /**
-     * Trading in the instrument has closed.
-     */
-    CLOSE = 12,
-    /**
-     * The instrument is in a post-close period.
-     */
-    POST_CLOSE = 13,
-    /**
-     * A change in short-selling restrictions.
-     */
-    SHORT_SELL_RESTRICTION_CHANGE = 14,
-    /**
-     * The instrument is not available for trading, either trading has closed or been halted.
-     */
-    NOT_AVAILABLE_FOR_TRADING = 15,
-} MarketStatusAction;
-
-/**
- * The order management system (OMS) type for a trading venue or trading strategy.
+ * 交易场所或交易策略的订单管理系统（OMS）类型。
  */
 typedef enum OmsType {
     /**
-     * There is no specific type of order management specified (will defer to the venue OMS).
+     * 未指定特定的订单管理类型（将委托给交易所 OMS）。
      */
     UNSPECIFIED = 0,
     /**
-     * The netting type where there is one position per instrument.
+     * 每个合约一个持仓的净额类型。
      */
     NETTING = 1,
     /**
-     * The hedging type where there can be multiple positions per instrument.
-     * This can be in LONG/SHORT directions, by position/ticket ID, or tracked virtually by
-     * Nautilus.
+     * 每个合约可以有多个持仓的对冲类型。
+     * 这可以是多头/空头方向，按持仓/票据 ID，或由 Nautilus 虚拟跟踪。
      */
     HEDGING = 2,
 } OmsType;
 
 /**
- * The kind of option contract.
+ * 期权合约的种类。
  */
 typedef enum OptionKind {
     /**
-     * A Call option gives the holder the right, but not the obligation, to buy an underlying asset at a specified strike price within a specified period of time.
+     * 看涨期权赋予持有人在指定时期内以指定行权价购买基础资产的权利，而非义务。
      */
     CALL = 1,
     /**
-     * A Put option gives the holder the right, but not the obligation, to sell an underlying asset at a specified strike price within a specified period of time.
+     * 看跌期权赋予持有人在指定时期内以指定行权价出售基础资产的权利，而非义务。
      */
     PUT = 2,
 } OptionKind;
 
 /**
- * Defines when OTO (One-Triggers-Other) child orders are released.
+ * 定义 OTO（一方触发另一方）子订单何时释放。
  */
 typedef enum OtoTriggerMode {
     /**
-     * Release child order(s) pro-rata to each partial fill (default).
+     * 按比例释放子订单以响应每个部分成交（默认）。
      */
     PARTIAL = 0,
     /**
-     * Release child order(s) only once the parent is fully filled.
+     * 仅在父订单完全成交后释放子订单。
      */
     FULL = 1,
 } OtoTriggerMode;
 
 /**
- * The status for a specific order.
+ * 特定订单的状态。
  *
- * An order is considered _open_ for the following status:
+ * 以下状态下的订单被视为_开放_：
  *  - `ACCEPTED`
  *  - `TRIGGERED`
  *  - `PENDING_UPDATE`
  *  - `PENDING_CANCEL`
  *  - `PARTIALLY_FILLED`
  *
- * An order is considered _in-flight_ for the following status:
+ * 以下状态下的订单被视为_在途_：
  *  - `SUBMITTED`
  *  - `PENDING_UPDATE`
  *  - `PENDING_CANCEL`
  *
- * An order is considered _closed_ for the following status:
+ * 以下状态下的订单被视为_已关闭_：
  *  - `DENIED`
  *  - `REJECTED`
  *  - `CANCELED`
@@ -639,137 +642,137 @@ typedef enum OtoTriggerMode {
  */
 typedef enum OrderStatus {
     /**
-     * The order is initialized (instantiated) within the Nautilus system.
+     * 订单在 Nautilus 系统中已初始化（实例化）。
      */
     INITIALIZED = 1,
     /**
-     * The order was denied by the Nautilus system, either for being invalid, unprocessable or exceeding a risk limit.
+     * 订单被 Nautilus 系统拒绝，因为无效、无法处理或超出风险限制。
      */
     DENIED = 2,
     /**
-     * The order became emulated by the Nautilus system in the `OrderEmulator` component.
+     * 订单在 Nautilus 系统的 `OrderEmulator` 组件中被模拟。
      */
     EMULATED = 3,
     /**
-     * The order was released by the Nautilus system from the `OrderEmulator` component.
+     * 订单从 Nautilus 系统的 `OrderEmulator` 组件中释放。
      */
     RELEASED = 4,
     /**
-     * The order was submitted by the Nautilus system to the external service or trading venue (awaiting acknowledgement).
+     * 订单由 Nautilus 系统提交到外部服务或交易场所（等待确认）。
      */
     SUBMITTED = 5,
     /**
-     * The order was acknowledged by the trading venue as being received and valid (may now be working).
+     * 订单被交易场所确认为已接收且有效（现在可能正在工作）。
      */
     ACCEPTED = 6,
     /**
-     * The order was rejected by the trading venue.
+     * 订单被交易场所拒绝。
      */
     REJECTED = 7,
     /**
-     * The order was canceled (closed/done).
+     * 订单被取消（关闭/完成）。
      */
     CANCELED = 8,
     /**
-     * The order reached a GTD expiration (closed/done).
+     * 订单达到 GTD 到期（关闭/完成）。
      */
     EXPIRED = 9,
     /**
-     * The order STOP price was triggered on a trading venue.
+     * 订单的 STOP 价格在交易场所被触发。
      */
     TRIGGERED = 10,
     /**
-     * The order is currently pending a request to modify on a trading venue.
+     * 订单当前在交易场所上等待修改请求。
      */
     PENDING_UPDATE = 11,
     /**
-     * The order is currently pending a request to cancel on a trading venue.
+     * 订单当前在交易场所上等待取消请求。
      */
     PENDING_CANCEL = 12,
     /**
-     * The order has been partially filled on a trading venue.
+     * 订单在交易场所上已部分成交。
      */
     PARTIALLY_FILLED = 13,
     /**
-     * The order has been completely filled on a trading venue (closed/done).
+     * 订单在交易场所上已完全成交（关闭/完成）。
      */
     FILLED = 14,
 } OrderStatus;
 
 /**
- * The type of order.
+ * 订单类型。
  */
 typedef enum OrderType {
     /**
-     * A market order to buy or sell at the best available price in the current market.
+     * 以当前市场最佳可用价格买入或卖出的市价订单。
      */
     MARKET = 1,
     /**
-     * A limit order to buy or sell at a specific price or better.
+     * 以特定价格或更好价格买入或卖出的限价订单。
      */
     LIMIT = 2,
     /**
-     * A stop market order to buy or sell once the price reaches the specified stop/trigger price. When the stop price is reached, the order effectively becomes a market order.
+     * 当价格达到指定止损/触发价格时买入或卖出的止损市价订单。当止损价格达到时，订单实际上成为市价订单。
      */
     STOP_MARKET = 3,
     /**
-     * A stop limit order to buy or sell which combines the features of a stop order and a limit order. Once the stop/trigger price is reached, a stop-limit order effectively becomes a limit order.
+     * 结合止损订单和限价订单特征的止损限价买入或卖出订单。一旦止损/触发价格达到，止损限价订单实际上成为限价订单。
      */
     STOP_LIMIT = 4,
     /**
-     * A market-to-limit order is a market order that is to be executed as a limit order at the current best market price after reaching the market.
+     * 市价转限价订单是市价订单，在到达市场后以当前最佳市场价格作为限价订单执行。
      */
     MARKET_TO_LIMIT = 5,
     /**
-     * A market-if-touched order effectively becomes a market order when the specified trigger price is reached.
+     * 当达到指定触发价格时，市价触及订单实际上成为市价订单。
      */
     MARKET_IF_TOUCHED = 6,
     /**
-     * A limit-if-touched order effectively becomes a limit order when the specified trigger price is reached.
+     * 当达到指定触发价格时，限价触及订单实际上成为限价订单。
      */
     LIMIT_IF_TOUCHED = 7,
     /**
-     * A trailing stop market order sets the stop/trigger price at a fixed "trailing offset" amount from the market.
+     * 跟踪止损市价订单将止损/触发价格设置为距离市场的固定"跟踪偏移"量。
      */
     TRAILING_STOP_MARKET = 8,
     /**
-     * A trailing stop limit order combines the features of a trailing stop order with those of a limit order.
+     * 跟踪止损限价订单结合了跟踪止损订单和限价订单的特征。
      */
     TRAILING_STOP_LIMIT = 9,
 } OrderType;
 
 /**
- * The market side for a specific position, or action related to positions.
+ * 特定持仓的市场方，或与持仓相关的操作。
  */
 typedef enum PositionSide {
     /**
-     * No position side is specified (only valid in the context of a filter for actions involving positions).
+     * 未指定持仓方（仅在涉及持仓的操作的过滤器上下文中有效）。
      */
     NO_POSITION_SIDE = 0,
     /**
-     * A neural/flat position, where no position is currently held in the market.
+     * 中性/平仓持仓，当前市场中未持有任何持仓。
      */
     FLAT = 1,
     /**
-     * A long position in the market, typically acquired through one or many BUY orders.
+     * 市场中的多头持仓，通常通过一个或多个买单获得。
      */
     LONG = 2,
     /**
-     * A short position in the market, typically acquired through one or many SELL orders.
+     * 市场中的空头持仓，通常通过一个或多个卖单获得。
      */
     SHORT = 3,
 } PositionSide;
 
 /**
- * The type of position adjustment.
+ * 持仓调整类型。
  */
 typedef enum PositionAdjustmentType {
     /**
-     * Commission adjustment affecting position quantity.
+     * 影响持仓数量的佣金调整。
      */
     COMMISSION = 1,
     /**
-     * Funding payment affecting position realized PnL.
+     * 影响持仓已实现盈亏的资金支付。
      */
     FUNDING = 2,
 } PositionAdjustmentType;
@@ -934,6 +937,10 @@ typedef enum TriggerType {
  * Orders are stored in an [`IndexMap`] which preserves FIFO (insertion) order.
  */
 typedef struct BookLevel BookLevel;
+
+typedef struct Option_Ustr Option_Ustr;
+
+typedef struct Option_bool Option_bool;
 
 /**
  * Provides a high-performance, versatile order book.
@@ -1447,6 +1454,48 @@ typedef struct InstrumentClose_t {
 } InstrumentClose_t;
 
 /**
+ * Represents an event that indicates a change in an instrument market status.
+ */
+typedef struct InstrumentStatus {
+    /**
+     * The instrument ID for the status change.
+     */
+    struct InstrumentId_t instrument_id;
+    /**
+     * The instrument market status action.
+     */
+    enum MarketStatusAction action;
+    /**
+     * UNIX timestamp (nanoseconds) when the status event occurred.
+     */
+    uint64_t ts_event;
+    /**
+     * UNIX timestamp (nanoseconds) when the instance was created.
+     */
+    uint64_t ts_init;
+    /**
+     * Additional details about the cause of the status change.
+     */
+    struct Option_Ustr reason;
+    /**
+     * Further information about the status change (if provided).
+     */
+    struct Option_Ustr trading_event;
+    /**
+     * The state of trading in the instrument.
+     */
+    struct Option_bool is_trading;
+    /**
+     * The state of quoting in the instrument.
+     */
+    struct Option_bool is_quoting;
+    /**
+     * The state of short sell restrictions for the instrument (if applicable).
+     */
+    struct Option_bool is_short_sell_restricted;
+} InstrumentStatus;
+
+/**
  * A built-in Nautilus data type.
  *
  * Not recommended for storing large amounts of data, as the largest variant is significantly
@@ -1462,6 +1511,7 @@ typedef enum Data_t_Tag {
     MARK_PRICE_UPDATE,
     INDEX_PRICE_UPDATE,
     INSTRUMENT_CLOSE,
+    INSTRUMENT_STATUS,
 } Data_t_Tag;
 
 typedef struct Data_t {
@@ -1493,6 +1543,9 @@ typedef struct Data_t {
         };
         struct {
             struct InstrumentClose_t instrument_close;
+        };
+        struct {
+            struct InstrumentStatus instrument_status;
         };
     };
 } Data_t;

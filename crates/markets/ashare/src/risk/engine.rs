@@ -24,49 +24,20 @@
 //! - 限流规则
 
 use nautilus_common::throttler::RateLimit;
-use nautilus_rules::common::{Rule, RuleChain, RuleContext};
+use nautilus_rules::command::CommandRuleChain;
+use nautilus_rules::common::{Rule, RuleChain};
 use super::rules::*;
 use super::config::AShareRuleConfig;
-use nautilus_model::{enums::MarketStatusAction, identifiers::InstrumentId};
 use super::provider::MarketDataProvider;
 use std::sync::Arc;
-
-type InstrumentStatusCallback = Arc<dyn Fn(&InstrumentId) -> Option<MarketStatusAction> + Send + Sync>;
-type TickSizeCallback = Arc<dyn Fn(&InstrumentId) -> Option<nautilus_model::types::Price> + Send + Sync>;
-type PriceBandCallback = Arc<dyn Fn(&InstrumentId) -> price_band::PriceBand + Send + Sync>;
 
 pub fn create_ashare_rule_chain_with_provider(
     config: &AShareRuleConfig,
     provider: Arc<dyn MarketDataProvider>,
 ) -> RuleChain {
-    let status_cb: InstrumentStatusCallback = Arc::new({
-        let provider = provider.clone();
-        move |iid: &InstrumentId| provider.instrument_status_action(iid)
-    });
-    let tick_cb: TickSizeCallback = Arc::new({
-        let provider = provider.clone();
-        move |iid: &InstrumentId| provider.tick_size(iid)
-    });
-    let band_cb: PriceBandCallback = Arc::new({
-        let provider = provider.clone();
-        move |iid: &InstrumentId| provider.price_band(iid)
-    });
-    let cage_cb: Arc<dyn Fn(&RuleContext) -> price_cage::MarketData + Send + Sync> = Arc::new({
-        let provider = provider.clone();
-        move |ctx: &RuleContext| provider.price_cage_market_data(ctx)
-    });
-    let limit_cb: Arc<dyn Fn(&RuleContext) -> price_limit::PriceLimitMarketData + Send + Sync> = Arc::new({
-        let provider = provider;
-        move |ctx: &RuleContext| provider.price_limit_market_data(ctx)
-    });
-
     create_ashare_rule_chain(
         config,
-        Some(status_cb),
-        Some(tick_cb),
-        Some(band_cb),
-        Some(cage_cb),
-        Some(limit_cb),
+        Some(provider.clone()),
     )
 }
 
@@ -75,24 +46,23 @@ pub fn create_ashare_rule_chain_with_provider(
 /// # 参数
 ///
 /// * `config` - A股规则配置，指定要启用的规则。
-/// * `market_data_callback` - 可选的回调函数，用于获取价格笼子验证所需的市场数据。
-/// * `price_limit_callback` - 可选的回调函数，用于获取涨跌停验证所需的市场数据。
+/// * `provider` - 可选的市场数据提供者，用于获取各种市场数据。
 ///
 /// # 返回值
 ///
 /// 包含所有已启用的A股规则的 `RuleChain`，顺序如下：
 /// 1. 交易时段规则（如果启用）
-/// 2. 价格笼子规则（如果启用且提供了市场数据回调）
-/// 3. 涨跌停限制规则（如果启用且提供了市场数据回调）
-/// 4. 手数规则（如果启用）
-/// 5. T+1 规则（如果启用）
+/// 2. 停牌状态规则（如果提供了 provider）
+/// 3. 价格对齐规则（如果提供了 provider）
+/// 4. 价格限制规则（如果提供了 provider）
+/// 5. 价格笼子规则（如果启用且提供了 provider）
+/// 6. 涨跌停限制规则（如果启用且提供了 provider）
+/// 7. 手数规则（如果启用）
+/// 8. T+1 规则（如果启用）
+/// 9. 限流规则（如果配置了）
 pub fn create_ashare_rule_chain(
     config: &AShareRuleConfig,
-    instrument_status_callback: Option<InstrumentStatusCallback>,
-    tick_size_callback: Option<TickSizeCallback>,
-    price_band_callback: Option<PriceBandCallback>,
-    market_data_callback: Option<Arc<dyn Fn(&RuleContext) -> price_cage::MarketData + Send + Sync>>,
-    price_limit_callback: Option<Arc<dyn Fn(&RuleContext) -> price_limit::PriceLimitMarketData + Send + Sync>>,
+    provider: Option<Arc<dyn MarketDataProvider>>,
 ) -> RuleChain {
     let mut chain = RuleChain::new();
 
@@ -102,31 +72,23 @@ pub fn create_ashare_rule_chain(
         }
     }
 
-    if let Some(cb) = instrument_status_callback {
-        chain.add_rule(Arc::new(InstrumentStatusRule::new(cb)));
-    }
+    if let Some(ref provider) = provider {
+        chain.add_rule(Arc::new(InstrumentStatusRule::new(provider.clone())));
+        chain.add_rule(Arc::new(PriceTickRule::new(provider.clone())));
+        chain.add_rule(Arc::new(PriceBandRule::new(provider.clone())));
 
-    if let Some(cb) = tick_size_callback {
-        chain.add_rule(Arc::new(PriceTickRule::new(cb)));
-    }
-
-    if let Some(cb) = price_band_callback {
-        chain.add_rule(Arc::new(PriceBandRule::new(cb)));
-    }
-
-    if config.price_cage_enabled {
-        if let (Some(session_provider), Some(callback)) = (&config.session_provider, &market_data_callback) {
-            chain.add_rule(Arc::new(PriceCageRule::new(
-                session_provider.clone(),
-                config.price_cage_pct,
-                callback.clone(),
-            )));
+        if config.price_cage_enabled {
+            if let Some(session_provider) = &config.session_provider {
+                chain.add_rule(Arc::new(PriceCageRule::new(
+                    session_provider.clone(),
+                    config.price_cage_pct,
+                    provider.clone(),
+                )));
+            }
         }
-    }
 
-    if config.price_limit_enabled {
-        if let Some(callback) = &price_limit_callback {
-            chain.add_rule(Arc::new(PriceLimitRule::new(callback.clone())));
+        if config.price_limit_enabled {
+            chain.add_rule(Arc::new(PriceLimitRule::new(provider.clone())));
         }
     }
 
@@ -145,6 +107,42 @@ pub fn create_ashare_rule_chain(
         config.max_order_submit_per_symbol.clone(),
     ) {
         chain.add_rule(throttler);
+    }
+
+    chain
+}
+
+pub fn create_ashare_command_rule_chain_with_provider(
+    config: &AShareRuleConfig,
+    provider: Arc<dyn MarketDataProvider>,
+) -> CommandRuleChain {
+    create_ashare_command_rule_chain(
+        config,
+        Some(provider.clone()),
+    )
+}
+
+/// 根据给定配置创建包含所有A股命令规则的策略链。
+///
+/// # 参数
+///
+/// * `config` - A股规则配置，指定要启用的规则。
+/// * `provider` - 可选的市场数据提供者，用于获取各种市场数据。
+///
+/// # 返回值
+///
+/// 包含所有已启用的A股命令规则的 `CommandRuleChain`，顺序如下：
+/// 1. 撤单会话规则（如果启用）
+pub fn create_ashare_command_rule_chain(
+    config: &AShareRuleConfig,
+    _provider: Option<Arc<dyn MarketDataProvider>>,
+) -> CommandRuleChain {
+    let mut chain = CommandRuleChain::new();
+
+    if config.session_enabled {
+        if let Some(session_provider) = &config.session_provider {
+            chain.add_rule(Arc::new(CancelSessionRule::new(session_provider.clone())));
+        }
     }
 
     chain

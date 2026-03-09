@@ -13,10 +13,10 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-use nautilus_model::identifiers::InstrumentId;
 use nautilus_model::orders::Order;
 use nautilus_model::types::Price;
 use nautilus_rules::common::{Rule, RuleCheckResult, RuleContext};
+use crate::risk::provider::MarketDataProvider;
 use std::sync::Arc;
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -25,11 +25,9 @@ pub struct PriceBand {
     pub max_price: Option<Price>,
 }
 
-pub type PriceBandCallback = dyn Fn(&InstrumentId) -> PriceBand + Send + Sync;
-
 #[derive(Clone)]
 pub struct PriceBandRule {
-    callback: Arc<PriceBandCallback>,
+    provider: Arc<dyn MarketDataProvider>,
     enabled: bool,
 }
 
@@ -42,9 +40,9 @@ impl std::fmt::Debug for PriceBandRule {
 }
 
 impl PriceBandRule {
-    pub fn new(callback: Arc<PriceBandCallback>) -> Self {
+    pub fn new(provider: Arc<dyn MarketDataProvider>) -> Self {
         Self {
-            callback,
+            provider,
             enabled: true,
         }
     }
@@ -73,7 +71,7 @@ impl Rule for PriceBandRule {
             None => return RuleCheckResult::Pass,
         };
 
-        let band = (self.callback)(&context.instrument_id);
+        let band = self.provider.price_band(&context.instrument_id);
 
         if let Some(max_price) = band.max_price {
             if order_price > max_price {
@@ -103,17 +101,30 @@ impl Rule for PriceBandRule {
 mod tests {
     use super::*;
     use nautilus_model::enums::OrderType;
-    use nautilus_model::identifiers::{ClientOrderId, StrategyId, TraderId};
+    use nautilus_model::identifiers::{ClientOrderId, InstrumentId, StrategyId, TraderId};
     use nautilus_model::orders::OrderTestBuilder;
     use nautilus_model::types::Quantity;
 
     #[test]
     fn test_price_band_rule_fail_above() {
+        struct MockProvider {
+            band: PriceBand,
+        }
+
+        impl MarketDataProvider for MockProvider {
+            fn price_band(&self, _instrument_id: &InstrumentId) -> PriceBand {
+                self.band
+            }
+        }
+
         let instrument_id = InstrumentId::from("600000.SH");
-        let rule = PriceBandRule::new(Arc::new(|_| PriceBand {
-            min_price: Some(Price::new(9.0, 2)),
-            max_price: Some(Price::new(10.0, 2)),
-        }));
+        let provider = Arc::new(MockProvider {
+            band: PriceBand {
+                min_price: Some(Price::new(9.0, 2)),
+                max_price: Some(Price::new(10.0, 2)),
+            },
+        });
+        let rule = PriceBandRule::new(provider);
 
         let order = OrderTestBuilder::new(OrderType::Limit)
             .trader_id(TraderId::from("TRADER-001"))

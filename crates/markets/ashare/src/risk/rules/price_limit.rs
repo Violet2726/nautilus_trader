@@ -23,9 +23,7 @@ use nautilus_model::types::Price;
 use std::sync::Arc;
 
 use nautilus_rules::common::{Rule, RuleCheckResult, RuleContext};
-
-/// 获取市场数据的回调函数，用于计算涨跌停价格
-pub type MarketDataCallback = dyn Fn(&RuleContext) -> PriceLimitMarketData + Send + Sync;
+use crate::risk::provider::MarketDataProvider;
 
 /// 计算涨跌停限制所需的市场数据
 #[derive(Debug, Clone, Default)]
@@ -46,7 +44,7 @@ pub struct PriceLimitMarketData {
 /// - 科创板：±20%（上市前5日无限制）
 /// - 北交所：±30%
 pub struct PriceLimitRule {
-    market_data_callback: Arc<MarketDataCallback>,
+    provider: Arc<dyn MarketDataProvider>,
     enabled: bool,
 }
 
@@ -59,9 +57,9 @@ impl std::fmt::Debug for PriceLimitRule {
 }
 
 impl PriceLimitRule {
-    pub fn new(market_data_callback: Arc<MarketDataCallback>) -> Self {
+    pub fn new(provider: Arc<dyn MarketDataProvider>) -> Self {
         Self {
-            market_data_callback,
+            provider,
             enabled: true,
         }
     }
@@ -125,7 +123,7 @@ impl Rule for PriceLimitRule {
         };
 
         // 获取市场数据
-        let market_data = (self.market_data_callback)(context);
+        let market_data = self.provider.price_limit_market_data(context);
 
         let prev_close = match market_data.prev_close {
             Some(price) => price,
