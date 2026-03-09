@@ -5,7 +5,7 @@ includes = []
 sys_includes = ["stdint.h", "Python.h"]
 no_includes = true
 tab_width = 4
-after_includes = "\n#ifdef __SIZEOF_INT128__\n    typedef __uint128_t uint128_t;\n    typedef __int128_t int128_t;\n#elif defined(_MSC_VER)\n    // MSVC doesn't support 128-bit integers, use 64-bit fallbacks\n    typedef uint64_t uint128_t;\n    typedef int64_t int128_t;\n    #undef HIGH_PRECISION\n#endif"
+after_includes = "\n#ifdef __SIZEOF_INT128__\n    typedef __uint128_t uint128_t;\n    typedef __int128_t int128_t;\n#elif defined(_MSC_VER)\n    // MSVC doesn't support 128-bit integers, use 64-bit fallbacks\n    typedef uint64_t uint128_t;\n    typedef int64_t int128_t;\n    #undef HIGH_PRECISION\n#endif\n\ntypedef struct Option_Ustr {\n    uint8_t _0;\n    char* value;\n} Option_Ustr;\n\ntypedef struct Option_bool {\n    uint8_t _0;\n    uint8_t value;\n} Option_bool;"
 
 [defines]
 "feature = high-precision" = "HIGH_PRECISION"
@@ -22,6 +22,8 @@ exclude = ["BarAggregation", "OrderId", "OrderSideSpecified"]
 "i32" = "int32_t"
 "bool" = "uint8_t"
 "Ustr" = "char*"
+"Option<Ustr>" = "Option_Ustr"
+"Option<bool>" = "Option_bool"
 "AccountId" = "AccountId_t"
 "Bar" = "Bar_t"
 "BarAggregation" = "uint8_t"

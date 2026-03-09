@@ -15,7 +15,7 @@
 
 //! The core `BacktestEngine` for backtesting on historical data.
 
-use std::{any::Any, cell::RefCell, fmt::Debug, rc::Rc, sync::Arc};
+use std::{any::Any, cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc, sync::Arc};
 
 use ahash::{AHashMap, AHashSet};
 use nautilus_analysis::analyzer::PortfolioAnalyzer;

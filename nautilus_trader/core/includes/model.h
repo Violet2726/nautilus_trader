@@ -15,6 +15,16 @@
     #undef HIGH_PRECISION
 #endif
 
+typedef struct Option_Ustr {
+    uint8_t _0;
+    char* value;
+} Option_Ustr;
+
+typedef struct Option_bool {
+    uint8_t _0;
+    uint8_t value;
+} Option_bool;
+
 #define DEPTH10_LEN 10
 
 #if defined(HIGH_PRECISION)

@@ -94,7 +94,7 @@ typedef enum ComponentTrigger {
     /**
      * 组件恢复（停止后）的触发器。
      */
-    RESUME = 6,
+    RESUME_TRIGGER = 6,
     /**
      * 组件成功恢复时的触发器。
      */

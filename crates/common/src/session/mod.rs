@@ -20,6 +20,7 @@ use nautilus_model::identifiers::Venue;
 
 /// 交易阶段枚举（占位符）
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "python", pyo3::pyclass(module = "nautilus_trader.core.nautilus_pyo3.common", from_py_object))]
 pub enum TradingPhase {
     Closed,
     ContinuousAm,
