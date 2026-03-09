@@ -85,7 +85,7 @@ impl Rule for SessionRule {
 mod tests {
     use super::*;
     use crate::market::session::TradingPhase;
-    use nautilus_common::{Rule, RuleCheckResult, RuleContext};
+    use nautilus_risk::{Rule, RuleContext};
     use nautilus_core::UnixNanos;
     use nautilus_model::enums::{OrderSide, OrderType};
     use nautilus_model::identifiers::{ClientOrderId, InstrumentId, StrategyId, TraderId};

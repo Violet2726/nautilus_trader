@@ -25,9 +25,10 @@
 //!
 //! ```rust
 //! use nautilus_markets_ashare::{AShareSessionProvider, AShareRuleConfig};
+//! use std::sync::Arc;
 //!
 //! // 创建A股交易时段提供者
-//! let session_provider = AShareSessionProvider::new(None);
+//! let session_provider = Arc::new(AShareSessionProvider::new(None));
 //!
 //! // 创建A股规则配置
 //! let config = AShareRuleConfig::new()

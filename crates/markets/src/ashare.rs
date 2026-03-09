@@ -13,16 +13,7 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! NautilusTrader 市场特定模块
-//!
-//! 提供各个市场的特定规则和功能。
+//! A股市场支持模块重新导出
 
-pub mod ashare;
-// pub mod us;     // 未来添加
-// pub mod hk;     // 未来添加
-
-// 重新导出常用类型
-pub use ashare::{
-    AShareSessionProvider, PriceLimits, T1Ledger, 
-    AShareRuleConfig, create_ashare_rule_chain
-};
+// 重新导出 ashare 子crate 的所有公共类型
+pub use nautilus_markets_ashare::*;

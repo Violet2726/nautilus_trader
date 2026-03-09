@@ -3994,6 +3994,7 @@ dependencies = [
  "nautilus-risk",
  "nautilus-testkit",
  "pyo3",
+ "ustr",
 ]
 
 [[package]]
