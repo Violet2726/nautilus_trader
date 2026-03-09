@@ -3,7 +3,7 @@
 //  https://nautechsystems.io
 //
 //  Licensed under the GNU Lesser General Public License Version 3.0 (the "License");
-//  You may not use this file except in compliance with the License.
+//  you may not use this file except in compliance with the License.
 //  You may obtain a copy of the License at https://www.gnu.org/licenses/lgpl-3.0.en.html
 //
 //  Unless required by applicable law or agreed to in writing, software
@@ -13,13 +13,21 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! Risk rule system for pre-trade validation.
+//! A股风险规则
 //!
-//! The rule system provides a flexible, extensible framework for implementing
-//! market-specific trading rules and risk controls. Rules can be chained together
-//! to create comprehensive validation pipelines.
+//! 包含所有A股特定的风险管理规则。
 
-pub mod common;
+pub mod lot_size;
+pub mod price_cage;
+pub mod price_limit;
+pub mod session;
+pub mod t1;
+pub mod throttler;
 
-// Re-exports
-pub use common::{Rule, RuleCheckResult, RuleContext, RuleChain};
+// 重新导出
+pub use lot_size::*;
+pub use price_cage::*;
+pub use price_limit::*;
+pub use session::*;
+pub use t1::*;
+pub use throttler::*;

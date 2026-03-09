@@ -42,7 +42,7 @@ use nautilus_model::{
         InstrumentClass, OrderSide, OrderStatus, PositionSide, TimeInForce, TradingState,
         TrailingOffsetType, TriggerType,
     },
-    events::{OrderDenied, OrderEventAny, OrderModifyRejected},
+    events::{OrderCancelRejected, OrderDenied, OrderEventAny, OrderModifyRejected},
     identifiers::{AccountId, InstrumentId},
     instruments::{Instrument, InstrumentAny},
     orders::{Order, OrderAny},
@@ -50,7 +50,10 @@ use nautilus_model::{
 };
 use nautilus_portfolio::Portfolio;
 use rust_decimal::{Decimal, prelude::ToPrimitive};
+use std::sync::Arc;
 use ustr::Ustr;
+
+use crate::rule::{RuleContext, RuleChain};
 
 type SubmitOrderFn = Box<dyn Fn(SubmitOrder)>;
 type ModifyOrderFn = Box<dyn Fn(ModifyOrder)>;
@@ -91,18 +94,26 @@ impl RiskEngine {
         clock: Rc<RefCell<dyn Clock>>,
         cache: Rc<RefCell<Cache>>,
     ) -> Self {
+        let global_trade_throttler = config.max_trade_command.as_ref().map(|rate_limit| {
+            Rc::new(RefCell::new(Self::create_global_trade_throttler(
+                rate_limit.clone(),
+                clock.clone(),
+                cache.clone(),
+            )))
+        });
+
         let throttled_submit_order = Self::create_submit_order_throttler(
             &config,
             clock.clone(),
             cache.clone(),
-            None,
+            global_trade_throttler.clone(),
         );
 
         let throttled_modify_order = Self::create_modify_order_throttler(
             &config,
             clock.clone(),
             cache.clone(),
-            None,
+            global_trade_throttler.clone(),
         );
 
         Self {
@@ -114,6 +125,7 @@ impl RiskEngine {
             max_notional_per_order: AHashMap::new(),
             trading_state: TradingState::Active,
             config,
+            global_trade_throttler,
             symbol_throttlers: AHashMap::new(),
             account_throttlers: AHashMap::new(),
         }
@@ -321,6 +333,97 @@ impl RiskEngine {
         ))
     }
 
+    fn create_global_trade_throttler(
+        rate_limit: nautilus_common::throttler::RateLimit,
+        clock: Rc<RefCell<dyn Clock>>,
+        cache: Rc<RefCell<Cache>>,
+    ) -> Throttler<TradingCommand, Box<dyn Fn(TradingCommand)>> {
+        let success_handler = {
+            Box::new(move |command: TradingCommand| {
+                let endpoint = MessagingSwitchboard::exec_engine_queue_execute();
+                msgbus::send_trading_command(endpoint, command);
+            }) as Box<dyn Fn(TradingCommand)>
+        };
+
+        let failure_handler = {
+            let cache = cache;
+            let clock = clock.clone();
+            Box::new(move |command: TradingCommand| {
+                let reason = "EXCEEDED MAX GLOBAL TRADE RATE LIMIT";
+                match &command {
+                    TradingCommand::SubmitOrder(submit_order) => {
+                        log::warn!(
+                            "SubmitOrder for {} DENIED: {}",
+                            submit_order.client_order_id,
+                            reason
+                        );
+                        Self::handle_submit_order_cache(&cache, submit_order);
+                        let denied = Self::create_order_denied(submit_order, reason, &clock);
+                        let endpoint = MessagingSwitchboard::exec_engine_process();
+                        msgbus::send_order_event(endpoint, denied);
+                    }
+                    TradingCommand::CancelOrder(cancel_order) => {
+                        log::warn!(
+                            "CancelOrder for {} DENIED: {}",
+                            cancel_order.client_order_id,
+                            reason
+                        );
+                        let (venue_order_id, account_id) = {
+                            let cache_borrow = cache.borrow();
+                            if let Some(order) = cache_borrow.order(&cancel_order.client_order_id) {
+                                (order.venue_order_id(), order.account_id())
+                            } else {
+                                (cancel_order.venue_order_id.clone(), None)
+                            }
+                        };
+                        let timestamp = clock.borrow().timestamp_ns();
+                        let rejected = OrderEventAny::CancelRejected(OrderCancelRejected::new(
+                            cancel_order.trader_id,
+                            cancel_order.strategy_id,
+                            cancel_order.instrument_id,
+                            cancel_order.client_order_id.clone(),
+                            Ustr::from(reason),
+                            UUID4::new(),
+                            timestamp,
+                            timestamp,
+                            false,
+                            venue_order_id,
+                            account_id,
+                        ));
+                        let endpoint = MessagingSwitchboard::exec_engine_process();
+                        msgbus::send_order_event(endpoint, rejected);
+                    }
+                    TradingCommand::ModifyOrder(modify_order) => {
+                        log::warn!(
+                            "ModifyOrder for {} DENIED: {}",
+                            modify_order.client_order_id,
+                            reason
+                        );
+                        let order = match Self::get_existing_order(&cache, modify_order) {
+                            Some(order) => order,
+                            None => return,
+                        };
+                        let rejected = Self::create_modify_rejected(&order, reason, &clock);
+                        let endpoint = MessagingSwitchboard::exec_engine_process();
+                        msgbus::send_order_event(endpoint, rejected);
+                    }
+                    _ => {
+                        log::warn!("Command dropped by global throttler: {:?}", command);
+                    }
+                }
+            }) as Box<dyn Fn(TradingCommand)>
+        };
+
+        Throttler::new(
+            rate_limit.limit,
+            rate_limit.interval_ns,
+            clock,
+            "GLOBAL_TRADE_THROTTLER".to_string(),
+            success_handler,
+            Some(failure_handler),
+            Ustr::from(UUID4::new().as_str()),
+        )
+    }
 
     /// Executes a trading command through the risk management pipeline.
     pub fn execute(&mut self, command: TradingCommand) {
@@ -361,6 +464,38 @@ impl RiskEngine {
         log::info!("Set MAX_NOTIONAL_PER_ORDER: {instrument_id} {new_value_str}");
     }
 
+    /// 加载 T+1 账本初始持仓，供早盘启动或盘中恢复时调用。
+    pub fn t1_load_position(
+        &mut self,
+        account_id: AccountId,
+        instrument_id: InstrumentId,
+        total_qty: f64,
+        today_buy_qty: f64,
+    ) {
+        if let Some(ledger) = &self.t1_ledger {
+            ledger.write().expect("T1 ledger lock poisoned").load_position(account_id, instrument_id, total_qty, today_buy_qty);
+            log::info!(
+                "T1_LEDGER Loaded: account={}, symbol={}, total={}, today_buy={}",
+                account_id,
+                instrument_id,
+                total_qty,
+                today_buy_qty
+            );
+        } else {
+            log::warn!("t1_load_position called but T1 ledger is not enabled.");
+        }
+    }
+
+    /// 执行 T+1 账本日切结算，将今日买入仓位解冻为可卖仓位（通常在盘后发信号调用）。
+    pub fn t1_on_settlement(&mut self) {
+        if let Some(ledger) = &self.t1_ledger {
+            ledger.write().expect("T1 ledger lock poisoned").on_settlement();
+            log::info!("T1_LEDGER settled for all accounts to unlock sellable balance.");
+        } else {
+            log::warn!("t1_on_settlement called but T1 ledger is not enabled.");
+        }
+    }
+
     /// Starts the risk engine.
     pub fn start(&mut self) {
         log::info!("Started");
@@ -375,6 +510,9 @@ impl RiskEngine {
     pub fn reset(&mut self) {
         self.throttled_submit_order.reset();
         self.throttled_modify_order.reset();
+        if let Some(t) = self.global_trade_throttler.as_ref() {
+            t.borrow_mut().reset();
+        }
         self.max_notional_per_order.clear();
         self.trading_state = TradingState::Active;
 
@@ -444,42 +582,103 @@ impl RiskEngine {
         }
     }
 
-    /// 检查标的是否停牌/临停
-    fn check_instrument_suspended(&self, instrument_id: &InstrumentId) -> bool {
-        let cache = self.cache.borrow();
-        if let Some(status) = cache.instrument_status(instrument_id) {
-            use nautilus_model::enums::MarketStatusAction;
-            matches!(
-                status.action,
-                MarketStatusAction::Halt
-                    | MarketStatusAction::Suspend
-                    | MarketStatusAction::NotAvailableForTrading
-            )
-        } else {
-            false
-        }
-    }
-
-    /// 撤单命令处理。
+    /// 撤单命令处理（含交易时段检查）。
     fn handle_cancel_order(&mut self, command: CancelOrder) {
         if self.config.bypass {
             self.send_to_execution(TradingCommand::CancelOrder(command));
             return;
         }
 
-        // Session provider functionality has been moved to nautilus-markets-ashare
+        // ---- 交易时段检查 ----
+        if let Some(ref session) = self.session_provider {
+            let phase = session.phase_at(
+                &command.instrument_id.venue,
+                self.clock.borrow().timestamp_ns(),
+            );
+            if !phase.can_cancel_order() {
+                let reason = format!("CANCEL_DENIED: phase={phase:?} does not allow cancellation");
+                log::warn!(
+                    "CancelOrder for {} DENIED: {reason}",
+                    command.client_order_id
+                );
+                // 从缓存中查找已有订单获取 venue_order_id / account_id
+                let (venue_order_id, account_id) = {
+                    let cache = self.cache.borrow();
+                    if let Some(order) = cache.order(&command.client_order_id) {
+                        (order.venue_order_id(), order.account_id())
+                    } else {
+                        (command.venue_order_id, None)
+                    }
+                };
+                let event = self.create_cancel_rejected(
+                    command.trader_id,
+                    command.strategy_id,
+                    command.instrument_id,
+                    command.client_order_id,
+                    venue_order_id,
+                    account_id,
+                    &reason,
+                );
+                let endpoint = MessagingSwitchboard::exec_engine_process();
+                msgbus::send_order_event(endpoint, event);
+                return;
+            }
+        }
         self.send_to_execution(TradingCommand::CancelOrder(command));
     }
 
-    /// 全部撤单命令处理。
+    /// 全部撤单命令处理（含交易时段检查）。
+    /// `CancelAllOrders` 无对应的单笔 `OrderCancelRejected`，仅打日志拦截。
     fn handle_cancel_all_orders(&mut self, command: CancelAllOrders) {
         if self.config.bypass {
             self.send_to_execution(TradingCommand::CancelAllOrders(command));
             return;
         }
 
-        // Session provider functionality has been moved to nautilus-markets-ashare
+        // ---- 交易时段检查 ----
+        if let Some(ref session) = self.session_provider {
+            let phase = session.phase_at(
+                &command.instrument_id.venue,
+                self.clock.borrow().timestamp_ns(),
+            );
+            if !phase.can_cancel_order() {
+                log::warn!(
+                    "CancelAllOrders for {} DENIED: phase={phase:?} does not allow cancellation",
+                    command.instrument_id
+                );
+                return;
+            }
+        }
+
         self.send_to_execution(TradingCommand::CancelAllOrders(command));
+    }
+
+    /// 构建 `OrderCancelRejected` 事件（A 股撤单被阶段规则拒绝时使用）。
+    #[allow(clippy::too_many_arguments)]
+    fn create_cancel_rejected(
+        &self,
+        trader_id: nautilus_model::identifiers::TraderId,
+        strategy_id: nautilus_model::identifiers::StrategyId,
+        instrument_id: InstrumentId,
+        client_order_id: nautilus_model::identifiers::ClientOrderId,
+        venue_order_id: Option<nautilus_model::identifiers::VenueOrderId>,
+        account_id: Option<AccountId>,
+        reason: &str,
+    ) -> OrderEventAny {
+        let ts_now = self.clock.borrow().timestamp_ns();
+        OrderEventAny::CancelRejected(OrderCancelRejected::new(
+            trader_id,
+            strategy_id,
+            instrument_id,
+            client_order_id,
+            Ustr::from(reason),
+            UUID4::new(),
+            ts_now,
+            ts_now,
+            false,
+            venue_order_id,
+            account_id,
+        ))
     }
 
     fn handle_submit_order(&mut self, command: SubmitOrder) {
@@ -544,17 +743,56 @@ impl RiskEngine {
             return; // Denied
         };
 
+        // ---- 使用规则链进行 A 股相关检查 ----
+        if let Some(ref rule_chain) = self.ashare_rule_chain {
+            let account_id = order.account_id().or_else(|| {
+                self.cache
+                    .borrow()
+                    .account_for_venue(&order.instrument_id().venue)
+                    .map(|a| a.id())
+            });
+
+            let context = RuleContext::new(
+                order.clone(),
+                command.instrument_id,
+                account_id,
+                self.clock.borrow().timestamp_ns().as_u64(),
+            );
+
+            let rule_result = rule_chain.check(&context);
+            if !rule_result.is_pass() {
+                if let crate::rule::RuleCheckResult::Fail { reason } = rule_result {
+                    self.deny_command(
+                        TradingCommand::SubmitOrder(command),
+                        &reason,
+                    );
+                    return;
+                }
+            }
+        }
+
         if !self.check_order(instrument.clone(), order.clone()) {
             return; // Denied
         }
 
         // ---- 停牌/临停检查 ----
-        if self.check_instrument_suspended(&command.instrument_id) {
-            self.deny_command(
-                TradingCommand::SubmitOrder(command),
-                "INSTRUMENT_SUSPENDED",
-            );
-            return;
+        {
+            let cache = self.cache.borrow();
+            if let Some(status) = cache.instrument_status(&command.instrument_id) {
+                use nautilus_model::enums::MarketStatusAction;
+                if matches!(
+                    status.action,
+                    MarketStatusAction::Halt
+                        | MarketStatusAction::Suspend
+                        | MarketStatusAction::NotAvailableForTrading
+                ) {
+                    self.deny_command(
+                        TradingCommand::SubmitOrder(command),
+                        &format!("INSTRUMENT_SUSPENDED: status={:?}", status.action),
+                    );
+                    return;
+                }
+            }
         }
 
         if !self.check_orders_risk(instrument.clone(), &[order]) {
@@ -605,13 +843,24 @@ impl RiskEngine {
             }
         }
 
-        // ---- 停牌/临停检查 ----
-        if self.check_instrument_suspended(&command.instrument_id) {
-            self.deny_order_list(
-                &orders,
-                "INSTRUMENT_SUSPENDED",
-            );
-            return;
+        // ---- 新增：停牌/临停检查 ----
+        {
+            let cache = self.cache.borrow();
+            if let Some(status) = cache.instrument_status(&command.instrument_id) {
+                use nautilus_model::enums::MarketStatusAction;
+                if matches!(
+                    status.action,
+                    MarketStatusAction::Halt
+                        | MarketStatusAction::Suspend
+                        | MarketStatusAction::NotAvailableForTrading
+                ) {
+                    self.deny_order_list(
+                        &orders,
+                        &format!("INSTRUMENT_SUSPENDED: status={:?}", status.action),
+                    );
+                    return;
+                }
+            }
         }
 
         if !self.check_orders_risk(instrument.clone(), &orders) {
@@ -1458,7 +1707,19 @@ impl RiskEngine {
     }
 
     fn execution_gateway(&mut self, instrument: InstrumentAny, command: TradingCommand) {
-        // Session provider functionality has been moved to nautilus-markets-ashare
+        // ---- 新增：撤单时段检查 ----
+        if let TradingCommand::CancelOrder(ref cancel) = command {
+            if let Some(ref session) = self.session_provider {
+                let phase = session.phase_at(
+                    &cancel.instrument_id.venue,
+                    self.clock.borrow().timestamp_ns(),
+                );
+                if !phase.can_cancel_order() {
+                    log::warn!("CancelOrder DENIED: phase={phase:?} does not allow cancellation");
+                    return;
+                }
+            }
+        }
 
         match self.trading_state {
             TradingState::Halted => match command {
@@ -1602,7 +1863,17 @@ impl RiskEngine {
     }
 
     fn send_to_execution(&self, command: TradingCommand) {
-        // Global trade throttler functionality has been moved to individual throttlers
+        if let Some(gt) = &self.global_trade_throttler {
+            if matches!(
+                command,
+                TradingCommand::SubmitOrder(_)
+                    | TradingCommand::CancelOrder(_)
+                    | TradingCommand::ModifyOrder(_)
+            ) {
+                gt.borrow_mut().send(command);
+                return;
+            }
+        }
 
         let endpoint = MessagingSwitchboard::exec_engine_queue_execute();
         msgbus::send_trading_command(endpoint, command);
@@ -1615,7 +1886,17 @@ impl RiskEngine {
             log::debug!("{RECV}{EVT} {event:?}");
         }
 
-        // T1 ledger functionality has been moved to nautilus-markets-ashare
+        // ---- T1Ledger 更新 ----
+        if let Some(ledger) = &self.t1_ledger {
+            if let OrderEventAny::Filled(fill) = event {
+                ledger.write().expect("T1 ledger lock poisoned").on_fill(
+                    fill.account_id,
+                    fill.instrument_id,
+                    fill.order_side,
+                    fill.last_qty.as_f64(),
+                );
+            }
+        }
     }
 
     fn handle_instrument_status(&mut self, status: &InstrumentStatus) {

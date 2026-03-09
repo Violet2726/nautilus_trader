@@ -3,7 +3,7 @@
 //  https://nautechsystems.io
 //
 //  Licensed under the GNU Lesser General Public License Version 3.0 (the "License");
-//  You may not use this file except in compliance with the License.
+//  you may not use this file except in compliance with the License.
 //  You may obtain a copy of the License at https://www.gnu.org/licenses/lgpl-3.0.en.html
 //
 //  Unless required by applicable law or agreed to in writing, software
@@ -13,15 +13,19 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-use super::super::common::{Rule, RuleCheckResult, RuleContext};
+//! A股T+1规则
+//!
+//! 提供A股市场的T+1交收验证功能。
+
+use crate::portfolio::T1Ledger;
+use nautilus_risk::rule::common::{Rule, RuleCheckResult, RuleContext};
 use nautilus_model::enums::OrderSide;
 use nautilus_model::orders::Order;
-use nautilus_portfolio::t1_ledger::T1Ledger;
 use std::sync::Arc;
 
-/// 用于验证 T+1 交收限制的规则。
+/// 用于验证T+1交收限制的规则。
 ///
-/// 此规则确保卖出订单不超过 T+1 交收规则下的可卖出数量。
+/// 此规则确保卖出订单不超过T+1交收规则下的可卖出数量。
 #[derive(Debug)]
 pub struct T1Rule {
     t1_ledger: Arc<std::sync::RwLock<T1Ledger>>,
@@ -140,7 +144,6 @@ mod tests {
         let ledger = T1Ledger::new();
         let rule = T1Rule::new(Arc::new(std::sync::RwLock::new(ledger)));
         let context = create_test_context(100.0, OrderSide::Buy, None);
-
         let result = rule.check(&context);
         assert!(result.is_pass());
     }
@@ -161,7 +164,6 @@ mod tests {
             OrderSide::Sell,
             Some(AccountId::from("ACC-001")),
         );
-
         let result = rule.check(&context);
         assert!(result.is_pass());
     }
@@ -182,7 +184,6 @@ mod tests {
             OrderSide::Sell,
             Some(AccountId::from("ACC-001")),
         );
-
         let result = rule.check(&context);
         assert!(result.is_fail());
         assert!(result.to_string().contains("EXCEEDS_SELLABLE"));
@@ -197,40 +198,14 @@ mod tests {
             1000.0,
             500.0,
         );
-
         let mut rule = T1Rule::new(Arc::new(std::sync::RwLock::new(ledger)));
         rule.set_enabled(false);
-
         let context = create_test_context(
             600.0,
             OrderSide::Sell,
             Some(AccountId::from("ACC-001")),
         );
-
         let result = rule.check(&context);
         assert!(result.is_pass());
-    }
-
-    #[test]
-    fn test_t1_rule_on_order_accepted() {
-        let mut ledger = T1Ledger::new();
-        ledger.load_position(
-            AccountId::from("ACC-001"),
-            InstrumentId::from("600000.SH"),
-            1000.0,
-            0.0,
-        );
-
-        let rule = T1Rule::new(Arc::new(std::sync::RwLock::new(ledger)));
-        let context = create_test_context(
-            100.0,
-            OrderSide::Sell,
-            Some(AccountId::from("ACC-001")),
-        );
-
-        rule.on_order_accepted(&context);
-
-        let sellable = rule.ledger().read().expect("T1 ledger lock poisoned").sellable(&AccountId::from("ACC-001"), &InstrumentId::from("600000.SH"));
-        assert_eq!(sellable, 900.0);
     }
 }

@@ -3,7 +3,7 @@
 //  https://nautechsystems.io
 //
 //  Licensed under the GNU Lesser General Public License Version 3.0 (the "License");
-//  You may not use this file except in compliance with the License.
+//  you may not use this file except in compliance with the License.
 //  You may obtain a copy of the License at https://www.gnu.org/licenses/lgpl-3.0.en.html
 //
 //  Unless required by applicable law or agreed to in writing, software
@@ -13,12 +13,22 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
+//! A股交易规则配置
+//!
+//! 提供A股市场的风险管理规则配置，包括：
+//! - 交易时段检查配置
+//! - 价格笼子验证配置
+//! - 涨跌停限制验证配置
+//! - T+1交收规则配置
+//! - 手数验证配置
+//! - 限流控制配置
+
 use nautilus_common::throttler::RateLimit;
-use nautilus_common::session::SessionProvider;
-use nautilus_portfolio::t1_ledger::T1Ledger;
+use crate::market::session::SessionProvider;
+use crate::portfolio::T1Ledger;
 use std::sync::Arc;
 
-/// A 股交易规则配置。
+/// A股交易规则配置。
 #[derive(Clone)]
 pub struct AShareRuleConfig {
     /// 启用基于交易时段的阶段检查。

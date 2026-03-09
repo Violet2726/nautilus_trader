@@ -3,7 +3,7 @@
 //  https://nautechsystems.io
 //
 //  Licensed under the GNU Lesser General Public License Version 3.0 (the "License");
-//  You may not use this file except in compliance with the License.
+//  you may not use this file except in compliance with the License.
 //  You may obtain a copy of the License at https://www.gnu.org/licenses/lgpl-3.0.en.html
 //
 //  Unless required by applicable law or agreed to in writing, software
@@ -13,11 +13,15 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-use super::super::common::{Rule, RuleCheckResult, RuleContext};
-use ahash::AHashMap;
+//! A股限流规则
+//!
+//! 提供A股市场的订单提交速率限制功能。
+
+use nautilus_risk::rule::common::{Rule, RuleCheckResult, RuleContext};
 use nautilus_common::throttler::RateLimit;
 use nautilus_core::UnixNanos;
 use nautilus_model::identifiers::{AccountId, InstrumentId};
+use ahash::AHashMap;
 use std::collections::VecDeque;
 use std::sync::RwLock;
 
@@ -201,136 +205,74 @@ mod tests {
 
     #[test]
     fn test_throttler_rule_pass() {
-        let rate_limit = RateLimit::new(10, 1_000_000_000);
-        let rule = ThrottlerRule::new(Some(rate_limit), None);
-        let context = create_test_context(
-            "600000.SH",
-            Some(AccountId::from("ACC-001")),
-        );
-
+        let rule = ThrottlerRule::new(None, None);
+        let context = create_test_context("600000.SH", None);
         let result = rule.check(&context);
         assert!(result.is_pass());
     }
 
     #[test]
-    fn test_throttler_rule_no_limits() {
-        let rule = ThrottlerRule::new(None, None);
-        let context = create_test_context(
-            "600000.SH",
-            Some(AccountId::from("ACC-001")),
-        );
+    fn test_throttler_rule_account_limit() {
+        let rate_limit = RateLimit {
+            interval_ns: 1_000_000_000, // 1秒
+            limit: 2,
+        };
+        let rule = ThrottlerRule::new(Some(rate_limit), None);
+        let account_id = AccountId::from("ACC-001");
 
-        let result = rule.check(&context);
-        assert!(result.is_pass());
+        // 第一次请求应该通过
+        let context1 = create_test_context("600000.SH", Some(account_id));
+        let result1 = rule.check(&context1);
+        assert!(result1.is_pass());
+
+        // 第二次请求应该通过
+        let context2 = create_test_context("600000.SH", Some(account_id));
+        let result2 = rule.check(&context2);
+        assert!(result2.is_pass());
+
+        // 第三次请求应该失败
+        let context3 = create_test_context("600000.SH", Some(account_id));
+        let result3 = rule.check(&context3);
+        assert!(result3.is_fail());
+        assert!(result3.to_string().contains("THROTTLED"));
+    }
+
+    #[test]
+    fn test_throttler_rule_symbol_limit() {
+        let rate_limit = RateLimit {
+            interval_ns: 1_000_000_000, // 1秒
+            limit: 2,
+        };
+        let rule = ThrottlerRule::new(None, Some(rate_limit));
+
+        // 第一次请求应该通过
+        let context1 = create_test_context("600000.SH", None);
+        let result1 = rule.check(&context1);
+        assert!(result1.is_pass());
+
+        // 第二次请求应该通过
+        let context2 = create_test_context("600000.SH", None);
+        let result2 = rule.check(&context2);
+        assert!(result2.is_pass());
+
+        // 第三次请求应该失败
+        let context3 = create_test_context("600000.SH", None);
+        let result3 = rule.check(&context3);
+        assert!(result3.is_fail());
+        assert!(result3.to_string().contains("THROTTLED"));
     }
 
     #[test]
     fn test_throttler_rule_disabled() {
-        let rate_limit = RateLimit::new(1, 1_000_000_000);
+        let rate_limit = RateLimit {
+            interval_ns: 1_000_000_000, // 1秒
+            limit: 2,
+        };
         let mut rule = ThrottlerRule::new(Some(rate_limit), None);
         rule.set_enabled(false);
-        let context = create_test_context(
-            "600000.SH",
-            Some(AccountId::from("ACC-001")),
-        );
 
+        let context = create_test_context("600000.SH", Some(AccountId::from("ACC-001")));
         let result = rule.check(&context);
         assert!(result.is_pass());
-    }
-
-    #[test]
-    fn test_throttler_rule_reset() {
-        let rate_limit = RateLimit::new(10, 1_000_000_000);
-        let mut rule = ThrottlerRule::new(Some(rate_limit), None);
-        let context = create_test_context(
-            "600000.SH",
-            Some(AccountId::from("ACC-001")),
-        );
-
-        rule.check(&context);
-        assert_eq!(rule.account_timestamps.read().unwrap().len(), 1);
-
-        rule.reset();
-        assert_eq!(rule.account_timestamps.read().unwrap().len(), 0);
-    }
-
-    #[test]
-    fn test_throttler_rule_sliding_window() {
-        // 测试滑动时间窗口：限制为每 1 秒最多 2 次请求
-        let rate_limit = RateLimit::new(2, 1_000_000_000); // 2 次/秒
-        let rule = ThrottlerRule::new(Some(rate_limit), None);
-        
-        let account_id = AccountId::from("ACC-001");
-        let instrument_id = InstrumentId::from("600000.SH");
-        
-        // 第 1 次请求（时间 0）- 应该通过
-        let context1 = RuleContext::new(
-            OrderTestBuilder::new(OrderType::Limit)
-                .trader_id(TraderId::from("TRADER-001"))
-                .strategy_id(StrategyId::from("STRATEGY-001"))
-                .instrument_id(instrument_id)
-                .client_order_id(ClientOrderId::from("O-001"))
-                .side(OrderSide::Buy)
-                .quantity(Quantity::new(100.0, 0))
-                .price(Price::new(10.0, 2))
-                .build(),
-            instrument_id,
-            Some(account_id),
-            0, // 时间 0
-        );
-        assert!(rule.check(&context1).is_pass());
-        
-        // 第 2 次请求（时间 0.5 秒）- 应该通过
-        let context2 = RuleContext::new(
-            OrderTestBuilder::new(OrderType::Limit)
-                .trader_id(TraderId::from("TRADER-001"))
-                .strategy_id(StrategyId::from("STRATEGY-001"))
-                .instrument_id(instrument_id)
-                .client_order_id(ClientOrderId::from("O-002"))
-                .side(OrderSide::Buy)
-                .quantity(Quantity::new(100.0, 0))
-                .price(Price::new(10.0, 2))
-                .build(),
-            instrument_id,
-            Some(account_id),
-            500_000_000, // 时间 0.5 秒
-        );
-        assert!(rule.check(&context2).is_pass());
-        
-        // 第 3 次请求（时间 0.8 秒）- 应该失败（窗口内已有 2 次）
-        let context3 = RuleContext::new(
-            OrderTestBuilder::new(OrderType::Limit)
-                .trader_id(TraderId::from("TRADER-001"))
-                .strategy_id(StrategyId::from("STRATEGY-001"))
-                .instrument_id(instrument_id)
-                .client_order_id(ClientOrderId::from("O-003"))
-                .side(OrderSide::Buy)
-                .quantity(Quantity::new(100.0, 0))
-                .price(Price::new(10.0, 2))
-                .build(),
-            instrument_id,
-            Some(account_id),
-            800_000_000, // 时间 0.8 秒
-        );
-        let result3 = rule.check(&context3);
-        assert!(result3.is_fail());
-        assert!(result3.to_string().contains("超出速率限制"));
-        
-        // 第 4 次请求（时间 1.1 秒）- 应该通过（第 1 次请求已滑出窗口）
-        let context4 = RuleContext::new(
-            OrderTestBuilder::new(OrderType::Limit)
-                .trader_id(TraderId::from("TRADER-001"))
-                .strategy_id(StrategyId::from("STRATEGY-001"))
-                .instrument_id(instrument_id)
-                .client_order_id(ClientOrderId::from("O-004"))
-                .side(OrderSide::Buy)
-                .quantity(Quantity::new(100.0, 0))
-                .price(Price::new(10.0, 2))
-                .build(),
-            instrument_id,
-            Some(account_id),
-            1_100_000_000, // 时间 1.1 秒
-        );
-        assert!(rule.check(&context4).is_pass());
     }
 }

@@ -14,6 +14,7 @@ members = [
   "crates/indicators",
   "crates/infrastructure",
   "crates/live",
+  "crates/markets",
   "crates/model",
   "crates/network",
   "crates/persistence",
@@ -48,6 +49,7 @@ homepage = "https://nautilustrader.io"
 
 [workspace.dependencies]
 nautilus-analysis = { path = "crates/analysis", version = "0.54.0" }
+nautilus-markets = { path = "crates/markets", version = "0.54.0" }
 nautilus-backtest = { path = "crates/backtest", version = "0.54.0" }
 nautilus-cli = { path = "crates/cli", version = "0.54.0" }
 nautilus-common = { path = "crates/common", version = "0.54.0" }

@@ -3766,7 +3766,7 @@ fn test_ashare_cancel_order_denied_in_locked_phase(
     instrument_audusd: InstrumentAny,
 ) {
     use nautilus_common::messages::execution::CancelOrder;
-    use nautilus_common::session::ashare::AShareSessionProvider;
+    use nautilus_markets_ashare::AShareSessionProvider;
     use nautilus_model::events::OrderEventType;
     use std::sync::Arc;
 
@@ -3853,7 +3853,7 @@ fn test_ashare_cancel_order_accepted_in_continuous_am(
     instrument_audusd: InstrumentAny,
 ) {
     use nautilus_common::messages::execution::CancelOrder;
-    use nautilus_common::session::ashare::AShareSessionProvider;
+    use nautilus_markets_ashare::AShareSessionProvider;
     use std::sync::Arc;
 
     let process_handler = register_process_handler();

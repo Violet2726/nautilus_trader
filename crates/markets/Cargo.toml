@@ -1,0 +1,24 @@
+[package]
+name = "nautilus-markets"
+version = "0.54.0"
+edition = "2021"
+description = "NautilusTrader 市场特定模块"
+authors = ["Nautech Systems <info@nautechsystems.io>"]
+license = "LGPL-3.0"
+repository = "https://github.com/nautechsystems/nautilus_trader"
+homepage = "https://nautechsystems.io"
+keywords = ["trading", "markets", "finance"]
+categories = ["finance", "algorithms"]
+
+[dependencies]
+nautilus-markets-ashare = { path = "./ashare", optional = true }
+
+[features]
+default = ["ashare"]
+ashare = ["nautilus-markets-ashare"]
+us = []      # 未来
+hk = []      # 未来
+
+[package.metadata.docs.rs]
+all-features = true
+rustc-args = ["--cfg", "docsrs"]

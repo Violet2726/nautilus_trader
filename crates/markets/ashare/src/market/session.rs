@@ -3,7 +3,7 @@
 //  https://nautechsystems.io
 //
 //  Licensed under the GNU Lesser General Public License Version 3.0 (the "License");
-//  You may not use this file except in compliance with the License.
+//  you may not use this file except in compliance with the License.
 //  You may obtain a copy of the License at https://www.gnu.org/licenses/lgpl-3.0.en.html
 //
 //  Unless required by applicable law or agreed to in writing, software
@@ -13,23 +13,21 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! A 股市场交易时段提供者实现。
+//! A股市场交易时段提供者实现。
 //!
-//! 本模块提供 A 股特定的交易时段逻辑：
+//! 本模块提供A股特定的交易时段逻辑：
 //!
-//! - **TradingPhase**：A 股交易阶段枚举
-//! - **AShareSessionProvider**：A 股市场的 SessionProvider 实现
+//! - **TradingPhase**：A股交易阶段枚举
+//! - **AShareSessionProvider**：A股市场的 SessionProvider 实现
 
-
-use super::SessionProvider;
 use chrono::{Datelike, TimeZone, Utc, Weekday};
 use nautilus_core::UnixNanos;
 use nautilus_model::identifiers::Venue;
 use std::collections::HashSet;
 
-/// A 股交易阶段枚举。
+/// A股交易阶段枚举。
 ///
-/// 表示中国 A 股市场交易日的不同阶段：
+/// 表示中国A股市场交易日的不同阶段：
 ///
 /// - **集合竞价阶段**（09:15-09:30）：具有不同限制的集合竞价
 /// - **连续竞价阶段**（09:30-11:30, 13:00-14:57）：正常交易
@@ -106,7 +104,7 @@ impl TradingPhase {
     }
 }
 
-/// A 股交易时段表。
+/// A股交易时段表。
 /// 所有时间边界编码为秒级偏移：HH*3600 + MM*60 + SS
 const PHASES: &[(u32, u32, TradingPhase)] = &[
     (9 * 3600 + 15 * 60, 9 * 3600 + 20 * 60, TradingPhase::PreAuctionOpen),
@@ -117,6 +115,20 @@ const PHASES: &[(u32, u32, TradingPhase)] = &[
     (13 * 3600, 14 * 3600 + 57 * 60, TradingPhase::ContinuousPm),
     (14 * 3600 + 57 * 60, 15 * 3600, TradingPhase::ClosingAuction),
 ];
+
+/// 查询给定场地和时间戳的交易阶段。
+///
+/// # 参数
+///
+/// * `venue` - 要查询的交易场地
+/// * `ts_ns` - 纳秒级时间戳
+///
+/// # 返回值
+///
+/// 指定场地和时间的当前交易阶段
+pub trait SessionProvider: Send + Sync {
+    fn phase_at(&self, venue: &Venue, ts_ns: UnixNanos) -> TradingPhase;
+}
 
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(
@@ -148,8 +160,8 @@ impl AShareSessionProvider {
 
     #[cfg(feature = "python")]
     #[pyo3(name = "phase_at")]
-    pub fn py_phase_at(&self, ts_ns: u64) -> super::TradingPhase {
-        // 我们可以直接创建一个虚拟场地，因为 A 股的阶段计算仅由时间决定
+    pub fn py_phase_at(&self, ts_ns: u64) -> TradingPhase {
+        // 我们可以直接创建一个虚拟场地，因为A股的阶段计算仅由时间决定
         let venue = Venue::new(ustr::ustr("XSHG"));
         <Self as SessionProvider>::phase_at(self, &venue, nautilus_core::UnixNanos::from(ts_ns))
     }

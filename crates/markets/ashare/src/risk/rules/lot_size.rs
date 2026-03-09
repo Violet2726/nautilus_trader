@@ -3,7 +3,7 @@
 //  https://nautechsystems.io
 //
 //  Licensed under the GNU Lesser General Public License Version 3.0 (the "License");
-//  You may not use this file except in compliance with the License.
+//  you may not use this file except in compliance with the License.
 //  You may obtain a copy of the License at https://www.gnu.org/licenses/lgpl-3.0.en.html
 //
 //  Unless required by applicable law or agreed to in writing, software
@@ -13,17 +13,21 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-use super::super::common::{Rule, RuleCheckResult, RuleContext};
+//! A股手数规则
+//!
+//! 提供A股市场的手数验证功能。
+
+use crate::portfolio::T1Ledger;
+use nautilus_risk::rule::common::{Rule, RuleCheckResult, RuleContext};
 use nautilus_model::enums::OrderSide;
 use nautilus_model::orders::Order;
-use nautilus_portfolio::t1_ledger::T1Ledger;
 
-/// 用于验证 A 股手数要求的规则。
+/// 用于验证A股手数要求的规则。
 ///
-/// 此规则确保订单符合 A 股手数规则：
-/// - 主板：100 股起，100 的整数倍
-/// - 科创板（688）：200 股起，1 股递增
-/// - 创业板（30）：100 股起，1 股递增
+/// 此规则确保订单符合A股手数规则：
+/// - 主板：100股起，100的整数倍
+/// - 科创板（688）：200股起，1股递增
+/// - 创业板（30）：100股起，1股递增
 /// - 零股卖出：必须卖出全部可卖余额
 #[derive(Debug)]
 pub struct LotSizeRule {
@@ -140,12 +144,6 @@ impl LotSizeRule {
     }
 }
 
-impl Default for LotSizeRule {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl Rule for LotSizeRule {
     fn name(&self) -> &str {
         "LotSizeRule"
@@ -212,7 +210,6 @@ mod tests {
     fn test_lot_size_rule_main_board_buy_pass() {
         let rule = LotSizeRule::new();
         let context = create_test_context("600000.SH", 100.0, OrderSide::Buy, None);
-
         let result = rule.check(&context);
         assert!(result.is_pass());
     }
@@ -221,7 +218,6 @@ mod tests {
     fn test_lot_size_rule_main_board_buy_fail() {
         let rule = LotSizeRule::new();
         let context = create_test_context("600000.SH", 150.0, OrderSide::Buy, None);
-
         let result = rule.check(&context);
         assert!(result.is_fail());
         assert!(result.to_string().contains("MAIN_BOARD_BUY_VIOLATION"));
@@ -231,7 +227,6 @@ mod tests {
     fn test_lot_size_rule_star_market_buy_pass() {
         let rule = LotSizeRule::new();
         let context = create_test_context("688001.SH", 200.0, OrderSide::Buy, None);
-
         let result = rule.check(&context);
         assert!(result.is_pass());
     }
@@ -240,7 +235,6 @@ mod tests {
     fn test_lot_size_rule_star_market_buy_fail() {
         let rule = LotSizeRule::new();
         let context = create_test_context("688001.SH", 199.0, OrderSide::Buy, None);
-
         let result = rule.check(&context);
         assert!(result.is_fail());
         assert!(result.to_string().contains("STAR_MARKET_BUY_VIOLATION"));
@@ -250,7 +244,6 @@ mod tests {
     fn test_lot_size_rule_chinext_buy_pass() {
         let rule = LotSizeRule::new();
         let context = create_test_context("300001.SZ", 100.0, OrderSide::Buy, None);
-
         let result = rule.check(&context);
         assert!(result.is_pass());
     }
@@ -259,7 +252,6 @@ mod tests {
     fn test_lot_size_rule_chinext_buy_fail() {
         let rule = LotSizeRule::new();
         let context = create_test_context("300001.SZ", 99.0, OrderSide::Buy, None);
-
         let result = rule.check(&context);
         assert!(result.is_fail());
         assert!(result.to_string().contains("CHINEXT_BUY_VIOLATION"));
@@ -269,7 +261,6 @@ mod tests {
     fn test_lot_size_rule_sell_pass() {
         let rule = LotSizeRule::new();
         let context = create_test_context("600000.SH", 100.0, OrderSide::Sell, None);
-
         let result = rule.check(&context);
         assert!(result.is_pass());
     }
@@ -279,7 +270,6 @@ mod tests {
         let mut rule = LotSizeRule::new();
         rule.set_enabled(false);
         let context = create_test_context("600000.SH", 150.0, OrderSide::Buy, None);
-
         let result = rule.check(&context);
         assert!(result.is_pass());
     }

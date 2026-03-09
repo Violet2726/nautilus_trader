@@ -15,11 +15,19 @@
 
 //! 交易时段管理基础设施。
 
-pub mod ashare;
-pub mod price_limits;
-pub use ashare::TradingPhase;
 use nautilus_core::UnixNanos;
 use nautilus_model::identifiers::Venue;
+
+/// 交易阶段枚举（占位符）
+#[derive(Debug, Clone, PartialEq)]
+pub enum TradingPhase {
+    Closed,
+    ContinuousAm,
+    OpeningCall,
+    Opening,
+    ContinuousPm,
+    Closing,
+}
 
 /// 查询给定场地和时间戳的交易阶段。
 ///

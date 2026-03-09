@@ -1,0 +1,42 @@
+[package]
+name = "nautilus-markets-ashare"
+version = "0.54.0"
+edition = "2021"
+description = "NautilusTrader A股市场支持"
+authors = ["Nautech Systems <info@nautechsystems.io>"]
+license = "LGPL-3.0"
+repository = "https://github.com/nautechsystems/nautilus_trader"
+homepage = "https://nautechsystems.io"
+readme = "README.md"
+keywords = ["trading", "risk", "ashare", "china", "finance"]
+categories = ["finance", "algorithms"]
+
+[dependencies]
+nautilus-common = { workspace = true }
+nautilus-model = { workspace = true }
+nautilus-risk = { path = "../../risk" }
+nautilus-portfolio = { path = "../../portfolio" }
+nautilus-core = { workspace = true }
+chrono = { workspace = true }
+ahash = "0.8"
+
+[features]
+default = []
+python = ["pyo3"]
+ffi = ["cbindgen"]
+
+[dependencies.pyo3]
+version = "0.28"
+features = ["extension-module"]
+optional = true
+
+[dependencies.cbindgen]
+version = "0.26"
+optional = true
+
+[dev-dependencies]
+nautilus-testkit = { path = "../../testkit" }
+
+[package.metadata.docs.rs]
+all-features = true
+rustc-args = ["--cfg", "docsrs"]

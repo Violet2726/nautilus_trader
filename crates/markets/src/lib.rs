@@ -3,7 +3,7 @@
 //  https://nautechsystems.io
 //
 //  Licensed under the GNU Lesser General Public License Version 3.0 (the "License");
-//  You may not use this file except in compliance with the License.
+//  you may not use this file except in compliance with the License.
 //  You may obtain a copy of the License at https://www.gnu.org/licenses/lgpl-3.0.en.html
 //
 //  Unless required by applicable law or agreed to in writing, software
@@ -13,13 +13,12 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! Risk rule system for pre-trade validation.
+//! NautilusTrader 市场特定模块
 //!
-//! The rule system provides a flexible, extensible framework for implementing
-//! market-specific trading rules and risk controls. Rules can be chained together
-//! to create comprehensive validation pipelines.
+//! 提供各个市场的特定规则和功能。
 
-pub mod common;
-
-// Re-exports
-pub use common::{Rule, RuleCheckResult, RuleContext, RuleChain};
+// 重新导出常用类型
+pub use nautilus_markets_ashare::{
+    AShareSessionProvider, PriceLimits, T1Ledger, 
+    AShareRuleConfig, create_ashare_rule_chain, create_throttler_rule
+};

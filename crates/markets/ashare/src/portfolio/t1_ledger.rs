@@ -1,10 +1,33 @@
+// -------------------------------------------------------------------------------------------------
+//  Copyright (C) 2015-2026 Nautech Systems Pty Ltd. All rights reserved.
+//  https://nautechsystems.io
+//
+//  Licensed under the GNU Lesser General Public License Version 3.0 (the "License");
+//  you may not use this file except in compliance with the License.
+//  You may obtain a copy of the License at https://www.gnu.org/licenses/lgpl-3.0.en.html
+//
+//  Unless required by applicable law or agreed to in writing, software
+//  distributed under the License is distributed on an "AS IS" BASIS,
+//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//  See the License for the specific language governing permissions and
+//  limitations under the License.
+// -------------------------------------------------------------------------------------------------
+
+//! A股T+1持仓管理
+//!
+//! 提供A股市场的T+1交收账本功能，包括：
+//! - T+1持仓条目管理
+//! - 可卖出数量计算
+//! - 成交回调处理
+//! - 日切结算处理
+
 use ahash::AHashMap;
 use nautilus_model::{
     enums::OrderSide,
     identifiers::{AccountId, InstrumentId},
 };
 
-/// 单个标的 T+1 持仓条目。
+/// 单个标的T+1持仓条目。
 ///
 /// 跟踪标的的总数量和今日买入数量。
 /// 可卖数量计算为 `total_qty - today_buy_qty`。
@@ -21,7 +44,7 @@ impl T1Entry {
     }
 }
 
-/// T+1 持仓状态机
+/// T+1持仓状态机
 #[derive(Debug, Default, Clone)]
 pub struct T1Ledger {
     entries: AHashMap<(AccountId, InstrumentId), T1Entry>,

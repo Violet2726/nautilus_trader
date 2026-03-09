@@ -3,7 +3,7 @@
 //  https://nautechsystems.io
 //
 //  Licensed under the GNU Lesser General Public License Version 3.0 (the "License");
-//  You may not use this file except in compliance with the License.
+//  you may not use this file except in compliance with the License.
 //  You may obtain a copy of the License at https://www.gnu.org/licenses/lgpl-3.0.en.html
 //
 //  Unless required by applicable law or agreed to in writing, software
@@ -13,8 +13,12 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-use super::super::common::{Rule, RuleCheckResult, RuleContext};
-use nautilus_common::session::SessionProvider;
+//! A股交易时段规则
+//!
+//! 提供A股市场的交易时段验证功能。
+
+use crate::market::session::SessionProvider;
+use nautilus_risk::rule::common::{Rule, RuleCheckResult, RuleContext};
 use nautilus_core::UnixNanos;
 use nautilus_model::identifiers::Venue;
 use std::sync::Arc;
@@ -65,9 +69,7 @@ impl Rule for SessionRule {
 
         let venue = Venue::from(context.instrument_id.venue.as_str());
         let timestamp_ns = UnixNanos::from(context.timestamp_ns);
-        let phase = self
-            .session_provider
-            .phase_at(&venue, timestamp_ns);
+        let phase = self.session_provider.phase_at(&venue, timestamp_ns);
 
         if !phase.can_accept_order() {
             return RuleCheckResult::Fail {
@@ -82,7 +84,8 @@ impl Rule for SessionRule {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nautilus_common::session::ashare::TradingPhase;
+    use crate::market::session::TradingPhase;
+    use nautilus_common::{Rule, RuleCheckResult, RuleContext};
     use nautilus_core::UnixNanos;
     use nautilus_model::enums::{OrderSide, OrderType};
     use nautilus_model::identifiers::{ClientOrderId, InstrumentId, StrategyId, TraderId};
@@ -125,7 +128,6 @@ mod tests {
         });
         let rule = SessionRule::new(provider);
         let context = create_test_context(OrderSide::Buy);
-
         let result = rule.check(&context);
         assert!(result.is_pass());
     }
@@ -137,7 +139,6 @@ mod tests {
         });
         let rule = SessionRule::new(provider);
         let context = create_test_context(OrderSide::Buy);
-
         let result = rule.check(&context);
         assert!(result.is_fail());
         assert!(result.to_string().contains("OUT_OF_SESSION"));
@@ -151,7 +152,6 @@ mod tests {
         let mut rule = SessionRule::new(provider);
         rule.set_enabled(false);
         let context = create_test_context(OrderSide::Buy);
-
         let result = rule.check(&context);
         assert!(result.is_pass());
     }
