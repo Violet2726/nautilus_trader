@@ -22,6 +22,7 @@ pub mod engine;
 pub mod provider;
 pub mod rules;
 pub mod checks;
+#[cfg(feature = "python")]
 pub mod python;
 
 // 重新导出

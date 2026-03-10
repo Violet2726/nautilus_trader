@@ -13,8 +13,11 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
+#[cfg(feature = "python")]
 use nautilus_model::types::Price;
+#[cfg(feature = "python")]
 use crate::market::session::TradingPhase;
+#[cfg(feature = "python")]
 use crate::risk::checks;
 
 #[cfg(feature = "python")]
@@ -30,6 +33,25 @@ pub fn compute_ashare_price_cage_violation(
     tick_size: Option<Price>,
 ) -> Option<Price> {
     let cp = current_price?;
+    let ts = tick_size.unwrap_or_else(|| Price::new(0.01, 2));
+    checks::check_price_cage_violation(is_buy, order_price, cp, pct, ts)
+}
+
+#[cfg(feature = "python")]
+#[pyfunction]
+pub fn compute_ashare_price_cage_violation_by_phase(
+    phase: TradingPhase,
+    is_buy: bool,
+    order_price: Price,
+    best_bid: Option<Price>,
+    last_trade: Option<Price>,
+    pct: f64,
+    tick_size: Option<Price>,
+) -> Option<Price> {
+    if !matches!(phase, TradingPhase::ContinuousAm | TradingPhase::ContinuousPm) {
+        return None;
+    }
+    let cp = best_bid.or(last_trade)?;
     let ts = tick_size.unwrap_or_else(|| Price::new(0.01, 2));
     checks::check_price_cage_violation(is_buy, order_price, cp, pct, ts)
 }

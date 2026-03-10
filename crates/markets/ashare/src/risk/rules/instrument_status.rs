@@ -75,7 +75,7 @@ impl Rule for InstrumentStatusRule {
 mod tests {
     use super::*;
     use crate::risk::provider::MarketDataProvider;
-    use nautilus_model::enums::OrderType;
+    use nautilus_model::enums::{MarketStatusAction, OrderType};
     use nautilus_model::identifiers::{ClientOrderId, InstrumentId, StrategyId, TraderId};
     use nautilus_model::orders::OrderTestBuilder;
     use nautilus_model::types::{Price, Quantity};

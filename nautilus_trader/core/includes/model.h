@@ -363,7 +363,7 @@ typedef enum MarketStatusAction {
     /**
      * 合约已复牌。
      */
-    RESUME = 16,
+    RESUMED = 16,
 } MarketStatusAction;
 
 /**

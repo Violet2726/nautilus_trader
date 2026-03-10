@@ -195,7 +195,7 @@ cdef extern from "../includes/model.h":
         # 合约不可用于交易，交易已收盘或停止。
         NOT_AVAILABLE_FOR_TRADING # = 15,
         # 合约已复牌。
-        RESUME # = 16,
+        RESUMED # = 16,
 
     # 交易场所或经纪人提供的账户类型。
     cpdef enum AccountType:

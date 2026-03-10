@@ -48,15 +48,14 @@ from nautilus_trader.core.rust.model cimport TrailingOffsetType
 from nautilus_trader.core.rust.model cimport TriggerType
 from nautilus_trader.core.uuid cimport UUID4
 from nautilus_trader.core.nautilus_pyo3.markets import AShareSessionProvider
-from nautilus_trader.core.nautilus_pyo3.markets import TradingPhase
-from nautilus_trader.core.nautilus_pyo3.markets import compute_ashare_price_cage_violation
+from nautilus_trader.core.nautilus_pyo3.markets import T1Ledger
+from nautilus_trader.core.nautilus_pyo3.markets import compute_ashare_price_cage_violation_by_phase
 from nautilus_trader.core.nautilus_pyo3.markets import compute_ashare_lot_size_violation
 from nautilus_trader.core.nautilus_pyo3.markets import compute_ashare_price_limit_violation
 from nautilus_trader.core.nautilus_pyo3.markets import can_ashare_submit_order
 from nautilus_trader.core.nautilus_pyo3.markets import can_ashare_cancel_order
 from nautilus_trader.core.nautilus_pyo3.markets import is_ashare_trading_suspended
 from nautilus_trader.core.nautilus_pyo3.markets import is_ashare_trading_resumed
-from nautilus_trader.core.nautilus_pyo3.markets import calculate_ashare_sellable_quantity
 from nautilus_trader.execution.messages cimport CancelAllOrders
 from nautilus_trader.execution.messages cimport CancelOrder
 from nautilus_trader.execution.messages cimport ModifyOrder
@@ -215,9 +214,10 @@ cdef class RiskEngine(Component):
 
         # A 股扩展：会话提供者 & T+1 账本（当 t1_enabled=True 时初始化）
         self._ashare_session_provider = None
-        self._t1_ledger = {}
+        self._t1_ledger = None
         if self._config.get("t1_enabled", False):
             self._ashare_session_provider = AShareSessionProvider()
+            self._t1_ledger = T1Ledger()
 
         # 配置
         self._initialize_risk_checks(config)
@@ -695,34 +695,31 @@ cdef class RiskEngine(Component):
 
         # A 股扩展: 价格笼子 (Price Cage) 检查 (Rust 实现)
         if self._config.get("price_cage_enabled", False):
-            if self._ashare_session_provider is not None:
+            if self._ashare_session_provider is not None and order.has_price_c():
                 phase = self._ashare_session_provider.phase_at(self._clock.timestamp_ns())
-                # 仅在连续竞价阶段启用
-                if phase in (TradingPhase.CONTINUOUS_AM, TradingPhase.CONTINUOUS_PM):
-                    if order.has_price_c():
-                        quote = self._cache.quote_tick(instrument.id)
-                        trade = self._cache.trade_tick(instrument.id)
+                quote = self._cache.quote_tick(instrument.id)
+                trade = self._cache.trade_tick(instrument.id)
 
-                        best_bid = quote.bid_price if quote is not None else None
-                        best_ask = quote.ask_price if quote is not None else None
-                        last_trade = trade.price if trade is not None else None
-                        prev_close = instrument.min_price if instrument.min_price is not None else None
-                        tick = instrument.price_increment if instrument.price_increment is not None else None
-                        pct = float(self._config.get("price_cage_pct", 0.02))
+                best_bid = quote.bid_price if quote is not None else None
+                last_trade = trade.price if trade is not None else None
+                tick = instrument.price_increment if instrument.price_increment is not None else None
+                pct = float(self._config.get("price_cage_pct", 0.02))
 
-                        bound = compute_ashare_price_cage_violation(
-                            order.is_buy_c(),
-                            order.price,
-                            best_bid if best_bid is not None else last_trade, # 逻辑修正：如果没盘口用最后成交价
-                            pct,
-                            tick,
-                        )
-                        if bound is not None:
-                            self._deny_order(
-                                order=order,
-                                reason=f"PRICE_CAGE_VIOLATION: price={order.price}, cage={bound}",
-                            )
-                            return False
+                bound = compute_ashare_price_cage_violation_by_phase(
+                    phase,
+                    order.is_buy_c(),
+                    order.price,
+                    best_bid,
+                    last_trade,
+                    pct,
+                    tick,
+                )
+                if bound is not None:
+                    self._deny_order(
+                        order=order,
+                        reason=f"PRICE_CAGE_VIOLATION: price={order.price}, cage={bound}",
+                    )
+                    return False
 
         return True  # 通过
 
@@ -739,13 +736,10 @@ cdef class RiskEngine(Component):
         if self._config.get("t1_enabled", False):
             if instrument.lot_size is not None and instrument.lot_size.raw_uint_c() > 0:
                 sellable = None
-                if order.is_sell_c():
-                    acct_key = str(order.account_id) if order.account_id is not None else "__no_account__"
+                if order.is_sell_c() and self._t1_ledger is not None:
+                    acct_key = str(order.account_id) if order.account_id is not None else None
                     inst_key = str(order.instrument_id)
-                    ledger_key = (acct_key, inst_key)
-                    entry = self._t1_ledger.get(ledger_key)
-                    if entry is not None:
-                        sellable = calculate_ashare_sellable_quantity(entry["total"], entry["today_buy"])
+                    sellable = self._t1_ledger.sellable_or_none_opt(acct_key, inst_key)
 
                 violation = compute_ashare_lot_size_violation(
                     instrument.id.symbol.as_str(),
@@ -1412,23 +1406,14 @@ cdef class RiskEngine(Component):
 
     cpdef void _update_t1_ledger(self, OrderFilled fill):
         """根据成交回报更新 T+1 可卖账本。"""
-        acct_key = str(fill.account_id) if fill.account_id is not None else "__no_account__"
+        if self._t1_ledger is None:
+            return
+
+        acct_key = str(fill.account_id) if fill.account_id is not None else None
         inst_key = str(fill.instrument_id)
-        ledger_key = (acct_key, inst_key)
-
-        if ledger_key not in self._t1_ledger:
-            self._t1_ledger[ledger_key] = {"total": 0.0, "today_buy": 0.0}
-
-        entry = self._t1_ledger[ledger_key]
         fill_qty = fill.last_qty.as_double()
-
-        if fill.order_side == OrderSide.BUY:
-            # 买入：总仓增加，今日买入增加（T+1 不可卖）
-            entry["total"] += fill_qty
-            entry["today_buy"] += fill_qty
-        elif fill.order_side == OrderSide.SELL:
-            # 卖出：从总仓扣减（今日买入部分不可卖，故只扣 total）
-            entry["total"] = max(entry["total"] - fill_qty, 0.0)
+        is_buy = fill.order_side == OrderSide.BUY
+        self._t1_ledger.on_fill_opt(acct_key, inst_key, is_buy, fill_qty)
 
     def t1_load_position(
         self,
@@ -1450,12 +1435,12 @@ cdef class RiskEngine(Component):
         today_buy_qty : double
             今日已买入部分（不可卖）。
         """
-        self._t1_ledger[(account_id, instrument_id)] = {
-            "total": total_qty,
-            "today_buy": today_buy_qty,
-        }
+        if self._t1_ledger is None:
+            return
+        self._t1_ledger.load_position_opt(account_id, instrument_id, total_qty, today_buy_qty)
 
     def t1_on_settlement(self):
         """日切结算：释放今日买入量，所有持仓变为可卖。"""
-        for entry in self._t1_ledger.values():
-            entry["today_buy"] = 0.0
+        if self._t1_ledger is None:
+            return
+        self._t1_ledger.on_settlement()

@@ -42,7 +42,9 @@ pub mod portfolio;
 
 // 重新导出常用类型
 pub use market::{AShareSessionProvider, TradingPhase, PriceLimits};
+#[cfg(feature = "python")]
 pub use market::compute_ashare_price_limits;
+#[cfg(feature = "python")]
 pub use market::compute_ashare_price_limits_by_board_status;
 pub use risk::{AShareRuleConfig, MarketDataProvider, create_ashare_rule_chain, create_ashare_rule_chain_with_provider, create_throttler_rule};
 pub use risk::{CancelSessionRule, create_ashare_command_rule_chain, create_ashare_command_rule_chain_with_provider};

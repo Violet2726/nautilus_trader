@@ -1,4 +1,4 @@
-// -------------------------------------------------------------------------------------------------
+﻿// -------------------------------------------------------------------------------------------------
 //  Copyright (C) 2015-2026 Nautech Systems Pty Ltd. All rights reserved.
 //  https://nautechsystems.io
 //
@@ -28,6 +28,7 @@ pub fn markets(_: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<nautilus_markets_ashare::market::price_limits::BoardType>()?;
     m.add_class::<nautilus_markets_ashare::market::price_limits::StockStatus>()?;
     m.add_class::<nautilus_markets_ashare::AShareSessionProvider>()?;
+    m.add_class::<nautilus_markets_ashare::T1Ledger>()?;
     m.add_class::<nautilus_markets_ashare::TradingPhase>()?;
 
     // AShare exports
@@ -41,6 +42,10 @@ pub fn markets(_: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     )?)?;
     m.add_function(wrap_pyfunction!(
         nautilus_markets_ashare::risk::python::compute_ashare_price_cage_violation,
+        m
+    )?)?;
+    m.add_function(wrap_pyfunction!(
+        nautilus_markets_ashare::risk::python::compute_ashare_price_cage_violation_by_phase,
         m
     )?)?;
     m.add_function(wrap_pyfunction!(
@@ -90,3 +95,4 @@ pub fn markets(_: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     Ok(())
 }
+

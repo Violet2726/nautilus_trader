@@ -72,22 +72,26 @@ pub fn check_ashare_lot_size_violation(
     qty: f64,
     sellable: Option<f64>,
 ) -> Option<String> {
-    let is_star = symbol.starts_with("688");
-    let is_chinext = symbol.starts_with("30");
-    let is_main = symbol.starts_with("60") || symbol.starts_with("00") || symbol.starts_with("00");
-
-    // 默认值
-    let min_qty = if is_star { 200.0 } else { 100.0 };
+    let board = crate::market::price_limits::identify_board_type(symbol);
+    let min_qty = match board {
+        crate::market::price_limits::BoardType::Star => 200.0,
+        _ => 100.0,
+    };
 
     if is_buy {
         if qty < min_qty {
+            let reason = match board {
+                crate::market::price_limits::BoardType::Star => "STAR_MARKET_BUY_VIOLATION",
+                crate::market::price_limits::BoardType::ChiNext => "CHINEXT_BUY_VIOLATION",
+                _ => "MAIN_BOARD_BUY_VIOLATION",
+            };
             return Some(format!(
-                "LOT_SIZE_BUY_VIOLATION: qty={:.2} less than min_qty={:.2}",
-                qty, min_qty
+                "{}: qty={:.2} less than min_qty={:.2}",
+                reason, qty, min_qty
             ));
         }
         // 只有主板要求 100 的整数倍
-        if is_main && (qty % 100.0).abs() > f64::EPSILON {
+        if matches!(board, crate::market::price_limits::BoardType::Main) && (qty % 100.0).abs() > f64::EPSILON {
             return Some(format!(
                 "MAIN_BOARD_BUY_VIOLATION: qty={:.2} not multiple of 100",
                 qty
@@ -95,7 +99,10 @@ pub fn check_ashare_lot_size_violation(
         }
     } else {
         // 卖出检查
-        let is_odd_lot = if is_star || is_chinext {
+        let is_odd_lot = if matches!(
+            board,
+            crate::market::price_limits::BoardType::Star | crate::market::price_limits::BoardType::ChiNext
+        ) {
             qty < min_qty
         } else {
             (qty % 100.0).abs() > f64::EPSILON
@@ -125,7 +132,7 @@ pub fn check_ashare_price_limit_violation(
     if let Some(tick) = tick_size {
         if tick.raw > 0 && (order_price.raw % tick.raw) != 0 {
             return Some(format!(
-                "PRICE_TICK_VIOLATION: price={} not multiple of tick={}",
+                "PRICE_NOT_ON_TICK: price={} not multiple of tick={}",
                 order_price, tick
             ));
         }
@@ -133,7 +140,7 @@ pub fn check_ashare_price_limit_violation(
     if let Some(max_p) = max_price {
         if order_price > max_p {
             return Some(format!(
-                "PRICE_LIMIT_UP_VIOLATION: price={} > limit_up={}",
+                "PRICE_ABOVE_UP_LIMIT: price={} > limit_up={}",
                 order_price, max_p
             ));
         }
@@ -141,7 +148,7 @@ pub fn check_ashare_price_limit_violation(
     if let Some(min_p) = min_price {
         if order_price < min_p {
             return Some(format!(
-                "PRICE_LIMIT_DOWN_VIOLATION: price={} < limit_down={}",
+                "PRICE_BELOW_DOWN_LIMIT: price={} < limit_down={}",
                 order_price, min_p
             ));
         }

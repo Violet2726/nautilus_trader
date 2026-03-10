@@ -47,7 +47,7 @@ cdef class RiskEngine(Component):
     cdef readonly Throttler _order_modify_throttler
     cdef readonly Throttler _global_trade_throttler
     cdef object _ashare_session_provider  # A 股：AShareSessionProvider 实例
-    cdef readonly dict _t1_ledger         # A 股：T+1 可卖账本
+    cdef object _t1_ledger                # A 股：T1Ledger 可卖账本
 
     cdef readonly TradingState trading_state
     """引擎当前交易状态。\n\n:returns: `TradingState`"""
