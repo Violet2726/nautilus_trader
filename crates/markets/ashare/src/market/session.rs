@@ -42,7 +42,7 @@ use std::collections::HashSet;
         eq,
         eq_int,
         from_py_object,
-        module = "nautilus_trader.core.nautilus_pyo3.common",
+        module = "nautilus_trader.core.nautilus_pyo3.markets",
         rename_all = "SCREAMING_SNAKE_CASE",
     )
 )]
@@ -133,7 +133,7 @@ pub trait SessionProvider: Send + Sync {
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(
     feature = "python",
-    pyo3::pyclass(module = "nautilus_trader.core.nautilus_pyo3.common", from_py_object)
+    pyo3::pyclass(module = "nautilus_trader.core.nautilus_pyo3.markets", from_py_object)
 )]
 pub struct AShareSessionProvider {
     /// 休市日集合，格式为 YYYYMMDD 的整数（例如 20240501）

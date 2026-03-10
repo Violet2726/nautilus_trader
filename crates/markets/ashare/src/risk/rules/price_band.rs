@@ -73,24 +73,13 @@ impl Rule for PriceBandRule {
 
         let band = self.provider.price_band(&context.instrument_id);
 
-        if let Some(max_price) = band.max_price {
-            if order_price > max_price {
-                return RuleCheckResult::Fail {
-                    reason: format!(
-                        "PRICE_ABOVE_UP_LIMIT: price={order_price}, up_limit={max_price}"
-                    ),
-                };
-            }
-        }
-
-        if let Some(min_price) = band.min_price {
-            if order_price < min_price {
-                return RuleCheckResult::Fail {
-                    reason: format!(
-                        "PRICE_BELOW_DOWN_LIMIT: price={order_price}, down_limit={min_price}"
-                    ),
-                };
-            }
+        if let Some(msg) = crate::risk::checks::check_ashare_price_limit_violation(
+            order_price,
+            None,
+            band.max_price,
+            band.min_price,
+        ) {
+            return RuleCheckResult::Fail { reason: msg };
         }
 
         RuleCheckResult::Pass

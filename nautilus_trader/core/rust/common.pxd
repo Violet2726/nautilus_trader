@@ -51,7 +51,7 @@ cdef extern from "../includes/common.h":
         # 组件成功停止时的触发器。
         STOP_COMPLETED # = 5,
         # 组件恢复（停止后）的触发器。
-        RESUME # = 6,
+        COMPONENT_RESUME # = 6,
         # 组件成功恢复时的触发器。
         RESUME_COMPLETED # = 7,
         # 组件重置的触发器。

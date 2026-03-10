@@ -1583,25 +1583,25 @@ cdef dict[tuple[ComponentState, ComponentTrigger], ComponentState] _COMPONENT_ST
     (ComponentState.RESETTING, ComponentTrigger.RESET_COMPLETED): ComponentState.READY,
     (ComponentState.STARTING, ComponentTrigger.START_COMPLETED): ComponentState.RUNNING,
     (ComponentState.STARTING, ComponentTrigger.STOP): ComponentState.STOPPING,  # Transitional state
-    (ComponentState.STARTING, ComponentTrigger.FAULT): ComponentState.FAULTING,  # Transitional state
-    (ComponentState.RUNNING, ComponentTrigger.STOP): ComponentState.STOPPING,  # Transitional state
-    (ComponentState.RUNNING, ComponentTrigger.DEGRADE): ComponentState.DEGRADING,  # Transitional state
-    (ComponentState.RUNNING, ComponentTrigger.FAULT): ComponentState.FAULTING,  # Transitional state
-    (ComponentState.RESUMING, ComponentTrigger.STOP): ComponentState.STOPPING,  # Transitional state
+    (ComponentState.STARTING, ComponentTrigger.FAULT): ComponentState.FAULTING,
+    (ComponentState.RUNNING, ComponentTrigger.STOP): ComponentState.STOPPING,
+    (ComponentState.RUNNING, ComponentTrigger.DEGRADE): ComponentState.DEGRADING,
+    (ComponentState.RUNNING, ComponentTrigger.FAULT): ComponentState.FAULTING,
+    (ComponentState.RESUMING, ComponentTrigger.STOP): ComponentState.STOPPING,
     (ComponentState.RESUMING, ComponentTrigger.RESUME_COMPLETED): ComponentState.RUNNING,
-    (ComponentState.RESUMING, ComponentTrigger.FAULT): ComponentState.FAULTING,  # Transitional state
+    (ComponentState.RESUMING, ComponentTrigger.FAULT): ComponentState.FAULTING,
     (ComponentState.STOPPING, ComponentTrigger.STOP_COMPLETED): ComponentState.STOPPED,
-    (ComponentState.STOPPING, ComponentTrigger.FAULT): ComponentState.FAULTING,  # Transitional state
-    (ComponentState.STOPPED, ComponentTrigger.RESET): ComponentState.RESETTING,  # Transitional state
-    (ComponentState.STOPPED, ComponentTrigger.RESUME): ComponentState.RESUMING,  # Transitional state
-    (ComponentState.STOPPED, ComponentTrigger.DISPOSE): ComponentState.DISPOSING,  # Transitional state
-    (ComponentState.STOPPED, ComponentTrigger.FAULT): ComponentState.FAULTING,  # Transitional state
+    (ComponentState.STOPPING, ComponentTrigger.FAULT): ComponentState.FAULTING,
+    (ComponentState.STOPPED, ComponentTrigger.RESET): ComponentState.RESETTING,
+    (ComponentState.STOPPED, ComponentTrigger.COMPONENT_RESUME): ComponentState.RESUMING,  # Transitional state
+    (ComponentState.STOPPED, ComponentTrigger.DISPOSE): ComponentState.DISPOSING,
+    (ComponentState.STOPPED, ComponentTrigger.FAULT): ComponentState.FAULTING,
     (ComponentState.DEGRADING, ComponentTrigger.DEGRADE_COMPLETED): ComponentState.DEGRADED,
-    (ComponentState.DEGRADED, ComponentTrigger.RESUME): ComponentState.RESUMING,  # Transitional state
-    (ComponentState.DEGRADED, ComponentTrigger.STOP): ComponentState.STOPPING,  # Transitional state
-    (ComponentState.DEGRADED, ComponentTrigger.FAULT): ComponentState.FAULTING,  # Transition state
-    (ComponentState.DISPOSING, ComponentTrigger.DISPOSE_COMPLETED): ComponentState.DISPOSED,  # Terminal state
-    (ComponentState.FAULTING, ComponentTrigger.FAULT_COMPLETED): ComponentState.FAULTED,  # Terminal state
+    (ComponentState.DEGRADED, ComponentTrigger.COMPONENT_RESUME): ComponentState.RESUMING,  # Transitional state
+    (ComponentState.DEGRADED, ComponentTrigger.STOP): ComponentState.STOPPING,
+    (ComponentState.DEGRADED, ComponentTrigger.FAULT): ComponentState.FAULTING,
+    (ComponentState.DISPOSING, ComponentTrigger.DISPOSE_COMPLETED): ComponentState.DISPOSED,
+    (ComponentState.FAULTING, ComponentTrigger.FAULT_COMPLETED): ComponentState.FAULTED,
 }
 
 cdef class ComponentFSMFactory:
@@ -1967,7 +1967,7 @@ cdef class Component:
         """
         try:
             self._trigger_fsm(
-                trigger=ComponentTrigger.RESUME,  # -> RESUMING
+                trigger=ComponentTrigger.COMPONENT_RESUME,  # -> RESUMING
                 is_transitory=True,
                 action=self._resume,
             )

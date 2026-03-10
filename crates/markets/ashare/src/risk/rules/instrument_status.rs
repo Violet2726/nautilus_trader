@@ -13,7 +13,7 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-use nautilus_model::enums::MarketStatusAction;
+
 use nautilus_rules::common::{Rule, RuleCheckResult, RuleContext};
 use crate::risk::provider::MarketDataProvider;
 use std::sync::Arc;
@@ -43,15 +43,6 @@ impl InstrumentStatusRule {
     pub fn set_enabled(&mut self, enabled: bool) {
         self.enabled = enabled;
     }
-
-    fn is_suspended(action: MarketStatusAction) -> bool {
-        matches!(
-            action,
-            MarketStatusAction::Halt
-                | MarketStatusAction::Suspend
-                | MarketStatusAction::NotAvailableForTrading
-        )
-    }
 }
 
 impl Rule for InstrumentStatusRule {
@@ -69,7 +60,7 @@ impl Rule for InstrumentStatusRule {
         }
 
         if let Some(action) = self.provider.instrument_status_action(&context.instrument_id) {
-            if Self::is_suspended(action) {
+            if crate::risk::checks::is_ashare_trading_suspended(action) {
                 return RuleCheckResult::Fail {
                     reason: format!("INSTRUMENT_SUSPENDED: action={action:?}"),
                 };

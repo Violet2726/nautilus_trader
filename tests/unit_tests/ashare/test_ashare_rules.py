@@ -22,7 +22,7 @@ from nautilus_trader.portfolio.portfolio import Portfolio
 from nautilus_trader.test_kit.functions import eventually
 
 # 导入通过 PyO3 导出的 A 股组件
-from nautilus_trader.core.nautilus_pyo3.common import AShareSessionProvider, TradingPhase
+from nautilus_trader.core.nautilus_pyo3.markets import AShareSessionProvider, TradingPhase
 
 # ---- 测试时段常量 ----
 TS_AM = pd.Timestamp("2024-01-19 10:00:00", tz="Asia/Shanghai").value   # 上午连续竞价

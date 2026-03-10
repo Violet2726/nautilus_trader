@@ -1623,7 +1623,7 @@ impl RiskEngine {
                     status.reason
                 );
             }
-            MarketStatusAction::Resume => {
+            MarketStatusAction::Resumed => {
                 log::info!(
                     "标的 {} 已复牌: action={:?}",
                     status.instrument_id,

@@ -52,92 +52,29 @@ impl LotSizeRule {
         self.enabled = enabled;
     }
 
-    fn is_star_market(symbol: &str) -> bool {
-        symbol.starts_with("688")
-    }
-
-    fn is_chinext(symbol: &str) -> bool {
-        symbol.starts_with("30")
-    }
-
-    fn is_main_board(symbol: &str) -> bool {
-        symbol.starts_with("60") || symbol.starts_with("00") || symbol.starts_with("00")
-    }
-
-    fn check_buy_lot_size(&self, symbol: &str, qty_raw: i64) -> RuleCheckResult {
-        let qty_f64 = qty_raw as f64 / 1_000_000_000.0;
-        if Self::is_star_market(symbol) {
-            if qty_f64 < 200.0 {
-                return RuleCheckResult::Fail {
-                    reason: format!(
-                        "STAR_MARKET_BUY_VIOLATION: buy_qty={} less than min_qty=200",
-                        qty_f64
-                    ),
-                };
-            }
-        } else if Self::is_chinext(symbol) {
-            if qty_f64 < 100.0 {
-                return RuleCheckResult::Fail {
-                    reason: format!(
-                        "CHINEXT_BUY_VIOLATION: buy_qty={} less than min_qty=100",
-                        qty_f64
-                    ),
-                };
-            }
-        } else if Self::is_main_board(symbol) {
-            if qty_f64 < 100.0 || (qty_raw % 100_000_000_000) != 0 {
-                return RuleCheckResult::Fail {
-                    reason: format!(
-                        "MAIN_BOARD_BUY_VIOLATION: buy_qty={} not multiple of 100",
-                        qty_f64
-                    ),
-                };
-            }
-        } else {
-            if qty_f64 < 100.0 || (qty_raw % 100_000_000_000) != 0 {
-                return RuleCheckResult::Fail {
-                    reason: format!(
-                        "LOT_SIZE_VIOLATION: buy_qty={} not multiple of 100",
-                        qty_f64
-                    ),
-                };
-            }
-        }
-        RuleCheckResult::Pass
-    }
-
-    fn check_sell_lot_size(
+    fn check_lot_size(
         &self,
         symbol: &str,
-        qty_raw: i64,
-        order_qty: f64,
+        is_buy: bool,
+        qty: f64,
         context: &RuleContext,
     ) -> RuleCheckResult {
-        let is_star_market = Self::is_star_market(symbol);
-        let is_chinext = Self::is_chinext(symbol);
-
-        let min_sell = if is_star_market { 200 } else { 100 };
-
-        let is_odd_lot = if is_star_market || is_chinext {
-            qty_raw < min_sell
-        } else {
-            (qty_raw % 100_000_000_000) != 0
-        };
-
-        if is_odd_lot {
+        let mut sellable = None;
+        if !is_buy {
             if let Some(ledger) = &self.t1_ledger {
                 if let Some(account_id) = &context.account_id {
-                    let sellable = ledger.sellable(account_id, &context.instrument_id);
-                    if (order_qty - sellable).abs() > f64::EPSILON {
-                        return RuleCheckResult::Fail {
-                            reason: format!(
-                                "ODD_LOT_VIOLATION: sell_qty={} must be full sellable={}",
-                                order_qty, sellable
-                            ),
-                        };
-                    }
+                    sellable = Some(ledger.sellable(account_id, &context.instrument_id));
                 }
             }
+        }
+
+        if let Some(msg) = crate::risk::checks::check_ashare_lot_size_violation(
+            symbol,
+            is_buy,
+            qty,
+            sellable,
+        ) {
+            return RuleCheckResult::Fail { reason: msg };
         }
 
         RuleCheckResult::Pass
@@ -163,14 +100,9 @@ impl Rule for LotSizeRule {
             return RuleCheckResult::Pass;
         }
 
-        let qty_raw = context.order.quantity().raw;
         let symbol = context.instrument_id.symbol.as_str();
-
-        match context.order.order_side() {
-            OrderSide::Buy => self.check_buy_lot_size(symbol, qty_raw as i64),
-            OrderSide::Sell => self.check_sell_lot_size(symbol, qty_raw as i64, order_qty, context),
-            _ => RuleCheckResult::Pass,
-        }
+        let is_buy = context.order.order_side() == OrderSide::Buy;
+        self.check_lot_size(symbol, is_buy, order_qty, context)
     }
 }
 

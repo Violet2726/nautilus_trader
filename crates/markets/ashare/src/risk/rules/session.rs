@@ -71,7 +71,7 @@ impl Rule for SessionRule {
         let timestamp_ns = UnixNanos::from(context.timestamp_ns);
         let phase = self.session_provider.phase_at(&venue, timestamp_ns);
 
-        if !phase.can_accept_order() {
+        if !crate::risk::checks::can_ashare_submit_order(phase) {
             return RuleCheckResult::Fail {
                 reason: format!("OUT_OF_SESSION: phase={phase:?}"),
             };

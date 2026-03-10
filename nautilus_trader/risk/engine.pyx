@@ -47,8 +47,16 @@ from nautilus_trader.core.rust.model cimport TradingState
 from nautilus_trader.core.rust.model cimport TrailingOffsetType
 from nautilus_trader.core.rust.model cimport TriggerType
 from nautilus_trader.core.uuid cimport UUID4
-from nautilus_trader.core.nautilus_pyo3.common import AShareSessionProvider
-from nautilus_trader.core.nautilus_pyo3.common import TradingPhase
+from nautilus_trader.core.nautilus_pyo3.markets import AShareSessionProvider
+from nautilus_trader.core.nautilus_pyo3.markets import TradingPhase
+from nautilus_trader.core.nautilus_pyo3.markets import compute_ashare_price_cage_violation
+from nautilus_trader.core.nautilus_pyo3.markets import compute_ashare_lot_size_violation
+from nautilus_trader.core.nautilus_pyo3.markets import compute_ashare_price_limit_violation
+from nautilus_trader.core.nautilus_pyo3.markets import can_ashare_submit_order
+from nautilus_trader.core.nautilus_pyo3.markets import can_ashare_cancel_order
+from nautilus_trader.core.nautilus_pyo3.markets import is_ashare_trading_suspended
+from nautilus_trader.core.nautilus_pyo3.markets import is_ashare_trading_resumed
+from nautilus_trader.core.nautilus_pyo3.markets import calculate_ashare_sellable_quantity
 from nautilus_trader.execution.messages cimport CancelAllOrders
 from nautilus_trader.execution.messages cimport CancelOrder
 from nautilus_trader.execution.messages cimport ModifyOrder
@@ -482,8 +490,7 @@ cdef class RiskEngine(Component):
         # A 股扩展: Session 检查
         if self._ashare_session_provider is not None:
             phase = self._ashare_session_provider.phase_at(self._clock.timestamp_ns())
-            # 只有部分阶段接受订单 (PreAuctionOpen, PreAuctionLocked, ContinuousAm, ContinuousPm, ClosingAuction)
-            if phase == TradingPhase.CLOSED or phase == TradingPhase.MIDDAY_BREAK or phase == TradingPhase.PRE_AUCTION_SILENT:
+            if not can_ashare_submit_order(phase):
                 self._deny_command(
                     command=command,
                     reason=f"OUT_OF_SESSION: phase={phase}",
@@ -591,8 +598,7 @@ cdef class RiskEngine(Component):
         # 检查 A 股标的状态 (Halt, Suspend, NotAvailableForTrading)
         status = self._cache.instrument_status(command.instrument_id)
         if status is not None:
-             from nautilus_model.enums import MarketStatusAction
-             if status.action in (MarketStatusAction.Halt, MarketStatusAction.Suspend, MarketStatusAction.NotAvailableForTrading):
+             if is_ashare_trading_suspended(status.action):
                  self._reject_modify_order(
                      order=order,
                      reason=f"INSTRUMENT_SUSPENDED: status={status.action}",
@@ -631,8 +637,7 @@ cdef class RiskEngine(Component):
         # A 股扩展: Cancel session 检查
         if self._ashare_session_provider is not None:
             phase = self._ashare_session_provider.phase_at(self._clock.timestamp_ns())
-            # 只有 PRE_AUCTION_OPEN/CONTINUOUS_AM/CONTINUOUS_PM 允许撤单
-            if phase not in (TradingPhase.PRE_AUCTION_OPEN, TradingPhase.CONTINUOUS_AM, TradingPhase.CONTINUOUS_PM):
+            if not can_ashare_cancel_order(phase):
                 self._reject_cancel_command(command, reason=f"CANCEL_DENIED: phase={phase} does not allow cancellation")
                 return  # 拒绝拦截
 
@@ -688,57 +693,36 @@ cdef class RiskEngine(Component):
                 self._deny_order(order=order, reason=f"触发价 {risk_msg}")
                 return False  # 拒绝
 
-        # A 股扩展: 价格笼子 (Price Cage) 检查
+        # A 股扩展: 价格笼子 (Price Cage) 检查 (Rust 实现)
         if self._config.get("price_cage_enabled", False):
             if self._ashare_session_provider is not None:
                 phase = self._ashare_session_provider.phase_at(self._clock.timestamp_ns())
                 # 仅在连续竞价阶段启用
                 if phase in (TradingPhase.CONTINUOUS_AM, TradingPhase.CONTINUOUS_PM):
                     if order.has_price_c():
-                        order_price = order.price.as_double()
                         quote = self._cache.quote_tick(instrument.id)
                         trade = self._cache.trade_tick(instrument.id)
-                        
-                        best_bid = quote.bid_price.as_double() if quote is not None and quote.bid_price is not None else None
-                        best_ask = quote.ask_price.as_double() if quote is not None and quote.ask_price is not None else None
-                        last_trade = trade.price.as_double() if trade is not None else None
-                        prev_close = instrument.min_price.as_double() if instrument.min_price is not None else 0.0
-                        
-                        tick = instrument.price_increment.as_double() if instrument.price_increment is not None else 0.01
+
+                        best_bid = quote.bid_price if quote is not None else None
+                        best_ask = quote.ask_price if quote is not None else None
+                        last_trade = trade.price if trade is not None else None
+                        prev_close = instrument.min_price if instrument.min_price is not None else None
+                        tick = instrument.price_increment if instrument.price_increment is not None else None
                         pct = float(self._config.get("price_cage_pct", 0.02))
-                        
-                        benchmark = None
-                        if order.is_buy_c():
-                            if best_ask is not None:
-                                benchmark = best_ask
-                            elif best_bid is not None:
-                                benchmark = best_bid
-                            elif last_trade is not None:
-                                benchmark = last_trade
-                            else:
-                                benchmark = prev_close
-                                
-                            if benchmark is not None:
-                                bound = max(benchmark * (1.0 + pct), benchmark + 10.0 * tick)
-                                if order_price > bound + 1e-9:
-                                    self._deny_order(order=order, reason=f"PRICE_CAGE_VIOLATION: price={order_price}, cage={bound}")
-                                    return False
-                                    
-                        elif order.is_sell_c():
-                            if best_bid is not None:
-                                benchmark = best_bid
-                            elif best_ask is not None:
-                                benchmark = best_ask
-                            elif last_trade is not None:
-                                benchmark = last_trade
-                            else:
-                                benchmark = prev_close
-                                
-                            if benchmark is not None:
-                                bound = min(benchmark * (1.0 - pct), benchmark - 10.0 * tick)
-                                if order_price < bound - 1e-9:
-                                    self._deny_order(order=order, reason=f"PRICE_CAGE_VIOLATION: price={order_price}, cage={bound}")
-                                    return False
+
+                        bound = compute_ashare_price_cage_violation(
+                            order.is_buy_c(),
+                            order.price,
+                            best_bid if best_bid is not None else last_trade, # 逻辑修正：如果没盘口用最后成交价
+                            pct,
+                            tick,
+                        )
+                        if bound is not None:
+                            self._deny_order(
+                                order=order,
+                                reason=f"PRICE_CAGE_VIOLATION: price={order.price}, cage={bound}",
+                            )
+                            return False
 
         return True  # 通过
 
@@ -751,48 +735,27 @@ cdef class RiskEngine(Component):
             self._deny_order(order=order, reason=risk_msg)
             return False  # 拒绝
 
-        # A 股扩展：lot_size 整数倍检查 & T+1 可卖校验
+        # A 股扩展：lot_size 整数倍检查 & T+1 可卖校验 (Rust 统一校验)
         if self._config.get("t1_enabled", False):
             if instrument.lot_size is not None and instrument.lot_size.raw_uint_c() > 0:
-                qty_raw = order.quantity.raw_uint_c()
-                lot_raw = instrument.lot_size.raw_uint_c()
-
-                if order.is_buy_c():
-                    # ---- 买入：必须是 lot_size 整数倍 ----
-                    if qty_raw % lot_raw != 0:
-                        self._deny_order(
-                            order=order,
-                            reason=f"LOT_SIZE_VIOLATION: buy_qty={order.quantity} not multiple of lot_size={instrument.lot_size}",
-                        )
-                        return False
-
-                elif order.is_sell_c():
-                    # ---- 卖出：T+1 可卖余额校验 ----
+                sellable = None
+                if order.is_sell_c():
                     acct_key = str(order.account_id) if order.account_id is not None else "__no_account__"
                     inst_key = str(order.instrument_id)
                     ledger_key = (acct_key, inst_key)
                     entry = self._t1_ledger.get(ledger_key)
-
                     if entry is not None:
-                        sellable = max(entry["total"] - entry["today_buy"], 0.0)
-                        order_qty = order.quantity.as_double()
+                        sellable = calculate_ashare_sellable_quantity(entry["total"], entry["today_buy"])
 
-                        # 超出可卖余额
-                        if order_qty > sellable + 1e-9:
-                            self._deny_order(
-                                order=order,
-                                reason=f"EXCEEDS_SELLABLE: sell_qty={order.quantity}, sellable={sellable:.0f}",
-                            )
-                            return False
-
-                        # 零头卖出：只允许将全部可卖余额一次性卖完
-                        if qty_raw % lot_raw != 0 and abs(order_qty - sellable) > 1e-9:
-                            self._deny_order(
-                                order=order,
-                                reason=f"ODD_LOT_VIOLATION: sell_qty={order.quantity} must equal total sellable={sellable:.0f}",
-                            )
-                            return False
-                    # 若账本中无该仓位记录（尚未建仓或首次启动），放行交由 Rust 层处理
+                violation = compute_ashare_lot_size_violation(
+                    instrument.id.symbol.as_str(),
+                    order.is_buy_c(),
+                    order.quantity.as_double(),
+                    sellable,
+                )
+                if violation is not None:
+                    self._deny_order(order=order, reason=violation)
+                    return False
 
         return True  # 通过
 
@@ -1199,16 +1162,16 @@ cdef class RiskEngine(Component):
                 # 检查失败
                 return f"价格 {price} 无效 (非正数)"
 
-        # A 股扩展: tick 对齐与涨跌停价检查
+        # A 股扩展: tick 对齐与涨跌停价检查 (Rust 实现)
         if self._config.get("t1_enabled", False):
-            if instrument.price_increment is not None and instrument.price_increment.raw_int_c() > 0:
-                if price.raw_int_c() % instrument.price_increment.raw_int_c() != 0:
-                    return f"PRICE_NOT_ON_TICK: price={price}, tick={instrument.price_increment}"
-            
-            if instrument.max_price is not None and price > instrument.max_price:
-                return f"PRICE_ABOVE_UP_LIMIT: price={price}, up_limit={instrument.max_price}"
-            if instrument.min_price is not None and price < instrument.min_price:
-                return f"PRICE_BELOW_DOWN_LIMIT: price={price}, down_limit={instrument.min_price}"
+            violation = compute_ashare_price_limit_violation(
+                price,
+                instrument.price_increment if instrument.price_increment is not None else None,
+                instrument.max_price if instrument.max_price is not None else None,
+                instrument.min_price if instrument.min_price is not None else None,
+            )
+            if violation is not None:
+                return violation
 
 
     cpdef str _check_quantity(self, Instrument instrument, Quantity quantity, bint is_quote_quantity=False):
@@ -1435,14 +1398,13 @@ cdef class RiskEngine(Component):
 
     cpdef void _handle_instrument_status(self, InstrumentStatus status):
         """处理 A 股标的状态变更。"""
-        from nautilus_model.enums import MarketStatusAction
-        if status.action in (MarketStatusAction.Halt, MarketStatusAction.Suspend, MarketStatusAction.NotAvailableForTrading):
+        if is_ashare_trading_suspended(status.action):
             self._log.info(
                 f"标的 {status.instrument_id} 已停牌/临停: action={status.action}, reason={status.reason}",
                 color=LogColor.RED,
             )
             # 是否需要在这里自动撤单？按需扩展。目前仅通过 _check_order 进行盘前拦截。
-        elif status.action == MarketStatusAction.Resume:
+        elif is_ashare_trading_resumed(status.action):
             self._log.info(
                 f"标的 {status.instrument_id} 已复牌: action={status.action}",
                 color=LogColor.GREEN,

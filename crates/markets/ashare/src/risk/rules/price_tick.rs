@@ -70,10 +70,13 @@ impl Rule for PriceTickRule {
             None => return RuleCheckResult::Pass,
         };
 
-        if !order_price.is_on_tick(tick) {
-            return RuleCheckResult::Fail {
-                reason: format!("PRICE_NOT_ON_TICK: price={order_price}, tick={tick}"),
-            };
+        if let Some(msg) = crate::risk::checks::check_ashare_price_limit_violation(
+            order_price,
+            Some(tick),
+            None,
+            None,
+        ) {
+            return RuleCheckResult::Fail { reason: msg };
         }
 
         RuleCheckResult::Pass

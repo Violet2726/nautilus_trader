@@ -75,7 +75,7 @@ impl CommandRule for CancelSessionRule {
         let ts = UnixNanos::from(context.timestamp_ns);
         let phase = self.session_provider.phase_at(&venue, ts);
 
-        if !phase.can_cancel_order() {
+        if !crate::risk::checks::can_ashare_cancel_order(phase) {
             return CommandRuleCheckResult::Fail {
                 reason: format!("CANCEL_DENIED: phase={phase:?}"),
             };

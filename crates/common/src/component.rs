@@ -151,7 +151,7 @@ pub trait Component {
     ///
     /// 如果组件恢复失败，则返回错误。
     fn resume(&mut self) -> anyhow::Result<()> {
-        self.transition_state(ComponentTrigger::Resume)?; // -> 进入 Resuming 状态
+        self.transition_state(ComponentTrigger::ComponentResume)?; // -> 进入 Resuming 状态
 
         if let Err(e) = self.on_resume() {
             log_error(&e);
@@ -348,11 +348,11 @@ impl ComponentState {
             (Self::Stopping, ComponentTrigger::StopCompleted) => Self::Stopped,
             (Self::Stopping, ComponentTrigger::Fault) => Self::Faulting,
             (Self::Stopped, ComponentTrigger::Reset) => Self::Resetting,
-            (Self::Stopped, ComponentTrigger::Resume) => Self::Resuming,
+            (Self::Stopped, ComponentTrigger::ComponentResume) => Self::Resuming,
             (Self::Stopped, ComponentTrigger::Dispose) => Self::Disposing,
             (Self::Stopped, ComponentTrigger::Fault) => Self::Faulting,
             (Self::Degrading, ComponentTrigger::DegradeCompleted) => Self::Degraded,
-            (Self::Degraded, ComponentTrigger::Resume) => Self::Resuming,
+            (Self::Degraded, ComponentTrigger::ComponentResume) => Self::Resuming,
             (Self::Degraded, ComponentTrigger::Stop) => Self::Stopping,
             (Self::Degraded, ComponentTrigger::Fault) => Self::Faulting,
             (Self::Disposing, ComponentTrigger::DisposeCompleted) => Self::Disposed,

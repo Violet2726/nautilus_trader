@@ -12,10 +12,12 @@ categories = ["finance", "algorithms"]
 
 [dependencies]
 nautilus-markets-ashare = { path = "./ashare", optional = true }
+pyo3 = { workspace = true, optional = true }
 
 [features]
 default = ["ashare"]
 ashare = ["nautilus-markets-ashare"]
+python = ["nautilus-markets-ashare/python", "pyo3"]
 us = []      # 未来
 hk = []      # 未来
 

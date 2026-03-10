@@ -22,7 +22,7 @@ name = "nautilus_pyo3"
 crate-type = ["rlib", "cdylib"]
 
 [features]
-default = []
+default = ["cython-compat"]
 cython-compat = []
 defi = [
   "nautilus-common/defi",
@@ -82,6 +82,7 @@ nautilus-execution = { workspace = true, features = ["python"] }
 nautilus-indicators = { workspace = true, features = ["python"] }
 nautilus-infrastructure = { workspace = true, features = ["python"] }
 nautilus-live = { workspace = true, features = ["python"] }
+nautilus-markets = { workspace = true, features = ["ashare", "python"] }
 nautilus-model = { workspace = true, features = ["python"] }
 nautilus-network = { workspace = true, features = ["python"] }
 nautilus-persistence = { workspace = true, features = ["python"] }

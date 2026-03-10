@@ -21,8 +21,11 @@ pub mod config;
 pub mod engine;
 pub mod provider;
 pub mod rules;
+pub mod checks;
+pub mod python;
 
 // 重新导出
+pub use checks::*;
 pub use config::*;
 pub use engine::*;
 pub use provider::*;

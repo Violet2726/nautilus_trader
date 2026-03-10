@@ -15,11 +15,20 @@ class TTPosition(NamedTuple):
 
     account_id: str
     stock_code: str
-    volume: int
-    available_volume: int
-    avg_price: float
-    market_value: float
-    float_pnl: float
+    stock_name: str = ""
+    volume: int = 0
+    available_volume: int = 0
+    pending_volume: int = 0
+    frozen_volume: int = 0
+    market_value: float = 0.0
+    last_price: float = 0.0
+    avg_price: float = 0.0
+    float_pnl: float = 0.0
+    profit_loss_ratio: float = 0.0
+    overnight_volume: int = 0
+    account_name: str = ""
+    broker_name: str = ""
+    expiry_date: str = ""
 
 
 class TTOrder(NamedTuple):
@@ -28,13 +37,23 @@ class TTOrder(NamedTuple):
     order_id: int
     order_sysid: str
     stock_code: str
-    order_type: int
-    order_volume: int
-    traded_volume: int
-    price: float
-    traded_price: float
-    order_status: int
-    order_remark: str
+    stock_name: str = ""
+    order_time: int = 0
+    order_type: int = 0
+    order_side: str = ""
+    order_status: int = 0
+    order_status_label: str = ""
+    order_volume: int = 0
+    traded_volume: int = 0
+    canceled_volume: int = 0
+    price: float = 0.0
+    traded_price: float = 0.0
+    frozen_amount: float = 0.0
+    order_remark: str = ""
+    reject_reason: str = ""
+    remark: str = ""
+    strategy_name: str = ""
+    executing: bool = False
 
 
 class TTTrade(NamedTuple):
@@ -44,10 +63,16 @@ class TTTrade(NamedTuple):
     order_id: int
     order_sysid: str
     stock_code: str
-    traded_id: str
-    traded_price: float
-    traded_volume: int
-    traded_time: int
+    stock_name: str = ""
+    order_side: str = ""
+    traded_id: str = ""
+    traded_price: float = 0.0
+    traded_volume: int = 0
+    traded_amount: float = 0.0
+    traded_time: int = 0
+    account_name: str = ""
+    remark: str = ""
+    strategy_name: str = ""
 
 
 class Request(msgspec.Struct, frozen=True):

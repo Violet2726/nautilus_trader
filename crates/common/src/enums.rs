@@ -133,7 +133,7 @@ pub enum ComponentTrigger {
     /// 组件成功停止时的触发器。
     StopCompleted = 5,
     /// 组件恢复（停止后）的触发器。
-    Resume = 6,
+    ComponentResume = 6,
     /// 组件成功恢复时的触发器。
     ResumeCompleted = 7,
     /// 组件重置的触发器。

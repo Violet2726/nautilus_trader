@@ -23,6 +23,9 @@
 
 use nautilus_model::types::{Price, price::PriceRaw};
 
+#[cfg(feature = "python")]
+use pyo3::pyfunction;
+
 /// A股板块类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(
@@ -31,7 +34,8 @@ use nautilus_model::types::{Price, price::PriceRaw};
         frozen,
         eq,
         eq_int,
-        module = "nautilus_trader.core.nautilus_pyo3.common",
+        from_py_object,
+        module = "nautilus_trader.core.nautilus_pyo3.markets",
         rename_all = "SCREAMING_SNAKE_CASE",
     )
 )]
@@ -54,7 +58,8 @@ pub enum BoardType {
         frozen,
         eq,
         eq_int,
-        module = "nautilus_trader.core.nautilus_pyo3.common",
+        from_py_object,
+        module = "nautilus_trader.core.nautilus_pyo3.markets",
         rename_all = "SCREAMING_SNAKE_CASE",
     )
 )]
@@ -217,6 +222,31 @@ pub fn compute_price_limits_for_stock(
     let status = identify_stock_status(symbol, name);
     let config = get_price_limit_config(board, status);
     compute_price_limits(prev_close, tick_size, config)
+}
+
+#[cfg(feature = "python")]
+#[pyfunction]
+pub fn compute_ashare_price_limits(
+    symbol: &str,
+    name: &str,
+    prev_close: Price,
+    tick_size: Price,
+) -> (Option<Price>, Option<Price>) {
+    let limits = compute_price_limits_for_stock(symbol, name, prev_close, tick_size);
+    (limits.limit_up, limits.limit_down)
+}
+
+#[cfg(feature = "python")]
+#[pyfunction]
+pub fn compute_ashare_price_limits_by_board_status(
+    board: BoardType,
+    status: StockStatus,
+    prev_close: Price,
+    tick_size: Price,
+) -> (Option<Price>, Option<Price>) {
+    let config = get_price_limit_config(board, status);
+    let limits = compute_price_limits(prev_close, tick_size, config);
+    (limits.limit_up, limits.limit_down)
 }
 
 #[cfg(test)]

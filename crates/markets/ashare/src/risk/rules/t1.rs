@@ -95,13 +95,8 @@ impl Rule for T1Rule {
         let sellable = self.t1_ledger.read().expect("T1 ledger lock poisoned").sellable(account_id, &context.instrument_id);
         let order_qty = context.metadata.quantity.unwrap_or(0.0);
 
-        if order_qty > sellable {
-            return RuleCheckResult::Fail {
-                reason: format!(
-                    "EXCEEDS_SELLABLE: qty={:.0}, sellable={:.0}",
-                    order_qty, sellable
-                ),
-            };
+        if let Some(msg) = crate::risk::checks::check_ashare_t1_violation(order_qty, sellable) {
+            return RuleCheckResult::Fail { reason: msg };
         }
 
         RuleCheckResult::Pass

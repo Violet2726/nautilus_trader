@@ -89,27 +89,25 @@ impl Rule for PriceCageRule {
 
         // 获取市场数据
         let market_data = self.provider.price_cage_market_data(context);
-        let current_price = market_data.current_price;
-        let tick_size = market_data.tick_size.unwrap_or_else(|| Price::new(0.01, 2));
-
-        let current_price = match current_price {
+        let current_price = match market_data.current_price {
             Some(price) => price,
             None => return RuleCheckResult::Pass,
         };
-
-        // 计算价格笼子限制
-        let cage_limit = current_price.as_f64() * (1.0 + self.price_cage_pct);
-        let cage_limit_price = Price::new(cage_limit, tick_size.precision);
+        let tick_size = market_data.tick_size.unwrap_or_else(|| Price::new(0.01, 2));
 
         // 检查是否违反价格笼子限制
-        if (context.order.order_side() == OrderSide::Buy && order_price > cage_limit_price)
-            || (context.order.order_side() == OrderSide::Sell && order_price < cage_limit_price)
-        {
+        if let Some(limit_price) = crate::risk::checks::check_price_cage_violation(
+            context.order.order_side() == OrderSide::Buy,
+            order_price,
+            current_price,
+            self.price_cage_pct,
+            tick_size,
+        ) {
             return RuleCheckResult::Fail {
                 reason: format!(
-                    "PRICE_CAGE_VIOLATION: price={:.2}, cage_limit={:.2}",
+                    "PRICE_CAGE_VIOLATION: price={:.2}, limit={:.2}",
                     order_price.as_f64(),
-                    cage_limit_price.as_f64()
+                    limit_price.as_f64()
                 ),
             };
         }

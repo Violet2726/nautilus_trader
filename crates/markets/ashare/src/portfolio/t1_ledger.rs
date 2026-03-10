@@ -40,7 +40,7 @@ pub struct T1Entry {
 impl T1Entry {
     #[must_use]
     pub fn sellable(&self) -> f64 {
-        (self.total_qty - self.today_buy_qty).max(0.0)
+        crate::risk::checks::calculate_ashare_sellable_quantity(self.total_qty, self.today_buy_qty)
     }
 }
 

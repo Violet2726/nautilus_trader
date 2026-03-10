@@ -3978,6 +3978,7 @@ name = "nautilus-markets"
 version = "0.54.0"
 dependencies = [
  "nautilus-markets-ashare",
+ "pyo3",
 ]
 
 [[package]]
@@ -4141,6 +4142,7 @@ dependencies = [
  "nautilus-indicators",
  "nautilus-infrastructure",
  "nautilus-live",
+ "nautilus-markets",
  "nautilus-model",
  "nautilus-network",
  "nautilus-persistence",

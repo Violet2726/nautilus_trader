@@ -860,7 +860,7 @@ pub enum MarketStatusAction {
     /// 合约不可用于交易，交易已收盘或停止。
     NotAvailableForTrading = 15,
     /// 合约已复牌。
-    Resume = 16,
+    Resumed = 16,
 }
 
 /// 将给定的 `value` 转换为 [`OrderSide`]。
@@ -883,7 +883,7 @@ impl FromU16 for MarketStatusAction {
             13 => Some(Self::PostClose),
             14 => Some(Self::ShortSellRestrictionChange),
             15 => Some(Self::NotAvailableForTrading),
-            16 => Some(Self::Resume),
+            16 => Some(Self::Resumed),
             _ => None,
         }
     }

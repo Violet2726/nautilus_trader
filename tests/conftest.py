@@ -21,6 +21,26 @@ from pathlib import Path
 
 import pytest
 
+_workspace_root = Path(__file__).resolve().parents[1]
+_python_src = _workspace_root / "python"
+if _python_src.exists() and str(_python_src) not in sys.path:
+    sys.path.insert(0, str(_python_src))
+
+# Ensure the `nautilus_trader` package can be resolved across both the repo root
+# (Cython extensions) and the `python/` source tree (maturin python-source).
+try:
+    import nautilus_trader as _nt
+
+    _root_pkg = _workspace_root / "nautilus_trader"
+    _py_pkg = _python_src / "nautilus_trader"
+    if hasattr(_nt, "__path__"):
+        if _root_pkg.exists() and str(_root_pkg) not in _nt.__path__:
+            _nt.__path__.append(str(_root_pkg))
+        if _py_pkg.exists() and str(_py_pkg) not in _nt.__path__:
+            _nt.__path__.append(str(_py_pkg))
+except Exception:
+    pass
+
 from nautilus_trader.common.component import init_logging
 from nautilus_trader.common.enums import LogLevel
 from nautilus_trader.model.data import QuoteTick

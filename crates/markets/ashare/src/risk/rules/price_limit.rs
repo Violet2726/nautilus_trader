@@ -17,7 +17,7 @@
 //!
 //! 提供A股市场的涨跌停价格验证功能。
 
-use nautilus_model::enums::{OrderSide, OrderType};
+use nautilus_model::enums::OrderType;
 use nautilus_model::orders::Order;
 use nautilus_model::types::Price;
 use std::sync::Arc;
@@ -67,35 +67,6 @@ impl PriceLimitRule {
     pub fn set_enabled(&mut self, enabled: bool) {
         self.enabled = enabled;
     }
-
-    /// 检查订单价格是否违反涨跌停限制
-    #[allow(dead_code)]
-    fn check_price_limit_violation(
-        &self,
-        order_price: Price,
-        limits: &crate::market::price_limits::PriceLimits,
-        side: OrderSide,
-    ) -> bool {
-        match side {
-            OrderSide::Buy => {
-                // 买入价不能超过涨停价
-                if let Some(limit_up) = limits.limit_up {
-                    order_price > limit_up
-                } else {
-                    false // 无涨停限制
-                }
-            }
-            OrderSide::Sell => {
-                // 卖出价不能低于跌停价
-                if let Some(limit_down) = limits.limit_down {
-                    order_price < limit_down
-                } else {
-                    false // 无跌停限制
-                }
-            }
-            _ => false,
-        }
-    }
 }
 
 impl Rule for PriceLimitRule {
@@ -142,21 +113,13 @@ impl Rule for PriceLimitRule {
         );
 
         // 检查是否违反涨跌停限制
-        if self.check_price_limit_violation(order_price, &limits, context.order.order_side()) {
-            let (limit_type, limit_price) = match context.order.order_side() {
-                OrderSide::Buy => ("涨停", limits.limit_up.unwrap_or_default()),
-                OrderSide::Sell => ("跌停", limits.limit_down.unwrap_or_default()),
-                _ => ("限制", Price::new(0.0, 2)),
-            };
-
-            return RuleCheckResult::Fail {
-                reason: format!(
-                    "PRICE_LIMIT_VIOLATION: price={:.2}, {}={:.2}",
-                    order_price.as_f64(),
-                    limit_type,
-                    limit_price.as_f64()
-                ),
-            };
+        if let Some(msg) = crate::risk::checks::check_ashare_price_limit_violation(
+            order_price,
+            market_data.tick_size,
+            limits.limit_up,
+            limits.limit_down,
+        ) {
+            return RuleCheckResult::Fail { reason: msg };
         }
 
         RuleCheckResult::Pass

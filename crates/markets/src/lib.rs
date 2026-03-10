@@ -17,6 +17,9 @@
 //!
 //! 提供各个市场的特定规则和功能。
 
+#[cfg(feature = "python")]
+pub mod python;
+
 pub mod ashare;
 
 // 重新导出常用类型

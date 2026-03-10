@@ -1,13 +1,13 @@
-from decimal import Decimal, ROUND_DOWN, ROUND_UP
+from decimal import Decimal
 
-# A股涨跌幅限制表：(板块, 状态) -> (上涨比例, 下跌比例)
-LIMIT_TABLE: dict[tuple[str, str], tuple[Decimal, Decimal] | None] = {
-    ("MAIN", "NORMAL"):   (Decimal("0.10"), Decimal("0.10")), # 主板普通
-    ("MAIN", "ST"):       (Decimal("0.05"), Decimal("0.05")), # 主板ST
-    ("GEM", "NORMAL"):    (Decimal("0.20"), Decimal("0.20")), # 创业板
-    ("STAR", "NORMAL"):   (Decimal("0.20"), Decimal("0.20")), # 科创板
-    ("STAR", "IPO5"):     None,  # 科创板上市前5日，不设涨跌幅
-}
+from nautilus_trader.core.nautilus_pyo3.markets import (
+    BoardType,
+    StockStatus,
+    compute_ashare_price_limits_by_board_status,
+    identify_ashare_board_type_from_str,
+    identify_ashare_stock_status_from_str,
+)
+from nautilus_trader.core.nautilus_pyo3.model import Price
 
 def compute_limits(
     board: str, status: str, prev_close: Decimal, tick: Decimal = Decimal("0.01"),
@@ -15,12 +15,15 @@ def compute_limits(
     """
     计算 A 股涨跌停价格
     """
-    entry = LIMIT_TABLE.get((board, status), (Decimal("0.10"), Decimal("0.10")))
-    if entry is None:
+    prev_close_f = float(prev_close)
+    tick_f = float(tick)
+    prev_close_p = Price(prev_close_f, max(-prev_close.as_tuple().exponent, 0))
+    tick_p = Price(tick_f, max(-tick.as_tuple().exponent, 0))
+
+    b = identify_ashare_board_type_from_str(board)
+    s = identify_ashare_stock_status_from_str(status)
+
+    limit_up, limit_down = compute_ashare_price_limits_by_board_status(b, s, prev_close_p, tick_p)
+    if limit_up is None or limit_down is None:
         return None, None
-    pct_up, pct_down = entry
-    # 涨停价：向上取整到 tick
-    up = (prev_close * (1 + pct_up) / tick).quantize(Decimal('1'), rounding=ROUND_DOWN) * tick
-    # 跌停价：向下取整到 tick
-    down = (prev_close * (1 - pct_down) / tick).quantize(Decimal('1'), rounding=ROUND_UP) * tick
-    return up, down
+    return Decimal(str(limit_up.as_f64())), Decimal(str(limit_down.as_f64()))
