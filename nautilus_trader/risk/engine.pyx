@@ -52,6 +52,7 @@ from nautilus_trader.core.nautilus_pyo3.markets import T1Ledger
 from nautilus_trader.core.nautilus_pyo3.markets import compute_ashare_price_cage_violation_by_phase
 from nautilus_trader.core.nautilus_pyo3.markets import compute_ashare_lot_size_violation
 from nautilus_trader.core.nautilus_pyo3.markets import compute_ashare_price_limit_violation
+from nautilus_trader.core.nautilus_pyo3.model import Price as PyO3Price
 from nautilus_trader.core.nautilus_pyo3.markets import can_ashare_submit_order
 from nautilus_trader.core.nautilus_pyo3.markets import can_ashare_cancel_order
 from nautilus_trader.core.nautilus_pyo3.markets import is_ashare_trading_suspended
@@ -705,14 +706,20 @@ cdef class RiskEngine(Component):
                 tick = instrument.price_increment if instrument.price_increment is not None else None
                 pct = float(self._config.get("price_cage_pct", 0.02))
 
+                # Convert Cython Price objects to PyO3 Price objects for compatibility
+                pyo3_order_price = PyO3Price(order.price.as_double(), order.price.precision)
+                pyo3_best_bid = PyO3Price(best_bid.as_double(), best_bid.precision) if best_bid is not None else None
+                pyo3_last_trade = PyO3Price(last_trade.as_double(), last_trade.precision) if last_trade is not None else None
+                pyo3_tick = PyO3Price(tick.as_double(), tick.precision) if tick is not None else None
+
                 bound = compute_ashare_price_cage_violation_by_phase(
                     phase,
                     order.is_buy_c(),
-                    order.price,
-                    best_bid,
-                    last_trade,
+                    pyo3_order_price,
+                    pyo3_best_bid,
+                    pyo3_last_trade,
                     pct,
-                    tick,
+                    pyo3_tick,
                 )
                 if bound is not None:
                     self._deny_order(
@@ -742,7 +749,7 @@ cdef class RiskEngine(Component):
                     sellable = self._t1_ledger.sellable_or_none_opt(acct_key, inst_key)
 
                 violation = compute_ashare_lot_size_violation(
-                    instrument.id.symbol.as_str(),
+                    instrument.id.symbol.value,
                     order.is_buy_c(),
                     order.quantity.as_double(),
                     sellable,
@@ -1158,11 +1165,17 @@ cdef class RiskEngine(Component):
 
         # A 股扩展: tick 对齐与涨跌停价检查 (Rust 实现)
         if self._config.get("t1_enabled", False):
+            # Convert Cython Price objects to PyO3 Price objects for compatibility
+            pyo3_price = PyO3Price(price.as_double(), price.precision)
+            pyo3_tick_size = PyO3Price(instrument.price_increment.as_double(), instrument.price_increment.precision) if instrument.price_increment is not None else None
+            pyo3_max_price = PyO3Price(instrument.max_price.as_double(), instrument.max_price.precision) if instrument.max_price is not None else None
+            pyo3_min_price = PyO3Price(instrument.min_price.as_double(), instrument.min_price.precision) if instrument.min_price is not None else None
+            
             violation = compute_ashare_price_limit_violation(
-                price,
-                instrument.price_increment if instrument.price_increment is not None else None,
-                instrument.max_price if instrument.max_price is not None else None,
-                instrument.min_price if instrument.min_price is not None else None,
+                pyo3_price,
+                pyo3_tick_size,
+                pyo3_max_price,
+                pyo3_min_price,
             )
             if violation is not None:
                 return violation
