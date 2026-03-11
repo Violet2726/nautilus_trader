@@ -13,7 +13,7 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! Risk management engine implementation.
+//! 风险管理引擎的实现。
 
 pub mod config;
 
@@ -57,12 +57,12 @@ use ustr::Ustr;
 type SubmitOrderFn = Box<dyn Fn(SubmitOrder)>;
 type ModifyOrderFn = Box<dyn Fn(ModifyOrder)>;
 
-/// Central risk management engine that validates and controls trading operations.
+/// 核心风险管理引擎，用于验证和控制交易操作。
 ///
-/// The `RiskEngine` provides comprehensive pre-trade risk checks including order validation,
-/// balance verification, position sizing limits, and trading state management. It acts as
-/// a gateway between strategy orders and execution, ensuring all trades comply with
-/// defined risk parameters and regulatory constraints.
+/// `RiskEngine` 提供全面的事前风险检查，包括订单验证、
+/// 资金余额验证、持仓规模限制以及交易状态管理。它作为
+/// 策略订单与执行系统之间的网关，确保所有交易均符合
+/// 定义的风险参数和监管限制。
 #[allow(dead_code)]
 pub struct RiskEngine {
     clock: Rc<RefCell<dyn Clock>>,
@@ -85,7 +85,7 @@ impl Debug for RiskEngine {
 }
 
 impl RiskEngine {
-    /// Creates a new [`RiskEngine`] instance.
+    /// 创建一个新的 [`RiskEngine`] 实例。
     pub fn new(
         config: RiskEngineConfig,
         portfolio: Portfolio,
@@ -96,14 +96,12 @@ impl RiskEngine {
             &config,
             clock.clone(),
             cache.clone(),
-            None,
         );
 
         let throttled_modify_order = Self::create_modify_order_throttler(
             &config,
             clock.clone(),
             cache.clone(),
-            None,
         );
 
         Self {
@@ -163,7 +161,7 @@ impl RiskEngine {
         }
     }
 
-    /// Registers all message bus handlers for the risk engine.
+    /// 为风险引擎注册所有的消息总线处理器。
     pub fn register_msgbus_handlers(engine: Rc<RefCell<Self>>) {
         let weak = WeakCell::from(Rc::downgrade(&engine));
 
@@ -206,17 +204,11 @@ impl RiskEngine {
         config: &RiskEngineConfig,
         clock: Rc<RefCell<dyn Clock>>,
         cache: Rc<RefCell<Cache>>,
-        global_throttler: Option<Rc<RefCell<Throttler<TradingCommand, Box<dyn Fn(TradingCommand)>>>>>,
     ) -> Throttler<SubmitOrder, SubmitOrderFn> {
         let success_handler = {
-            let global_throttler = global_throttler;
             Box::new(move |submit_order: SubmitOrder| {
-                if let Some(gt) = &global_throttler {
-                    gt.borrow_mut().send(TradingCommand::SubmitOrder(submit_order));
-                } else {
-                    let endpoint = MessagingSwitchboard::exec_engine_queue_execute();
-                    msgbus::send_trading_command(endpoint, TradingCommand::SubmitOrder(submit_order));
-                }
+                let endpoint = MessagingSwitchboard::exec_engine_queue_execute();
+                msgbus::send_trading_command(endpoint, TradingCommand::SubmitOrder(submit_order));
             }) as Box<dyn Fn(SubmitOrder)>
         };
 
@@ -224,9 +216,9 @@ impl RiskEngine {
             let cache = cache;
             let clock = clock.clone();
             Box::new(move |submit_order: SubmitOrder| {
-                let reason = "REJECTED BY THROTTLER";
+                let reason = "流控器（Throttler）拒绝";
                 log::warn!(
-                    "SubmitOrder for {} DENIED: {}",
+                    "{} 的提交订单（SubmitOrder）被拒绝：{}",
                     submit_order.client_order_id,
                     reason
                 );
@@ -255,17 +247,11 @@ impl RiskEngine {
         config: &RiskEngineConfig,
         clock: Rc<RefCell<dyn Clock>>,
         cache: Rc<RefCell<Cache>>,
-        global_throttler: Option<Rc<RefCell<Throttler<TradingCommand, Box<dyn Fn(TradingCommand)>>>>>,
     ) -> Throttler<ModifyOrder, ModifyOrderFn> {
         let success_handler = {
-            let global_throttler = global_throttler;
             Box::new(move |order: ModifyOrder| {
-                if let Some(gt) = &global_throttler {
-                    gt.borrow_mut().send(TradingCommand::ModifyOrder(order));
-                } else {
-                    let endpoint = MessagingSwitchboard::exec_engine_queue_execute();
-                    msgbus::send_trading_command(endpoint, TradingCommand::ModifyOrder(order));
-                }
+                let endpoint = MessagingSwitchboard::exec_engine_queue_execute();
+                msgbus::send_trading_command(endpoint, TradingCommand::ModifyOrder(order));
             }) as Box<dyn Fn(ModifyOrder)>
         };
 
@@ -273,9 +259,9 @@ impl RiskEngine {
             let cache = cache;
             let clock = clock.clone();
             Box::new(move |order: ModifyOrder| {
-                let reason = "Exceeded MAX_ORDER_MODIFY_RATE";
+                let reason = "超过了最大订单修改速率限制（MAX_ORDER_MODIFY_RATE）";
                 log::warn!(
-                    "SubmitOrder for {} DENIED: {}",
+                    "{} 的提交订单（SubmitOrder）被拒绝：{}",
                     order.client_order_id,
                     reason
                 );
@@ -307,7 +293,7 @@ impl RiskEngine {
         let cache = cache.borrow();
         if !cache.order_exists(&submit_order.client_order_id) {
             log::error!(
-                "Order not found in cache for client_order_id: {}",
+                "缓存中未找到 client_order_id 为 {} 的订单",
                 submit_order.client_order_id
             );
         }
@@ -319,7 +305,7 @@ impl RiskEngine {
             Some(order.clone())
         } else {
             log::error!(
-                "Order with command.client_order_id: {} not found",
+                "未找到 client_order_id 为 {} 的订单",
                 order.client_order_id
             );
             None
@@ -366,22 +352,22 @@ impl RiskEngine {
     }
 
 
-    /// Executes a trading command through the risk management pipeline.
+    /// 通过风险管理流水线执行一项交易命令。
     pub fn execute(&mut self, command: TradingCommand) {
-        // This will extend to other commands such as `RiskCommand`
+        // 这将扩展到其他命令，例如 `RiskCommand`
         self.handle_command(command);
     }
 
-    /// Processes an order event for risk monitoring and state updates.
+    /// 处理订单事件以进行风险监控和状态更新。
     pub fn process(&mut self, event: &OrderEventAny) {
-        // This will extend to other events such as `RiskEvent`
+        // 这将扩展到其他事件，例如 `RiskEvent`
         self.handle_event(event);
     }
 
-    /// Sets the trading state for risk control enforcement.
+    /// 设置用于风险控制执行的交易状态。
     pub fn set_trading_state(&mut self, state: TradingState) {
         if state == self.trading_state {
-            log::warn!("No change to trading state: already set to {state:?}");
+            log::warn!("交易状态无变化：已设置为 {state:?}");
             return;
         }
 
@@ -389,40 +375,40 @@ impl RiskEngine {
 
         let _ts_now = self.clock.borrow().timestamp_ns();
 
-        // TODO: Create a new Event "TradingStateChanged" in OrderEventAny enum.
+        // TODO：在 OrderEventAny 枚举中创建一个新的事件 "TradingStateChanged"。
         // let event = OrderEventAny::TradingStateChanged(TradingStateChanged::new(..,self.trading_state,..));
 
-        msgbus::publish_any("events.risk".into(), &"message"); // TODO: Send the new Event here
+        msgbus::publish_any("events.risk".into(), &"message"); // TODO：在这里发送新事件
 
-        log::info!("Trading state set to {state:?}");
+        log::info!("交易状态已设置为 {state:?}");
     }
 
-    /// Sets the maximum notional value per order for the specified instrument.
+    /// 为指定的标的设置每笔订单的最大名义价值。
     pub fn set_max_notional_per_order(&mut self, instrument_id: InstrumentId, new_value: Decimal) {
         self.max_notional_per_order.insert(instrument_id, new_value);
 
         let new_value_str = new_value.to_string();
-        log::info!("Set MAX_NOTIONAL_PER_ORDER: {instrument_id} {new_value_str}");
+        log::info!("已设置每笔订单最大名义价值：{instrument_id} {new_value_str}");
     }
 
-    /// Starts the risk engine.
+    /// 启动风险引擎。
     pub fn start(&mut self) {
-        log::info!("Started");
+        log::info!("已启动");
     }
 
-    /// Stops the risk engine.
+    /// 停止风险引擎。
     pub fn stop(&mut self) {
-        log::info!("Stopped");
+        log::info!("已停止");
     }
 
-    /// Resets the risk engine to its initial state.
+    /// 将风险引擎重置为其初始状态。
     pub fn reset(&mut self) {
         self.throttled_submit_order.reset();
         self.throttled_modify_order.reset();
         self.max_notional_per_order.clear();
         self.trading_state = TradingState::Active;
 
-        log::info!("Reset");
+        log::info!("已重置");
     }
 
     fn check_pre_trade_rules(&self, order: OrderAny, instrument_id: InstrumentId) -> Option<String> {
@@ -437,36 +423,36 @@ impl RiskEngine {
         }
     }
 
-    /// Disposes of the risk engine, releasing resources.
+    /// 释放风险引擎，释放资源。
     pub fn dispose(&mut self) {
-        log::info!("Disposed");
+        log::info!("已释放");
     }
 
-    /// Returns a reference to the clock.
+    /// 返回时钟的引用。
     #[must_use]
     pub fn clock(&self) -> &Rc<RefCell<dyn Clock>> {
         &self.clock
     }
 
-    /// Returns a reference to the cache.
+    /// 返回缓存的引用。
     #[must_use]
     pub fn cache(&self) -> &Rc<RefCell<Cache>> {
         &self.cache
     }
 
-    /// Returns a reference to the configuration.
+    /// 返回配置的引用。
     #[must_use]
     pub const fn config(&self) -> &RiskEngineConfig {
         &self.config
     }
 
-    /// Returns the current trading state.
+    /// 返回当前的交易状态。
     #[must_use]
     pub const fn trading_state(&self) -> TradingState {
         self.trading_state
     }
 
-    /// Returns a reference to the max notional per order settings.
+    /// 返回每笔订单最大名义价值设置的引用。
     #[must_use]
     pub const fn max_notional_per_order(&self) -> &AHashMap<InstrumentId, Decimal> {
         &self.max_notional_per_order
@@ -495,7 +481,7 @@ impl RiskEngine {
                 self.send_to_execution(TradingCommand::QueryAccount(query_account));
             }
             _ => {
-                log::error!("Cannot handle command: {command}");
+                log::error!("无法处理命令：{command}");
             }
         }
     }
@@ -540,7 +526,7 @@ impl RiskEngine {
 
         let wrapped = TradingCommand::CancelAllOrders(command.clone());
         if let Some(reason) = self.check_pre_trade_command_rules(wrapped) {
-            // CancelAllOrders has no single order id; emit a generic risk event for now.
+            // CancelAllOrders 没有单个订单 ID；暂时发出一个通用的风险事件。
             msgbus::publish_any("events.risk".into(), &reason);
             return;
         }
@@ -560,7 +546,7 @@ impl RiskEngine {
                 Some(order) => order.clone(),
                 None => {
                     log::error!(
-                        "Cannot handle submit order: order not found in cache for {}",
+                        "无法处理下单：缓存中未找到 {} 的订单",
                         command.client_order_id
                     );
                     return;
@@ -582,14 +568,14 @@ impl RiskEngine {
                 if !order.would_reduce_only(pos_side, pos_quantity) {
                     self.deny_command(
                         TradingCommand::SubmitOrder(command),
-                        &format!("Reduce only order would increase position {position_id}"),
+                        &format!("只减仓订单（Reduce only）会增加标的 {position_id} 的持仓"),
                     );
-                    return; // Denied
+                    return; // 已拒绝
                 }
             } else {
                 self.deny_command(
                     TradingCommand::SubmitOrder(command),
-                    &format!("Position {position_id} not found for reduce-only order"),
+                    &format!("未找到只减仓订单对应的仓位 {position_id}"),
                 );
                 return;
             }
@@ -605,7 +591,7 @@ impl RiskEngine {
         } else {
             self.deny_command(
                 TradingCommand::SubmitOrder(command.clone()),
-                &format!("Instrument for {} not found", command.instrument_id),
+                &format!("未找到 {} 对应的标的", command.instrument_id),
             );
             return; // Denied
         };
@@ -623,7 +609,7 @@ impl RiskEngine {
             return; // Denied
         }
 
-        // Route through execution gateway for TradingState checks & throttling
+        // 通过执行网关进行路由，以进行交易状态检查和流控限制
         self.execution_gateway(instrument, TradingCommand::SubmitOrder(command));
     }
 
@@ -643,7 +629,7 @@ impl RiskEngine {
         } else {
             self.deny_command(
                 TradingCommand::SubmitOrderList(command.clone()),
-                &format!("no instrument found for {}", command.instrument_id),
+                &format!("未找到 {} 对应的标的", command.instrument_id),
             );
             return; // Denied
         };
@@ -656,7 +642,7 @@ impl RiskEngine {
         if orders.len() != command.order_list.client_order_ids.len() {
             self.deny_order_list(
                 &orders,
-                &format!("Incomplete order list: missing orders in cache for {command}"),
+                &format!("订单列表不完整：缓存中缺失 {} 的订单", command),
             );
             return; // Denied
         }
@@ -677,7 +663,7 @@ impl RiskEngine {
         if !self.check_orders_risk(instrument.clone(), &orders) {
             self.deny_order_list(
                 &orders,
-                &format!("OrderList {} DENIED", command.order_list.id),
+                &format!("订单列表（OrderList）{} 被拒绝", command.order_list.id),
             );
             return; // Denied
         }
@@ -706,7 +692,7 @@ impl RiskEngine {
             order
         } else {
             log::error!(
-                "ModifyOrder DENIED: Order with command.client_order_id: {} not found",
+                "修改订单请求被拒绝：未找到 client_order_id 为 {} 的订单",
                 command.client_order_id
             );
             return;
@@ -716,7 +702,7 @@ impl RiskEngine {
             self.reject_modify_order(
                 order,
                 &format!(
-                    "Order with command.client_order_id: {} already closed",
+                    "client_order_id 为 {} 的订单已收盘/关闭",
                     command.client_order_id
                 ),
             );
@@ -725,7 +711,7 @@ impl RiskEngine {
             self.reject_modify_order(
                 order,
                 &format!(
-                    "Order with command.client_order_id: {} is already pending cancel",
+                    "client_order_id 为 {} 的订单已在等待撤单中",
                     command.client_order_id
                 ),
             );
@@ -742,33 +728,33 @@ impl RiskEngine {
         } else {
             self.reject_modify_order(
                 order,
-                &format!("no instrument found for {:?}", command.instrument_id),
+                &format!("未找到 {:?} 对应的标的", command.instrument_id),
             );
             return; // Denied
         };
 
-        // Check Price
+        // 检查价格
         let mut risk_msg = self.check_price(&instrument, command.price);
         if let Some(risk_msg) = risk_msg {
             self.reject_modify_order(order, &risk_msg);
             return; // Denied
         }
 
-        // Check Trigger
+        // 检查触发价
         risk_msg = self.check_price(&instrument, command.trigger_price);
         if let Some(risk_msg) = risk_msg {
             self.reject_modify_order(order, &risk_msg);
             return; // Denied
         }
 
-        // Check Quantity
+        // 检查数量
         risk_msg = self.check_quantity(&instrument, command.quantity, order.is_quote_quantity());
         if let Some(risk_msg) = risk_msg {
             self.reject_modify_order(order, &risk_msg);
             return; // Denied
         }
 
-        // Check InstrumentStatus
+        // 检查标的状态
         {
             let cache = self.cache.borrow();
             if let Some(status) = cache.instrument_status(&command.instrument_id) {
@@ -788,10 +774,10 @@ impl RiskEngine {
             }
         }
 
-        // Check TradingState
+        // 检查交易状态
         match self.trading_state {
             TradingState::Halted => {
-                self.reject_modify_order(order, "TradingState is HALTED: Cannot modify order");
+                self.reject_modify_order(order, "交易状态为停牌/停盘 (HALTED)：无法修改订单");
             }
             TradingState::Reducing => {
                 if let Some(quantity) = command.quantity
@@ -802,7 +788,7 @@ impl RiskEngine {
                     self.reject_modify_order(
                         order,
                         &format!(
-                            "TradingState is REDUCING and update will increase exposure {}",
+                            "交易状态为减仓 (REDUCING)，且更新将增加标的 {} 的敞口",
                             instrument.id()
                         ),
                     );
@@ -816,14 +802,14 @@ impl RiskEngine {
 
     fn check_order(&self, instrument: InstrumentAny, order: OrderAny) -> bool {
         if order.time_in_force() == TimeInForce::Gtd {
-            // SAFETY: GTD guarantees an expire time
+            // 安全性：GTD 保证具有过期时间
             let expire_time = order.expire_time().unwrap();
             if expire_time <= self.clock.borrow().timestamp_ns() {
                 self.deny_order(
                     order,
-                    &format!("GTD {} already past", expire_time.to_rfc3339()),
+                    &format!("GTD 订单已超过过期时间 {}", expire_time.to_rfc3339()),
                 );
-                return false; // Denied
+                return false; // 已拒绝
             }
         }
 
@@ -841,7 +827,7 @@ impl RiskEngine {
             let risk_msg = self.check_price(&instrument, Some(order_price));
             if let Some(risk_msg) = risk_msg {
                 self.deny_order(order.clone(), &risk_msg);
-                return false; // Denied
+                return false; // 已拒绝
             }
         }
 
@@ -849,7 +835,7 @@ impl RiskEngine {
             let risk_msg = self.check_price(&instrument, order.trigger_price());
             if let Some(risk_msg) = risk_msg {
                 self.deny_order(order, &risk_msg);
-                return false; // Denied
+                return false; // 已拒绝
             }
         }
 
@@ -874,7 +860,7 @@ impl RiskEngine {
         let mut last_px: Option<Price> = None;
         let mut max_notional: Option<Money> = None;
 
-        // Determine max notional
+        // 确定最大名义价值
         let max_notional_setting = self.max_notional_per_order.get(&instrument.id());
         if let Some(max_notional_setting_val) = max_notional_setting.copied() {
             max_notional = Some(Money::new(
@@ -894,21 +880,21 @@ impl RiskEngine {
         let account = if let Some(account) = account_exists {
             account
         } else {
-            log::debug!("Cannot find account for venue {}", instrument.id().venue);
-            return true; // TODO: Temporary early return until handling routing/multiple venues
+            log::debug!("未找到柜台 {} 的账户", instrument.id().venue);
+            return true; // TODO：暂时提前返回直到处理路由/多柜台逻辑
         };
         let cash_account = match account {
             AccountAny::Cash(cash_account) => cash_account,
-            AccountAny::Margin(_) => return true, // TODO: Determine risk controls for margin
+            AccountAny::Margin(_) => return true, // TODO：确定保证金账户的风险控制
         };
         let free = cash_account.balance_free(Some(instrument.quote_currency()));
         let allow_borrowing = cash_account.allow_borrowing;
         if self.config.debug {
-            log::debug!("Free cash: {free:?}");
+            log::debug!("空闲现金：{free:?}");
         }
 
-        // Get net LONG position quantity for this instrument (for position-reducing sell checks),
-        // accounting for already submitted (but unfilled) SELL orders to prevent overselling.
+        // 获取该标的的净多头持仓数量（用于减仓卖出检查），
+        // 考虑已提交（但未成交）的卖单，以防止超卖。
         let (net_long_qty_raw, pending_sell_qty_raw) = {
             let cache = self.cache.borrow();
             let long_qty: QuantityRaw = cache
@@ -936,23 +922,23 @@ impl RiskEngine {
             (long_qty, pending_sells)
         };
 
-        // Available quantity is long position minus pending sells
+        // 可用数量等于多头持仓减去挂单中的卖单
         let available_long_qty_raw = net_long_qty_raw.saturating_sub(pending_sell_qty_raw);
 
         if self.config.debug && net_long_qty_raw > 0 {
             log::debug!(
-                "Net LONG qty (raw): {net_long_qty_raw}, pending sells: {pending_sell_qty_raw}, available: {available_long_qty_raw}"
+                "净多头持仓（raw）：{net_long_qty_raw}，挂单卖出：{pending_sell_qty_raw}，可用：{available_long_qty_raw}"
             );
         }
 
-        // Track cumulative sell quantity to determine position-reducing vs position-opening sells
+        // 追踪累计卖出数量，以确定是减仓型卖出还是开仓型卖出
         let mut cum_sell_qty_raw: QuantityRaw = 0;
 
         let mut cum_notional_buy: Option<Money> = None;
         let mut cum_notional_sell: Option<Money> = None;
         let mut base_currency: Option<Currency> = None;
         for order in orders {
-            // Determine last price based on order type
+            // 根据订单类型确定最新价格
             last_px = match order {
                 OrderAny::Market(_) | OrderAny::MarketToLimit(_) => {
                     if last_px.is_none() {
@@ -961,7 +947,7 @@ impl RiskEngine {
                             match order.order_side() {
                                 OrderSide::Buy => Some(last_quote.ask_price),
                                 OrderSide::Sell => Some(last_quote.bid_price),
-                                _ => panic!("Invalid order side"),
+                                _ => panic!("无效的订单方向（OrderSide）"),
                             }
                         } else {
                             let cache = self.cache.borrow();
@@ -971,7 +957,7 @@ impl RiskEngine {
                                 Some(last_trade.price)
                             } else {
                                 log::warn!(
-                                    "Cannot check MARKET order risk: no prices for {}",
+                                    "无法检查市价单（MARKET）风险：{} 无报价",
                                     instrument.id()
                                 );
                                 continue;
@@ -996,7 +982,7 @@ impl RiskEngine {
                         ) {
                             self.deny_order(
                                 order.clone(),
-                                &format!("UNSUPPORTED_TRAILING_OFFSET_TYPE: {offset_type:?}"),
+                                &format!("不支持的追踪偏移类型（UNSUPPORTED_TRAILING_OFFSET_TYPE）：{offset_type:?}"),
                             );
                             return false;
                         }
@@ -1017,7 +1003,7 @@ impl RiskEngine {
                                     Ok(calculated_trigger) => Some(calculated_trigger),
                                     Err(e) => {
                                         log::warn!(
-                                            "Cannot check {} order risk: failed to calculate trigger price from trailing offset: {e}",
+                                            "无法检查 {} 订单风险：无法从追踪偏移量计算触发价：{e}",
                                             order.order_type()
                                         );
                                         continue;
@@ -1025,7 +1011,7 @@ impl RiskEngine {
                                 }
                             } else {
                                 log::warn!(
-                                    "Cannot check {} order risk: no trigger price set and no bid/ask quotes available for {}",
+                                    "无法检查 {} 订单风险：未设置触发价，且 {} 无可用报价数据",
                                     order.order_type(),
                                     instrument.id()
                                 );
@@ -1042,7 +1028,7 @@ impl RiskEngine {
                                 Ok(calculated_trigger) => Some(calculated_trigger),
                                 Err(e) => {
                                     log::warn!(
-                                        "Cannot check {} order risk: failed to calculate trigger price from trailing offset: {}",
+                                        "无法检查 {} 订单风险：无法从追踪偏移量计算触发价：{}",
                                         order.order_type(),
                                         e
                                     );
@@ -1050,7 +1036,7 @@ impl RiskEngine {
                                 }
                             }
                         } else if trigger_type == TriggerType::LastOrBidAsk {
-                            // Fallback to bid/ask when no trade data available
+                            // 当没有成交数据可用时，回退到使用买卖报价
                             if let Some(quote) = cache.quote(&instrument.id()) {
                                 match trailing_stop_calculate_with_bid_ask(
                                     instrument.price_increment(),
@@ -1063,7 +1049,7 @@ impl RiskEngine {
                                     Ok(calculated_trigger) => Some(calculated_trigger),
                                     Err(e) => {
                                         log::warn!(
-                                            "Cannot check {} order risk: failed to calculate trigger price from trailing offset: {e}",
+                                            "无法检查 {} 订单风险：无法从追踪偏移量计算触发价：{e}",
                                             order.order_type()
                                         );
                                         continue;
@@ -1071,7 +1057,7 @@ impl RiskEngine {
                                 }
                             } else {
                                 log::warn!(
-                                    "Cannot check {} order risk: no trigger price set and no market data available for {}",
+                                    "无法检查 {} 订单风险：未设置触发价，且 {} 无可用市场数据",
                                     order.order_type(),
                                     instrument.id()
                                 );
@@ -1079,7 +1065,7 @@ impl RiskEngine {
                             }
                         } else {
                             log::warn!(
-                                "Cannot check {} order risk: no trigger price set and no market data available for {}",
+                                "无法检查 {} 订单风险：未设置触发价，且 {} 无可用市场数据",
                                 order.order_type(),
                                 instrument.id()
                             );
@@ -1093,27 +1079,27 @@ impl RiskEngine {
             let last_px = if let Some(px) = last_px {
                 px
             } else {
-                log::error!("Cannot check order risk: no price available");
+                log::error!("无法检查订单风险：无可用的价格数据");
                 continue;
             };
 
-            // For quote quantity limit orders, use worst-case execution price
+            // 对于报价币种数量的限价单，使用最坏情况下的执行价格
             let effective_price = if order.is_quote_quantity()
                 && !instrument.is_inverse()
                 && matches!(order, OrderAny::Limit(_) | OrderAny::StopLimit(_))
             {
-                // Get current market price for worst-case execution
+                // 获取当前市场价格以进行最坏情况下的执行
                 let cache = self.cache.borrow();
                 if let Some(quote_tick) = cache.quote(&instrument.id()) {
                     match order.order_side() {
-                        // BUY: could execute at best ask if below limit (more quantity)
+                        // 买入：如果低于限价，则可能以最佳卖价执行（更多数量）
                         OrderSide::Buy => last_px.min(quote_tick.ask_price),
-                        // SELL: could execute at best bid if above limit (but less quantity, so use limit)
+                        // 卖出：如果高于限价，则可能以最佳买价执行（但数量较少，故限价执行）
                         OrderSide::Sell => last_px.max(quote_tick.bid_price),
                         _ => last_px,
                     }
                 } else {
-                    last_px // No market data, use limit price
+                    last_px // 无市场数据，使用限价
                 }
             } else {
                 last_px
@@ -1125,17 +1111,17 @@ impl RiskEngine {
                 order.quantity()
             };
 
-            // Check min/max quantity against effective quantity
+            // 根据有效数量检查最小/最大数量限制
             if let Some(max_quantity) = instrument.max_quantity()
                 && effective_quantity > max_quantity
             {
                 self.deny_order(
                     order.clone(),
                     &format!(
-                        "QUANTITY_EXCEEDS_MAXIMUM: effective_quantity={effective_quantity}, max_quantity={max_quantity}"
+                        "数量超过最大限制：有效数量={effective_quantity}，最大数量={max_quantity}"
                     ),
                 );
-                return false; // Denied
+                return false; // 已拒绝
             }
 
             if let Some(min_quantity) = instrument.min_quantity()
@@ -1144,33 +1130,33 @@ impl RiskEngine {
                 self.deny_order(
                     order.clone(),
                     &format!(
-                        "QUANTITY_BELOW_MINIMUM: effective_quantity={effective_quantity}, min_quantity={min_quantity}"
+                        "数量低于最小限制：有效数量={effective_quantity}，最小数量={min_quantity}"
                     ),
                 );
-                return false; // Denied
+                return false; // 已拒绝
             }
 
             let notional =
                 instrument.calculate_notional_value(effective_quantity, last_px, Some(true));
 
             if self.config.debug {
-                log::debug!("Notional: {notional:?}");
+                log::debug!("名义价值：{notional:?}");
             }
 
-            // Check MAX notional per order limit
+            // 检查每笔订单的最大名义价值限制
             if let Some(max_notional_value) = max_notional
                 && notional > max_notional_value
             {
                 self.deny_order(
                         order.clone(),
                         &format!(
-                            "NOTIONAL_EXCEEDS_MAX_PER_ORDER: max_notional={max_notional_value:?}, notional={notional:?}"
+                            "名义价值超过每笔订单最大限制：最大限制={max_notional_value:?}，当前名义价值={notional:?}"
                         ),
                     );
-                return false; // Denied
+                return false; // 已拒绝
             }
 
-            // Check MIN notional instrument limit
+            // 检查标的的最小名义价值限制
             if let Some(min_notional) = instrument.min_notional()
                 && notional.currency == min_notional.currency
                 && notional < min_notional
@@ -1178,13 +1164,13 @@ impl RiskEngine {
                 self.deny_order(
                         order.clone(),
                         &format!(
-                            "NOTIONAL_LESS_THAN_MIN_FOR_INSTRUMENT: min_notional={min_notional:?}, notional={notional:?}"
+                            "名义价值低于标的最小限制：最小限制={min_notional:?}，当前名义价值={notional:?}"
                         ),
                     );
-                return false; // Denied
+                return false; // 已拒绝
             }
 
-            // // Check MAX notional instrument limit
+            // 检查标地的最大名义价值限制
             if let Some(max_notional) = instrument.max_notional()
                 && notional.currency == max_notional.currency
                 && notional > max_notional
@@ -1192,27 +1178,27 @@ impl RiskEngine {
                 self.deny_order(
                         order.clone(),
                         &format!(
-                            "NOTIONAL_GREATER_THAN_MAX_FOR_INSTRUMENT: max_notional={max_notional:?}, notional={notional:?}"
+                            "名义价值超过标的最大限制：最大限制={max_notional:?}，当前名义价值={notional:?}"
                         ),
                     );
-                return false; // Denied
+                return false; // 已拒绝
             }
 
-            // Calculate OrderBalanceImpact (valid for CashAccount only)
+            // 计算订单余额影响（仅对现金账户有效）
             let notional = instrument.calculate_notional_value(effective_quantity, last_px, None);
             let order_balance_impact = match order.order_side() {
                 OrderSide::Buy => Money::from_raw(-notional.raw, notional.currency),
                 OrderSide::Sell => Money::from_raw(notional.raw, notional.currency),
                 OrderSide::NoOrderSide => {
-                    panic!("invalid `OrderSide`, was {}", order.order_side());
+                    panic!("无效的订单方向（OrderSide）：{}", order.order_side());
                 }
             };
 
             if self.config.debug {
-                log::debug!("Balance impact: {order_balance_impact}");
+                log::debug!("余额影响：{order_balance_impact}");
             }
 
-            // Skip balance check when borrowing is enabled (e.g. spot margin trading)
+            // 当启用借贷（例如现货杠杆交易）时，跳过余额检查
             if !allow_borrowing
                 && let Some(free_val) = free
                 && (free_val.as_decimal() + order_balance_impact.as_decimal()) < Decimal::ZERO
@@ -1220,7 +1206,7 @@ impl RiskEngine {
                 self.deny_order(
                     order.clone(),
                     &format!(
-                        "NOTIONAL_EXCEEDS_FREE_BALANCE: free={free_val:?}, notional={notional:?}"
+                        "名义价值超过可用余额：可用余额={free_val:?}，当前名义价值={notional:?}"
                     ),
                 );
                 return false;
@@ -1243,15 +1229,15 @@ impl RiskEngine {
                 }
 
                 if self.config.debug {
-                    log::debug!("Cumulative notional BUY: {cum_notional_buy:?}");
+                    log::debug!("累计买入名义价值：{cum_notional_buy:?}");
                 }
 
                 if !allow_borrowing
                     && let (Some(free), Some(cum_notional_buy)) = (free, cum_notional_buy)
                     && cum_notional_buy > free
                 {
-                    self.deny_order(order.clone(), &format!("CUM_NOTIONAL_EXCEEDS_FREE_BALANCE: free={free}, cum_notional={cum_notional_buy}"));
-                    return false; // Denied
+                    self.deny_order(order.clone(), &format!("累计名义价值超过可用余额：可用余额={free}，累计名义价值={cum_notional_buy}"));
+                    return false; // 已拒绝
                 }
             } else if order.is_sell() {
                 let is_position_reducing_sell = order.is_reduce_only()
@@ -1260,7 +1246,7 @@ impl RiskEngine {
 
                 if is_position_reducing_sell {
                     if self.config.debug {
-                        log::debug!("Position-reducing SELL skips balance check");
+                        log::debug!("减仓型卖出（SELL）跳过余额检查");
                     }
                     continue;
                 }
@@ -1278,39 +1264,39 @@ impl RiskEngine {
                         }
                     }
                     if self.config.debug {
-                        log::debug!("Cumulative notional SELL: {cum_notional_sell:?}");
+                        log::debug!("累计卖出名义价值：{cum_notional_sell:?}");
                     }
 
                     if !allow_borrowing
                         && let (Some(free), Some(cum_notional_sell)) = (free, cum_notional_sell)
                         && cum_notional_sell > free
                     {
-                        self.deny_order(order.clone(), &format!("CUM_NOTIONAL_EXCEEDS_FREE_BALANCE: free={free}, cum_notional={cum_notional_sell}"));
-                        return false; // Denied
+                        self.deny_order(order.clone(), &format!("累计名义价值超过可用余额：可用余额={free}，累计名义价值={cum_notional_sell}"));
+                        return false; // 已拒绝
                     }
                 }
-                // Account is already of type Cash, so no check
+                // 账户已经是现金类型，因此不进行检查
                 else if let Some(base_currency) = base_currency {
                     let cash_value = Money::from_raw(
                         effective_quantity
                             .raw
                             .try_into()
-                            .map_err(|e| log::error!("Unable to convert Quantity to f64: {e}"))
+                            .map_err(|e| log::error!("无法将 Quantity 转换为 f64：{e}"))
                             .unwrap(),
                         base_currency,
                     );
 
                     if self.config.debug {
-                        log::debug!("Cash value: {cash_value:?}");
+                        log::debug!("现金价值：{cash_value:?}");
                         log::debug!(
-                            "Total: {:?}",
+                            "总额：{:?}",
                             cash_account.balance_total(Some(base_currency))
                         );
                         log::debug!(
-                            "Locked: {:?}",
+                            "锁定：{:?}",
                             cash_account.balance_locked(Some(base_currency))
                         );
-                        log::debug!("Free: {:?}", cash_account.balance_free(Some(base_currency)));
+                        log::debug!("空闲：{:?}", cash_account.balance_free(Some(base_currency)));
                     }
 
                     match cum_notional_sell {
@@ -1322,21 +1308,21 @@ impl RiskEngine {
                     }
 
                     if self.config.debug {
-                        log::debug!("Cumulative notional SELL: {cum_notional_sell:?}");
+                        log::debug!("累计卖出名义价值：{cum_notional_sell:?}");
                     }
                     if !allow_borrowing
                         && let (Some(free), Some(cum_notional_sell)) = (free, cum_notional_sell)
                         && cum_notional_sell.raw > free.raw
                     {
-                        self.deny_order(order.clone(), &format!("CUM_NOTIONAL_EXCEEDS_FREE_BALANCE: free={free}, cum_notional={cum_notional_sell}"));
-                        return false; // Denied
+                        self.deny_order(order.clone(), &format!("累计名义价值超过可用余额：可用余额={free}，累计名义价值={cum_notional_sell}"));
+                        return false; // 已拒绝
                     }
                 }
             }
         }
 
-        // Finally
-        true // Passed
+        // 已通过
+        true // 已通过
     }
 
     fn check_price(&self, instrument: &InstrumentAny, price: Option<Price>) -> Option<String> {
@@ -1372,7 +1358,7 @@ impl RiskEngine {
     ) -> Option<String> {
         let quantity_val = quantity?;
 
-        // Check precision
+        // 检查精度
         if quantity_val.precision > instrument.size_precision() {
             return Some(format!(
                 "quantity {} invalid (precision {} > {})",
@@ -1382,12 +1368,12 @@ impl RiskEngine {
             ));
         }
 
-        // Skip min/max checks for quote quantities (they will be checked in check_orders_risk using effective_quantity)
+        // 对于报价币种数量，跳过最小/最大检查（这些将在 check_orders_risk 中使用有效数量进行检查）
         if is_quote_quantity {
             return None;
         }
 
-        // Check maximum quantity
+        // 检查最大数量限制
         if let Some(max_quantity) = instrument.max_quantity()
             && quantity_val > max_quantity
         {
@@ -1396,7 +1382,7 @@ impl RiskEngine {
             ));
         }
 
-        // Check minimum quantity
+        // 检查最小数量限制
         if let Some(min_quantity) = instrument.min_quantity()
             && quantity_val < min_quantity
         {
@@ -1419,7 +1405,7 @@ impl RiskEngine {
                     self.deny_order(order, reason);
                 } else {
                     log::error!(
-                        "Cannot deny order: not found in cache for {}",
+                        "无法拒绝订单：缓存中未找到 {}",
                         command.client_order_id
                     );
                 }
@@ -1432,14 +1418,14 @@ impl RiskEngine {
                 self.deny_order_list(&orders, reason);
             }
             _ => {
-                panic!("Cannot deny command {command}");
+                panic!("无法拒绝命令：{command}");
             }
         }
     }
 
     fn deny_order(&self, order: OrderAny, reason: &str) {
         log::warn!(
-            "SubmitOrder for {} DENIED: {}",
+            "{} 的提交订单（SubmitOrder）被拒绝：{}",
             order.client_order_id(),
             reason
         );
@@ -1448,14 +1434,14 @@ impl RiskEngine {
             return;
         }
 
-        // Scope the cache borrow to avoid RefCell conflict when sending to ExecEngine
+        // 作用域化缓存借用以避免发送到 ExecEngine 时出现 RefCell 冲突
         {
             let mut cache = self.cache.borrow_mut();
             if !cache.order_exists(&order.client_order_id()) {
                 cache
                     .add_order(order.clone(), None, None, false)
                     .map_err(|e| {
-                        log::error!("Cannot add order to cache: {e}");
+                        log::error!("无法将订单添加到缓存：{e}");
                     })
                     .unwrap();
             }
@@ -1513,7 +1499,7 @@ impl RiskEngine {
                         cache.order(&submit_order.client_order_id).cloned()
                     };
                     if let Some(order) = order {
-                        self.deny_order(order, "TradingState::HALTED");
+                        self.deny_order(order, "交易状态：停牌/停盘 (TradingState::HALTED)");
                     }
                 }
                 TradingCommand::SubmitOrderList(submit_order_list) => {
@@ -1521,7 +1507,7 @@ impl RiskEngine {
                         &submit_order_list.order_list.client_order_ids,
                         &submit_order_list,
                     );
-                    self.deny_order_list(&orders, "TradingState::HALTED");
+                    self.deny_order_list(&orders, "交易状态：停牌/停盘 (TradingState::HALTED)");
                 }
                 _ => {}
             },
@@ -1536,7 +1522,7 @@ impl RiskEngine {
                             self.deny_order(
                                 order,
                                 &format!(
-                                    "BUY when TradingState::REDUCING and LONG {}",
+                                    "交易状态为减仓 (REDUCING) 且处于多头头寸时的买入动作 {}",
                                     instrument.id()
                                 ),
                             );
@@ -1544,7 +1530,7 @@ impl RiskEngine {
                             self.deny_order(
                                 order,
                                 &format!(
-                                    "SELL when TradingState::REDUCING and SHORT {}",
+                                    "交易状态为减仓 (REDUCING) 且处于空头头寸时的卖出动作 {}",
                                     instrument.id()
                                 ),
                             );
@@ -1561,7 +1547,7 @@ impl RiskEngine {
                             self.deny_order_list(
                                 &orders,
                                 &format!(
-                                    "BUY when TradingState::REDUCING and LONG {}",
+                                    "交易状态为减仓 (REDUCING) 且处于多头头寸时的买入动作 {}",
                                     instrument.id()
                                 ),
                             );
@@ -1570,7 +1556,7 @@ impl RiskEngine {
                             self.deny_order_list(
                                 &orders,
                                 &format!(
-                                    "SELL when TradingState::REDUCING and SHORT {}",
+                                    "交易状态为减仓 (REDUCING) 且处于空头头寸时的卖出动作 {}",
                                     instrument.id()
                                 ),
                             );
@@ -1585,7 +1571,7 @@ impl RiskEngine {
                     self.throttled_submit_order.send(submit_order);
                 }
                 TradingCommand::SubmitOrderList(submit_order_list) => {
-                    // TODO: implement throttler for order lists
+                    // TODO：为订单列表实现流控器
                     self.send_to_execution(TradingCommand::SubmitOrderList(submit_order_list));
                 }
                 _ => {}
@@ -1594,22 +1580,22 @@ impl RiskEngine {
     }
 
     fn send_to_execution(&self, command: TradingCommand) {
-        // Global trade throttler functionality has been moved to individual throttlers
+        // 全局交易流控功能已移动到各个独立的流控器中
 
         let endpoint = MessagingSwitchboard::exec_engine_queue_execute();
         msgbus::send_trading_command(endpoint, command);
     }
 
     fn handle_event(&mut self, event: &OrderEventAny) {
-        // We intend to extend the risk engine to be able to handle additional events.
-        // For now we just log.
+        // 我们计划扩展风险引擎，使其能够处理额外的事件。
+        // 目前我们仅进行日志记录。
         if self.config.debug {
             log::debug!("{RECV}{EVT} {event:?}");
         }
     }
 
     fn handle_instrument_status(&mut self, status: &InstrumentStatus) {
-        log::debug!("Handling instrument status: {:?}", status);
+        log::debug!("正在处理标的状态：{:?}", status);
 
         use nautilus_model::enums::MarketStatusAction;
         match status.action {
@@ -1617,7 +1603,7 @@ impl RiskEngine {
             | MarketStatusAction::Suspend
             | MarketStatusAction::NotAvailableForTrading => {
                 log::warn!(
-                    "标的 {} 已停牌/临停: action={:?}, reason={:?}",
+                    "标的 {} 已停牌/临停：动作={:?}，原因={:?}",
                     status.instrument_id,
                     status.action,
                     status.reason
@@ -1625,7 +1611,7 @@ impl RiskEngine {
             }
             MarketStatusAction::Resumed => {
                 log::info!(
-                    "标的 {} 已复牌: action={:?}",
+                    "标的 {} 已复牌：动作={:?}",
                     status.instrument_id,
                     status.action
                 );

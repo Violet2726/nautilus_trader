@@ -46,6 +46,12 @@ cdef class RiskEngine(Component):
     cdef readonly Throttler _order_submit_throttler
     cdef readonly Throttler _order_modify_throttler
     cdef readonly Throttler _global_trade_throttler
+    cdef bint _ashare_t1_enabled
+    cdef bint _ashare_session_enabled
+    cdef bint _ashare_price_tick_enabled
+    cdef bint _ashare_price_limit_enabled
+    cdef bint _ashare_lot_size_enabled
+    cdef bint _ashare_price_cage_enabled
     cdef object _ashare_session_provider  # A 股：AShareSessionProvider 实例
     cdef object _t1_ledger                # A 股：T1Ledger 可卖账本
 

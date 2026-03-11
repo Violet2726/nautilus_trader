@@ -49,6 +49,7 @@ from nautilus_trader.core.rust.model cimport TriggerType
 from nautilus_trader.core.uuid cimport UUID4
 from nautilus_trader.core.nautilus_pyo3.markets import AShareSessionProvider
 from nautilus_trader.core.nautilus_pyo3.markets import T1Ledger
+from nautilus_trader.core.nautilus_pyo3.markets import compute_ashare_price_limits
 from nautilus_trader.core.nautilus_pyo3.markets import compute_ashare_price_cage_violation_by_phase
 from nautilus_trader.core.nautilus_pyo3.markets import compute_ashare_lot_size_violation
 from nautilus_trader.core.nautilus_pyo3.markets import compute_ashare_price_limit_violation
@@ -213,12 +214,7 @@ cdef class RiskEngine(Component):
         # 风险设置
         self._max_notional_per_order: dict[InstrumentId, Decimal] = {}
 
-        # A 股扩展：会话提供者 & T+1 账本（当 t1_enabled=True 时初始化）
-        self._ashare_session_provider = None
-        self._t1_ledger = None
-        if self._config.get("t1_enabled", False):
-            self._ashare_session_provider = AShareSessionProvider()
-            self._t1_ledger = T1Ledger()
+        self._init_ashare_extensions()
 
         # 配置
         self._initialize_risk_checks(config)
@@ -489,14 +485,10 @@ cdef class RiskEngine(Component):
             return  # 拒绝
 
         # A 股扩展: Session 检查
-        if self._ashare_session_provider is not None:
-            phase = self._ashare_session_provider.phase_at(self._clock.timestamp_ns())
-            if not can_ashare_submit_order(phase):
-                self._deny_command(
-                    command=command,
-                    reason=f"OUT_OF_SESSION: phase={phase}",
-                )
-                return  # 拒绝
+        cdef str submit_session_violation = self._check_ashare_submit_session()
+        if submit_session_violation:
+            self._deny_command(command=command, reason=submit_session_violation)
+            return  # 拒绝
 
         ########################################################################
         # 盘前订单检查
@@ -636,11 +628,10 @@ cdef class RiskEngine(Component):
             return
 
         # A 股扩展: Cancel session 检查
-        if self._ashare_session_provider is not None:
-            phase = self._ashare_session_provider.phase_at(self._clock.timestamp_ns())
-            if not can_ashare_cancel_order(phase):
-                self._reject_cancel_command(command, reason=f"CANCEL_DENIED: phase={phase} does not allow cancellation")
-                return  # 拒绝拦截
+        cdef str cancel_session_violation = self._check_ashare_cancel_session()
+        if cancel_session_violation:
+            self._reject_cancel_command(command, reason=cancel_session_violation)
+            return  # 拒绝拦截
 
         # 发送执行
         self._send_to_execution(command)
@@ -694,39 +685,10 @@ cdef class RiskEngine(Component):
                 self._deny_order(order=order, reason=f"触发价 {risk_msg}")
                 return False  # 拒绝
 
-        # A 股扩展: 价格笼子 (Price Cage) 检查 (Rust 实现)
-        if self._config.get("price_cage_enabled", False):
-            if self._ashare_session_provider is not None and order.has_price_c():
-                phase = self._ashare_session_provider.phase_at(self._clock.timestamp_ns())
-                quote = self._cache.quote_tick(instrument.id)
-                trade = self._cache.trade_tick(instrument.id)
-
-                best_bid = quote.bid_price if quote is not None else None
-                last_trade = trade.price if trade is not None else None
-                tick = instrument.price_increment if instrument.price_increment is not None else None
-                pct = float(self._config.get("price_cage_pct", 0.02))
-
-                # Convert Cython Price objects to PyO3 Price objects for compatibility
-                pyo3_order_price = PyO3Price(order.price.as_double(), order.price.precision)
-                pyo3_best_bid = PyO3Price(best_bid.as_double(), best_bid.precision) if best_bid is not None else None
-                pyo3_last_trade = PyO3Price(last_trade.as_double(), last_trade.precision) if last_trade is not None else None
-                pyo3_tick = PyO3Price(tick.as_double(), tick.precision) if tick is not None else None
-
-                bound = compute_ashare_price_cage_violation_by_phase(
-                    phase,
-                    order.is_buy_c(),
-                    pyo3_order_price,
-                    pyo3_best_bid,
-                    pyo3_last_trade,
-                    pct,
-                    pyo3_tick,
-                )
-                if bound is not None:
-                    self._deny_order(
-                        order=order,
-                        reason=f"PRICE_CAGE_VIOLATION: price={order.price}, cage={bound}",
-                    )
-                    return False
+        cdef str price_cage_violation = self._check_ashare_price_cage(instrument, order)
+        if price_cage_violation:
+            self._deny_order(order=order, reason=price_cage_violation)
+            return False
 
         return True  # 通过
 
@@ -739,24 +701,10 @@ cdef class RiskEngine(Component):
             self._deny_order(order=order, reason=risk_msg)
             return False  # 拒绝
 
-        # A 股扩展：lot_size 整数倍检查 & T+1 可卖校验 (Rust 统一校验)
-        if self._config.get("t1_enabled", False):
-            if instrument.lot_size is not None and instrument.lot_size.raw_uint_c() > 0:
-                sellable = None
-                if order.is_sell_c() and self._t1_ledger is not None:
-                    acct_key = str(order.account_id) if order.account_id is not None else None
-                    inst_key = str(order.instrument_id)
-                    sellable = self._t1_ledger.sellable_or_none_opt(acct_key, inst_key)
-
-                violation = compute_ashare_lot_size_violation(
-                    instrument.id.symbol.value,
-                    order.is_buy_c(),
-                    order.quantity.as_double(),
-                    sellable,
-                )
-                if violation is not None:
-                    self._deny_order(order=order, reason=violation)
-                    return False
+        cdef str lot_size_violation = self._check_ashare_lot_size(instrument, order)
+        if lot_size_violation:
+            self._deny_order(order=order, reason=lot_size_violation)
+            return False
 
         return True  # 通过
 
@@ -1163,22 +1111,9 @@ cdef class RiskEngine(Component):
                 # 检查失败
                 return f"价格 {price} 无效 (非正数)"
 
-        # A 股扩展: tick 对齐与涨跌停价检查 (Rust 实现)
-        if self._config.get("t1_enabled", False):
-            # Convert Cython Price objects to PyO3 Price objects for compatibility
-            pyo3_price = PyO3Price(price.as_double(), price.precision)
-            pyo3_tick_size = PyO3Price(instrument.price_increment.as_double(), instrument.price_increment.precision) if instrument.price_increment is not None else None
-            pyo3_max_price = PyO3Price(instrument.max_price.as_double(), instrument.max_price.precision) if instrument.max_price is not None else None
-            pyo3_min_price = PyO3Price(instrument.min_price.as_double(), instrument.min_price.precision) if instrument.min_price is not None else None
-            
-            violation = compute_ashare_price_limit_violation(
-                pyo3_price,
-                pyo3_tick_size,
-                pyo3_max_price,
-                pyo3_min_price,
-            )
-            if violation is not None:
-                return violation
+        cdef str ashare_price_violation = self._check_ashare_price_rules(instrument, price)
+        if ashare_price_violation:
+            return ashare_price_violation
 
 
     cpdef str _check_quantity(self, Instrument instrument, Quantity quantity, bint is_quote_quantity=False):
@@ -1396,7 +1331,7 @@ cdef class RiskEngine(Component):
         self.event_count += 1
 
         # A 股扩展：监听成交事件更新 T+1 账本
-        if self._config.get("t1_enabled", False) and isinstance(event, OrderFilled):
+        if self._ashare_t1_enabled and isinstance(event, OrderFilled):
             self._update_t1_ledger(event)
 
         # A 股扩展：监听状态变更事件
@@ -1457,3 +1392,209 @@ cdef class RiskEngine(Component):
         if self._t1_ledger is None:
             return
         self._t1_ledger.on_settlement()
+
+    # -- A 股扩展辅助函数 --------------------------------------------------------------------------
+
+    def _init_ashare_extensions(self):
+        self._ashare_t1_enabled = bool(self._config.get("t1_enabled", False))
+        self._ashare_session_enabled = self._config.get("session_enabled")
+        self._ashare_price_tick_enabled = self._config.get("price_tick_enabled")
+        self._ashare_price_limit_enabled = self._config.get("price_limit_enabled")
+        self._ashare_lot_size_enabled = self._config.get("lot_size_enabled")
+        self._ashare_price_cage_enabled = bool(self._config.get("price_cage_enabled", False))
+
+        if self._ashare_session_enabled is None:
+            self._ashare_session_enabled = self._ashare_t1_enabled
+        else:
+            self._ashare_session_enabled = bool(self._ashare_session_enabled)
+
+        if self._ashare_price_tick_enabled is None:
+            self._ashare_price_tick_enabled = self._ashare_t1_enabled
+        else:
+            self._ashare_price_tick_enabled = bool(self._ashare_price_tick_enabled)
+
+        if self._ashare_price_limit_enabled is None:
+            self._ashare_price_limit_enabled = self._ashare_t1_enabled
+        else:
+            self._ashare_price_limit_enabled = bool(self._ashare_price_limit_enabled)
+
+        if self._ashare_lot_size_enabled is None:
+            self._ashare_lot_size_enabled = self._ashare_t1_enabled
+        else:
+            self._ashare_lot_size_enabled = bool(self._ashare_lot_size_enabled)
+
+        self._ashare_session_provider = None
+        if self._ashare_session_enabled or self._ashare_price_cage_enabled:
+            self._ashare_session_provider = AShareSessionProvider()
+
+        self._t1_ledger = None
+        if self._ashare_t1_enabled:
+            self._t1_ledger = T1Ledger()
+
+    def _check_ashare_submit_session(self):
+        if self._ashare_session_enabled and self._ashare_session_provider is not None:
+            phase = self._ashare_session_provider.phase_at(self._clock.timestamp_ns())
+            if not can_ashare_submit_order(phase):
+                return f"OUT_OF_SESSION: phase={phase}"
+        return None
+
+    def _check_ashare_cancel_session(self):
+        if self._ashare_session_enabled and self._ashare_session_provider is not None:
+            phase = self._ashare_session_provider.phase_at(self._clock.timestamp_ns())
+            if not can_ashare_cancel_order(phase):
+                return f"CANCEL_DENIED: phase={phase} does not allow cancellation"
+        return None
+
+    def _check_ashare_price_cage(self, Instrument instrument, Order order):
+        cdef object quote
+        cdef object trade
+        cdef object best_bid
+        cdef object last_trade
+        cdef object tick
+        cdef object pyo3_best_bid
+        cdef object pyo3_last_trade
+        cdef object pyo3_tick
+        cdef object bound
+        cdef object pyo3_order_price
+        cdef float pct
+        cdef object phase
+
+        if not self._ashare_price_cage_enabled:
+            return None
+        if self._ashare_session_provider is None or not order.has_price_c():
+            return None
+
+        phase = self._ashare_session_provider.phase_at(self._clock.timestamp_ns())
+        quote = self._cache.quote_tick(instrument.id)
+        trade = self._cache.trade_tick(instrument.id)
+
+        best_bid = quote.bid_price if quote is not None else None
+        last_trade = trade.price if trade is not None else None
+        tick = instrument.price_increment if instrument.price_increment is not None else None
+        pct = float(self._config.get("price_cage_pct", 0.02))
+
+        pyo3_order_price = PyO3Price(order.price.as_double(), order.price.precision)
+        pyo3_best_bid = PyO3Price(best_bid.as_double(), best_bid.precision) if best_bid is not None else None
+        pyo3_last_trade = PyO3Price(last_trade.as_double(), last_trade.precision) if last_trade is not None else None
+        pyo3_tick = PyO3Price(tick.as_double(), tick.precision) if tick is not None else None
+
+        bound = compute_ashare_price_cage_violation_by_phase(
+            phase,
+            order.is_buy_c(),
+            pyo3_order_price,
+            pyo3_best_bid,
+            pyo3_last_trade,
+            pct,
+            pyo3_tick,
+        )
+        if bound is not None:
+            return f"PRICE_CAGE_VIOLATION: price={order.price}, cage={bound}"
+        return None
+
+    def _check_ashare_lot_size(self, Instrument instrument, Order order):
+        cdef object sellable = None
+        cdef str acct_key
+        cdef str inst_key
+        cdef object violation
+
+        if not self._ashare_lot_size_enabled:
+            return None
+        if instrument.lot_size is None or instrument.lot_size.raw_uint_c() == 0:
+            return None
+
+        if self._ashare_t1_enabled and order.is_sell_c() and self._t1_ledger is not None:
+            acct_key = str(order.account_id) if order.account_id is not None else None
+            inst_key = str(order.instrument_id)
+            sellable = self._t1_ledger.sellable_or_none_opt(acct_key, inst_key)
+
+        violation = compute_ashare_lot_size_violation(
+            instrument.id.symbol.value,
+            order.is_buy_c(),
+            order.quantity.as_double(),
+            sellable,
+        )
+        return violation if violation is not None else None
+
+    def _check_ashare_price_rules(self, Instrument instrument, Price price):
+        cdef object pyo3_price
+        cdef object pyo3_tick_size
+        cdef object pyo3_max_price
+        cdef object pyo3_min_price
+        cdef object trade
+        cdef object quote
+        cdef object pyo3_prev_close
+        cdef object pyo3_tick_for_limit
+        cdef object computed_limit_up
+        cdef object computed_limit_down
+        cdef str stock_name
+        cdef object violation
+
+        if not (self._ashare_price_tick_enabled or self._ashare_price_limit_enabled):
+            return None
+
+        pyo3_price = PyO3Price(price.as_double(), price.precision)
+        pyo3_tick_size = None
+        if self._ashare_price_tick_enabled and instrument.price_increment is not None:
+            pyo3_tick_size = PyO3Price(
+                instrument.price_increment.as_double(),
+                instrument.price_increment.precision,
+            )
+
+        pyo3_max_price = None
+        pyo3_min_price = None
+        if self._ashare_price_limit_enabled:
+            pyo3_max_price = (
+                PyO3Price(instrument.max_price.as_double(), instrument.max_price.precision)
+                if instrument.max_price is not None
+                else None
+            )
+            pyo3_min_price = (
+                PyO3Price(instrument.min_price.as_double(), instrument.min_price.precision)
+                if instrument.min_price is not None
+                else None
+            )
+
+            if pyo3_max_price is None or pyo3_min_price is None:
+                pyo3_prev_close = None
+                trade = self._cache.trade_tick(instrument.id)
+                quote = self._cache.quote_tick(instrument.id)
+
+                if trade is not None:
+                    pyo3_prev_close = PyO3Price(trade.price.as_double(), trade.price.precision)
+                elif quote is not None:
+                    pyo3_prev_close = PyO3Price(
+                        (quote.bid_price.as_double() + quote.ask_price.as_double()) / 2.0,
+                        quote.bid_price.precision,
+                    )
+
+                if pyo3_prev_close is not None:
+                    if pyo3_tick_size is not None:
+                        pyo3_tick_for_limit = pyo3_tick_size
+                    elif instrument.price_increment is not None:
+                        pyo3_tick_for_limit = PyO3Price(
+                            instrument.price_increment.as_double(),
+                            instrument.price_increment.precision,
+                        )
+                    else:
+                        pyo3_tick_for_limit = PyO3Price(10.0 ** (-price.precision), price.precision)
+
+                    stock_name = instrument.raw_symbol.value if instrument.raw_symbol is not None else instrument.id.symbol.value
+                    computed_limit_up, computed_limit_down = compute_ashare_price_limits(
+                        instrument.id.symbol.value,
+                        stock_name,
+                        pyo3_prev_close,
+                        pyo3_tick_for_limit,
+                    )
+
+                    if pyo3_max_price is None:
+                        pyo3_max_price = computed_limit_up
+                    if pyo3_min_price is None:
+                        pyo3_min_price = computed_limit_down
+
+        violation = compute_ashare_price_limit_violation(
+            pyo3_price,
+            pyo3_tick_size,
+            pyo3_max_price,
+            pyo3_min_price,
+        )
+        return violation if violation is not None else None

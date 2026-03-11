@@ -37,6 +37,18 @@ class RiskEngineConfig(NautilusConfig, frozen=True):
         调试模式是否激活（将提供额外的调试日志记录）。
     t1_enabled : bool, 默认 False
         是否启用 T+1 交易限制检查。
+    session_enabled : bool | None, 默认 None
+        是否启用 A 股交易时段检查（报单/撤单）。
+        当为 ``None`` 时，兼容历史行为：跟随 ``t1_enabled``。
+    price_tick_enabled : bool | None, 默认 None
+        是否启用 A 股价格最小变动单位（tick）检查。
+        当为 ``None`` 时，兼容历史行为：跟随 ``t1_enabled``。
+    price_limit_enabled : bool | None, 默认 None
+        是否启用 A 股涨跌停价检查。
+        当为 ``None`` 时，兼容历史行为：跟随 ``t1_enabled``。
+    lot_size_enabled : bool | None, 默认 None
+        是否启用 A 股买入手数整数倍及卖出零股规则检查。
+        当为 ``None`` 时，兼容历史行为：跟随 ``t1_enabled``。
     price_cage_enabled : bool, 默认 False
         是否启用价格笼子（Price Cage）检查。
     price_cage_pct : float, 默认 0.02
@@ -53,6 +65,10 @@ class RiskEngineConfig(NautilusConfig, frozen=True):
     max_notional_per_order: dict[str, int] = {}
     debug: bool = False
     t1_enabled: bool = False
+    session_enabled: bool | None = None
+    price_tick_enabled: bool | None = None
+    price_limit_enabled: bool | None = None
+    lot_size_enabled: bool | None = None
     price_cage_enabled: bool = False
     price_cage_pct: float = 0.02
     max_trade_command_rate: str | None = None

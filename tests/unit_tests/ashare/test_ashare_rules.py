@@ -56,6 +56,10 @@ class TestAShareTradingRules:
         # 启用 A 股规则的配置
         self.config = LiveRiskEngineConfig(
             t1_enabled=True,
+            session_enabled=True,
+            price_tick_enabled=True,
+            price_limit_enabled=True,
+            lot_size_enabled=True,
             price_cage_enabled=True,
             price_cage_pct=0.02,
         )
@@ -81,6 +85,22 @@ class TestAShareTradingRules:
         yield
         self.risk_engine.stop()
         self.risk_engine.dispose()
+
+    def _rebuild_risk_engine(self, config: LiveRiskEngineConfig) -> None:
+        self.risk_engine.stop()
+        self.risk_engine.dispose()
+        # 重建 MessageBus/Portfolio，避免重复注册相同 endpoint
+        self.msgbus = MessageBus(trader_id=self.trader_id, clock=self.clock)
+        self.portfolio = Portfolio(msgbus=self.msgbus, cache=self.cache, clock=self.clock)
+        self.config = config
+        self.risk_engine = RiskEngine(
+            portfolio=self.portfolio,
+            msgbus=self.msgbus,
+            cache=self.cache,
+            clock=self.clock,
+            config=self.config,
+        )
+        self.risk_engine.start()
 
     def _create_submit_order(self, side, qty, price=None):
         if price:
@@ -137,6 +157,70 @@ class TestAShareTradingRules:
         assert provider.phase_at(pd.Timestamp("2024-01-19 20:00:00", tz="Asia/Shanghai").value) == TradingPhase.CLOSED
 
     # ---- 批量数量校验 ----
+
+    @pytest.mark.asyncio
+    async def test_session_rule_can_enable_without_t1(self):
+        self._rebuild_risk_engine(
+            LiveRiskEngineConfig(
+                t1_enabled=False,
+                session_enabled=True,
+                price_tick_enabled=False,
+                price_limit_enabled=False,
+                lot_size_enabled=False,
+                price_cage_enabled=False,
+            )
+        )
+        self.clock.set_time(TS_CLOSED)
+        cmd = self._create_submit_order(OrderSide.BUY, 100, 10.00)
+        denied_events = []
+        self.msgbus.register("ExecEngine.process", lambda msg: denied_events.append(msg))
+        self.risk_engine.execute(cmd)
+        await eventually(lambda: len(denied_events) > 0)
+        assert any("OUT_OF_SESSION" in getattr(e, "reason", "") for e in denied_events)
+
+    @pytest.mark.asyncio
+    async def test_price_limit_rule_can_enable_without_t1(self):
+        self._rebuild_risk_engine(
+            LiveRiskEngineConfig(
+                t1_enabled=False,
+                session_enabled=False,
+                price_tick_enabled=False,
+                price_limit_enabled=True,
+                lot_size_enabled=False,
+                price_cage_enabled=False,
+            )
+        )
+        self.clock.set_time(TS_AM)
+        cmd = self._create_submit_order(OrderSide.BUY, 100, 11.01)
+        denied_events = []
+        self.msgbus.register("ExecEngine.process", lambda msg: denied_events.append(msg))
+        self.risk_engine.execute(cmd)
+        await eventually(lambda: len(denied_events) > 0)
+        assert any("PRICE_ABOVE_UP_LIMIT" in getattr(e, "reason", "") for e in denied_events)
+
+    @pytest.mark.asyncio
+    async def test_lot_size_rule_can_enable_without_t1(self):
+        self._rebuild_risk_engine(
+            LiveRiskEngineConfig(
+                t1_enabled=False,
+                session_enabled=False,
+                price_tick_enabled=False,
+                price_limit_enabled=False,
+                lot_size_enabled=True,
+                price_cage_enabled=False,
+            )
+        )
+        self.clock.set_time(TS_AM)
+        cmd = self._create_submit_order(OrderSide.BUY, 150, 10.00)
+        denied_events = []
+        self.msgbus.register("ExecEngine.process", lambda msg: denied_events.append(msg))
+        self.risk_engine.execute(cmd)
+        await eventually(lambda: len(denied_events) > 0)
+        assert any(
+            "LOT_SIZE_VIOLATION" in getattr(e, "reason", "")
+            or "MAIN_BOARD_BUY_VIOLATION" in getattr(e, "reason", "")
+            for e in denied_events
+        )
 
     @pytest.mark.asyncio
     async def test_deny_buy_order_not_multiple_of_lot_size(self):

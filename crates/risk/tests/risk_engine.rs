@@ -1113,7 +1113,7 @@ fn test_submit_order_reduce_only_order_with_custom_position_id_not_open_then_den
     );
     assert_eq!(
         saved_process_messages.first().unwrap().message().unwrap(),
-        Ustr::from("Position CUSTOM-001 not found for reduce-only order")
+        Ustr::from("未找到只减仓订单对应的仓位 CUSTOM-001")
     );
 }
 
@@ -1178,7 +1178,7 @@ fn test_submit_order_when_instrument_not_in_cache_then_denies(
     );
     assert_eq!(
         saved_process_messages.first().unwrap().message().unwrap(),
-        Ustr::from("Instrument for AUD/USD.SIM not found")
+        Ustr::from("未找到 AUD/USD.SIM 对应的标的")
     );
 }
 
@@ -1866,7 +1866,7 @@ fn test_submit_order_when_less_than_min_notional_for_instrument_then_denies(
     assert_eq!(
         saved_process_messages.first().unwrap().message().unwrap(),
         Ustr::from(
-            "NOTIONAL_LESS_THAN_MIN_FOR_INSTRUMENT: min_notional=Money(1.00, USD), notional=Money(0.90, USD)"
+            "名义价值低于标的最小限制：最小限制=Money(1.00, USD)，当前名义价值=Money(0.90, USD)"
         )
     );
 }
@@ -1950,7 +1950,7 @@ fn test_submit_order_when_greater_than_max_notional_for_instrument_then_denies(
     assert_eq!(
         saved_process_messages.first().unwrap().message().unwrap(),
         Ustr::from(
-            "NOTIONAL_GREATER_THAN_MAX_FOR_INSTRUMENT: max_notional=Money(10000000.00, USD), notional=Money(10000001.00, USD)"
+            "名义价值超过标的最大限制：最大限制=Money(10000000.00, USD)，当前名义价值=Money(10000001.00, USD)"
         )
     );
 }
@@ -2032,7 +2032,7 @@ fn test_submit_order_when_buy_market_order_and_over_max_notional_then_denies(
     assert_eq!(
         saved_process_messages.first().unwrap().message().unwrap(),
         Ustr::from(
-            "NOTIONAL_EXCEEDS_MAX_PER_ORDER: max_notional=Money(100000.00, USD), notional=Money(750050.00, USD)"
+            "名义价值超过每笔订单最大限制：最大限制=Money(100000.00, USD)，当前名义价值=Money(750050.00, USD)"
         )
     );
 }
@@ -2114,7 +2114,7 @@ fn test_submit_order_when_sell_market_order_and_over_max_notional_then_denies(
     assert_eq!(
         saved_process_messages.first().unwrap().message().unwrap(),
         Ustr::from(
-            "NOTIONAL_EXCEEDS_MAX_PER_ORDER: max_notional=Money(100000.00, USD), notional=Money(750000.00, USD)"
+            "名义价值超过每笔订单最大限制：最大限制=Money(100000.00, USD)，当前名义价值=Money(750000.00, USD)"
         )
     );
 }
@@ -2184,7 +2184,7 @@ fn test_submit_order_when_market_order_and_over_free_balance_then_denies(
     assert_eq!(
         saved_process_messages.first().unwrap().message().unwrap(),
         Ustr::from(
-            "NOTIONAL_EXCEEDS_FREE_BALANCE: free=Money(1000000.00, USD), notional=Money(10100000.00, USD)"
+            "名义价值超过可用余额：可用余额=Money(1000000.00, USD)，当前名义价值=Money(10100000.00, USD)"
         )
     );
 }
@@ -2342,7 +2342,7 @@ fn test_submit_order_list_buys_when_over_free_balance_then_denies(
     assert_eq!(
         saved_process_messages.first().unwrap().message().unwrap(),
         Ustr::from(
-            "CUM_NOTIONAL_EXCEEDS_FREE_BALANCE: free=1000000.00 USD, cum_notional=1067873.00 USD"
+            "累计名义价值超过可用余额：可用余额=1000000.00 USD，累计名义价值=1067873.00 USD"
         )
     );
 }
@@ -2433,7 +2433,7 @@ fn test_submit_order_list_sells_when_over_free_balance_then_denies(
     assert_eq!(
         saved_process_messages.first().unwrap().message().unwrap(),
         Ustr::from(
-            "CUM_NOTIONAL_EXCEEDS_FREE_BALANCE: free=1000000.00 USD, cum_notional=1057300.00 USD"
+            "累计名义价值超过可用余额：可用余额=1000000.00 USD，累计名义价值=1057300.00 USD"
         )
     );
 }
@@ -2492,7 +2492,7 @@ fn test_submit_order_when_trading_halted_then_denies_order(
     assert_eq!(first_message.event_type(), OrderEventType::Denied);
     assert_eq!(
         first_message.message().unwrap(),
-        Ustr::from("TradingState::HALTED")
+        Ustr::from("交易状态：停牌/停盘 (TradingState::HALTED)")
     );
 }
 
@@ -2561,7 +2561,7 @@ fn test_submit_order_beyond_rate_limit_then_denies_order(
     assert_eq!(first_message.event_type(), OrderEventType::Denied);
     assert_eq!(
         first_message.message().unwrap(),
-        Ustr::from("REJECTED BY THROTTLER")
+        Ustr::from("流控器（Throttler）拒绝")
     );
 }
 
@@ -2660,7 +2660,10 @@ fn test_submit_order_list_when_trading_halted_then_denies_orders(
 
     for event in &saved_process_messages {
         assert_eq!(event.event_type(), OrderEventType::Denied);
-        assert_eq!(event.message().unwrap(), Ustr::from("TradingState::HALTED"));
+        assert_eq!(
+            event.message().unwrap(),
+            Ustr::from("交易状态：停牌/停盘 (TradingState::HALTED)")
+        );
     }
 }
 
@@ -3057,7 +3060,7 @@ fn test_submit_bracket_order_when_instrument_not_in_cache_then_denies(
         assert_eq!(event.event_type(), OrderEventType::Denied);
         assert_eq!(
             event.message().unwrap(),
-            Ustr::from("no instrument found for AUD/USD.SIM")
+            Ustr::from("未找到 AUD/USD.SIM 对应的标的")
         );
     }
 }
@@ -3184,7 +3187,7 @@ fn test_modify_order_beyond_rate_limit_then_rejects(
     assert_eq!(first_message.event_type(), OrderEventType::ModifyRejected);
     assert_eq!(
         first_message.message().unwrap(),
-        Ustr::from("Exceeded MAX_ORDER_MODIFY_RATE")
+        Ustr::from("超过了最大订单修改速率限制（MAX_ORDER_MODIFY_RATE）")
     );
 }
 
@@ -3748,6 +3751,6 @@ fn test_submit_order_with_quote_quantity_exceeds_max_after_conversion(
             .unwrap()
             .message()
             .unwrap()
-            .contains("QUANTITY_EXCEEDS_MAXIMUM")
+            .contains("数量超过最大限制")
     );
 }
