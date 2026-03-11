@@ -122,4 +122,88 @@ mod tests {
         assert!(res.is_fail());
         assert!(res.to_string().contains("PRICE_NOT_ON_TICK"));
     }
+
+    #[test]
+    fn test_price_tick_rule_pass_on_tick() {
+        struct MockProvider {
+            tick: Option<Price>,
+        }
+
+        impl MarketDataProvider for MockProvider {
+            fn tick_size(&self, _instrument_id: &InstrumentId) -> Option<Price> {
+                self.tick
+            }
+        }
+
+        let provider = Arc::new(MockProvider {
+            tick: Some(Price::new(0.01, 2)),
+        });
+        let rule = PriceTickRule::new(provider);
+        let instrument_id = InstrumentId::from("600000.SH");
+        let order = OrderTestBuilder::new(OrderType::Limit)
+            .trader_id(TraderId::from("TRADER-001"))
+            .strategy_id(StrategyId::from("STRATEGY-001"))
+            .instrument_id(instrument_id)
+            .client_order_id(ClientOrderId::from("O-20240101-002"))
+            .quantity(Quantity::new(100.0, 0))
+            .price(Price::new(10.01, 2))
+            .build();
+
+        let ctx = RuleContext::new(order, instrument_id, None, 0);
+        assert!(rule.check(&ctx).is_pass());
+    }
+
+    #[test]
+    fn test_price_tick_rule_pass_when_tick_missing() {
+        struct MockProvider;
+
+        impl MarketDataProvider for MockProvider {}
+
+        let provider = Arc::new(MockProvider);
+        let rule = PriceTickRule::new(provider);
+        let instrument_id = InstrumentId::from("600000.SH");
+        let order = OrderTestBuilder::new(OrderType::Limit)
+            .trader_id(TraderId::from("TRADER-001"))
+            .strategy_id(StrategyId::from("STRATEGY-001"))
+            .instrument_id(instrument_id)
+            .client_order_id(ClientOrderId::from("O-20240101-003"))
+            .quantity(Quantity::new(100.0, 0))
+            .price(Price::new(10.005, 3))
+            .build();
+
+        let ctx = RuleContext::new(order, instrument_id, None, 0);
+        assert!(rule.check(&ctx).is_pass());
+    }
+
+    #[test]
+    fn test_price_tick_rule_disabled() {
+        struct MockProvider {
+            tick: Option<Price>,
+        }
+
+        impl MarketDataProvider for MockProvider {
+            fn tick_size(&self, _instrument_id: &InstrumentId) -> Option<Price> {
+                self.tick
+            }
+        }
+
+        let provider = Arc::new(MockProvider {
+            tick: Some(Price::new(0.01, 2)),
+        });
+        let mut rule = PriceTickRule::new(provider);
+        rule.set_enabled(false);
+
+        let instrument_id = InstrumentId::from("600000.SH");
+        let order = OrderTestBuilder::new(OrderType::Limit)
+            .trader_id(TraderId::from("TRADER-001"))
+            .strategy_id(StrategyId::from("STRATEGY-001"))
+            .instrument_id(instrument_id)
+            .client_order_id(ClientOrderId::from("O-20240101-004"))
+            .quantity(Quantity::new(100.0, 0))
+            .price(Price::new(10.005, 3))
+            .build();
+
+        let ctx = RuleContext::new(order, instrument_id, None, 0);
+        assert!(rule.check(&ctx).is_pass());
+    }
 }

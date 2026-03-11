@@ -21,7 +21,7 @@
 //! 2. **撤单时段规则**（CancelSessionRule）—— 各阶段撤单/拒绝
 //! 3. **停牌状态规则**（InstrumentStatusRule）—— Halt/Suspend/正常
 //! 4. **价格对齐规则**（PriceTickRule）—— 价格是否对齐最小变动
-//! 5. **涨跌停带规则**（PriceBandRule）—— 超出/处于价格带
+//! 5. **价格笼子/涨跌停规则**（PriceCageRule/PriceLimitRule）—— 越界/缺失数据
 //! 6. **手数规则**（LotSizeRule）—— 主板/科创/创业板
 //! 7. **T+1规则**（T1Rule）—— 可卖不足/充足/日切
 //! 8. **限流规则**（ThrottlerRule）—— 账户/标的级别限流
@@ -53,7 +53,6 @@ use nautilus_markets_ashare::{
     risk::rules::{
         instrument_status::InstrumentStatusRule,
         lot_size::LotSizeRule,
-        price_band::{PriceBand, PriceBandRule},
         price_cage,
         price_limit,
         price_tick::PriceTickRule,
@@ -165,7 +164,6 @@ impl SessionProvider for MockSessionProvider {
 struct MockMarketDataProvider {
     status_action: Option<MarketStatusAction>,
     tick: Option<Price>,
-    band: PriceBand,
     cage_data: price_cage::MarketData,
     limit_data: price_limit::PriceLimitMarketData,
 }
@@ -175,7 +173,6 @@ impl Default for MockMarketDataProvider {
         Self {
             status_action: None,
             tick: None,
-            band: PriceBand::default(),
             cage_data: price_cage::MarketData::default(),
             limit_data: price_limit::PriceLimitMarketData::default(),
         }
@@ -191,15 +188,11 @@ impl MarketDataProvider for MockMarketDataProvider {
         self.tick
     }
 
-    fn price_band(&self, _id: &InstrumentId) -> PriceBand {
-        self.band
-    }
-
-    fn price_cage_market_data(&self, _ctx: &RuleContext) -> price_cage::MarketData {
+    fn price_cage_market_data(&self, _context: &nautilus_rules::common::RuleContext) -> price_cage::MarketData {
         self.cage_data.clone()
     }
 
-    fn price_limit_market_data(&self, _ctx: &RuleContext) -> price_limit::PriceLimitMarketData {
+    fn price_limit_market_data(&self, _context: &nautilus_rules::common::RuleContext) -> price_limit::PriceLimitMarketData {
         self.limit_data.clone()
     }
 }
@@ -537,94 +530,7 @@ fn test_price_tick_rule_pass_market_order() {
 }
 
 // ============================================================
-// 5. 涨跌停带规则 —— PriceBandRule
-// ============================================================
-
-#[test]
-fn test_price_band_rule_pass_within_band() {
-    let provider = Arc::new(MockMarketDataProvider {
-        band: PriceBand {
-            min_price: Some(Price::new(9.0, 2)),
-            max_price: Some(Price::new(11.0, 2)),
-        },
-        ..Default::default()
-    });
-    let rule = PriceBandRule::new(provider);
-    let ctx = make_ctx(SH_MAIN, OrderSide::Buy, 100.0, 10.0, None, 0);
-    assert!(rule.check(&ctx).is_pass());
-}
-
-#[test]
-fn test_price_band_rule_fail_above_max() {
-    let provider = Arc::new(MockMarketDataProvider {
-        band: PriceBand {
-            min_price: Some(Price::new(9.0, 2)),
-            max_price: Some(Price::new(11.0, 2)),
-        },
-        ..Default::default()
-    });
-    let rule = PriceBandRule::new(provider);
-    let ctx = make_ctx(SH_MAIN, OrderSide::Buy, 100.0, 11.01, None, 0);
-    let res = rule.check(&ctx);
-    assert!(res.is_fail());
-    assert!(res.to_string().contains("PRICE_ABOVE_UP_LIMIT"));
-}
-
-#[test]
-fn test_price_band_rule_fail_below_min() {
-    let provider = Arc::new(MockMarketDataProvider {
-        band: PriceBand {
-            min_price: Some(Price::new(9.0, 2)),
-            max_price: Some(Price::new(11.0, 2)),
-        },
-        ..Default::default()
-    });
-    let rule = PriceBandRule::new(provider);
-    let ctx = make_ctx(SH_MAIN, OrderSide::Sell, 100.0, 8.99, None, 0);
-    let res = rule.check(&ctx);
-    assert!(res.is_fail());
-    assert!(res.to_string().contains("PRICE_BELOW_DOWN_LIMIT"));
-}
-
-#[test]
-fn test_price_band_rule_pass_no_band() {
-    let provider = Arc::new(MockMarketDataProvider::default());
-    let rule = PriceBandRule::new(provider);
-    let ctx = make_ctx(SH_MAIN, OrderSide::Buy, 100.0, 999.0, None, 0);
-    // band 未配置 → Pass
-    assert!(rule.check(&ctx).is_pass());
-}
-
-#[test]
-fn test_price_band_rule_pass_at_max_boundary() {
-    let provider = Arc::new(MockMarketDataProvider {
-        band: PriceBand {
-            min_price: Some(Price::new(9.0, 2)),
-            max_price: Some(Price::new(11.0, 2)),
-        },
-        ..Default::default()
-    });
-    let rule = PriceBandRule::new(provider);
-    let ctx = make_ctx(SH_MAIN, OrderSide::Buy, 100.0, 11.0, None, 0);
-    assert!(rule.check(&ctx).is_pass());
-}
-
-#[test]
-fn test_price_band_rule_pass_at_min_boundary() {
-    let provider = Arc::new(MockMarketDataProvider {
-        band: PriceBand {
-            min_price: Some(Price::new(9.0, 2)),
-            max_price: Some(Price::new(11.0, 2)),
-        },
-        ..Default::default()
-    });
-    let rule = PriceBandRule::new(provider);
-    let ctx = make_ctx(SH_MAIN, OrderSide::Sell, 100.0, 9.0, None, 0);
-    assert!(rule.check(&ctx).is_pass());
-}
-
-// ============================================================
-// 6. 手数规则 —— LotSizeRule
+// 5. 手数规则 —— LotSizeRule
 // ============================================================
 
 // --- 主板 (600xxx) ---
@@ -1078,15 +984,18 @@ fn test_rule_chain_with_provider_denies_suspended() {
 }
 
 #[test]
-fn test_rule_chain_with_provider_denies_price_above_band() {
+fn test_rule_chain_with_provider_denies_price_above_limit() {
     let data_provider = Arc::new(MockMarketDataProvider {
-        band: PriceBand {
-            min_price: Some(Price::new(9.0, 2)),
-            max_price: Some(Price::new(11.0, 2)),
+        status_action: None,
+        tick: Some(Price::new(0.01, 2)),
+        limit_data: price_limit::PriceLimitMarketData {
+            prev_close: Some(Price::new(10.0, 2)),
+            tick_size: Some(Price::new(0.01, 2)),
+            stock_name: Some("正常股票".to_string()),
         },
         ..Default::default()
     });
-    let cfg = AShareRuleConfig::new();
+    let cfg = AShareRuleConfig::new().with_price_limit(true);
     let chain = create_ashare_rule_chain(&cfg, Some(data_provider));
     let ctx = make_ctx(SH_MAIN, OrderSide::Buy, 100.0, 12.0, None, 0);
     let res = chain.check(&ctx);
@@ -1138,9 +1047,10 @@ fn test_rule_chain_all_rules_pass() {
     let data_provider = Arc::new(MockMarketDataProvider {
         status_action: None,
         tick: Some(Price::new(0.01, 2)),
-        band: PriceBand {
-            min_price: Some(Price::new(8.0, 2)),
-            max_price: Some(Price::new(12.0, 2)),
+        limit_data: price_limit::PriceLimitMarketData {
+            prev_close: Some(Price::new(10.0, 2)),
+            tick_size: Some(Price::new(0.01, 2)),
+            stock_name: Some("正常股票".to_string()),
         },
         ..Default::default()
     });
@@ -1545,4 +1455,106 @@ fn test_real_provider_price_limit_respects_instrument_precision() {
     let res = chain.check(&ctx);
 
     assert!(res.is_pass());
+}
+
+#[test]
+fn test_real_provider_price_limit_fail_above_limit_up() {
+    let instrument_id = InstrumentId::from("600115.SH");
+    let mut cache = Cache::default();
+    cache
+        .add_instrument(make_equity_for_test(
+            instrument_id,
+            "600115",
+            2,
+            Price::new(0.01, 2),
+        ))
+        .unwrap();
+    cache
+        .add_trade(TradeTick::new(
+            instrument_id,
+            Price::new(10.00, 2),
+            Quantity::new(100.0, 0),
+            nautilus_model::enums::AggressorSide::NoAggressor,
+            TradeId::new("T-600115"),
+            UnixNanos::default(),
+            UnixNanos::default(),
+        ))
+        .unwrap();
+
+    let provider = Arc::new(CacheMarketDataProvider::new(Arc::new(std::sync::Mutex::new(cache))));
+    let cfg = AShareRuleConfig::production().with_price_limit(true);
+    let chain = create_ashare_rule_chain(&cfg, Some(provider));
+    let ctx = make_ctx("600115.SH", OrderSide::Buy, 100.0, 11.01, None, 0);
+    let res = chain.check(&ctx);
+
+    assert!(res.is_fail());
+    assert!(res.to_string().contains("PRICE_ABOVE_UP_LIMIT"));
+}
+
+#[test]
+fn test_real_provider_price_limit_fail_below_limit_down() {
+    let instrument_id = InstrumentId::from("600116.SH");
+    let mut cache = Cache::default();
+    cache
+        .add_instrument(make_equity_for_test(
+            instrument_id,
+            "600116",
+            2,
+            Price::new(0.01, 2),
+        ))
+        .unwrap();
+    cache
+        .add_trade(TradeTick::new(
+            instrument_id,
+            Price::new(10.00, 2),
+            Quantity::new(100.0, 0),
+            nautilus_model::enums::AggressorSide::NoAggressor,
+            TradeId::new("T-600116"),
+            UnixNanos::default(),
+            UnixNanos::default(),
+        ))
+        .unwrap();
+
+    let provider = Arc::new(CacheMarketDataProvider::new(Arc::new(std::sync::Mutex::new(cache))));
+    let cfg = AShareRuleConfig::production().with_price_limit(true);
+    let chain = create_ashare_rule_chain(&cfg, Some(provider));
+    let ctx = make_ctx("600116.SH", OrderSide::Sell, 100.0, 8.99, None, 0);
+    let res = chain.check(&ctx);
+
+    assert!(res.is_fail());
+    assert!(res.to_string().contains("PRICE_BELOW_DOWN_LIMIT"));
+}
+
+#[test]
+fn test_real_provider_price_limit_st_stock_uses_5pct() {
+    let instrument_id = InstrumentId::from("600117.SH");
+    let mut cache = Cache::default();
+    cache
+        .add_instrument(make_equity_for_test(
+            instrument_id,
+            "ST600117",
+            2,
+            Price::new(0.01, 2),
+        ))
+        .unwrap();
+    cache
+        .add_trade(TradeTick::new(
+            instrument_id,
+            Price::new(10.00, 2),
+            Quantity::new(100.0, 0),
+            nautilus_model::enums::AggressorSide::NoAggressor,
+            TradeId::new("T-600117"),
+            UnixNanos::default(),
+            UnixNanos::default(),
+        ))
+        .unwrap();
+
+    let provider = Arc::new(CacheMarketDataProvider::new(Arc::new(std::sync::Mutex::new(cache))));
+    let cfg = AShareRuleConfig::production().with_price_limit(true);
+    let chain = create_ashare_rule_chain(&cfg, Some(provider));
+    let ctx = make_ctx("600117.SH", OrderSide::Buy, 100.0, 10.60, None, 0);
+    let res = chain.check(&ctx);
+
+    assert!(res.is_fail());
+    assert!(res.to_string().contains("PRICE_ABOVE_UP_LIMIT"));
 }

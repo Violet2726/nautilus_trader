@@ -166,3 +166,115 @@ impl Rule for PriceLimitRule {
         RuleCheckResult::Pass
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use nautilus_model::enums::OrderType;
+    use nautilus_model::identifiers::{ClientOrderId, InstrumentId, StrategyId, TraderId};
+    use nautilus_model::orders::OrderTestBuilder;
+    use nautilus_model::types::Quantity;
+
+    struct MockProvider {
+        data: PriceLimitMarketData,
+        precision: Option<u8>,
+        tick: Option<Price>,
+    }
+
+    impl MarketDataProvider for MockProvider {
+        fn price_limit_market_data(&self, _context: &RuleContext) -> PriceLimitMarketData {
+            self.data.clone()
+        }
+
+        fn price_precision(&self, _instrument_id: &InstrumentId) -> Option<u8> {
+            self.precision
+        }
+
+        fn tick_size(&self, _instrument_id: &InstrumentId) -> Option<Price> {
+            self.tick
+        }
+    }
+
+    fn make_context(symbol: &str, price: f64) -> RuleContext {
+        let instrument_id = InstrumentId::from(symbol);
+        let order = OrderTestBuilder::new(OrderType::Limit)
+            .trader_id(TraderId::from("TRADER-001"))
+            .strategy_id(StrategyId::from("STRATEGY-001"))
+            .instrument_id(instrument_id)
+            .client_order_id(ClientOrderId::from("O-20240101-001"))
+            .quantity(Quantity::new(100.0, 0))
+            .price(Price::new(price, 2))
+            .build();
+        RuleContext::new(order, instrument_id, None, 0)
+    }
+
+    #[test]
+    fn test_price_limit_rule_pass_within_limit() {
+        let provider = Arc::new(MockProvider {
+            data: PriceLimitMarketData {
+                prev_close: Some(Price::new(10.0, 2)),
+                tick_size: Some(Price::new(0.01, 2)),
+                stock_name: Some("正常股票".to_string()),
+            },
+            precision: Some(2),
+            tick: Some(Price::new(0.01, 2)),
+        });
+        let rule = PriceLimitRule::new(provider, MissingMarketDataPolicy::FailClose);
+        let ctx = make_context("600000.SH", 10.50);
+        assert!(rule.check(&ctx).is_pass());
+    }
+
+    #[test]
+    fn test_price_limit_rule_fail_above_limit_up() {
+        let provider = Arc::new(MockProvider {
+            data: PriceLimitMarketData {
+                prev_close: Some(Price::new(10.0, 2)),
+                tick_size: Some(Price::new(0.01, 2)),
+                stock_name: Some("正常股票".to_string()),
+            },
+            precision: Some(2),
+            tick: Some(Price::new(0.01, 2)),
+        });
+        let rule = PriceLimitRule::new(provider, MissingMarketDataPolicy::FailClose);
+        let ctx = make_context("600000.SH", 11.01);
+        let res = rule.check(&ctx);
+        assert!(res.is_fail());
+        assert!(res.to_string().contains("PRICE_ABOVE_UP_LIMIT"));
+    }
+
+    #[test]
+    fn test_price_limit_rule_fail_below_limit_down() {
+        let provider = Arc::new(MockProvider {
+            data: PriceLimitMarketData {
+                prev_close: Some(Price::new(10.0, 2)),
+                tick_size: Some(Price::new(0.01, 2)),
+                stock_name: Some("正常股票".to_string()),
+            },
+            precision: Some(2),
+            tick: Some(Price::new(0.01, 2)),
+        });
+        let rule = PriceLimitRule::new(provider, MissingMarketDataPolicy::FailClose);
+        let ctx = make_context("600000.SH", 8.99);
+        let res = rule.check(&ctx);
+        assert!(res.is_fail());
+        assert!(res.to_string().contains("PRICE_BELOW_DOWN_LIMIT"));
+    }
+
+    #[test]
+    fn test_price_limit_rule_missing_prev_close_fail_close() {
+        let provider = Arc::new(MockProvider {
+            data: PriceLimitMarketData {
+                prev_close: None,
+                tick_size: Some(Price::new(0.01, 2)),
+                stock_name: Some("正常股票".to_string()),
+            },
+            precision: Some(2),
+            tick: Some(Price::new(0.01, 2)),
+        });
+        let rule = PriceLimitRule::new(provider, MissingMarketDataPolicy::FailClose);
+        let ctx = make_context("600000.SH", 10.00);
+        let res = rule.check(&ctx);
+        assert!(res.is_fail());
+        assert!(res.to_string().contains("ASHARE_PRICE_LIMIT_MISSING_PREV_CLOSE"));
+    }
+}

@@ -51,12 +51,11 @@ pub fn create_ashare_rule_chain_with_provider(
 /// 1. 交易时段规则（如果启用）
 /// 2. 停牌状态规则（如果提供了 provider）
 /// 3. 价格对齐规则（如果提供了 provider）
-/// 4. 价格限制规则（如果提供了 provider）
-/// 5. 价格笼子规则（如果启用且提供了 provider）
-/// 6. 涨跌停限制规则（如果启用且提供了 provider）
-/// 7. 手数规则（如果启用）
-/// 8. T+1 规则（如果启用）
-/// 9. 限流规则（如果配置了）
+/// 4. 价格笼子规则（如果启用且提供了 provider）
+/// 5. 涨跌停限制规则（如果启用且提供了 provider）
+/// 6. 手数规则（如果启用）
+/// 7. T+1 规则（如果启用）
+/// 8. 限流规则（如果配置了）
 pub fn create_ashare_rule_chain(
     config: &AShareRuleConfig,
     provider: Option<Arc<dyn MarketDataProvider>>,
@@ -72,7 +71,6 @@ pub fn create_ashare_rule_chain(
     if let Some(ref provider) = provider {
         chain.add_rule(Arc::new(InstrumentStatusRule::new(provider.clone())));
         chain.add_rule(Arc::new(PriceTickRule::new(provider.clone())));
-        chain.add_rule(Arc::new(PriceBandRule::new(provider.clone())));
 
         if config.price_cage_enabled {
             if let Some(session_provider) = &config.session_provider {

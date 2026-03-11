@@ -14,7 +14,7 @@
 // -------------------------------------------------------------------------------------------------
 
 use crate::risk::rules::{
-    price_band::PriceBand, price_cage::MarketData as PriceCageMarketData,
+    price_cage::MarketData as PriceCageMarketData,
     price_limit::PriceLimitMarketData,
 };
 use nautilus_common::cache::Cache;
@@ -42,11 +42,6 @@ pub trait MarketDataProvider: Send + Sync {
     fn price_precision(&self, _instrument_id: &InstrumentId) -> Option<u8> {
         // 来源：工具定义中的 price_precision 字段
         None
-    }
-
-    fn price_band(&self, _instrument_id: &InstrumentId) -> PriceBand {
-        // 来源：前收盘价，来自动态行情数据 (bars 或 market data)
-        PriceBand::default()
     }
 
     fn price_cage_market_data(&self, _context: &RuleContext) -> PriceCageMarketData {
@@ -111,18 +106,6 @@ impl MarketDataProvider for CacheMarketDataProvider {
 
     fn price_precision(&self, instrument_id: &InstrumentId) -> Option<u8> {
         self.with_cache(|cache| Self::price_precision_from_cache(cache, instrument_id))
-    }
-
-    fn price_band(&self, instrument_id: &InstrumentId) -> PriceBand {
-        self.with_cache(|cache| {
-            cache
-                .instrument(instrument_id)
-                .map(|instrument| PriceBand {
-                    min_price: instrument.min_price(),
-                    max_price: instrument.max_price(),
-                })
-                .unwrap_or_default()
-        })
     }
 
     fn price_cage_market_data(&self, context: &RuleContext) -> PriceCageMarketData {

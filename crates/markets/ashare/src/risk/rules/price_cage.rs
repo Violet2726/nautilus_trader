@@ -163,3 +163,123 @@ pub struct MarketData {
     /// 最小价格变动单位
     pub tick_size: Option<Price>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::market::session::TradingPhase;
+    use nautilus_core::UnixNanos;
+    use nautilus_model::enums::OrderType;
+    use nautilus_model::identifiers::{ClientOrderId, InstrumentId, StrategyId, TraderId, Venue};
+    use nautilus_model::orders::OrderTestBuilder;
+    use nautilus_model::types::Quantity;
+
+    struct MockSessionProvider;
+
+    impl SessionProvider for MockSessionProvider {
+        fn phase_at(&self, _venue: &Venue, _ts_ns: UnixNanos) -> TradingPhase {
+            TradingPhase::ContinuousAm
+        }
+    }
+
+    struct MockProvider {
+        data: MarketData,
+        precision: Option<u8>,
+        tick: Option<Price>,
+    }
+
+    impl MarketDataProvider for MockProvider {
+        fn price_cage_market_data(&self, _context: &RuleContext) -> MarketData {
+            self.data.clone()
+        }
+
+        fn price_precision(&self, _instrument_id: &InstrumentId) -> Option<u8> {
+            self.precision
+        }
+
+        fn tick_size(&self, _instrument_id: &InstrumentId) -> Option<Price> {
+            self.tick
+        }
+    }
+
+    fn make_context(symbol: &str, price: f64) -> RuleContext {
+        let instrument_id = InstrumentId::from(symbol);
+        let order = OrderTestBuilder::new(OrderType::Limit)
+            .trader_id(TraderId::from("TRADER-001"))
+            .strategy_id(StrategyId::from("STRATEGY-001"))
+            .instrument_id(instrument_id)
+            .client_order_id(ClientOrderId::from("O-PRICE-CAGE-001"))
+            .quantity(Quantity::new(100.0, 0))
+            .price(Price::new(price, 2))
+            .build();
+
+        RuleContext::new(order, instrument_id, None, 0)
+    }
+
+    #[test]
+    fn test_price_cage_rule_fail_when_above_cage() {
+        let session_provider = Arc::new(MockSessionProvider);
+        let provider = Arc::new(MockProvider {
+            data: MarketData {
+                current_price: Some(Price::new(10.0, 2)),
+                tick_size: Some(Price::new(0.01, 2)),
+            },
+            precision: Some(2),
+            tick: Some(Price::new(0.01, 2)),
+        });
+        let rule = PriceCageRule::new(
+            session_provider,
+            0.02,
+            provider,
+            MissingMarketDataPolicy::FailClose,
+        );
+        let ctx = make_context("600000.SH", 10.31);
+        let res = rule.check(&ctx);
+        assert!(res.is_fail());
+        assert!(res.to_string().contains("PRICE_CAGE_VIOLATION"));
+    }
+
+    #[test]
+    fn test_price_cage_rule_pass_when_market_data_missing_fail_open() {
+        let session_provider = Arc::new(MockSessionProvider);
+        let provider = Arc::new(MockProvider {
+            data: MarketData {
+                current_price: None,
+                tick_size: Some(Price::new(0.01, 2)),
+            },
+            precision: Some(2),
+            tick: Some(Price::new(0.01, 2)),
+        });
+        let rule = PriceCageRule::new(
+            session_provider,
+            0.02,
+            provider,
+            MissingMarketDataPolicy::FailOpen,
+        );
+        let ctx = make_context("600000.SH", 10.00);
+        assert!(rule.check(&ctx).is_pass());
+    }
+
+    #[test]
+    fn test_price_cage_rule_fail_when_market_data_missing_fail_close() {
+        let session_provider = Arc::new(MockSessionProvider);
+        let provider = Arc::new(MockProvider {
+            data: MarketData {
+                current_price: None,
+                tick_size: Some(Price::new(0.01, 2)),
+            },
+            precision: Some(2),
+            tick: Some(Price::new(0.01, 2)),
+        });
+        let rule = PriceCageRule::new(
+            session_provider,
+            0.02,
+            provider,
+            MissingMarketDataPolicy::FailClose,
+        );
+        let ctx = make_context("600000.SH", 10.00);
+        let res = rule.check(&ctx);
+        assert!(res.is_fail());
+        assert!(res.to_string().contains("ASHARE_PRICE_CAGE_MISSING_CURRENT_PRICE"));
+    }
+}

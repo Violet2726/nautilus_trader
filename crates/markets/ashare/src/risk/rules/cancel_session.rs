@@ -133,4 +133,92 @@ mod tests {
         assert!(res.is_fail());
         assert!(res.to_string().contains("CANCEL_DENIED"));
     }
+
+    #[test]
+    fn test_cancel_session_rule_pass_when_continuous() {
+        let provider = Arc::new(MockSessionProvider {
+            phase: TradingPhase::ContinuousAm,
+        });
+        let rule = CancelSessionRule::new(provider);
+
+        let cancel = CancelOrder::new(
+            TraderId::from("TRADER-001"),
+            None,
+            StrategyId::from("STRATEGY-001"),
+            InstrumentId::from("600000.SH"),
+            ClientOrderId::from("O-2"),
+            None,
+            nautilus_core::UUID4::new(),
+            0.into(),
+            None,
+        );
+
+        let ctx = CommandContext {
+            command: TradingCommand::CancelOrder(cancel),
+            instrument_id: Some(InstrumentId::from("600000.SH")),
+            account_id: None,
+            timestamp_ns: 0,
+        };
+
+        assert!(rule.check(&ctx).is_pass());
+    }
+
+    #[test]
+    fn test_cancel_session_rule_pass_when_instrument_missing() {
+        let provider = Arc::new(MockSessionProvider {
+            phase: TradingPhase::PreAuctionLocked,
+        });
+        let rule = CancelSessionRule::new(provider);
+
+        let cancel = CancelOrder::new(
+            TraderId::from("TRADER-001"),
+            None,
+            StrategyId::from("STRATEGY-001"),
+            InstrumentId::from("600000.SH"),
+            ClientOrderId::from("O-3"),
+            None,
+            nautilus_core::UUID4::new(),
+            0.into(),
+            None,
+        );
+
+        let ctx = CommandContext {
+            command: TradingCommand::CancelOrder(cancel),
+            instrument_id: None,
+            account_id: None,
+            timestamp_ns: 0,
+        };
+
+        assert!(rule.check(&ctx).is_pass());
+    }
+
+    #[test]
+    fn test_cancel_session_rule_disabled() {
+        let provider = Arc::new(MockSessionProvider {
+            phase: TradingPhase::PreAuctionLocked,
+        });
+        let mut rule = CancelSessionRule::new(provider);
+        rule.set_enabled(false);
+
+        let cancel = CancelOrder::new(
+            TraderId::from("TRADER-001"),
+            None,
+            StrategyId::from("STRATEGY-001"),
+            InstrumentId::from("600000.SH"),
+            ClientOrderId::from("O-4"),
+            None,
+            nautilus_core::UUID4::new(),
+            0.into(),
+            None,
+        );
+
+        let ctx = CommandContext {
+            command: TradingCommand::CancelOrder(cancel),
+            instrument_id: Some(InstrumentId::from("600000.SH")),
+            account_id: None,
+            timestamp_ns: 0,
+        };
+
+        assert!(rule.check(&ctx).is_pass());
+    }
 }
