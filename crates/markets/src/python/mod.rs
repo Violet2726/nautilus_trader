@@ -13,15 +13,15 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! Python bindings from [PyO3](https://pyo3.rs).
+//! `nautilus_markets` 的 Python 绑定入口（基于 `PyO3`）。
 
 use pyo3::prelude::*;
 
-/// Loaded as `nautilus_pyo3.markets`.
+/// 以 `nautilus_pyo3.markets` 模块名加载。
 ///
-/// # Errors
+/// # 错误
 ///
-/// Returns a `PyErr` if registering any module components fails.
+/// 当任一类型或函数注册失败时返回 `PyErr`。
 #[pymodule]
 #[rustfmt::skip]
 pub fn markets(_: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -31,7 +31,7 @@ pub fn markets(_: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<nautilus_markets_ashare::T1Ledger>()?;
     m.add_class::<nautilus_markets_ashare::TradingPhase>()?;
 
-    // AShare exports
+    // A 股导出项
     m.add_function(wrap_pyfunction!(
         nautilus_markets_ashare::market::price_limits::compute_ashare_price_limits,
         m

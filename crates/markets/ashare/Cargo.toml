@@ -20,6 +20,7 @@ nautilus-core = { workspace = true }
 chrono = { workspace = true }
 ahash = "0.8"
 ustr = { workspace = true }
+log = { workspace = true }
 
 [features]
 default = []

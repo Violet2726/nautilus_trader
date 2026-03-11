@@ -35,10 +35,7 @@ pub fn create_ashare_rule_chain_with_provider(
     config: &AShareRuleConfig,
     provider: Arc<dyn MarketDataProvider>,
 ) -> RuleChain {
-    create_ashare_rule_chain(
-        config,
-        Some(provider.clone()),
-    )
+    create_ashare_rule_chain(config, Some(provider))
 }
 
 /// 根据给定配置创建包含所有A股规则的策略链。
@@ -83,12 +80,16 @@ pub fn create_ashare_rule_chain(
                     session_provider.clone(),
                     config.price_cage_pct,
                     provider.clone(),
+                    config.missing_market_data_policy,
                 )));
             }
         }
 
         if config.price_limit_enabled {
-            chain.add_rule(Arc::new(PriceLimitRule::new(provider.clone())));
+            chain.add_rule(Arc::new(PriceLimitRule::new(
+                provider.clone(),
+                config.missing_market_data_policy,
+            )));
         }
     }
 
@@ -116,10 +117,7 @@ pub fn create_ashare_command_rule_chain_with_provider(
     config: &AShareRuleConfig,
     provider: Arc<dyn MarketDataProvider>,
 ) -> CommandRuleChain {
-    create_ashare_command_rule_chain(
-        config,
-        Some(provider.clone()),
-    )
+    create_ashare_command_rule_chain(config, Some(provider))
 }
 
 /// 根据给定配置创建包含所有A股命令规则的策略链。

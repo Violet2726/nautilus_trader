@@ -138,36 +138,22 @@ pub fn identify_stock_status(_symbol: &str, name: &str) -> StockStatus {
 /// 获取涨跌停限制配置
 pub fn get_price_limit_config(board: BoardType, status: StockStatus) -> Option<PriceLimitConfig> {
     match (board, status) {
-        // 主板正常股票：±10%
-        (BoardType::Main, StockStatus::Normal) => {
-            Some(PriceLimitConfig::new(0.10, 0.10))
-        }
-        // 主板ST股票：±5%
-        (BoardType::Main, StockStatus::ST) => {
+        // 主板：正常 ±10%，ST/*ST ±5%
+        (BoardType::Main, StockStatus::ST | StockStatus::StarST) => {
             Some(PriceLimitConfig::new(0.05, 0.05))
         }
-        // 主板*ST股票：±5%
-        (BoardType::Main, StockStatus::StarST) => {
-            Some(PriceLimitConfig::new(0.05, 0.05))
-        }
-        // 创业板：±20%
-        (BoardType::ChiNext, StockStatus::Normal) => {
-            Some(PriceLimitConfig::new(0.20, 0.20))
-        }
-        // 科创板正常股票：±20%
-        (BoardType::Star, StockStatus::Normal) => {
-            Some(PriceLimitConfig::new(0.20, 0.20))
-        }
+        (BoardType::Main, _) => Some(PriceLimitConfig::new(0.10, 0.10)),
+
+        // 创业板：默认 ±20%（状态不影响）
+        (BoardType::ChiNext, _) => Some(PriceLimitConfig::new(0.20, 0.20)),
+
+        // 科创板：上市前 5 日无涨跌幅，其余状态统一 ±20%
         // 科创板上市前5日：无涨跌幅限制
-        (BoardType::Star, StockStatus::IPO5) => {
-            None
-        }
-        // 北交所：±30%
-        (BoardType::BSE, StockStatus::Normal) => {
-            Some(PriceLimitConfig::new(0.30, 0.30))
-        }
-        // 其他情况默认主板限制
-        _ => Some(PriceLimitConfig::new(0.10, 0.10)),
+        (BoardType::Star, StockStatus::IPO5) => None,
+        (BoardType::Star, _) => Some(PriceLimitConfig::new(0.20, 0.20)),
+
+        // 北交所：统一 ±30%（状态不影响）
+        (BoardType::BSE, _) => Some(PriceLimitConfig::new(0.30, 0.30)),
     }
 }
 
@@ -290,6 +276,10 @@ mod tests {
         let config = get_price_limit_config(BoardType::ChiNext, StockStatus::Normal).unwrap();
         assert_eq!(config.limit_up_pct, 0.20);
         assert_eq!(config.limit_down_pct, 0.20);
+        // 创业板 ST 仍应为 ±20%
+        let config = get_price_limit_config(BoardType::ChiNext, StockStatus::ST).unwrap();
+        assert_eq!(config.limit_up_pct, 0.20);
+        assert_eq!(config.limit_down_pct, 0.20);
 
         // 科创板上市前5日
         let config = get_price_limit_config(BoardType::Star, StockStatus::IPO5);
@@ -297,6 +287,10 @@ mod tests {
 
         // 北交所
         let config = get_price_limit_config(BoardType::BSE, StockStatus::Normal).unwrap();
+        assert_eq!(config.limit_up_pct, 0.30);
+        assert_eq!(config.limit_down_pct, 0.30);
+        // 北交所 ST 仍应为 ±30%
+        let config = get_price_limit_config(BoardType::BSE, StockStatus::ST).unwrap();
         assert_eq!(config.limit_up_pct, 0.30);
         assert_eq!(config.limit_down_pct, 0.30);
     }

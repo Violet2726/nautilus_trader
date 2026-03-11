@@ -22,6 +22,7 @@ use nautilus_model::enums::{OrderSide, OrderType};
 use nautilus_model::types::Price;
 use nautilus_model::orders::Order;
 use crate::market::session::SessionProvider;
+use crate::risk::config::MissingMarketDataPolicy;
 use crate::risk::provider::MarketDataProvider;
 use std::sync::Arc;
 
@@ -33,6 +34,7 @@ pub struct PriceCageRule {
     session_provider: Arc<dyn SessionProvider>,
     price_cage_pct: f64,
     provider: Arc<dyn MarketDataProvider>,
+    missing_market_data_policy: MissingMarketDataPolicy,
     enabled: bool,
 }
 
@@ -49,17 +51,33 @@ impl PriceCageRule {
         session_provider: Arc<dyn SessionProvider>,
         price_cage_pct: f64,
         provider: Arc<dyn MarketDataProvider>,
+        missing_market_data_policy: MissingMarketDataPolicy,
     ) -> Self {
         Self {
             session_provider,
             price_cage_pct,
             provider,
+            missing_market_data_policy,
             enabled: true,
         }
     }
 
     pub fn set_enabled(&mut self, enabled: bool) {
         self.enabled = enabled;
+    }
+
+    fn handle_missing_data(&self, code: &str, detail: &str) -> RuleCheckResult {
+        log::warn!(
+            "ASHARE_PRICE_CAGE_MISSING_DATA: code={code}, detail={detail}, policy={:?}",
+            self.missing_market_data_policy
+        );
+
+        match self.missing_market_data_policy {
+            MissingMarketDataPolicy::FailOpen => RuleCheckResult::Pass,
+            MissingMarketDataPolicy::FailClose => RuleCheckResult::Fail {
+                reason: format!("MISSING_MARKET_DATA: code={code}, detail={detail}"),
+            },
+        }
     }
 }
 
@@ -82,23 +100,44 @@ impl Rule for PriceCageRule {
             return RuleCheckResult::Pass;
         }
 
-        let order_price = match context.metadata.price {
-            Some(price) => Price::new(price, 2),
-            None => return RuleCheckResult::Pass,
+        let order_price = match context.order.price() {
+            Some(price) => price,
+            None => {
+                return self.handle_missing_data(
+                    "ASHARE_PRICE_CAGE_MISSING_ORDER_PRICE",
+                    "limit_order_has_no_price",
+                );
+            }
         };
 
         // 获取市场数据
         let market_data = self.provider.price_cage_market_data(context);
         let current_price = match market_data.current_price {
             Some(price) => price,
-            None => return RuleCheckResult::Pass,
+            None => {
+                return self.handle_missing_data(
+                    "ASHARE_PRICE_CAGE_MISSING_CURRENT_PRICE",
+                    "provider.current_price_is_none",
+                );
+            }
         };
-        let tick_size = market_data.tick_size.unwrap_or_else(|| Price::new(0.01, 2));
+        let precision = self
+            .provider
+            .price_precision(&context.instrument_id)
+            .unwrap_or(order_price.precision);
+        let tick_size = market_data
+            .tick_size
+            .or_else(|| self.provider.tick_size(&context.instrument_id))
+            .unwrap_or_else(|| {
+                let step = 10f64.powi(-(precision as i32));
+                Price::new(step, precision)
+            });
+        let normalized_order_price = Price::new(order_price.as_f64(), precision);
 
         // 检查是否违反价格笼子限制
         if let Some(limit_price) = crate::risk::checks::check_price_cage_violation(
             context.order.order_side() == OrderSide::Buy,
-            order_price,
+            normalized_order_price,
             current_price,
             self.price_cage_pct,
             tick_size,
@@ -106,7 +145,7 @@ impl Rule for PriceCageRule {
             return RuleCheckResult::Fail {
                 reason: format!(
                     "PRICE_CAGE_VIOLATION: price={:.2}, limit={:.2}",
-                    order_price.as_f64(),
+                    normalized_order_price.as_f64(),
                     limit_price.as_f64()
                 ),
             };

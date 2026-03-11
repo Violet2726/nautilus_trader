@@ -3988,6 +3988,7 @@ dependencies = [
  "ahash 0.8.12",
  "cbindgen 0.26.0",
  "chrono",
+ "log",
  "nautilus-common",
  "nautilus-core",
  "nautilus-model",

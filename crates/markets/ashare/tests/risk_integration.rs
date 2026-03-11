@@ -31,12 +31,15 @@
 use std::sync::{Arc, RwLock};
 
 use nautilus_common::throttler::RateLimit;
+use nautilus_common::cache::Cache;
 use nautilus_core::UnixNanos;
 use nautilus_model::{
+    data::{InstrumentStatus, QuoteTick, TradeTick},
     enums::{MarketStatusAction, OrderSide, OrderType},
-    identifiers::{AccountId, ClientOrderId, InstrumentId, StrategyId, TraderId, Venue},
+    identifiers::{AccountId, ClientOrderId, InstrumentId, StrategyId, TradeId, TraderId, Venue},
+    instruments::{Equity, InstrumentAny},
     orders::OrderTestBuilder,
-    types::{Price, Quantity},
+    types::{Currency, Price, Quantity},
 };
 use nautilus_rules::{
     command::{CommandContext, CommandRule},
@@ -59,6 +62,7 @@ use nautilus_markets_ashare::{
         throttler::ThrottlerRule,
     },
 };
+use nautilus_markets_ashare::risk::{CacheMarketDataProvider, MissingMarketDataPolicy};
 use nautilus_markets_ashare::market::session::SessionProvider;
 use nautilus_common::messages::execution::{CancelOrder, TradingCommand};
 
@@ -115,6 +119,35 @@ fn make_market_ctx(
         .build();
 
     RuleContext::new(order, instrument_id, account_id, timestamp_ns)
+}
+
+fn make_equity_for_test(
+    instrument_id: InstrumentId,
+    raw_symbol: &str,
+    price_precision: u8,
+    price_increment: Price,
+) -> InstrumentAny {
+    Equity::new(
+        instrument_id,
+        nautilus_model::identifiers::Symbol::from(raw_symbol),
+        Some(ustr::Ustr::from("TESTISIN")),
+        Currency::from("CNY"),
+        price_precision,
+        price_increment,
+        None,
+        None,
+        None,
+        Some(Price::new(9999.0, price_precision)),
+        Some(Price::new(0.001, price_precision)),
+        None,
+        None,
+        None,
+        None,
+        None,
+        UnixNanos::default(),
+        UnixNanos::default(),
+    )
+    .into()
 }
 
 /// 模拟固定阶段的时段提供者
@@ -1326,10 +1359,17 @@ fn test_ashare_rule_config_defaults() {
     assert!(!cfg.session_enabled);
     assert!(!cfg.price_cage_enabled);
     assert!(!cfg.price_limit_enabled);
+    assert_eq!(cfg.missing_market_data_policy, MissingMarketDataPolicy::FailOpen);
     assert!(!cfg.t1_enabled);
     assert!(!cfg.lot_size_enabled);
     assert!(cfg.session_provider.is_none());
     assert!(cfg.t1_ledger.is_none());
+}
+
+#[test]
+fn test_ashare_rule_config_production_uses_fail_close() {
+    let cfg = AShareRuleConfig::production();
+    assert_eq!(cfg.missing_market_data_policy, MissingMarketDataPolicy::FailClose);
 }
 
 #[test]
@@ -1358,4 +1398,151 @@ fn test_ashare_rule_config_builder_chain() {
     assert!(cfg.t1_ledger.is_some());
     assert!(cfg.max_order_submit_per_account.is_some());
     assert!(cfg.max_order_submit_per_symbol.is_some());
+}
+
+// ============================================================
+// 14. 真实 Cache provider 回放端到端测试
+// ============================================================
+
+#[test]
+fn test_real_provider_price_limit_missing_data_fail_close() {
+    let instrument_id = InstrumentId::from("600111.SH");
+    let mut cache = Cache::default();
+    cache
+        .add_instrument(make_equity_for_test(
+            instrument_id,
+            "600111",
+            2,
+            Price::new(0.01, 2),
+        ))
+        .unwrap();
+
+    let provider = Arc::new(CacheMarketDataProvider::new(Arc::new(std::sync::Mutex::new(cache))));
+    let cfg = AShareRuleConfig::production().with_price_limit(true);
+    let chain = create_ashare_rule_chain(&cfg, Some(provider));
+    let ctx = make_ctx("600111.SH", OrderSide::Buy, 100.0, 10.0, None, 0);
+    let res = chain.check(&ctx);
+
+    assert!(res.is_fail());
+    assert!(res.to_string().contains("MISSING_MARKET_DATA"));
+    assert!(res.to_string().contains("ASHARE_PRICE_LIMIT_MISSING_PREV_CLOSE"));
+}
+
+#[test]
+fn test_real_provider_price_limit_missing_data_fail_open() {
+    let instrument_id = InstrumentId::from("600112.SH");
+    let mut cache = Cache::default();
+    cache
+        .add_instrument(make_equity_for_test(
+            instrument_id,
+            "600112",
+            2,
+            Price::new(0.01, 2),
+        ))
+        .unwrap();
+
+    let provider = Arc::new(CacheMarketDataProvider::new(Arc::new(std::sync::Mutex::new(cache))));
+    let cfg = AShareRuleConfig::new()
+        .with_price_limit(true)
+        .with_missing_market_data_policy(MissingMarketDataPolicy::FailOpen);
+    let chain = create_ashare_rule_chain(&cfg, Some(provider));
+    let ctx = make_ctx("600112.SH", OrderSide::Buy, 100.0, 10.0, None, 0);
+    let res = chain.check(&ctx);
+
+    assert!(res.is_pass());
+}
+
+#[test]
+fn test_real_provider_price_cage_violation_with_replay_quote() {
+    let instrument_id = InstrumentId::from("600113.SH");
+    let mut cache = Cache::default();
+    cache
+        .add_instrument(make_equity_for_test(
+            instrument_id,
+            "600113",
+            2,
+            Price::new(0.01, 2),
+        ))
+        .unwrap();
+    cache
+        .add_quote(QuoteTick::new(
+            instrument_id,
+            Price::new(10.00, 2),
+            Price::new(10.10, 2),
+            Quantity::new(100.0, 0),
+            Quantity::new(100.0, 0),
+            UnixNanos::default(),
+            UnixNanos::default(),
+        ))
+        .unwrap();
+
+    let provider = Arc::new(CacheMarketDataProvider::new(Arc::new(std::sync::Mutex::new(cache))));
+    let session = Arc::new(MockSessionProvider {
+        phase: TradingPhase::ContinuousAm,
+    });
+    let cfg = AShareRuleConfig::production()
+        .with_session(false, Some(session as Arc<dyn SessionProvider>))
+        .with_price_cage(true, 0.02);
+    let chain = create_ashare_rule_chain(&cfg, Some(provider));
+    let ctx = make_ctx("600113.SH", OrderSide::Buy, 100.0, 10.31, None, 0);
+    let res = chain.check(&ctx);
+
+    assert!(res.is_fail());
+    assert!(res.to_string().contains("PRICE_CAGE_VIOLATION"));
+}
+
+#[test]
+fn test_real_provider_price_limit_respects_instrument_precision() {
+    let instrument_id = InstrumentId::from("600114.SH");
+    let mut cache = Cache::default();
+    cache
+        .add_instrument(make_equity_for_test(
+            instrument_id,
+            "600114",
+            3,
+            Price::new(0.001, 3),
+        ))
+        .unwrap();
+    cache
+        .add_trade(TradeTick::new(
+            instrument_id,
+            Price::new(10.123, 3),
+            Quantity::new(100.0, 0),
+            nautilus_model::enums::AggressorSide::NoAggressor,
+            TradeId::new("T-600114"),
+            UnixNanos::default(),
+            UnixNanos::default(),
+        ))
+        .unwrap();
+    cache
+        .add_instrument_status(InstrumentStatus::new(
+            instrument_id,
+            MarketStatusAction::Trading,
+            UnixNanos::default(),
+            UnixNanos::default(),
+            None,
+            None,
+            Some(true),
+            Some(true),
+            None,
+        ))
+        .unwrap();
+
+    let provider = Arc::new(CacheMarketDataProvider::new(Arc::new(std::sync::Mutex::new(cache))));
+    let cfg = AShareRuleConfig::production().with_price_limit(true);
+    let chain = create_ashare_rule_chain(&cfg, Some(provider));
+
+    let order = OrderTestBuilder::new(OrderType::Limit)
+        .trader_id(TraderId::from("TRADER-001"))
+        .strategy_id(StrategyId::from("S-001"))
+        .instrument_id(instrument_id)
+        .client_order_id(ClientOrderId::from("O-PREC-001"))
+        .side(OrderSide::Buy)
+        .quantity(Quantity::new(100.0, 0))
+        .price(Price::new(11.136, 3))
+        .build();
+    let ctx = RuleContext::new(order, instrument_id, None, 0);
+    let res = chain.check(&ctx);
+
+    assert!(res.is_pass());
 }

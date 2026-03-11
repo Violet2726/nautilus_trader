@@ -13,9 +13,10 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! A股市场支持模块
+//! A 股市场适配入口模块。
 //!
-//! 重新导出 nautilus_markets_ashare crate 的所有公共类型
+//! 当前仅负责重新导出 `nautilus_markets_ashare` crate 的公共类型与函数，
+//! 供上层通过 `nautilus_markets` 统一访问。
 
-// Re-export all public types from nautilus_markets_ashare crate
+// 统一导出 A 股子 crate 的公共接口
 pub use nautilus_markets_ashare::*;

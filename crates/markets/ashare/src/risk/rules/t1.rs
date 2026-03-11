@@ -33,6 +33,11 @@ pub struct T1Rule {
 }
 
 impl T1Rule {
+    /// 创建一个 `T1Rule` 实例。
+    ///
+    /// # 参数
+    ///
+    /// - `t1_ledger`：T+1 账本的共享读写句柄。
     pub fn new(t1_ledger: Arc<std::sync::RwLock<T1Ledger>>) -> Self {
         Self {
             t1_ledger,
@@ -40,14 +45,19 @@ impl T1Rule {
         }
     }
 
+    /// 设置规则开关状态。
     pub fn set_enabled(&mut self, enabled: bool) {
         self.enabled = enabled;
     }
 
+    /// 返回内部账本句柄（只读访问入口）。
     pub fn ledger(&self) -> &std::sync::RwLock<T1Ledger> {
         &self.t1_ledger
     }
 
+    /// 在订单被接受后更新账本状态。
+    ///
+    /// 当前仅处理卖单，且要求上下文中包含 `account_id`。
     pub fn on_order_accepted(&self, context: &RuleContext) {
         if context.order.order_side() != OrderSide::Sell {
             return;
@@ -58,7 +68,7 @@ impl T1Rule {
             None => return,
         };
 
-        let order_qty = context.metadata.quantity.unwrap_or(0.0);
+        let order_qty = context.order.quantity().as_f64();
         let mut ledger = self.t1_ledger.write().expect("T1 ledger lock poisoned");
         ledger.on_fill(
             *account_id,
@@ -92,8 +102,12 @@ impl Rule for T1Rule {
             None => return RuleCheckResult::Pass,
         };
 
-        let sellable = self.t1_ledger.read().expect("T1 ledger lock poisoned").sellable(account_id, &context.instrument_id);
-        let order_qty = context.metadata.quantity.unwrap_or(0.0);
+        let sellable = self
+            .t1_ledger
+            .read()
+            .expect("T1 ledger lock poisoned")
+            .sellable(account_id, &context.instrument_id);
+        let order_qty = context.order.quantity().as_f64();
 
         if let Some(msg) = crate::risk::checks::check_ashare_t1_violation(order_qty, sellable) {
             return RuleCheckResult::Fail { reason: msg };

@@ -23,6 +23,7 @@ use nautilus_model::types::Price;
 use std::sync::Arc;
 
 use nautilus_rules::common::{Rule, RuleCheckResult, RuleContext};
+use crate::risk::config::MissingMarketDataPolicy;
 use crate::risk::provider::MarketDataProvider;
 
 /// 计算涨跌停限制所需的市场数据
@@ -45,6 +46,7 @@ pub struct PriceLimitMarketData {
 /// - 北交所：±30%
 pub struct PriceLimitRule {
     provider: Arc<dyn MarketDataProvider>,
+    missing_market_data_policy: MissingMarketDataPolicy,
     enabled: bool,
 }
 
@@ -57,15 +59,33 @@ impl std::fmt::Debug for PriceLimitRule {
 }
 
 impl PriceLimitRule {
-    pub fn new(provider: Arc<dyn MarketDataProvider>) -> Self {
+    pub fn new(
+        provider: Arc<dyn MarketDataProvider>,
+        missing_market_data_policy: MissingMarketDataPolicy,
+    ) -> Self {
         Self {
             provider,
+            missing_market_data_policy,
             enabled: true,
         }
     }
 
     pub fn set_enabled(&mut self, enabled: bool) {
         self.enabled = enabled;
+    }
+
+    fn handle_missing_data(&self, code: &str, detail: &str) -> RuleCheckResult {
+        log::warn!(
+            "ASHARE_PRICE_LIMIT_MISSING_DATA: code={code}, detail={detail}, policy={:?}",
+            self.missing_market_data_policy
+        );
+
+        match self.missing_market_data_policy {
+            MissingMarketDataPolicy::FailOpen => RuleCheckResult::Pass,
+            MissingMarketDataPolicy::FailClose => RuleCheckResult::Fail {
+                reason: format!("MISSING_MARKET_DATA: code={code}, detail={detail}"),
+            },
+        }
     }
 }
 
@@ -88,9 +108,14 @@ impl Rule for PriceLimitRule {
             return RuleCheckResult::Pass;
         }
 
-        let order_price = match context.metadata.price {
-            Some(price) => Price::new(price, 2), // 默认精度为2
-            None => return RuleCheckResult::Pass,
+        let order_price = match context.order.price() {
+            Some(price) => price,
+            None => {
+                return self.handle_missing_data(
+                    "ASHARE_PRICE_LIMIT_MISSING_ORDER_PRICE",
+                    "limit_order_has_no_price",
+                );
+            }
         };
 
         // 获取市场数据
@@ -98,10 +123,26 @@ impl Rule for PriceLimitRule {
 
         let prev_close = match market_data.prev_close {
             Some(price) => price,
-            None => return RuleCheckResult::Pass, // 没有前收盘价则跳过检查
+            None => {
+                return self.handle_missing_data(
+                    "ASHARE_PRICE_LIMIT_MISSING_PREV_CLOSE",
+                    "provider.prev_close_is_none",
+                );
+            }
         };
 
-        let tick_size = market_data.tick_size.unwrap_or_else(|| Price::new(0.01, 2));
+        let precision = self
+            .provider
+            .price_precision(&context.instrument_id)
+            .unwrap_or(order_price.precision);
+        let tick_size = market_data
+            .tick_size
+            .or_else(|| self.provider.tick_size(&context.instrument_id))
+            .unwrap_or_else(|| {
+                let step = 10f64.powi(-(precision as i32));
+                Price::new(step, precision)
+            });
+        let normalized_order_price = Price::new(order_price.as_f64(), precision);
         let stock_name = market_data.stock_name.unwrap_or_default();
 
         // 计算涨跌停价格
@@ -114,8 +155,8 @@ impl Rule for PriceLimitRule {
 
         // 检查是否违反涨跌停限制
         if let Some(msg) = crate::risk::checks::check_ashare_price_limit_violation(
-            order_price,
-            market_data.tick_size,
+            normalized_order_price,
+            Some(tick_size),
             limits.limit_up,
             limits.limit_down,
         ) {

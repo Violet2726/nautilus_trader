@@ -13,19 +13,19 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-//! NautilusTrader 市场特定模块
+//! NautilusTrader 市场适配总模块。
 //!
-//! 提供各个市场的特定规则和功能。
+//! 该 crate 作为统一入口，按市场划分并聚合各子模块的规则、会话、风控与持仓能力。
 
 #[cfg(feature = "python")]
 pub mod python;
 
 pub mod ashare;
 
-// 重新导出常用类型
+// 重新导出常用市场类型
 pub use ashare::*;
 
-// 未来市场模块
+// 预留：未来扩展其他市场模块
 // #[cfg(feature = "us")]
 // pub mod us;
 // #[cfg(feature = "hk")]

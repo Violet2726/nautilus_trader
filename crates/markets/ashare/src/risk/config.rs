@@ -28,6 +28,12 @@ use crate::market::session::SessionProvider;
 use crate::portfolio::T1Ledger;
 use std::sync::{Arc, RwLock};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MissingMarketDataPolicy {
+    FailOpen,
+    FailClose,
+}
+
 /// A股交易规则配置。
 #[derive(Clone)]
 pub struct AShareRuleConfig {
@@ -43,6 +49,8 @@ pub struct AShareRuleConfig {
 
     /// 启用涨跌停价格限制验证。
     pub price_limit_enabled: bool,
+    /// 市场数据缺失时的处理策略。
+    pub missing_market_data_policy: MissingMarketDataPolicy,
 
     /// 启用 T+1 交收规则。
     pub t1_enabled: bool,
@@ -65,6 +73,7 @@ impl std::fmt::Debug for AShareRuleConfig {
             .field("price_cage_enabled", &self.price_cage_enabled)
             .field("price_cage_pct", &self.price_cage_pct)
             .field("price_limit_enabled", &self.price_limit_enabled)
+            .field("missing_market_data_policy", &self.missing_market_data_policy)
             .field("t1_enabled", &self.t1_enabled)
             .field("lot_size_enabled", &self.lot_size_enabled)
             .field("max_order_submit_per_account", &self.max_order_submit_per_account)
@@ -81,6 +90,7 @@ impl Default for AShareRuleConfig {
             price_cage_enabled: false,
             price_cage_pct: 0.02,
             price_limit_enabled: false,
+            missing_market_data_policy: MissingMarketDataPolicy::FailOpen,
             t1_enabled: false,
             t1_ledger: None,
             lot_size_enabled: false,
@@ -93,6 +103,10 @@ impl Default for AShareRuleConfig {
 impl AShareRuleConfig {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn production() -> Self {
+        Self::default().with_missing_market_data_policy(MissingMarketDataPolicy::FailClose)
     }
 
     pub fn with_session(mut self, enabled: bool, provider: Option<Arc<dyn SessionProvider>>) -> Self {
@@ -109,6 +123,11 @@ impl AShareRuleConfig {
 
     pub fn with_price_limit(mut self, enabled: bool) -> Self {
         self.price_limit_enabled = enabled;
+        self
+    }
+
+    pub fn with_missing_market_data_policy(mut self, policy: MissingMarketDataPolicy) -> Self {
+        self.missing_market_data_policy = policy;
         self
     }
 
